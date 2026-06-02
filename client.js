@@ -121,13 +121,13 @@ async function toggleVoiceRecording({ button, status, target }) {
       current.stream.getTracks().forEach(track => track.stop());
       current.button.textContent = "Record Voice Note";
       current.button.classList.remove("recording");
-      current.status.textContent = "Transcribing voice note...";
+      current.status.textContent = "Converting voice note to English text...";
       try {
         const transcript = await transcribeRecording(new Blob(current.chunks, { type: recorder.mimeType || "audio/webm" }));
         if (!transcript) throw new Error("No speech was detected. Please record again.");
         current.target.value = [current.target.value.trim(), transcript].filter(Boolean).join(current.target.value.trim() ? "\n" : "");
         current.target.dispatchEvent(new Event("input", { bubbles: true }));
-        current.status.textContent = "Transcript added. You can edit it before saving.";
+        current.status.textContent = "English transcript added. You can edit it before saving.";
       } catch (error) {
         current.status.textContent = error.message;
       }

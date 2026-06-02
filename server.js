@@ -39,7 +39,7 @@ const ROOT = __dirname;
 const DATA_DIR = process.env.VERCEL ? path.join("/tmp", "argleadstracker") : path.join(ROOT, "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe";
+const OPENAI_TRANSLATION_MODEL = "whisper-1";
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "glory@alrassteel.com").trim().toLowerCase();
 const ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || "";
 const SESSION_SECRET = process.env.APP_SESSION_SECRET || "local-development-session-secret-change-me";
@@ -300,10 +300,10 @@ async function transcribeAudio(req, res) {
   if (!audio.length) return sendJson(res, 400, { error: "Record a voice note before requesting transcription." });
 
   const form = new FormData();
-  form.append("model", OPENAI_TRANSCRIPTION_MODEL);
+  form.append("model", OPENAI_TRANSLATION_MODEL);
   form.append("file", new Blob([audio], { type: contentType }), `sales-note.${audioExtension(contentType)}`);
 
-  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+  const response = await fetch("https://api.openai.com/v1/audio/translations", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: form
@@ -314,7 +314,7 @@ async function transcribeAudio(req, res) {
     error.status = response.status === 429 ? 429 : 502;
     throw error;
   }
-  return sendJson(res, 200, { text: String(data.text || "").trim(), model: OPENAI_TRANSCRIPTION_MODEL });
+  return sendJson(res, 200, { text: String(data.text || "").trim(), model: OPENAI_TRANSLATION_MODEL, language: "English" });
 }
 
 function normalizeLead(input) {
@@ -474,7 +474,7 @@ async function handleApi(req, res, url) {
       app: "ARG Leads Tracker",
       backend: { supabase: supabaseEnabled, admin: isSupabaseAdminConfigured() },
       enrichment: { google_places: googlePlacesConfigured(), hunter: hunterConfigured() },
-      transcription: { enabled: Boolean(OPENAI_API_KEY), model: OPENAI_TRANSCRIPTION_MODEL },
+      transcription: { enabled: Boolean(OPENAI_API_KEY), model: OPENAI_TRANSLATION_MODEL, language: "English", mode: "translation" },
       date: new Date().toISOString()
     });
   }

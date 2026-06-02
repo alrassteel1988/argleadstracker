@@ -22,7 +22,7 @@ On another phone connected to the same network, use the computer's local IP addr
 - Lead list, search, stage filter, salesman filter
 - Lead detail panel with stage updates and activity logging
 - Add lead form with ARG sales workflow fields
-- Mobile voice-note recording with OpenAI Whisper speech-to-text transcription
+- Mobile voice-note recording with OpenAI Whisper translation into English text
 - Required email and password sign-in
 - Administrator-only salesman account creation
 - Supabase Auth and durable Postgres persistence when configured
@@ -77,13 +77,12 @@ The server stores a salted password hash in `data/db.json`. After the first succ
 
 ## Voice transcription setup
 
-Voice notes are recorded in the browser and uploaded to the local backend. The backend calls OpenAI, so the API key is never exposed in frontend code.
+Voice notes are recorded in the browser and uploaded to the backend. The backend calls OpenAI's audio translation endpoint with `whisper-1`, so speech in supported languages is converted into English text and the API key is never exposed in frontend code.
 
 Set these server environment variables before starting:
 
 ```powershell
 $env:OPENAI_API_KEY="your_openai_api_key"
-$env:OPENAI_TRANSCRIPTION_MODEL="gpt-4o-mini-transcribe"
 npm start
 ```
 
@@ -92,7 +91,7 @@ On mobile:
 1. Open a lead and tap `Record Voice Note`.
 2. Allow microphone access.
 3. Speak, then tap `Stop Recording`.
-4. Review and edit the transcript before saving the activity.
+4. Review and edit the English transcript before saving the activity.
 
 The Add Lead form also supports recording directly into the notes field. Recordings are limited to two minutes in the browser and 20 MB on the backend.
 
