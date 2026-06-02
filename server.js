@@ -489,4 +489,7 @@ if (require.main === module) {
   });
 }
 
-module.exports = { handleApi, normalizeLead, transcribeAudio };
+server.handleApi = handleApi;
+server.normalizeLead = normalizeLead;
+server.transcribeAudio = transcribeAudio;
+module.exports = server;
