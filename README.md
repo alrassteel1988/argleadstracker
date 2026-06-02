@@ -77,12 +77,13 @@ The server stores a salted password hash in `data/db.json`. After the first succ
 
 ## Voice transcription setup
 
-Voice notes are recorded in the browser and uploaded to the backend. The backend calls OpenAI's audio translation endpoint with `whisper-1`, so speech in supported languages is converted into English text and the API key is never exposed in frontend code.
+Voice notes are recorded in the browser and uploaded to the backend. The backend calls OpenAI's audio translation endpoint with `whisper-1`, then runs an English normalization pass with `gpt-4.1-mini`. This keeps Tagalog and other supported spoken languages from being saved as source-language notes. The API key is never exposed in frontend code.
 
 Set these server environment variables before starting:
 
 ```powershell
 $env:OPENAI_API_KEY="your_openai_api_key"
+$env:OPENAI_TEXT_MODEL="gpt-4.1-mini"
 npm start
 ```
 
