@@ -52,6 +52,7 @@
             <span class="signed-in-user" id="signedInUser"></span>
             <button class="ghost-button hidden" id="openSalesmanForm">Create Salesman Account</button>
             <button class="ghost-button" id="logoutButton">Sign Out</button>
+            <button class="ghost-button" id="openPlacesSearch">Search Google Places</button>
             <button class="primary-button" id="openLeadForm">Add Lead</button>
           </div>
         </header>
@@ -131,9 +132,13 @@
         </div>
         <div class="form-grid">
           <label>Company name<input name="company_name" required></label>
+          <label>Industry<input name="industry"></label>
+          <label>Location<input name="location" placeholder="Dubai, UAE"></label>
+          <label>Address<input name="address"></label>
           <label>Contact person<input name="contact_person"></label>
           <label>Phone<input name="phone"></label>
           <label>Email<input name="email" type="email"></label>
+          <label>Website<input name="website" type="url" placeholder="https://example.com"></label>
           <label>Territory<input name="territory" value="Dubai"></label>
           <label>Assigned salesman<select name="assigned_salesman" id="formSalesman"></select></label>
           <label>Stage<select name="stage" id="formStage"></select></label>
@@ -142,6 +147,10 @@
           <label>Next action date<input name="next_action_date" type="date"></label>
           <label class="wide">Product interest<input name="product_interest"></label>
           <label class="wide">Next action<input name="next_action" value="Qualify lead"></label>
+          <input name="google_place_id" type="hidden">
+          <input name="google_maps_url" type="hidden">
+          <input name="google_rating" type="hidden">
+          <input name="google_review_count" type="hidden">
           <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Type notes or record a voice note"></textarea></label>
           <div class="wide voice-control">
             <button class="voice-button" id="recordLeadVoice" type="button">Record Voice Note</button>
@@ -149,6 +158,25 @@
           </div>
         </div>
         <button class="primary-button" type="submit">Save Lead</button>
+      </form>
+    </dialog>
+
+    <dialog id="placesDialog">
+      <form method="dialog" class="lead-form" id="placesForm">
+        <div class="dialog-header">
+          <div>
+            <h2>Search Google Places</h2>
+            <p>Find a UAE business, then apply its public details to a new lead.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closePlacesSearch">Close</button>
+        </div>
+        <div class="places-search-row">
+          <label>Business keyword<input name="keyword" placeholder="Company name or steel contractor" required></label>
+          <label>Location<input name="location" value="Dubai, UAE"></label>
+          <button class="primary-button" type="submit">Search</button>
+        </div>
+        <span class="form-message" id="placesMessage" aria-live="polite"></span>
+        <div class="places-results" id="placesResults"></div>
       </form>
     </dialog>
 

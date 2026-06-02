@@ -17,6 +17,10 @@ const els = {
   salesmanDialog: document.querySelector("#salesmanDialog"),
   salesmanForm: document.querySelector("#salesmanForm"),
   salesmanMessage: document.querySelector("#salesmanMessage"),
+  placesDialog: document.querySelector("#placesDialog"),
+  placesForm: document.querySelector("#placesForm"),
+  placesMessage: document.querySelector("#placesMessage"),
+  placesResults: document.querySelector("#placesResults"),
   leadList: document.querySelector("#leadList"),
   detailPanel: document.querySelector("#detailPanel"),
   leadCount: document.querySelector("#leadCount"),
@@ -149,6 +153,12 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function setMessage(element, message, type = "") {
+  element.textContent = message;
+  element.classList.toggle("success", type === "success");
+  element.classList.toggle("error", type === "error");
+}
+
 function fillSelect(select, values, firstLabel) {
   select.innerHTML = firstLabel ? `<option value="all">${firstLabel}</option>` : "";
   values.forEach(value => {
@@ -254,9 +264,18 @@ function renderDetail() {
         <div class="meta-box"><span class="meta-label">Contact</span><span class="meta-value">${escapeHtml(lead.contact_person)}</span></div>
         <div class="meta-box"><span class="meta-label">Phone</span><span class="meta-value">${escapeHtml(lead.phone)}</span></div>
         <div class="meta-box"><span class="meta-label">Email</span><span class="meta-value">${escapeHtml(lead.email)}</span></div>
+        <div class="meta-box"><span class="meta-label">Industry</span><span class="meta-value">${escapeHtml(lead.industry || "Not added")}</span></div>
+        <div class="meta-box"><span class="meta-label">Website</span><span class="meta-value">${escapeHtml(lead.website || "Not added")}</span></div>
+        <div class="meta-box"><span class="meta-label">Enrichment</span><span class="meta-value">${escapeHtml(lead.enrichment_status || "pending")}</span></div>
         <div class="meta-box"><span class="meta-label">Estimated value</span><span class="meta-value">${money.format(lead.estimated_value || 0)}</span></div>
         <div class="meta-box"><span class="meta-label">Next action</span><span class="meta-value">${escapeHtml(lead.next_action)}</span></div>
         <div class="meta-box"><span class="meta-label">Due date</span><span class="meta-value">${escapeHtml(lead.next_action_date)}</span></div>
+      </div>
+
+      <div class="detail-actions">
+        <button class="ghost-button" id="enrichLead" type="button">Enrich with Hunter</button>
+        <button class="ghost-button" id="deleteLead" type="button">Delete Lead</button>
+        <span class="form-message" id="detailMessage" aria-live="polite"></span>
       </div>
 
       <div class="stage-actions">
@@ -303,6 +322,31 @@ function renderDetail() {
       status: document.querySelector("#activityVoiceStatus"),
       target: document.querySelector("#activityText")
     });
+  });
+
+  document.querySelector("#enrichLead").addEventListener("click", async () => {
+    const message = document.querySelector("#detailMessage");
+    setMessage(message, "Searching Hunter...");
+    try {
+      const result = await api(`/api/leads/${lead.id}/enrich`, { method: "POST" });
+      setMessage(message, result.emails.length ? `Hunter found ${result.emails.length} email suggestion(s).` : "Hunter completed with no email suggestions.", "success");
+      await loadLeads();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  });
+
+  document.querySelector("#deleteLead").addEventListener("click", async () => {
+    if (!window.confirm(`Delete ${lead.company_name}?`)) return;
+    const message = document.querySelector("#detailMessage");
+    setMessage(message, "Deleting lead...");
+    try {
+      await api(`/api/leads/${lead.id}`, { method: "DELETE" });
+      state.selectedId = null;
+      await loadLeads();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
   });
 }
 
@@ -378,6 +422,46 @@ els.salesmanFilter.addEventListener("change", event => {
 document.querySelector("#openLeadForm").addEventListener("click", () => els.leadDialog.showModal());
 document.querySelector("#closeLeadForm").addEventListener("click", () => els.leadDialog.close());
 document.querySelector("#closeSalesmanForm").addEventListener("click", () => els.salesmanDialog.close());
+document.querySelector("#openPlacesSearch").addEventListener("click", () => {
+  setMessage(els.placesMessage, "");
+  els.placesResults.innerHTML = "";
+  els.placesDialog.showModal();
+});
+document.querySelector("#closePlacesSearch").addEventListener("click", () => els.placesDialog.close());
+
+els.placesForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  setMessage(els.placesMessage, "Searching Google Places...");
+  els.placesResults.innerHTML = "";
+  try {
+    const result = await api("/api/places/search", {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(new FormData(els.placesForm).entries()))
+    });
+    setMessage(els.placesMessage, result.matches.length ? `${result.matches.length} business match(es) found.` : "No matching businesses found.", result.matches.length ? "success" : "");
+    els.placesResults.innerHTML = result.matches.map((place, index) => `
+      <article class="place-result">
+        <strong>${escapeHtml(place.company_name)}</strong>
+        <p>${escapeHtml(place.address || "Address not provided")}</p>
+        <p>${escapeHtml(place.phone || "Phone not provided")} ${place.google_rating ? ` · Rating ${escapeHtml(place.google_rating)} (${escapeHtml(place.google_review_count)} reviews)` : ""}</p>
+        <button class="primary-button" type="button" data-place-index="${index}">Use Business</button>
+      </article>
+    `).join("");
+    document.querySelectorAll("[data-place-index]").forEach(button => {
+      button.addEventListener("click", () => {
+        const place = result.matches[Number(button.dataset.placeIndex)];
+        Object.entries(place).forEach(([key, value]) => {
+          const field = els.leadForm.elements[key];
+          if (field) field.value = value ?? "";
+        });
+        els.placesDialog.close();
+        els.leadDialog.showModal();
+      });
+    });
+  } catch (error) {
+    setMessage(els.placesMessage, error.message, "error");
+  }
+});
 
 els.loginForm.addEventListener("submit", async event => {
   event.preventDefault();

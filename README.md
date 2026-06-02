@@ -25,12 +25,44 @@ On another phone connected to the same network, use the computer's local IP addr
 - Mobile voice-note recording with OpenAI Whisper speech-to-text transcription
 - Required email and password sign-in
 - Administrator-only salesman account creation
-- Local Node API with JSON persistence in `data/db.json`
+- Supabase Auth and durable Postgres persistence when configured
+- Local JSON fallback in `data/db.json` for offline development
 - Seed salesmen and sample leads
+- Google Places business discovery and Hunter domain email enrichment
+
+## Supabase setup
+
+Run [supabase/migrations/20260602154500_create_lead_enrichment_backend.sql](supabase/migrations/20260602154500_create_lead_enrichment_backend.sql) in the Supabase SQL editor or apply it with the Supabase CLI. It creates:
+
+- `profiles`
+- `companies`
+- `leads`
+- `contacts`
+- `search_history`
+- `enrichment_status`
+- Auth profile trigger, grants, updated-at triggers, and RLS policies
+
+Configure these server environment variables:
+
+```powershell
+$env:NEXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
+$env:NEXT_PUBLIC_SUPABASE_ANON_KEY="your_publishable_or_anon_key"
+$env:SUPABASE_SERVICE_ROLE_KEY="your_service_role_key"
+$env:GOOGLE_PLACES_API_KEY="your_google_places_key"
+$env:HUNTER_API_KEY="your_hunter_key"
+```
+
+Get the Supabase URL from `Project Settings > API > Project URL`. Get the publishable or legacy anon key from `Project Settings > API Keys`. Get the service-role key from the server-side secret keys area and store it only in Vercel environment variables or your private local `.env`.
+
+Enable `Places API (New)` in Google Cloud and restrict the Google key to the server deployment. Hunter enrichment uses Hunter's Domain Search endpoint and requires a Hunter API key.
 
 ## Authentication setup
 
-The administrator account is created once from server-only environment variables. Salesmen cannot create accounts. After the administrator signs in, use `Create Salesman Account` in the top bar to add salesman credentials.
+When Supabase is configured, create the first administrator in Supabase Auth and set `app_metadata.role` to `admin`. The migration trigger creates the matching profile. Salesmen cannot create accounts. After the administrator signs in, use `Create Salesman Account` in the top bar to add salesman credentials through the server-only service role.
+
+For the required administrator, create `glory@alrassteel.com` in `Supabase Dashboard > Authentication > Users`, then run [supabase/bootstrap-admin.sql](supabase/bootstrap-admin.sql) once in the SQL editor. Do not put the password in SQL or commit it.
+
+Without Supabase variables, the local fallback administrator account is created once from server-only environment variables:
 
 For the first server start:
 
@@ -78,7 +110,11 @@ The Add Lead form also supports recording directly into the notes field. Recordi
 - `PATCH /api/leads/:id/stage`
 - `POST /api/leads/:id/activities`
 - `POST /api/transcriptions`
+- `POST /api/places/search`
+- `PATCH /api/leads/:id`
+- `DELETE /api/leads/:id`
+- `POST /api/leads/:id/enrich`
 
 ## Production note
 
-This version is ready for local team testing. For true multi-user production access, move credentials and CRM records to a durable hosted database with a production authentication provider so office users and salesmen share records securely online.
+Use Supabase in production. The JSON fallback is for offline development only because Vercel function filesystems are ephemeral.

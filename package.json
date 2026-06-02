@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node -e \"console.log('No asset compilation required for ARG Leads Tracker')\"",
     "start": "node server.js",
-    "check": "node --check server.js && node --check client.js"
+    "check": "node --check server.js && node --check client.js && node --check supabase-client.js && node --check enrichment.js"
   },
   "engines": {
     "node": "24.x"

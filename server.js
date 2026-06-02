@@ -2,6 +2,22 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const {
+  bearerToken,
+  createAuthUser,
+  currentSupabaseUser,
+  isSupabaseAdminConfigured,
+  isSupabaseConfigured,
+  rest,
+  signIn,
+  signOut
+} = require("./supabase-client");
+const {
+  enrichHunter,
+  googlePlacesConfigured,
+  hunterConfigured,
+  searchGooglePlaces
+} = require("./enrichment");
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -324,13 +340,140 @@ function normalizeLead(input) {
   };
 }
 
+function toSupabaseLead(input, user) {
+  const lead = normalizeLead(input);
+  return {
+    company_id: input.company_id || null,
+    company_name: lead.company_name,
+    industry: String(input.industry || "").trim(),
+    location: String(input.location || lead.territory).trim(),
+    address: String(input.address || "").trim(),
+    phone: lead.phone,
+    website: String(input.website || "").trim(),
+    google_place_id: String(input.google_place_id || "").trim() || null,
+    google_maps_url: String(input.google_maps_url || "").trim(),
+    google_rating: Number(input.google_rating || 0) || null,
+    google_review_count: Number(input.google_review_count || 0),
+    contact_name: lead.contact_person,
+    contact_email: lead.email,
+    hunter_confidence_score: input.hunter_confidence_score == null ? null : Number(input.hunter_confidence_score),
+    lead_status: lead.stage,
+    notes: lead.notes,
+    territory: lead.territory,
+    assigned_salesman: lead.assigned_salesman,
+    priority: lead.priority,
+    estimated_value: lead.estimated_value,
+    product_interest: lead.product_interest,
+    next_action: lead.next_action,
+    next_action_date: lead.next_action_date,
+    last_activity: lead.last_activity,
+    source: lead.source,
+    activities: lead.activities,
+    enrichment_status: String(input.enrichment_status || "pending"),
+    enrichment_updated_at: input.enrichment_updated_at || null,
+    created_by: user.id
+  };
+}
+
+function fromSupabaseLead(lead) {
+  return {
+    ...lead,
+    contact_person: lead.contact_name || "",
+    email: lead.contact_email || "",
+    stage: lead.lead_status || "New"
+  };
+}
+
+async function getSupabaseLead(token, id) {
+  const leads = await rest(`leads?id=eq.${encodeURIComponent(id)}&select=*`, { token });
+  return leads[0] ? fromSupabaseLead(leads[0]) : null;
+}
+
+async function recordSearch(token, userId, keyword, location, provider, resultCount, status = "completed", errorMessage = "") {
+  try {
+    await rest("search_history", {
+      method: "POST",
+      token,
+      body: { created_by: userId, keyword, location, provider, result_count: resultCount, status, error_message: errorMessage }
+    });
+  } catch {
+    // Search results should still be returned if optional history logging fails.
+  }
+}
+
+async function updateEnrichment(token, userId, leadId, provider, status, details = {}, errorMessage = "") {
+  await rest("enrichment_status?on_conflict=lead_id,provider", {
+    method: "POST",
+    token,
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: { lead_id: leadId, provider, status, details, error_message: errorMessage, created_by: userId }
+  });
+}
+
+async function findCompany(token, lead) {
+  if (lead.google_place_id) {
+    const matches = await rest(`companies?google_place_id=eq.${encodeURIComponent(lead.google_place_id)}&select=*`, { token });
+    if (matches[0]) return matches[0];
+  }
+  if (lead.website) {
+    const matches = await rest(`companies?website=eq.${encodeURIComponent(lead.website)}&select=*`, { token });
+    if (matches[0]) return matches[0];
+  }
+  return null;
+}
+
+async function saveSupabaseLead(token, user, input) {
+  const lead = toSupabaseLead(input, user);
+  if (lead.google_place_id) {
+    const duplicate = await rest(`leads?google_place_id=eq.${encodeURIComponent(lead.google_place_id)}&select=*`, { token });
+    if (duplicate[0]) {
+      const error = new Error("This Google business is already saved as a lead.");
+      error.status = 409;
+      throw error;
+    }
+  }
+  let company = await findCompany(token, lead);
+  if (!company) {
+    const companies = await rest("companies?select=*", {
+      method: "POST",
+      token,
+      headers: { Prefer: "return=representation" },
+      body: {
+        company_name: lead.company_name,
+        industry: lead.industry,
+        location: lead.location,
+        address: lead.address,
+        phone: lead.phone,
+        website: lead.website,
+        google_place_id: lead.google_place_id,
+        google_maps_url: lead.google_maps_url,
+        google_rating: lead.google_rating,
+        google_review_count: lead.google_review_count,
+        created_by: user.id
+      }
+    });
+    company = companies[0];
+  }
+  lead.company_id = company?.id || null;
+  const leads = await rest("leads?select=*", {
+    method: "POST",
+    token,
+    headers: { Prefer: "return=representation" },
+    body: lead
+  });
+  return fromSupabaseLead(leads[0]);
+}
+
 async function handleApi(req, res, url) {
-  const db = readDb();
+  const supabaseEnabled = isSupabaseConfigured();
+  const db = supabaseEnabled ? null : readDb();
 
   if (req.method === "GET" && url.pathname === "/api/health") {
     return sendJson(res, 200, {
       ok: true,
       app: "ARG Leads Tracker",
+      backend: { supabase: supabaseEnabled, admin: isSupabaseAdminConfigured() },
+      enrichment: { google_places: googlePlacesConfigured(), hunter: hunterConfigured() },
       transcription: { enabled: Boolean(OPENAI_API_KEY), model: OPENAI_TRANSCRIPTION_MODEL },
       date: new Date().toISOString()
     });
@@ -339,6 +482,12 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
     const payload = await readBody(req);
     const email = String(payload.email || "").trim().toLowerCase();
+    if (supabaseEnabled) {
+      const session = await signIn(email, String(payload.password || ""));
+      const user = await currentSupabaseUser({ headers: { authorization: `Bearer ${session.access_token}` } });
+      if (!user) return sendJson(res, 403, { error: "Your profile is not active. Contact the administrator." });
+      return sendJson(res, 200, { token: session.access_token, refresh_token: session.refresh_token, user });
+    }
     const user = db.users.find(item => String(item.email || "").toLowerCase() === email && item.status === "active");
     if (!user || !passwordMatches(payload.password, user.password_hash)) {
       return sendJson(res, 401, { error: "Invalid email or password." });
@@ -346,7 +495,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { token: issueToken(user), user: publicUser(user) });
   }
 
-  const user = currentUser(req, db);
+  const user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
@@ -354,6 +503,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    if (supabaseEnabled) await signOut(bearerToken(req));
     return sendJson(res, 200, { ok: true });
   }
 
@@ -361,8 +511,40 @@ async function handleApi(req, res, url) {
     return transcribeAudio(req, res);
   }
 
+  if (req.method === "POST" && url.pathname === "/api/places/search") {
+    const payload = await readBody(req);
+    const keyword = String(payload.keyword || "").trim();
+    const location = String(payload.location || "").trim();
+    try {
+      const matches = await searchGooglePlaces(keyword, location, clientIp(req));
+      if (supabaseEnabled) await recordSearch(user.token, user.id, keyword, location, "google_places", matches.length);
+      return sendJson(res, 200, { matches });
+    } catch (error) {
+      if (supabaseEnabled) await recordSearch(user.token, user.id, keyword, location, "google_places", 0, "failed", error.message);
+      throw error;
+    }
+  }
+
   if (url.pathname === "/api/users") {
     if (user.role !== "admin") return sendJson(res, 403, { error: "Admin access required." });
+    if (supabaseEnabled) {
+      if (req.method === "GET") {
+        const profiles = await rest("profiles?select=*&order=full_name.asc", { token: user.token });
+        return sendJson(res, 200, profiles.map(profile => ({ ...profile, name: profile.full_name })));
+      }
+      if (req.method === "POST") {
+        if (!isSupabaseAdminConfigured()) return sendJson(res, 503, { error: "SUPABASE_SERVICE_ROLE_KEY is required to create salesman accounts." });
+        const payload = await readBody(req);
+        const email = String(payload.email || "").trim().toLowerCase();
+        const name = String(payload.name || "").trim();
+        const password = String(payload.password || "");
+        if (!name || !email || password.length < 8) {
+          return sendJson(res, 400, { error: "Name, email, and a password of at least 8 characters are required." });
+        }
+        const account = await createAuthUser({ email, password, name, territory: String(payload.territory || "Dubai").trim() });
+        return sendJson(res, 201, { id: account.id, email: account.email, name, role: "salesman", territory: payload.territory || "Dubai", status: "active" });
+      }
+    }
     if (req.method === "GET") return sendJson(res, 200, db.users.map(publicUser));
     if (req.method === "POST") {
       const payload = await readBody(req);
@@ -395,6 +577,15 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/settings") {
+    if (supabaseEnabled) {
+      const profiles = await rest("profiles?role=eq.salesman&status=eq.active&select=*", { token: user.token });
+      return sendJson(res, 200, {
+        stages: ["New", "Qualified", "Proposal", "Negotiation", "Won", "Dormant"],
+        priorities: ["New", "Warm", "Hot", "At Risk"],
+        territories: ["Dubai", "Sharjah", "Abu Dhabi", "Ajman", "Northern Emirates"],
+        salesmen: profiles.map(profile => ({ ...profile, name: profile.full_name }))
+      });
+    }
     return sendJson(res, 200, {
       stages: ["New", "Qualified", "Proposal", "Negotiation", "Won", "Dormant"],
       priorities: ["New", "Warm", "Hot", "At Risk"],
@@ -404,20 +595,76 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/leads") {
+    if (supabaseEnabled) {
+      const leads = await rest("leads?select=*&order=created_at.desc", { token: user.token });
+      return sendJson(res, 200, leads.map(fromSupabaseLead));
+    }
     return sendJson(res, 200, db.leads);
   }
 
   if (req.method === "POST" && url.pathname === "/api/leads") {
     const payload = await readBody(req);
+    if (supabaseEnabled) return sendJson(res, 201, await saveSupabaseLead(user.token, user, payload));
     const lead = normalizeLead(payload);
     db.leads.unshift(lead);
     writeDb(db);
     return sendJson(res, 201, lead);
   }
 
+  const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
+  if (req.method === "PATCH" && leadMatch) {
+    const payload = await readBody(req);
+    if (supabaseEnabled) {
+      const allowed = [
+        "company_name", "industry", "location", "address", "phone", "website", "google_place_id",
+        "google_maps_url", "google_rating", "google_review_count", "contact_name", "contact_email",
+        "hunter_confidence_score", "lead_status", "notes", "territory", "assigned_salesman", "priority",
+        "estimated_value", "product_interest", "next_action", "next_action_date", "source"
+      ];
+      const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
+      const leads = await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}&select=*`, {
+        method: "PATCH",
+        token: user.token,
+        headers: { Prefer: "return=representation" },
+        body: updates
+      });
+      if (!leads[0]) return sendJson(res, 404, { error: "Lead not found" });
+      return sendJson(res, 200, fromSupabaseLead(leads[0]));
+    }
+    const lead = db.leads.find(item => item.id === leadMatch[1]);
+    if (!lead) return sendJson(res, 404, { error: "Lead not found" });
+    Object.assign(lead, payload);
+    writeDb(db);
+    return sendJson(res, 200, lead);
+  }
+
+  if (req.method === "DELETE" && leadMatch) {
+    if (supabaseEnabled) {
+      await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}`, { method: "DELETE", token: user.token });
+      return sendJson(res, 200, { ok: true });
+    }
+    const index = db.leads.findIndex(item => item.id === leadMatch[1]);
+    if (index < 0) return sendJson(res, 404, { error: "Lead not found" });
+    db.leads.splice(index, 1);
+    writeDb(db);
+    return sendJson(res, 200, { ok: true });
+  }
+
   const stageMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/stage$/);
   if (req.method === "PATCH" && stageMatch) {
     const payload = await readBody(req);
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, stageMatch[1]);
+      if (!lead) return sendJson(res, 404, { error: "Lead not found" });
+      const activity = { at: new Date().toISOString().slice(0, 10), type: "Stage", text: `Stage changed to ${payload.stage || lead.stage}` };
+      const leads = await rest(`leads?id=eq.${encodeURIComponent(stageMatch[1])}&select=*`, {
+        method: "PATCH",
+        token: user.token,
+        headers: { Prefer: "return=representation" },
+        body: { lead_status: String(payload.stage || lead.stage), last_activity: activity.at, activities: [activity, ...(lead.activities || [])] }
+      });
+      return sendJson(res, 200, fromSupabaseLead(leads[0]));
+    }
     const lead = db.leads.find(item => item.id === stageMatch[1]);
     if (!lead) return sendJson(res, 404, { error: "Lead not found" });
     lead.stage = String(payload.stage || lead.stage);
@@ -434,6 +681,18 @@ async function handleApi(req, res, url) {
   const activityMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activities$/);
   if (req.method === "POST" && activityMatch) {
     const payload = await readBody(req);
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, activityMatch[1]);
+      if (!lead) return sendJson(res, 404, { error: "Lead not found" });
+      const activity = { at: new Date().toISOString().slice(0, 10), type: String(payload.type || "Note"), text: String(payload.text || "Activity added") };
+      const leads = await rest(`leads?id=eq.${encodeURIComponent(activityMatch[1])}&select=*`, {
+        method: "PATCH",
+        token: user.token,
+        headers: { Prefer: "return=representation" },
+        body: { last_activity: activity.at, activities: [activity, ...(lead.activities || [])] }
+      });
+      return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), activity });
+    }
     const lead = db.leads.find(item => item.id === activityMatch[1]);
     if (!lead) return sendJson(res, 404, { error: "Lead not found" });
     const activity = {
@@ -445,6 +704,57 @@ async function handleApi(req, res, url) {
     lead.last_activity = activity.at;
     writeDb(db);
     return sendJson(res, 201, { lead, activity });
+  }
+
+  const enrichmentMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/enrich$/);
+  if (req.method === "POST" && enrichmentMatch) {
+    if (!supabaseEnabled) return sendJson(res, 503, { error: "Hunter enrichment requires the Supabase backend configuration." });
+    const lead = await getSupabaseLead(user.token, enrichmentMatch[1]);
+    if (!lead) return sendJson(res, 404, { error: "Lead not found" });
+    await updateEnrichment(user.token, user.id, lead.id, "hunter", "pending");
+    try {
+      const enriched = await enrichHunter(lead.website, lead.company_name, clientIp(req));
+      const emails = enriched.emails;
+      if (emails.length) {
+        await rest("contacts?on_conflict=lead_id,contact_email", {
+          method: "POST",
+          token: user.token,
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: emails.map(item => ({
+            company_id: lead.company_id,
+            lead_id: lead.id,
+            contact_email: item.email,
+            contact_type: item.type,
+            hunter_confidence_score: item.confidence,
+            source_data: item.source_data,
+            created_by: user.id
+          }))
+        });
+      }
+      const primary = [...emails].sort((a, b) => b.confidence - a.confidence).find(item => item.confidence >= 70) || null;
+      const updated = await rest(`leads?id=eq.${encodeURIComponent(lead.id)}&select=*`, {
+        method: "PATCH",
+        token: user.token,
+        headers: { Prefer: "return=representation" },
+        body: {
+          contact_email: primary?.email || lead.contact_email,
+          hunter_confidence_score: primary?.confidence ?? lead.hunter_confidence_score,
+          enrichment_status: "completed",
+          enrichment_updated_at: new Date().toISOString()
+        }
+      });
+      await updateEnrichment(user.token, user.id, lead.id, "hunter", "completed", { domain: enriched.domain, emails });
+      await recordSearch(user.token, user.id, enriched.domain, lead.location || "", "hunter", emails.length);
+      return sendJson(res, 200, { lead: fromSupabaseLead(updated[0]), domain: enriched.domain, emails });
+    } catch (error) {
+      await updateEnrichment(user.token, user.id, lead.id, "hunter", "failed", {}, error.message);
+      await rest(`leads?id=eq.${encodeURIComponent(lead.id)}`, {
+        method: "PATCH",
+        token: user.token,
+        body: { enrichment_status: "failed", enrichment_updated_at: new Date().toISOString() }
+      });
+      throw error;
+    }
   }
 
   return sendJson(res, 404, { error: "API route not found" });
