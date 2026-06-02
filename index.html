@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ARG Leads Tracker CRM</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="auth-screen" id="authScreen">
+      <form class="auth-card" id="loginForm">
+        <div class="brand-mark">ARG</div>
+        <div>
+          <h1>ARG Leads Tracker</h1>
+          <p>Sign in to access the shared sales workspace.</p>
+        </div>
+        <label>Email<input name="email" type="email" autocomplete="username" required></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary-button" type="submit">Sign In</button>
+        <span class="form-message" id="loginMessage" aria-live="polite"></span>
+      </form>
+    </main>
+
+    <div class="app-shell hidden" id="appShell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">ARG</div>
+          <div>
+            <strong>ARG Leads Tracker</strong>
+            <span>Shared CRM platform</span>
+          </div>
+        </div>
+        <nav class="nav-list" aria-label="Main navigation">
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button class="nav-item" data-view="pipeline">Pipeline</button>
+          <button class="nav-item" data-view="salesmen">Salesmen</button>
+          <button class="nav-item" data-view="activity">Activity</button>
+        </nav>
+        <div class="sidebar-note">
+          <strong>One CRM</strong>
+          <span>Desktop office view and mobile salesman view use the same records.</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1>ARG CRM Command Center</h1>
+            <p>Track leads, assign salesmen, update pipeline stages, and keep mobile follow-ups synced.</p>
+          </div>
+          <div class="topbar-actions">
+            <span class="signed-in-user" id="signedInUser"></span>
+            <button class="ghost-button hidden" id="openSalesmanForm">Create Salesman Account</button>
+            <button class="ghost-button" id="logoutButton">Sign Out</button>
+            <button class="primary-button" id="openLeadForm">Add Lead</button>
+          </div>
+        </header>
+
+        <section class="metrics" aria-label="CRM metrics">
+          <article>
+            <span>Total Leads</span>
+            <strong id="metricTotal">0</strong>
+          </article>
+          <article>
+            <span>Open Value</span>
+            <strong id="metricValue">AED 0</strong>
+          </article>
+          <article>
+            <span>Hot Leads</span>
+            <strong id="metricHot">0</strong>
+          </article>
+          <article>
+            <span>Due Follow-ups</span>
+            <strong id="metricDue">0</strong>
+          </article>
+        </section>
+
+        <section class="toolbar">
+          <label class="search-box">
+            <span>Search</span>
+            <input id="searchInput" type="search" placeholder="Company, contact, product, territory">
+          </label>
+          <label>
+            <span>Stage</span>
+            <select id="stageFilter">
+              <option value="all">All stages</option>
+            </select>
+          </label>
+          <label>
+            <span>Salesman</span>
+            <select id="salesmanFilter">
+              <option value="all">All salesmen</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="content-grid">
+          <div class="panel leads-panel">
+            <div class="panel-header">
+              <h2>Live Lead List</h2>
+              <span id="leadCount">0 records</span>
+            </div>
+            <div class="lead-list" id="leadList"></div>
+          </div>
+
+          <div class="panel detail-panel" id="detailPanel">
+            <div class="empty-state">
+              <strong>Select a lead</strong>
+              <span>Open any record to view details, update stage, and log activity.</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="mobile-tabs" aria-label="Mobile navigation">
+      <button class="nav-item active" data-view="dashboard">Home</button>
+      <button class="nav-item" data-view="pipeline">Pipeline</button>
+      <button class="nav-item" data-view="salesmen">Team</button>
+      <button class="nav-item" data-view="activity">Activity</button>
+    </div>
+
+    <dialog id="leadDialog">
+      <form method="dialog" class="lead-form" id="leadForm">
+        <div class="dialog-header">
+          <div>
+            <h2>Add New Lead</h2>
+            <p>Create once. Salesmen can access it from web or mobile.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeLeadForm">Close</button>
+        </div>
+        <div class="form-grid">
+          <label>Company name<input name="company_name" required></label>
+          <label>Contact person<input name="contact_person"></label>
+          <label>Phone<input name="phone"></label>
+          <label>Email<input name="email" type="email"></label>
+          <label>Territory<input name="territory" value="Dubai"></label>
+          <label>Assigned salesman<select name="assigned_salesman" id="formSalesman"></select></label>
+          <label>Stage<select name="stage" id="formStage"></select></label>
+          <label>Priority<select name="priority" id="formPriority"></select></label>
+          <label>Estimated value<input name="estimated_value" type="number" min="0" value="0"></label>
+          <label>Next action date<input name="next_action_date" type="date"></label>
+          <label class="wide">Product interest<input name="product_interest"></label>
+          <label class="wide">Next action<input name="next_action" value="Qualify lead"></label>
+          <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Type notes or record a voice note"></textarea></label>
+          <div class="wide voice-control">
+            <button class="voice-button" id="recordLeadVoice" type="button">Record Voice Note</button>
+            <span class="voice-status" id="leadVoiceStatus" aria-live="polite"></span>
+          </div>
+        </div>
+        <button class="primary-button" type="submit">Save Lead</button>
+      </form>
+    </dialog>
+
+    <dialog id="salesmanDialog">
+      <form method="dialog" class="lead-form" id="salesmanForm">
+        <div class="dialog-header">
+          <div>
+            <h2>Create Salesman Account</h2>
+            <p>Only the administrator can create new salesman sign-in accounts.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeSalesmanForm">Close</button>
+        </div>
+        <div class="form-grid">
+          <label>Name<input name="name" required></label>
+          <label>Email<input name="email" type="email" required></label>
+          <label>Territory<input name="territory" value="Dubai" required></label>
+          <label>Password<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+        </div>
+        <span class="form-message" id="salesmanMessage" aria-live="polite"></span>
+        <button class="primary-button" type="submit">Create Salesman</button>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
