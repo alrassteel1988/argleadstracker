@@ -1,0 +1,9 @@
+.env
+.vercel/
+node_modules/
+*.log
+data/db.json
+scripts/push-github-api.ps1
+arg leads tracker web/
+
+.vercel
