@@ -13,9 +13,11 @@ const {
   signOut
 } = require("./supabase-client");
 const {
+  enrichCompanyFromGoogle,
   enrichHunter,
   googlePlacesConfigured,
   hunterConfigured,
+  mergeLeadWithEnrichment,
   searchGooglePlaces
 } = require("./enrichment");
 
@@ -46,6 +48,16 @@ const ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || "";
 const SESSION_SECRET = process.env.APP_SESSION_SECRET || "local-development-session-secret-change-me";
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 const transcriptionRateLimit = new Map();
+const COMPANY_STATUSES = ["PROSPECT", "OUTREACH", "ENGAGED", "SAMPLING", "ACTIVE", "DORMANT"];
+const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
+const COMPANY_TIERS = ["1", "2", "3"];
+const GCC_TERRITORIES = ["UAE-North", "UAE-South", "Saudi", "Kuwait", "Bahrain", "Oman", "Mixed"];
+const ACTIVITY_TYPES = ["Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed", "Note", "Stage"];
+const PMR_HEAT = ["1", "2", "3", "4", "5"];
+const PMR_ORDER_TIMING = ["within 30 days", "30-90 days", "90 days-6 months", "6 months+", "unknown"];
+const PMR_VALUE = ["<500K", "500K-2M", "2M-5M", "5M+"];
+const PMR_DIRECTOR_ACTION = ["None", "Awareness only", "Attend next visit", "Direct contact"];
+const PMR_ACCOUNT_STATUS = ["Cold", "Warm", "Hot", "Active"];
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -140,6 +152,7 @@ function ensureDb() {
 function readDb() {
   ensureDb();
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8").replace(/^\uFEFF/, ""));
+  db.pmrs = Array.isArray(db.pmrs) ? db.pmrs : [];
   if (ensureAdminAccount(db)) writeDb(db);
   return db;
 }
@@ -166,6 +179,12 @@ function ensureAdminAccount(db) {
   if (existing) {
     existing.role = "admin";
     existing.status = "active";
+    existing.territory = existing.territory || "All";
+    if (ADMIN_BOOTSTRAP_PASSWORD && !passwordMatches(ADMIN_BOOTSTRAP_PASSWORD, existing.password_hash)) {
+      existing.password_hash = hashPassword(ADMIN_BOOTSTRAP_PASSWORD);
+      existing.updated_at = new Date().toISOString();
+      return true;
+    }
     return false;
   }
   if (!ADMIN_BOOTSTRAP_PASSWORD) return false;
@@ -366,15 +385,43 @@ async function transcribeAudio(req, res) {
 
 function normalizeLead(input) {
   const now = new Date().toISOString().slice(0, 10);
+  const status = COMPANY_STATUSES.includes(String(input.stage || input.status || input.lead_status || "").toUpperCase())
+    ? String(input.stage || input.status || input.lead_status).toUpperCase()
+    : "PROSPECT";
+  const tier = COMPANY_TIERS.includes(String(input.tier || "")) ? String(input.tier) : "2";
   return {
     id: input.id || `lead-${Date.now()}`,
     company_name: String(input.company_name || "New ARG Lead").trim(),
+    country_emirate: String(input.country_emirate || input.location || "Dubai, UAE").trim(),
+    sector: COMPANY_SECTORS.includes(String(input.sector || input.industry || "")) ? String(input.sector || input.industry) : "Other",
+    tier,
+    status,
+    legal_name: String(input.legal_name || "").trim(),
+    year_established: String(input.year_established || "").trim(),
     contact_person: String(input.contact_person || "").trim(),
+    primary_contact_title: String(input.primary_contact_title || "").trim(),
     phone: String(input.phone || "").trim(),
     email: String(input.email || "").trim(),
+    secondary_contact_name: String(input.secondary_contact_name || "").trim(),
+    secondary_contact_title: String(input.secondary_contact_title || "").trim(),
+    secondary_contact_mobile: String(input.secondary_contact_mobile || "").trim(),
+    secondary_contact_email: String(input.secondary_contact_email || "").trim(),
+    address: String(input.address || "").trim(),
+    location: String(input.location || "").trim(),
+    website: String(input.website || "").trim(),
+    google_place_id: String(input.google_place_id || input.place_id || "").trim(),
+    google_maps_url: String(input.google_maps_url || "").trim(),
+    google_rating: Number(input.google_rating || 0),
+    google_review_count: Number(input.google_review_count || 0),
+    business_category: String(input.business_category || input.industry || "").trim(),
+    opening_hours: Array.isArray(input.opening_hours) ? input.opening_hours : String(input.opening_hours || "").split(/\n|,/).map(item => item.trim()).filter(Boolean),
+    products_services_remarks: String(input.products_services_remarks || "").trim(),
+    enrichment_source: String(input.enrichment_source || "").trim(),
+    enrichment_status: String(input.enrichment_status || "pending").trim(),
+    enriched_at: input.enriched_at || null,
     territory: String(input.territory || "Dubai").trim(),
     assigned_salesman: String(input.assigned_salesman || "Unassigned").trim(),
-    stage: String(input.stage || "New").trim(),
+    stage: status,
     priority: String(input.priority || "New").trim(),
     estimated_value: Number(input.estimated_value || 0),
     product_interest: String(input.product_interest || "").trim(),
@@ -382,9 +429,140 @@ function normalizeLead(input) {
     next_action_date: String(input.next_action_date || now).trim(),
     last_activity: String(input.last_activity || now).trim(),
     source: String(input.source || "Manual entry").trim(),
+    quotation_ref: String(input.quotation_ref || "").trim(),
+    first_order_date: String(input.first_order_date || "").trim(),
+    estimated_monthly_volume: String(input.estimated_monthly_volume || "").trim(),
+    tags: String(input.tags || "").trim(),
     notes: String(input.notes || "").trim(),
     activities: Array.isArray(input.activities) ? input.activities : []
   };
+}
+
+function normalizeCompanyName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\b(llc|l\.l\.c|fze|fzco|ltd|limited|co|company|est|establishment|trading|contracting)\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function tokenSet(value) {
+  return new Set(normalizeCompanyName(value).split(/\s+/).filter(Boolean));
+}
+
+function duplicateScore(a, b) {
+  const left = normalizeCompanyName(a);
+  const right = normalizeCompanyName(b);
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  if (left.includes(right) || right.includes(left)) return 0.92;
+  const aTokens = tokenSet(left);
+  const bTokens = tokenSet(right);
+  const intersection = [...aTokens].filter(token => bTokens.has(token)).length;
+  const union = new Set([...aTokens, ...bTokens]).size || 1;
+  return intersection / union;
+}
+
+function findDuplicateLead(leads, companyName) {
+  return (leads || [])
+    .map(lead => ({ lead, score: duplicateScore(lead.company_name, companyName) }))
+    .filter(match => match.score >= 0.72)
+    .sort((a, b) => b.score - a.score)[0] || null;
+}
+
+function daysSince(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return 999;
+  return Math.floor((Date.now() - date.getTime()) / 86_400_000);
+}
+
+function expectedFrequencyDays(lead) {
+  if (lead.stage === "ACTIVE") return 30;
+  if (lead.stage === "OUTREACH") return 21;
+  if (["ENGAGED", "SAMPLING"].includes(lead.stage)) return 14;
+  return lead.tier === "1" ? 14 : lead.tier === "2" ? 21 : 30;
+}
+
+function relationshipHealth(lead) {
+  const elapsed = daysSince(lead.last_activity || lead.next_action_date);
+  const expected = expectedFrequencyDays(lead);
+  if (lead.stage === "DORMANT" || elapsed > expected * 1.6) return { label: "RED", score: 1, reason: `${elapsed} days since last activity` };
+  if (elapsed > expected) return { label: "AMBER", score: 2, reason: `${elapsed} days since last activity` };
+  return { label: "GREEN", score: 3, reason: `Activity within ${expected}-day expected contact window` };
+}
+
+function leadWithDerivedFields(lead) {
+  return {
+    ...lead,
+    health: relationshipHealth(lead)
+  };
+}
+
+function normalizePmr(input, lead, user) {
+  const now = new Date().toISOString();
+  return {
+    id: input.id || `pmr-${Date.now()}`,
+    company_id: lead.id,
+    activity_id: input.activity_id || "",
+    meeting_date: String(input.meeting_date || now.slice(0, 10)).trim(),
+    filed_by: user.name || user.email || "Unknown",
+    products_discussed: String(input.products_discussed || "").trim(),
+    competitors_mentioned: String(input.competitors_mentioned || "").trim(),
+    compliance_requirements: String(input.compliance_requirements || "").trim(),
+    relationship_heat_score: PMR_HEAT.includes(String(input.relationship_heat_score || "")) ? String(input.relationship_heat_score) : "3",
+    first_order_timing: PMR_ORDER_TIMING.includes(String(input.first_order_timing || "")) ? String(input.first_order_timing) : "unknown",
+    potential_annual_value: PMR_VALUE.includes(String(input.potential_annual_value || "")) ? String(input.potential_annual_value) : "500K-2M",
+    director_action_required: PMR_DIRECTOR_ACTION.includes(String(input.director_action_required || "")) ? String(input.director_action_required) : "None",
+    account_status: PMR_ACCOUNT_STATUS.includes(String(input.account_status || "")) ? String(input.account_status) : "Warm",
+    raw_document_url: String(input.raw_document_url || "").trim(),
+    notes: String(input.notes || "").trim(),
+    created_at: now
+  };
+}
+
+function latestPmr(db, leadId) {
+  return (db.pmrs || [])
+    .filter(pmr => pmr.company_id === leadId)
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
+}
+
+function actionResponse(action, lead, pmr) {
+  const activities = lead.activities || [];
+  const lastActivity = activities[0];
+  const health = relationshipHealth(lead);
+  if (action === "prepare") {
+    return [
+      `${lead.company_name} is ${lead.stage} with ${health.label} relationship health.`,
+      `Assigned to ${lead.assigned_salesman}; territory ${lead.territory}; sector ${lead.sector || lead.industry || "not classified"}.`,
+      lastActivity ? `Last activity: ${lastActivity.type} on ${lastActivity.at}: ${lastActivity.text}` : "No activity has been logged yet.",
+      pmr ? `Last PMR heat score ${pmr.relationship_heat_score}/5; competitors: ${pmr.competitors_mentioned || "none noted"}; director action: ${pmr.director_action_required}.` : "No PMR is filed yet.",
+      `Recommended ask: ${lead.next_action || "Confirm current steel requirements, buying timeline, and quotation registration process."}`
+    ].join("\n");
+  }
+  if (action === "next") {
+    return `${lead.next_action || "Contact the primary buyer"} because the relationship is ${health.label} and the last activity is ${health.reason}.`;
+  }
+  if (action === "email") {
+    return [
+      `Subject: Follow-up from Al Ras Steel`,
+      "",
+      `Dear ${lead.contact_person || "Team"},`,
+      "",
+      `Thank you for your time regarding ${lead.product_interest || "your steel requirements"}. Following our last discussion${lastActivity ? ` on ${lastActivity.at}` : ""}, we would like to confirm the next steps and understand any upcoming requirements for structural steel, rebar, plates, or related materials.`,
+      "",
+      `Please let us know the best contact for procurement or project coordination, and whether there are active or upcoming enquiries where Al Ras Steel can support.`,
+      "",
+      `Regards,`,
+      `Al Ras Steel`
+    ].join("\n");
+  }
+  if (action === "summary") {
+    return `${lead.company_name} is a ${lead.stage} ${lead.sector || lead.industry || "company"} account assigned to ${lead.assigned_salesman}. Relationship health is ${health.label}. ${lastActivity ? `Latest activity: ${lastActivity.text}` : "No activity has been logged."} ${pmr ? `Latest PMR marked the account ${pmr.account_status} with heat score ${pmr.relationship_heat_score}/5.` : "No PMR has been filed."}`;
+  }
+  if (action === "flag") {
+    return `Director attention flagged for ${lead.company_name}. Reason: ${health.label} health, ${health.reason}. Most recent PMR director action: ${pmr?.director_action_required || "None"}.`;
+  }
+  return "Action is not available.";
 }
 
 function toSupabaseLead(input, user) {
@@ -392,17 +570,30 @@ function toSupabaseLead(input, user) {
   return {
     company_id: input.company_id || null,
     company_name: lead.company_name,
-    industry: String(input.industry || "").trim(),
-    location: String(input.location || lead.territory).trim(),
-    address: String(input.address || "").trim(),
+    country_emirate: lead.country_emirate,
+    sector: lead.sector,
+    tier: lead.tier,
+    legal_name: lead.legal_name,
+    year_established: lead.year_established,
+    industry: String(input.industry || lead.business_category || "").trim(),
+    location: String(input.location || lead.location || lead.territory).trim(),
+    address: lead.address,
     phone: lead.phone,
-    website: String(input.website || "").trim(),
-    google_place_id: String(input.google_place_id || "").trim() || null,
-    google_maps_url: String(input.google_maps_url || "").trim(),
-    google_rating: Number(input.google_rating || 0) || null,
-    google_review_count: Number(input.google_review_count || 0),
+    website: lead.website,
+    google_place_id: lead.google_place_id || null,
+    google_maps_url: lead.google_maps_url,
+    google_rating: Number(lead.google_rating || 0) || null,
+    google_review_count: Number(lead.google_review_count || 0),
+    business_category: lead.business_category,
+    opening_hours: lead.opening_hours,
+    products_services_remarks: lead.products_services_remarks,
     contact_name: lead.contact_person,
+    primary_contact_title: lead.primary_contact_title,
     contact_email: lead.email,
+    secondary_contact_name: lead.secondary_contact_name,
+    secondary_contact_title: lead.secondary_contact_title,
+    secondary_contact_mobile: lead.secondary_contact_mobile,
+    secondary_contact_email: lead.secondary_contact_email,
     hunter_confidence_score: input.hunter_confidence_score == null ? null : Number(input.hunter_confidence_score),
     lead_status: lead.stage,
     notes: lead.notes,
@@ -415,20 +606,26 @@ function toSupabaseLead(input, user) {
     next_action_date: lead.next_action_date,
     last_activity: lead.last_activity,
     source: lead.source,
+    quotation_ref: lead.quotation_ref,
+    first_order_date: lead.first_order_date || null,
+    estimated_monthly_volume: lead.estimated_monthly_volume,
+    tags: lead.tags,
     activities: lead.activities,
-    enrichment_status: String(input.enrichment_status || "pending"),
-    enrichment_updated_at: input.enrichment_updated_at || null,
+    enrichment_status: lead.enrichment_status,
+    enrichment_source: lead.enrichment_source,
+    enriched_at: lead.enriched_at,
+    enrichment_updated_at: input.enrichment_updated_at || lead.enriched_at || null,
     created_by: user.id
   };
 }
 
 function fromSupabaseLead(lead) {
-  return {
+  return leadWithDerivedFields({
     ...lead,
     contact_person: lead.contact_name || "",
     email: lead.contact_email || "",
     stage: lead.lead_status || "New"
-  };
+  });
 }
 
 async function getSupabaseLead(token, id) {
@@ -455,6 +652,36 @@ async function updateEnrichment(token, userId, leadId, provider, status, details
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: { lead_id: leadId, provider, status, details, error_message: errorMessage, created_by: userId }
   });
+}
+
+function hasGoogleFields(input) {
+  return Boolean(
+    input.google_place_id
+    || input.google_maps_url
+    || ["enriched", "partial", "not_found"].includes(String(input.enrichment_status || ""))
+  );
+}
+
+async function googleEnrichPayload(input, req, { overwrite = false } = {}) {
+  const companyName = String(input.company_name || "").trim();
+  if (!companyName || hasGoogleFields(input)) return input;
+  try {
+    const enrichment = await enrichCompanyFromGoogle({
+      companyName,
+      location: String(input.location || input.territory || "").trim(),
+      country: "United Arab Emirates",
+      rateKey: clientIp(req)
+    });
+    return mergeLeadWithEnrichment(input, enrichment, { overwrite });
+  } catch (error) {
+    return {
+      ...input,
+      enrichment_source: "google_places",
+      enrichment_status: error.status === 429 ? "failed" : "failed",
+      products_services_remarks: error.message,
+      enrichment_updated_at: new Date().toISOString()
+    };
+  }
 }
 
 async function findCompany(token, lead) {
@@ -487,6 +714,8 @@ async function saveSupabaseLead(token, user, input) {
       headers: { Prefer: "return=representation" },
       body: {
         company_name: lead.company_name,
+        legal_name: lead.legal_name,
+        year_established: lead.year_established,
         industry: lead.industry,
         location: lead.location,
         address: lead.address,
@@ -496,6 +725,13 @@ async function saveSupabaseLead(token, user, input) {
         google_maps_url: lead.google_maps_url,
         google_rating: lead.google_rating,
         google_review_count: lead.google_review_count,
+        business_category: lead.business_category,
+        opening_hours: lead.opening_hours,
+        products_services_remarks: lead.products_services_remarks,
+        enrichment_source: lead.enrichment_source,
+        enrichment_status: lead.enrichment_status,
+        enriched_at: lead.enriched_at,
+        enrichment_updated_at: lead.enrichment_updated_at,
         created_by: user.id
       }
     });
@@ -578,6 +814,25 @@ async function handleApi(req, res, url) {
     }
   }
 
+  if (req.method === "POST" && url.pathname === "/api/leads/enrich-company") {
+    const payload = await readBody(req);
+    const companyName = String(payload.companyName || payload.company_name || "").trim();
+    const location = String(payload.location || payload.city || "").trim();
+    try {
+      const enrichment = await enrichCompanyFromGoogle({
+        companyName,
+        location,
+        country: String(payload.country || "United Arab Emirates").trim(),
+        rateKey: clientIp(req)
+      });
+      if (supabaseEnabled) await recordSearch(user.token, user.id, companyName, location, "google_places", enrichment.enrichment_status === "not_found" ? 0 : 1);
+      return sendJson(res, 200, { enrichment });
+    } catch (error) {
+      if (supabaseEnabled) await recordSearch(user.token, user.id, companyName, location, "google_places", 0, "failed", error.message);
+      throw error;
+    }
+  }
+
   if (url.pathname === "/api/users") {
     if (user.role !== "admin") return sendJson(res, 403, { error: "Admin access required." });
     if (supabaseEnabled) {
@@ -633,16 +888,24 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const profiles = await rest("profiles?role=eq.salesman&status=eq.active&select=*", { token: user.token });
       return sendJson(res, 200, {
-        stages: ["New", "Qualified", "Proposal", "Negotiation", "Won", "Dormant"],
+        stages: COMPANY_STATUSES,
         priorities: ["New", "Warm", "Hot", "At Risk"],
-        territories: ["Dubai", "Sharjah", "Abu Dhabi", "Ajman", "Northern Emirates"],
+        sectors: COMPANY_SECTORS,
+        tiers: COMPANY_TIERS,
+        territories: GCC_TERRITORIES,
+        activityTypes: ACTIVITY_TYPES,
+        pmr: { heat: PMR_HEAT, firstOrderTiming: PMR_ORDER_TIMING, potentialValue: PMR_VALUE, directorAction: PMR_DIRECTOR_ACTION, accountStatus: PMR_ACCOUNT_STATUS },
         salesmen: profiles.map(profile => ({ ...profile, name: profile.full_name }))
       });
     }
     return sendJson(res, 200, {
-      stages: ["New", "Qualified", "Proposal", "Negotiation", "Won", "Dormant"],
+      stages: COMPANY_STATUSES,
       priorities: ["New", "Warm", "Hot", "At Risk"],
-      territories: ["Dubai", "Sharjah", "Abu Dhabi", "Ajman", "Northern Emirates"],
+      sectors: COMPANY_SECTORS,
+      tiers: COMPANY_TIERS,
+      territories: GCC_TERRITORIES,
+      activityTypes: ACTIVITY_TYPES,
+      pmr: { heat: PMR_HEAT, firstOrderTiming: PMR_ORDER_TIMING, potentialValue: PMR_VALUE, directorAction: PMR_DIRECTOR_ACTION, accountStatus: PMR_ACCOUNT_STATUS },
       salesmen: db.salesmen
     });
   }
@@ -652,27 +915,49 @@ async function handleApi(req, res, url) {
       const leads = await rest("leads?select=*&order=created_at.desc", { token: user.token });
       return sendJson(res, 200, leads.map(fromSupabaseLead));
     }
-    return sendJson(res, 200, db.leads);
+    return sendJson(res, 200, db.leads.map(leadWithDerivedFields));
   }
 
   if (req.method === "POST" && url.pathname === "/api/leads") {
-    const payload = await readBody(req);
+    const payload = await googleEnrichPayload(await readBody(req), req);
     if (supabaseEnabled) return sendJson(res, 201, await saveSupabaseLead(user.token, user, payload));
+    if (!payload.allow_duplicate) {
+      const duplicate = findDuplicateLead(db.leads, payload.company_name);
+      if (duplicate) {
+        return sendJson(res, 409, {
+          error: "Possible duplicate company found.",
+          duplicate: {
+            id: duplicate.lead.id,
+            company_name: duplicate.lead.company_name,
+            assigned_salesman: duplicate.lead.assigned_salesman,
+            territory: duplicate.lead.territory,
+            score: Number(duplicate.score.toFixed(2))
+          }
+        });
+      }
+    }
     const lead = normalizeLead(payload);
     db.leads.unshift(lead);
     writeDb(db);
-    return sendJson(res, 201, lead);
+    return sendJson(res, 201, leadWithDerivedFields(lead));
   }
 
   const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
   if (req.method === "PATCH" && leadMatch) {
-    const payload = await readBody(req);
+    let payload = await readBody(req);
     if (supabaseEnabled) {
+      const existing = await getSupabaseLead(user.token, leadMatch[1]);
+      if (!existing) return sendJson(res, 404, { error: "Lead not found" });
+      if (payload.company_name && String(payload.company_name).trim() !== String(existing.company_name || "").trim()) {
+        payload = await googleEnrichPayload({ ...existing, ...payload, google_place_id: "" }, req);
+      }
       const allowed = [
         "company_name", "industry", "location", "address", "phone", "website", "google_place_id",
         "google_maps_url", "google_rating", "google_review_count", "contact_name", "contact_email",
         "hunter_confidence_score", "lead_status", "notes", "territory", "assigned_salesman", "priority",
-        "estimated_value", "product_interest", "next_action", "next_action_date", "source"
+        "estimated_value", "product_interest", "next_action", "next_action_date", "source",
+        "legal_name", "year_established", "business_category", "opening_hours",
+        "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at"
       ];
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
       const leads = await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}&select=*`, {
@@ -686,9 +971,12 @@ async function handleApi(req, res, url) {
     }
     const lead = db.leads.find(item => item.id === leadMatch[1]);
     if (!lead) return sendJson(res, 404, { error: "Lead not found" });
+    if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
+      payload = await googleEnrichPayload({ ...lead, ...payload, google_place_id: "" }, req);
+    }
     Object.assign(lead, payload);
     writeDb(db);
-    return sendJson(res, 200, lead);
+    return sendJson(res, 200, leadWithDerivedFields(lead));
   }
 
   if (req.method === "DELETE" && leadMatch) {
@@ -759,6 +1047,48 @@ async function handleApi(req, res, url) {
     return sendJson(res, 201, { lead, activity });
   }
 
+  const pmrMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/pmrs$/);
+  if (pmrMatch) {
+    if (supabaseEnabled) return sendJson(res, 503, { error: "PMR storage migration must be applied before Supabase PMRs are enabled." });
+    const lead = db.leads.find(item => item.id === pmrMatch[1]);
+    if (!lead) return sendJson(res, 404, { error: "Company not found" });
+    if (req.method === "GET") {
+      return sendJson(res, 200, db.pmrs.filter(pmr => pmr.company_id === lead.id));
+    }
+    if (req.method === "POST") {
+      const payload = await readBody(req);
+      const pmr = normalizePmr(payload, lead, publicUser(user));
+      const activity = {
+        at: new Date().toISOString().slice(0, 10),
+        type: "In-Person Meeting",
+        text: `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.`,
+        pmr_linked: true,
+        pmr_id: pmr.id,
+        quotation_ref: String(payload.quotation_ref || "").trim()
+      };
+      db.pmrs.unshift(pmr);
+      lead.activities.unshift(activity);
+      lead.last_activity = activity.at;
+      lead.tags = [lead.tags, pmr.compliance_requirements, pmr.competitors_mentioned].filter(Boolean).join(", ");
+      writeDb(db);
+      return sendJson(res, 201, { pmr, lead: leadWithDerivedFields(lead) });
+    }
+  }
+
+  const actionMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/ai-actions$/);
+  if (req.method === "POST" && actionMatch) {
+    if (supabaseEnabled) return sendJson(res, 503, { error: "Relationship intelligence actions are currently enabled for the local company store. Apply the PMR migration before Supabase actions." });
+    const payload = await readBody(req);
+    const lead = db.leads.find(item => item.id === actionMatch[1]);
+    if (!lead) return sendJson(res, 404, { error: "Company not found" });
+    const action = String(payload.action || "").trim();
+    return sendJson(res, 200, {
+      action,
+      output: actionResponse(action, lead, latestPmr(db, lead.id)),
+      source: "Company record, activity log, and latest PMR"
+    });
+  }
+
   const enrichmentMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/enrich$/);
   if (req.method === "POST" && enrichmentMatch) {
     if (!supabaseEnabled) return sendJson(res, 503, { error: "Hunter enrichment requires the Supabase backend configuration." });
@@ -792,11 +1122,11 @@ async function handleApi(req, res, url) {
         body: {
           contact_email: primary?.email || lead.contact_email,
           hunter_confidence_score: primary?.confidence ?? lead.hunter_confidence_score,
-          enrichment_status: "completed",
+          enrichment_status: "enriched",
           enrichment_updated_at: new Date().toISOString()
         }
       });
-      await updateEnrichment(user.token, user.id, lead.id, "hunter", "completed", { domain: enriched.domain, emails });
+      await updateEnrichment(user.token, user.id, lead.id, "hunter", "enriched", { domain: enriched.domain, emails });
       await recordSearch(user.token, user.id, enriched.domain, lead.location || "", "hunter", emails.length);
       return sendJson(res, 200, { lead: fromSupabaseLead(updated[0]), domain: enriched.domain, emails });
     } catch (error) {

@@ -131,26 +131,49 @@
           <button type="button" class="ghost-button" id="closeLeadForm">Close</button>
         </div>
         <div class="form-grid">
-          <label>Company name<input name="company_name" required></label>
+          <label class="company-field">Company name<input name="company_name" id="leadCompanyName" required></label>
+          <div class="wide enrichment-strip">
+            <span class="enrichment-status" id="leadEnrichmentStatus" aria-live="polite">Type a company name to fetch Google business info.</span>
+          </div>
+          <label>Legal name<input name="legal_name" placeholder="Not available from Google Places API"></label>
+          <label>Year established<input name="year_established" placeholder="Not available from Google Places API"></label>
+          <label>Country / Emirate<input name="country_emirate" value="Dubai, UAE"></label>
+          <label>Sector<select name="sector" id="formSector"></select></label>
+          <label>Tier<select name="tier" id="formTier"></select></label>
           <label>Industry<input name="industry"></label>
           <label>Location<input name="location" placeholder="Dubai, UAE"></label>
           <label>Address<input name="address"></label>
           <label>Contact person<input name="contact_person"></label>
+          <label>Primary title<input name="primary_contact_title"></label>
           <label>Phone<input name="phone"></label>
           <label>Email<input name="email" type="email"></label>
+          <label>Secondary contact<input name="secondary_contact_name"></label>
+          <label>Secondary title<input name="secondary_contact_title"></label>
+          <label>Secondary mobile<input name="secondary_contact_mobile"></label>
+          <label>Secondary email<input name="secondary_contact_email" type="email"></label>
           <label>Website<input name="website" type="url" placeholder="https://example.com"></label>
+          <label>Google Maps URL<input name="google_maps_url" type="url"></label>
+          <label>Business category<input name="business_category"></label>
           <label>Territory<input name="territory" value="Dubai"></label>
           <label>Assigned salesman<select name="assigned_salesman" id="formSalesman"></select></label>
           <label>Stage<select name="stage" id="formStage"></select></label>
           <label>Priority<select name="priority" id="formPriority"></select></label>
           <label>Estimated value<input name="estimated_value" type="number" min="0" value="0"></label>
           <label>Next action date<input name="next_action_date" type="date"></label>
+          <label>First order date<input name="first_order_date" type="date"></label>
+          <label>Est. monthly volume<input name="estimated_monthly_volume" placeholder="MT/month"></label>
           <label class="wide">Product interest<input name="product_interest"></label>
+          <label class="wide">Tags<input name="tags" placeholder="ICV-required, BAPCO-approved"></label>
+          <label class="wide">Quotation ref<input name="quotation_ref" placeholder="ERP reference only"></label>
+          <label class="wide">Products/services remarks<textarea name="products_services_remarks" rows="3" placeholder="Google Places limitations or sales notes"></textarea></label>
           <label class="wide">Next action<input name="next_action" value="Qualify lead"></label>
           <input name="google_place_id" type="hidden">
-          <input name="google_maps_url" type="hidden">
           <input name="google_rating" type="hidden">
           <input name="google_review_count" type="hidden">
+          <input name="opening_hours" type="hidden">
+          <input name="enrichment_source" type="hidden">
+          <input name="enrichment_status" type="hidden">
+          <input name="enriched_at" type="hidden">
           <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Type notes or record a voice note"></textarea></label>
           <div class="wide voice-control">
             <button class="voice-button" id="recordLeadVoice" type="button">Record Voice Note</button>
@@ -158,6 +181,34 @@
           </div>
         </div>
         <button class="primary-button" type="submit">Save Lead</button>
+      </form>
+    </dialog>
+
+    <dialog id="pmrDialog">
+      <form method="dialog" class="lead-form" id="pmrForm">
+        <div class="dialog-header">
+          <div>
+            <h2>File Post-Meeting Report</h2>
+            <p>Structured PMR intelligence is linked to this company and activity log.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closePmrForm">Close</button>
+        </div>
+        <div class="form-grid">
+          <input name="company_id" type="hidden">
+          <label>Meeting date<input name="meeting_date" type="date" required></label>
+          <label>Relationship heat<select name="relationship_heat_score" id="pmrHeat"></select></label>
+          <label>First order timing<select name="first_order_timing" id="pmrOrderTiming"></select></label>
+          <label>Potential annual value<select name="potential_annual_value" id="pmrPotentialValue"></select></label>
+          <label>Director action<select name="director_action_required" id="pmrDirectorAction"></select></label>
+          <label>Account status<select name="account_status" id="pmrAccountStatus"></select></label>
+          <label class="wide">Products discussed<textarea name="products_discussed" rows="2"></textarea></label>
+          <label class="wide">Competitors mentioned<textarea name="competitors_mentioned" rows="2"></textarea></label>
+          <label class="wide">Compliance requirements<textarea name="compliance_requirements" rows="2" placeholder="ISO, ICV, DNV, ADNOC approved"></textarea></label>
+          <label class="wide">Raw document URL<input name="raw_document_url" type="url" placeholder="Google Drive or equivalent link"></label>
+          <label class="wide">PMR notes<textarea name="notes" rows="3"></textarea></label>
+        </div>
+        <span class="form-message" id="pmrMessage" aria-live="polite"></span>
+        <button class="primary-button" type="submit">Save PMR</button>
       </form>
     </dialog>
 
