@@ -5,12 +5,14 @@ const crypto = require("crypto");
 const {
   bearerToken,
   createAuthUser,
+  createStorageSignedUrl,
   currentSupabaseUser,
   isSupabaseAdminConfigured,
   isSupabaseConfigured,
   rest,
   signIn,
-  signOut
+  signOut,
+  uploadStorageObject
 } = require("./supabase-client");
 const {
   enrichCompanyFromGoogle,
@@ -40,9 +42,11 @@ const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const DATA_DIR = process.env.VERCEL ? path.join("/tmp", "argleadstracker") : path.join(ROOT, "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
+const VOICE_NOTE_DIR = path.join(DATA_DIR, "voice-notes");
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_TRANSLATION_MODEL = "whisper-1";
 const OPENAI_ENGLISH_NORMALIZATION_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
+const OPENAI_PMR_ANALYSIS_MODEL = process.env.OPENAI_PMR_ANALYSIS_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "glory@alrassteel.com").trim().toLowerCase();
 const ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || "";
 const SESSION_SECRET = process.env.APP_SESSION_SECRET || "local-development-session-secret-change-me";
@@ -58,6 +62,8 @@ const PMR_ORDER_TIMING = ["within 30 days", "30-90 days", "90 days-6 months", "6
 const PMR_VALUE = ["<500K", "500K-2M", "2M-5M", "5M+"];
 const PMR_DIRECTOR_ACTION = ["None", "Awareness only", "Attend next visit", "Direct contact"];
 const PMR_ACCOUNT_STATUS = ["Cold", "Warm", "Hot", "Active"];
+const REMINDER_TYPES = ["Quotation follow-up", "Planned visit", "Important date", "Payment follow-up", "Sample approval", "General follow-up"];
+const ACTIVITY_EXTRA_FIELDS = ["followup_completed", "completed_due_date", "completed_activity_required", "completed_reminder_type"];
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -149,6 +155,11 @@ function ensureDb() {
   if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, JSON.stringify(seed, null, 2));
 }
 
+function ensureVoiceNoteDir() {
+  ensureDb();
+  if (!fs.existsSync(VOICE_NOTE_DIR)) fs.mkdirSync(VOICE_NOTE_DIR, { recursive: true });
+}
+
 function readDb() {
   ensureDb();
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8").replace(/^\uFEFF/, ""));
@@ -207,6 +218,16 @@ function publicUser(user) {
   return safe;
 }
 
+function newRecordId(prefix) {
+  return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+}
+
+function ensureActivityIds(activities) {
+  return (Array.isArray(activities) ? activities : []).map(activity => (
+    activity?.id ? activity : { ...activity, id: newRecordId("act") }
+  ));
+}
+
 function issueToken(user) {
   const payload = Buffer.from(JSON.stringify({
     sub: user.id,
@@ -236,6 +257,17 @@ function currentUser(req, db) {
 function sendJson(res, status, data) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(data));
+}
+
+function sendDownload(res, contentType, filename, body) {
+  const buffer = Buffer.isBuffer(body) ? body : Buffer.from(String(body), "utf8");
+  res.writeHead(200, {
+    "Content-Type": contentType,
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Cache-Control": "no-store",
+    "Content-Length": buffer.length
+  });
+  res.end(buffer);
 }
 
 function readBody(req) {
@@ -302,6 +334,94 @@ function audioExtension(contentType) {
   return "webm";
 }
 
+function audioContentType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".mp4" || ext === ".m4a") return "audio/mp4";
+  if (ext === ".mp3") return "audio/mpeg";
+  if (ext === ".wav") return "audio/wav";
+  return "audio/webm";
+}
+
+function safeVoiceNoteId(value) {
+  const id = String(value || "").trim();
+  return /^[a-z0-9-]{12,80}$/i.test(id) ? id : "";
+}
+
+function voiceNoteRecord(input = {}) {
+  const id = safeVoiceNoteId(input.voice_note_id);
+  const url = String(input.voice_note_url || "").trim();
+  if (!id || !url.startsWith("/api/pmr-voice-notes/")) return null;
+  return {
+    id,
+    url,
+    path: String(input.voice_note_path || "").trim(),
+    mime_type: String(input.voice_note_mime_type || "audio/webm").trim(),
+    size_bytes: Number(input.voice_note_size_bytes || 0) || 0
+  };
+}
+
+function sendVoiceNote(req, res, noteId) {
+  const id = safeVoiceNoteId(noteId);
+  if (!id) {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("Invalid voice note");
+  }
+  ensureVoiceNoteDir();
+  const fileName = fs.readdirSync(VOICE_NOTE_DIR).find(name => name.startsWith(`${id}.`));
+  if (!fileName) {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("Voice note not found");
+  }
+  const filePath = path.join(VOICE_NOTE_DIR, fileName);
+  res.writeHead(200, {
+    "Content-Type": audioContentType(filePath),
+    "Cache-Control": "private, max-age=31536000, immutable",
+    "Content-Disposition": `inline; filename="${fileName}"`
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+async function saveVoiceNote(req, res, { supabaseEnabled = false, user = null } = {}) {
+  const contentType = String(req.headers["content-type"] || "audio/webm").split(";")[0].trim();
+  if (!contentType.startsWith("audio/") && contentType !== "application/octet-stream") {
+    return sendJson(res, 415, { error: "Unsupported voice note format." });
+  }
+  const audio = await readRawBody(req);
+  if (!audio.length) return sendJson(res, 400, { error: "Record a PMR voice note before uploading." });
+
+  const id = `voice-${Date.now()}-${crypto.randomBytes(8).toString("hex")}`;
+  const extension = audioExtension(contentType);
+  const fileName = `${id}.${extension}`;
+  const mimeType = contentType === "application/octet-stream" ? audioContentType(fileName) : contentType;
+
+  if (supabaseEnabled) {
+    if (!user) return sendJson(res, 401, { error: "Authentication required." });
+    const objectPath = `${user.id}/${fileName}`;
+    await uploadStorageObject(objectPath, audio, mimeType);
+    return sendJson(res, 201, {
+      id,
+      url: `/api/pmr-voice-notes/${id}`,
+      path: objectPath,
+      mime_type: mimeType,
+      size_bytes: audio.length,
+      file_name: fileName,
+      storage: "supabase"
+    });
+  }
+
+  ensureVoiceNoteDir();
+  const filePath = path.join(VOICE_NOTE_DIR, fileName);
+  fs.writeFileSync(filePath, audio);
+  return sendJson(res, 201, {
+    id,
+    url: `/api/pmr-voice-notes/${id}`,
+    path: "",
+    mime_type: mimeType,
+    size_bytes: audio.length,
+    file_name: fileName
+  });
+}
+
 function safeProviderMessage(value) {
   return String(value || "OpenAI transcription request failed.")
     .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
@@ -346,6 +466,112 @@ async function normalizeEnglishText(text) {
     throw error;
   }
   return englishText;
+}
+
+function extractJsonObject(text) {
+  const raw = String(text || "").trim();
+  if (!raw) throw new Error("AI PMR analysis returned no text.");
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw error;
+    return JSON.parse(match[0]);
+  }
+}
+
+function normalizeAiOption(value, allowed, fallback) {
+  const normalized = String(value || "").trim().toLowerCase();
+  const match = allowed.find(option => option.toLowerCase() === normalized);
+  return match || fallback;
+}
+
+function conciseText(value, max = 1200) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function normalizePmrAnalysisDraft(input = {}) {
+  const draft = {
+    products_discussed: conciseText(input.products_discussed),
+    competitors_mentioned: conciseText(input.competitors_mentioned),
+    compliance_requirements: conciseText(input.compliance_requirements),
+    notes: conciseText(input.notes, 1800),
+    first_order_timing: normalizeAiOption(input.first_order_timing, PMR_ORDER_TIMING, "unknown"),
+    potential_annual_value: normalizeAiOption(input.potential_annual_value, PMR_VALUE, "500K-2M"),
+    relationship_heat_score: normalizeAiOption(input.relationship_heat_score, PMR_HEAT, "3"),
+    director_action_required: normalizeAiOption(input.director_action_required, PMR_DIRECTOR_ACTION, "None"),
+    account_status: normalizeAiOption(input.account_status, PMR_ACCOUNT_STATUS, "Warm")
+  };
+  if (!draft.notes) {
+    draft.notes = "AI could not identify detailed meeting notes from the transcript. Review the transcript before saving.";
+  }
+  return draft;
+}
+
+async function analyzePmrTranscriptText(transcript, lead = {}) {
+  if (!OPENAI_API_KEY) {
+    const error = new Error("AI PMR drafting is not configured. Add OPENAI_API_KEY on the server.");
+    error.status = 503;
+    throw error;
+  }
+  const source = String(transcript || "").trim();
+  if (source.length < 8) {
+    const error = new Error("Record a clearer meeting voice note before requesting AI PMR drafting.");
+    error.status = 400;
+    throw error;
+  }
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: OPENAI_PMR_ANALYSIS_MODEL,
+      instructions: [
+        "You are an assistant for Al Ras Steel's CRM post-meeting reports.",
+        "Analyze the meeting transcript and return only valid JSON with these keys:",
+        "products_discussed, competitors_mentioned, compliance_requirements, notes, first_order_timing, potential_annual_value, relationship_heat_score, director_action_required, account_status.",
+        `first_order_timing must be one of: ${PMR_ORDER_TIMING.join(", ")}.`,
+        `potential_annual_value must be one of: ${PMR_VALUE.join(", ")}.`,
+        `relationship_heat_score must be one of: ${PMR_HEAT.join(", ")}.`,
+        `director_action_required must be one of: ${PMR_DIRECTOR_ACTION.join(", ")}.`,
+        `account_status must be one of: ${PMR_ACCOUNT_STATUS.join(", ")}.`,
+        "Do not invent facts. If a text field is not discussed, return an empty string for that field.",
+        "For notes, write a concise sales-focused PMR summary using only the transcript."
+      ].join(" "),
+      input: [
+        `Company context: ${JSON.stringify({
+          company_name: lead.company_name || "",
+          sector: lead.sector || "",
+          stage: lead.stage || "",
+          notes: lead.notes || ""
+        })}`,
+        `Transcript: ${source.slice(0, 12000)}`
+      ].join("\n\n"),
+      max_output_tokens: 900
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(safeProviderMessage(data.error?.message || "AI PMR analysis failed."));
+    error.status = response.status === 429 ? 429 : 502;
+    throw error;
+  }
+  return normalizePmrAnalysisDraft(extractJsonObject(responseText(data)));
+}
+
+async function analyzePmrTranscript(req, res) {
+  if (!allowTranscription(req)) return sendJson(res, 429, { error: "Too many AI voice requests. Please wait one minute and try again." });
+  const payload = await readBody(req);
+  const transcript = String(payload.transcript || "").trim();
+  const draft = await analyzePmrTranscriptText(transcript, payload.lead || {});
+  return sendJson(res, 200, {
+    draft,
+    model: OPENAI_PMR_ANALYSIS_MODEL,
+    source: "voice_note_transcript"
+  });
 }
 
 async function transcribeAudio(req, res) {
@@ -438,6 +664,195 @@ function normalizeLead(input) {
   };
 }
 
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60_000);
+}
+
+function compactCalendarDate(dateValue, timeValue, offsetMinutes = 0) {
+  const date = String(dateValue || "").trim();
+  if (!date) return "";
+  const time = String(timeValue || "").trim() || "09:00";
+  const parsed = new Date(`${date}T${time}:00`);
+  const value = Number.isNaN(parsed.getTime()) ? new Date(`${date}T09:00:00`) : addMinutes(parsed, offsetMinutes);
+  const pad = number => String(number).padStart(2, "0");
+  return [
+    value.getFullYear(),
+    pad(value.getMonth() + 1),
+    pad(value.getDate()),
+    "T",
+    pad(value.getHours()),
+    pad(value.getMinutes()),
+    "00"
+  ].join("");
+}
+
+function googleCalendarUrl({ title, details, location, due_date, due_time }) {
+  const start = compactCalendarDate(due_date, due_time);
+  if (!start) return "";
+  const end = compactCalendarDate(due_date, due_time, 30);
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: String(title || "ARG CRM follow-up"),
+    dates: `${start}/${end}`,
+    details: String(details || ""),
+    location: String(location || ""),
+    ctz: "Asia/Dubai"
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function isReminderActivity(activity) {
+  return Boolean(activity?.reminder) || String(activity?.type || "").toLowerCase() === "reminder";
+}
+
+function normalizeReminderActivity(input, lead, user) {
+  const dueDate = String(input.due_date || lead.next_action_date || new Date().toISOString().slice(0, 10)).trim();
+  const reminderType = REMINDER_TYPES.includes(String(input.reminder_type || "")) ? String(input.reminder_type) : "General follow-up";
+  const action = String(input.activity_required || input.text || lead.next_action || "Follow up with customer").trim();
+  const title = `${reminderType}: ${lead.company_name}`;
+  const details = [
+    action,
+    lead.phone ? `Phone: ${lead.phone}` : "",
+    lead.email ? `Email: ${lead.email}` : "",
+    `Salesman: ${user?.name || lead.assigned_salesman || "Assigned salesman"}`,
+    "Created from ARG Leads Tracker."
+  ].filter(Boolean).join("\n");
+  return {
+    id: input.id || newRecordId("act"),
+    at: new Date().toISOString().slice(0, 10),
+    type: "Reminder",
+    text: `${reminderType}: ${action}`,
+    reminder: true,
+    reminder_type: reminderType,
+    activity_required: action,
+    due_date: dueDate,
+    due_time: String(input.due_time || "09:00").trim(),
+    reminder_status: "scheduled",
+    google_calendar_url: googleCalendarUrl({
+      title,
+      details,
+      location: lead.address || lead.location || lead.territory,
+      due_date: dueDate,
+      due_time: String(input.due_time || "09:00").trim()
+    })
+  };
+}
+
+function editActivity(existing, input, lead, user) {
+  const next = { ...existing };
+  const at = String(input.at || next.at || new Date().toISOString().slice(0, 10)).trim();
+  const type = String(input.type || next.type || "Note").trim();
+  const text = String(input.text || next.text || "").trim();
+  next.at = at;
+  next.type = type;
+  next.text = text || "Activity updated";
+  next.edited_at = new Date().toISOString();
+
+  if (isReminderActivity(next) || type.toLowerCase() === "reminder" || input.reminder) {
+    next.reminder = true;
+    next.type = "Reminder";
+    next.reminder_type = REMINDER_TYPES.includes(String(input.reminder_type || next.reminder_type || ""))
+      ? String(input.reminder_type || next.reminder_type)
+      : "General follow-up";
+    next.activity_required = String(input.activity_required || text || next.activity_required || next.text || "Follow up with customer").trim();
+    next.due_date = String(input.due_date || next.due_date || at).trim();
+    next.due_time = String(input.due_time || next.due_time || "09:00").trim();
+    next.reminder_status = String(input.reminder_status || next.reminder_status || "scheduled").trim();
+    next.text = `${next.reminder_type}: ${next.activity_required}`;
+    next.google_calendar_url = googleCalendarUrl({
+      title: `${next.reminder_type}: ${lead.company_name}`,
+      details: [
+        next.activity_required,
+        lead.phone ? `Phone: ${lead.phone}` : "",
+        lead.email ? `Email: ${lead.email}` : "",
+        `Salesman: ${user?.name || lead.assigned_salesman || "Assigned salesman"}`,
+        "Updated from ARG Leads Tracker."
+      ].filter(Boolean).join("\n"),
+      location: lead.address || lead.location || lead.territory,
+      due_date: next.due_date,
+      due_time: next.due_time
+    });
+  }
+
+  return next;
+}
+
+function normalizePlainActivity(input) {
+  const activity = {
+    id: input.id || newRecordId("act"),
+    at: new Date().toISOString().slice(0, 10),
+    type: String(input.type || "Note"),
+    text: String(input.text || "Activity added")
+  };
+  ACTIVITY_EXTRA_FIELDS.forEach(field => {
+    if (input[field] !== undefined) activity[field] = input[field];
+  });
+  return activity;
+}
+
+function normalizeDeleteRequest(input, lead, user, activities) {
+  const targetType = String(input.target_type || "").trim().toLowerCase();
+  const reason = String(input.reason || "").trim();
+  if (!["lead", "activity"].includes(targetType)) {
+    const error = new Error("Choose whether to delete the lead or an activity.");
+    error.status = 400;
+    throw error;
+  }
+  if (!reason) {
+    const error = new Error("Add a reason for the admin approval request.");
+    error.status = 400;
+    throw error;
+  }
+  const request = {
+    id: newRecordId("delreq"),
+    at: new Date().toISOString().slice(0, 10),
+    type: "Delete Request",
+    text: `Delete ${targetType} requested: ${reason}`,
+    delete_request: true,
+    request_status: "pending",
+    target_type: targetType,
+    reason,
+    requested_by: user.id,
+    requested_by_name: user.name || user.email || "User",
+    requested_at: new Date().toISOString()
+  };
+  if (targetType === "activity") {
+    const activityIndex = Number(input.activity_index);
+    if (!Number.isInteger(activityIndex) || activityIndex < 0 || !activities[activityIndex]) {
+      const error = new Error("Activity not found.");
+      error.status = 404;
+      throw error;
+    }
+    if (activities[activityIndex].delete_request) {
+      const error = new Error("Delete request entries cannot be deleted through this flow.");
+      error.status = 400;
+      throw error;
+    }
+    request.target_activity_id = activities[activityIndex].id;
+    request.target_activity_summary = `${activities[activityIndex].at || ""} ${activities[activityIndex].type || "Activity"} - ${activities[activityIndex].text || ""}`.trim();
+  }
+  return request;
+}
+
+function nextActionReminderActivity(lead, user) {
+  if (!lead.next_action_date || !lead.next_action) return null;
+  return normalizeReminderActivity({
+    reminder_type: "General follow-up",
+    activity_required: lead.next_action,
+    due_date: lead.next_action_date,
+    due_time: "09:00"
+  }, lead, user);
+}
+
+function withAutomaticReminder(lead, user) {
+  const existing = Array.isArray(lead.activities) ? lead.activities : [];
+  if (existing.some(activity => activity.reminder && activity.due_date === lead.next_action_date && activity.activity_required === lead.next_action)) {
+    return { ...lead, activities: existing };
+  }
+  const reminder = nextActionReminderActivity(lead, user);
+  return reminder ? { ...lead, activities: [reminder, ...existing] } : { ...lead, activities: existing };
+}
+
 function normalizeCompanyName(value) {
   return String(value || "")
     .toLowerCase()
@@ -498,8 +913,253 @@ function leadWithDerivedFields(lead) {
   };
 }
 
+function isAdmin(user) {
+  return String(user?.role || "").toLowerCase() === "admin";
+}
+
+async function verifyAdminPassword(user, password, supabaseEnabled) {
+  if (!isAdmin(user) || !String(password || "").trim()) return false;
+  if (supabaseEnabled) {
+    try {
+      await signIn(user.email, String(password || ""));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return passwordMatches(password, user.password_hash);
+}
+
+function userLeadNames(user) {
+  return [
+    user?.name,
+    user?.email,
+    String(user?.email || "").split("@")[0]
+  ]
+    .map(value => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function leadBelongsToUser(lead, user) {
+  if (isAdmin(user)) return true;
+  if (!lead || !user) return false;
+  if (lead.created_by && String(lead.created_by) === String(user.id)) return true;
+  if (lead.assigned_to && String(lead.assigned_to) === String(user.id)) return true;
+  const assigned = String(lead.assigned_salesman || "").trim().toLowerCase();
+  return Boolean(assigned && userLeadNames(user).includes(assigned));
+}
+
+function visibleLeadsForUser(leads, user) {
+  return isAdmin(user) ? leads : (leads || []).filter(lead => leadBelongsToUser(lead, user));
+}
+
+function leadNotFound(res) {
+  return sendJson(res, 404, { error: "Lead not found" });
+}
+
+const LEAD_EXPORT_COLUMNS = [
+  ["company_name", "Company Name"],
+  ["legal_name", "Legal Name"],
+  ["stage", "Stage"],
+  ["priority", "Priority"],
+  ["assigned_salesman", "Assigned Salesman"],
+  ["territory", "Territory"],
+  ["sector", "Sector"],
+  ["tier", "Tier"],
+  ["contact_person", "Contact Person"],
+  ["primary_contact_title", "Contact Title"],
+  ["phone", "Phone"],
+  ["email", "Email"],
+  ["website", "Website"],
+  ["address", "Address"],
+  ["google_maps_url", "Google Maps URL"],
+  ["google_rating", "Google Rating"],
+  ["google_review_count", "Google Review Count"],
+  ["estimated_value", "Estimated Value"],
+  ["product_interest", "Product Interest"],
+  ["next_action", "Next Action"],
+  ["next_action_date", "Next Action Date"],
+  ["last_activity", "Last Activity Date"],
+  ["source", "Source"],
+  ["tags", "Tags"],
+  ["enrichment_status", "Enrichment Status"],
+  ["activities_count", "Activities Count"],
+  ["latest_activity_note", "Latest Activity Note"],
+  ["notes", "Notes"]
+];
+
+function exportTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+}
+
+function exportLeadRows(leads) {
+  return (leads || []).map(lead => {
+    const activities = Array.isArray(lead.activities) ? lead.activities : [];
+    const latest = activities[0] || {};
+    return {
+      ...lead,
+      activities_count: activities.length,
+      latest_activity_note: [latest.at, latest.type, latest.text].filter(Boolean).join(" - ")
+    };
+  });
+}
+
+function xmlEscape(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function excelCell(value) {
+  const numeric = typeof value === "number" && Number.isFinite(value);
+  return `<Cell><Data ss:Type="${numeric ? "Number" : "String"}">${xmlEscape(value)}</Data></Cell>`;
+}
+
+function leadsExcelWorkbook(leads) {
+  const rows = exportLeadRows(leads);
+  const header = LEAD_EXPORT_COLUMNS.map(([, label]) => excelCell(label)).join("");
+  const body = rows.map(row => `<Row>${LEAD_EXPORT_COLUMNS.map(([key]) => excelCell(row[key] ?? "")).join("")}</Row>`).join("");
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+    <Author>ARG Leads Tracker</Author>
+    <Created>${new Date().toISOString()}</Created>
+  </DocumentProperties>
+  <Styles>
+    <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Top"/><Font ss:FontName="Inter" ss:Size="10"/></Style>
+  </Styles>
+  <Worksheet ss:Name="Leads Backup">
+    <Table>
+      <Row>${header}</Row>
+      ${body}
+    </Table>
+  </Worksheet>
+</Workbook>`;
+}
+
+function pdfEscape(value) {
+  return String(value ?? "").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function wrapPdfText(value, max = 98) {
+  const words = String(value || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines = [];
+  let line = "";
+  words.forEach(word => {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > max) {
+      if (line) lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  });
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+
+function pdfLine(text, x, y, size = 10) {
+  return `BT /F1 ${size} Tf ${x} ${y} Td (${pdfEscape(text)}) Tj ET`;
+}
+
+function leadsPdfBuffer(leads) {
+  const objects = [];
+  const addObject = value => {
+    objects.push(value);
+    return objects.length;
+  };
+  const fontId = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const pages = [];
+  let pageLines = [];
+  const flushPage = () => {
+    if (!pageLines.length) return;
+    const content = pageLines.map((line, index) => pdfLine(line.text, line.x, line.y, line.size)).join("\n");
+    const contentId = addObject(`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pages.push(pageId);
+    pageLines = [];
+  };
+  const addLine = (text, size = 10) => {
+    if (!pageLines.length) pageLines.push({ text: "ARG Leads Tracker - Leads Backup", x: 42, y: 750, size: 15 });
+    const last = pageLines[pageLines.length - 1];
+    const y = last.y - (size >= 12 ? 18 : 14);
+    if (y < 52) {
+      flushPage();
+      pageLines.push({ text: "ARG Leads Tracker - Leads Backup", x: 42, y: 750, size: 15 });
+      pageLines.push({ text, x: 42, y: 728, size });
+    } else {
+      pageLines.push({ text, x: 42, y, size });
+    }
+  };
+  addLine(`Generated: ${new Date().toISOString()} | Leads: ${(leads || []).length}`, 10);
+  exportLeadRows(leads).forEach((lead, index) => {
+    addLine("", 8);
+    addLine(`${index + 1}. ${lead.company_name || "Unnamed company"} | ${lead.stage || ""} | ${lead.assigned_salesman || ""}`, 12);
+    [
+      `Contact: ${lead.contact_person || "-"} | Phone: ${lead.phone || "-"} | Email: ${lead.email || "-"}`,
+      `Location: ${lead.territory || lead.location || "-"} | Value: AED ${Number(lead.estimated_value || 0).toLocaleString("en-AE")}`,
+      `Next action: ${lead.next_action || "-"} | Due: ${lead.next_action_date || "-"}`,
+      `Website: ${lead.website || "-"} | Google rating: ${lead.google_rating || "-"}`,
+      `Notes: ${lead.notes || "-"}`
+    ].forEach(text => wrapPdfText(text).forEach(line => addLine(line, 9)));
+  });
+  flushPage();
+  const pagesId = addObject(`<< /Type /Pages /Kids [${pages.map(id => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`);
+  pages.forEach(pageId => {
+    objects[pageId - 1] = objects[pageId - 1].replace("/Parent 0 0 R", `/Parent ${pagesId} 0 R`);
+  });
+  const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach(offset => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, "utf8");
+}
+
+async function exportableLeadsForUser(user, supabaseEnabled, db) {
+  if (!isAdmin(user)) {
+    const error = new Error("Admin access required.");
+    error.status = 403;
+    throw error;
+  }
+  if (supabaseEnabled) {
+    const leads = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
+    return leads.map(fromSupabaseLead);
+  }
+  return db.leads.map(leadWithDerivedFields);
+}
+
+function prepareLeadPayloadForUser(payload, user, existing = null) {
+  const next = { ...(payload || {}) };
+  if (isAdmin(user)) return next;
+  delete next.assigned_to;
+  delete next.created_by;
+  if (existing?.assigned_salesman) {
+    next.assigned_salesman = existing.assigned_salesman;
+  } else {
+    next.assigned_salesman = user.name || user.email || "Unassigned";
+  }
+  return next;
+}
+
 function normalizePmr(input, lead, user) {
   const now = new Date().toISOString();
+  const voiceNote = voiceNoteRecord(input);
   return {
     id: input.id || `pmr-${Date.now()}`,
     company_id: lead.id,
@@ -516,6 +1176,13 @@ function normalizePmr(input, lead, user) {
     account_status: PMR_ACCOUNT_STATUS.includes(String(input.account_status || "")) ? String(input.account_status) : "Warm",
     raw_document_url: String(input.raw_document_url || "").trim(),
     notes: String(input.notes || "").trim(),
+    voice_note_transcript: String(input.voice_note_transcript || "").trim(),
+    voice_note: voiceNote,
+    voice_note_id: voiceNote?.id || "",
+    voice_note_url: voiceNote?.url || "",
+    voice_note_path: voiceNote?.path || String(input.voice_note_path || "").trim(),
+    voice_note_mime_type: voiceNote?.mime_type || "",
+    voice_note_size_bytes: voiceNote?.size_bytes || 0,
     created_at: now
   };
 }
@@ -566,7 +1233,7 @@ function actionResponse(action, lead, pmr) {
 }
 
 function toSupabaseLead(input, user) {
-  const lead = normalizeLead(input);
+  const lead = withAutomaticReminder(normalizeLead(input), user);
   return {
     company_id: input.company_id || null,
     company_name: lead.company_name,
@@ -615,7 +1282,8 @@ function toSupabaseLead(input, user) {
     enrichment_source: lead.enrichment_source,
     enriched_at: lead.enriched_at,
     enrichment_updated_at: input.enrichment_updated_at || lead.enriched_at || null,
-    created_by: user.id
+    created_by: user.id,
+    assigned_to: input.assigned_to || (isAdmin(user) ? null : user.id)
   };
 }
 
@@ -628,16 +1296,80 @@ function fromSupabaseLead(lead) {
   });
 }
 
-async function getSupabaseLead(token, id) {
-  const leads = await rest(`leads?id=eq.${encodeURIComponent(id)}&select=*`, { token });
-  return leads[0] ? fromSupabaseLead(leads[0]) : null;
+function toSupabasePmr(input, lead, user) {
+  const pmr = normalizePmr(input, lead, publicUser(user));
+  return {
+    company_id: lead.company_id || null,
+    lead_id: lead.id,
+    activity_id: pmr.activity_id,
+    meeting_date: pmr.meeting_date,
+    filed_by: user.id,
+    products_discussed: pmr.products_discussed,
+    competitors_mentioned: pmr.competitors_mentioned,
+    compliance_requirements: pmr.compliance_requirements,
+    relationship_heat_score: Number(pmr.relationship_heat_score || 3),
+    first_order_timing: pmr.first_order_timing,
+    potential_annual_value: pmr.potential_annual_value,
+    director_action_required: pmr.director_action_required,
+    account_status: pmr.account_status,
+    raw_document_url: pmr.raw_document_url,
+    notes: pmr.notes,
+    voice_note_id: pmr.voice_note_id,
+    voice_note_url: pmr.voice_note_url,
+    voice_note_path: pmr.voice_note_path,
+    voice_note_mime_type: pmr.voice_note_mime_type,
+    voice_note_size_bytes: pmr.voice_note_size_bytes,
+    voice_note_transcript: pmr.voice_note_transcript
+  };
+}
+
+function fromSupabasePmr(pmr) {
+  const voiceNote = voiceNoteRecord({
+    voice_note_id: pmr.voice_note_id,
+    voice_note_url: pmr.voice_note_url,
+    voice_note_path: pmr.voice_note_path,
+    voice_note_mime_type: pmr.voice_note_mime_type,
+    voice_note_size_bytes: pmr.voice_note_size_bytes
+  });
+  return {
+    ...pmr,
+    company_id: pmr.lead_id || pmr.company_id,
+    filed_by: pmr.filed_by || "",
+    relationship_heat_score: String(pmr.relationship_heat_score || "3"),
+    voice_note: voiceNote,
+    voice_note_id: voiceNote?.id || "",
+    voice_note_url: voiceNote?.url || "",
+    voice_note_path: voiceNote?.path || "",
+    voice_note_mime_type: voiceNote?.mime_type || "",
+    voice_note_size_bytes: voiceNote?.size_bytes || 0,
+    voice_note_transcript: String(pmr.voice_note_transcript || "")
+  };
+}
+
+function supabaseDataOptions(token, extra = {}) {
+  return {
+    ...(isSupabaseAdminConfigured() ? { service: true } : { token }),
+    ...extra
+  };
+}
+
+async function latestSupabasePmr(token, leadId) {
+  const pmrs = await rest(`pmrs?lead_id=eq.${encodeURIComponent(leadId)}&select=*&order=created_at.desc&limit=1`, supabaseDataOptions(token));
+  return pmrs[0] ? fromSupabasePmr(pmrs[0]) : null;
+}
+
+async function getSupabaseLead(token, id, user = null) {
+  const leads = await rest(`leads?id=eq.${encodeURIComponent(id)}&select=*`, supabaseDataOptions(token));
+  const lead = leads[0] ? fromSupabaseLead(leads[0]) : null;
+  if (!lead || !user) return lead;
+  return leadBelongsToUser(lead, user) ? lead : null;
 }
 
 async function recordSearch(token, userId, keyword, location, provider, resultCount, status = "completed", errorMessage = "") {
   try {
     await rest("search_history", {
       method: "POST",
-      token,
+      ...supabaseDataOptions(token),
       body: { created_by: userId, keyword, location, provider, result_count: resultCount, status, error_message: errorMessage }
     });
   } catch {
@@ -648,7 +1380,7 @@ async function recordSearch(token, userId, keyword, location, provider, resultCo
 async function updateEnrichment(token, userId, leadId, provider, status, details = {}, errorMessage = "") {
   await rest("enrichment_status?on_conflict=lead_id,provider", {
     method: "POST",
-    token,
+    ...supabaseDataOptions(token),
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: { lead_id: leadId, provider, status, details, error_message: errorMessage, created_by: userId }
   });
@@ -686,20 +1418,34 @@ async function googleEnrichPayload(input, req, { overwrite = false } = {}) {
 
 async function findCompany(token, lead) {
   if (lead.google_place_id) {
-    const matches = await rest(`companies?google_place_id=eq.${encodeURIComponent(lead.google_place_id)}&select=*`, { token });
+    const matches = await rest(`companies?google_place_id=eq.${encodeURIComponent(lead.google_place_id)}&select=*`, supabaseDataOptions(token));
     if (matches[0]) return matches[0];
   }
   if (lead.website) {
-    const matches = await rest(`companies?website=eq.${encodeURIComponent(lead.website)}&select=*`, { token });
+    const matches = await rest(`companies?website=eq.${encodeURIComponent(lead.website)}&select=*`, supabaseDataOptions(token));
     if (matches[0]) return matches[0];
   }
   return null;
 }
 
+async function resolveSalesmanId(token, assignedSalesman) {
+  const name = String(assignedSalesman || "").trim();
+  if (!name) return null;
+  try {
+    const profiles = await rest(`profiles?role=eq.salesman&full_name=eq.${encodeURIComponent(name)}&select=id&limit=1`, supabaseDataOptions(token));
+    return profiles[0]?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 async function saveSupabaseLead(token, user, input) {
   const lead = toSupabaseLead(input, user);
+  if (isAdmin(user) && !lead.assigned_to) {
+    lead.assigned_to = await resolveSalesmanId(token, lead.assigned_salesman);
+  }
   if (lead.google_place_id) {
-    const duplicate = await rest(`leads?google_place_id=eq.${encodeURIComponent(lead.google_place_id)}&select=*`, { token });
+    const duplicate = await rest(`leads?google_place_id=eq.${encodeURIComponent(lead.google_place_id)}&select=*`, supabaseDataOptions(token));
     if (duplicate[0]) {
       const error = new Error("This Google business is already saved as a lead.");
       error.status = 409;
@@ -710,7 +1456,7 @@ async function saveSupabaseLead(token, user, input) {
   if (!company) {
     const companies = await rest("companies?select=*", {
       method: "POST",
-      token,
+      ...supabaseDataOptions(token),
       headers: { Prefer: "return=representation" },
       body: {
         company_name: lead.company_name,
@@ -740,7 +1486,7 @@ async function saveSupabaseLead(token, user, input) {
   lead.company_id = company?.id || null;
   const leads = await rest("leads?select=*", {
     method: "POST",
-    token,
+    ...supabaseDataOptions(token),
     headers: { Prefer: "return=representation" },
     body: lead
   });
@@ -761,6 +1507,7 @@ async function handleApi(req, res, url) {
         enabled: Boolean(OPENAI_API_KEY),
         model: OPENAI_TRANSLATION_MODEL,
         normalization_model: OPENAI_ENGLISH_NORMALIZATION_MODEL,
+        pmr_analysis_model: OPENAI_PMR_ANALYSIS_MODEL,
         language: "English",
         mode: "translation_with_english_normalization"
       },
@@ -784,6 +1531,11 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { token: issueToken(user), user: publicUser(user) });
   }
 
+  const voiceNoteMatch = url.pathname.match(/^\/api\/pmr-voice-notes\/([^/]+)$/);
+  if (req.method === "GET" && voiceNoteMatch) {
+    return sendVoiceNote(req, res, voiceNoteMatch[1]);
+  }
+
   const user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
 
@@ -798,6 +1550,51 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/transcriptions") {
     return transcribeAudio(req, res);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/pmrs/analyze-transcript") {
+    return analyzePmrTranscript(req, res);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/pmr-voice-notes") {
+    return saveVoiceNote(req, res, { supabaseEnabled, user });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/exports/leads.xls") {
+    const leads = await exportableLeadsForUser(user, supabaseEnabled, db);
+    return sendDownload(
+      res,
+      "application/vnd.ms-excel; charset=utf-8",
+      `arg-leads-backup-${exportTimestamp()}.xls`,
+      leadsExcelWorkbook(leads)
+    );
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/exports/leads.pdf") {
+    const leads = await exportableLeadsForUser(user, supabaseEnabled, db);
+    return sendDownload(
+      res,
+      "application/pdf",
+      `arg-leads-backup-${exportTimestamp()}.pdf`,
+      leadsPdfBuffer(leads)
+    );
+  }
+
+  const voiceNoteSignedMatch = url.pathname.match(/^\/api\/pmr-voice-notes\/([^/]+)\/signed-url$/);
+  if (req.method === "GET" && voiceNoteSignedMatch) {
+    const id = safeVoiceNoteId(voiceNoteSignedMatch[1]);
+    if (!id) return sendJson(res, 400, { error: "Invalid voice note." });
+    if (supabaseEnabled) {
+      const pmrs = await rest(`pmrs?voice_note_id=eq.${encodeURIComponent(id)}&select=lead_id,voice_note_path&limit=1`, supabaseDataOptions(user.token));
+      if (!pmrs[0]) return sendJson(res, 404, { error: "Voice note not found." });
+      const lead = await getSupabaseLead(user.token, pmrs[0].lead_id, user);
+      if (!lead) return sendJson(res, 404, { error: "Voice note not found." });
+      const objectPath = String(pmrs[0].voice_note_path || "").trim();
+      if (!objectPath) return sendJson(res, 404, { error: "Voice note not found." });
+      const signedUrl = await createStorageSignedUrl(objectPath, 3600);
+      return sendJson(res, 200, { url: signedUrl, expires_in: 3600 });
+    }
+    return sendJson(res, 200, { url: `/api/pmr-voice-notes/${id}` });
   }
 
   if (req.method === "POST" && url.pathname === "/api/places/search") {
@@ -886,7 +1683,10 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/settings") {
     if (supabaseEnabled) {
-      const profiles = await rest("profiles?role=eq.salesman&status=eq.active&select=*", { token: user.token });
+      const profilePath = isAdmin(user)
+        ? "profiles?role=eq.salesman&status=eq.active&select=*&order=full_name.asc"
+        : `profiles?id=eq.${encodeURIComponent(user.id)}&select=*`;
+      const profiles = await rest(profilePath, { token: user.token });
       return sendJson(res, 200, {
         stages: COMPANY_STATUSES,
         priorities: ["New", "Warm", "Hot", "At Risk"],
@@ -898,6 +1698,7 @@ async function handleApi(req, res, url) {
         salesmen: profiles.map(profile => ({ ...profile, name: profile.full_name }))
       });
     }
+    const salesmen = isAdmin(user) ? db.salesmen : [publicUser(user)];
     return sendJson(res, 200, {
       stages: COMPANY_STATUSES,
       priorities: ["New", "Warm", "Hot", "At Risk"],
@@ -906,23 +1707,24 @@ async function handleApi(req, res, url) {
       territories: GCC_TERRITORIES,
       activityTypes: ACTIVITY_TYPES,
       pmr: { heat: PMR_HEAT, firstOrderTiming: PMR_ORDER_TIMING, potentialValue: PMR_VALUE, directorAction: PMR_DIRECTOR_ACTION, accountStatus: PMR_ACCOUNT_STATUS },
-      salesmen: db.salesmen
+      salesmen
     });
   }
 
   if (req.method === "GET" && url.pathname === "/api/leads") {
     if (supabaseEnabled) {
-      const leads = await rest("leads?select=*&order=created_at.desc", { token: user.token });
-      return sendJson(res, 200, leads.map(fromSupabaseLead));
+      const leads = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
+      return sendJson(res, 200, visibleLeadsForUser(leads.map(fromSupabaseLead), user));
     }
-    return sendJson(res, 200, db.leads.map(leadWithDerivedFields));
+    return sendJson(res, 200, visibleLeadsForUser(db.leads, user).map(leadWithDerivedFields));
   }
 
   if (req.method === "POST" && url.pathname === "/api/leads") {
-    const payload = await googleEnrichPayload(await readBody(req), req);
+    const rawPayload = prepareLeadPayloadForUser(await readBody(req), user);
+    const payload = await googleEnrichPayload(rawPayload, req);
     if (supabaseEnabled) return sendJson(res, 201, await saveSupabaseLead(user.token, user, payload));
     if (!payload.allow_duplicate) {
-      const duplicate = findDuplicateLead(db.leads, payload.company_name);
+      const duplicate = findDuplicateLead(visibleLeadsForUser(db.leads, user), payload.company_name);
       if (duplicate) {
         return sendJson(res, 409, {
           error: "Possible duplicate company found.",
@@ -936,7 +1738,8 @@ async function handleApi(req, res, url) {
         });
       }
     }
-    const lead = normalizeLead(payload);
+    const lead = withAutomaticReminder(normalizeLead(payload), user);
+    if (!isAdmin(user)) lead.assigned_salesman = user.name || user.email || lead.assigned_salesman;
     db.leads.unshift(lead);
     writeDb(db);
     return sendJson(res, 201, leadWithDerivedFields(lead));
@@ -946,8 +1749,9 @@ async function handleApi(req, res, url) {
   if (req.method === "PATCH" && leadMatch) {
     let payload = await readBody(req);
     if (supabaseEnabled) {
-      const existing = await getSupabaseLead(user.token, leadMatch[1]);
-      if (!existing) return sendJson(res, 404, { error: "Lead not found" });
+      const existing = await getSupabaseLead(user.token, leadMatch[1], user);
+      if (!existing) return leadNotFound(res);
+      payload = prepareLeadPayloadForUser(payload, user, existing);
       if (payload.company_name && String(payload.company_name).trim() !== String(existing.company_name || "").trim()) {
         payload = await googleEnrichPayload({ ...existing, ...payload, google_place_id: "" }, req);
       }
@@ -958,11 +1762,11 @@ async function handleApi(req, res, url) {
         "estimated_value", "product_interest", "next_action", "next_action_date", "source",
         "legal_name", "year_established", "business_category", "opening_hours",
         "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at"
-      ];
+      ].filter(field => isAdmin(user) || !["assigned_salesman", "assigned_to", "created_by"].includes(field));
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
       const leads = await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}&select=*`, {
         method: "PATCH",
-        token: user.token,
+        ...supabaseDataOptions(user.token),
         headers: { Prefer: "return=representation" },
         body: updates
       });
@@ -970,7 +1774,8 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, fromSupabaseLead(leads[0]));
     }
     const lead = db.leads.find(item => item.id === leadMatch[1]);
-    if (!lead) return sendJson(res, 404, { error: "Lead not found" });
+    if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    payload = prepareLeadPayloadForUser(payload, user, lead);
     if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
       payload = await googleEnrichPayload({ ...lead, ...payload, google_place_id: "" }, req);
     }
@@ -980,37 +1785,142 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "DELETE" && leadMatch) {
+    const payload = await readBody(req);
+    if (!isAdmin(user)) {
+      return sendJson(res, 403, { error: "Salesman delete actions require admin approval. Use Request Delete instead." });
+    }
+    if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
+      return sendJson(res, 403, { error: "Admin password confirmation is required to delete a lead." });
+    }
     if (supabaseEnabled) {
-      await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}`, { method: "DELETE", token: user.token });
+      const existing = await getSupabaseLead(user.token, leadMatch[1], user);
+      if (!existing) return leadNotFound(res);
+      await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}`, { method: "DELETE", ...supabaseDataOptions(user.token) });
       return sendJson(res, 200, { ok: true });
     }
     const index = db.leads.findIndex(item => item.id === leadMatch[1]);
-    if (index < 0) return sendJson(res, 404, { error: "Lead not found" });
+    if (index < 0 || !leadBelongsToUser(db.leads[index], user)) return leadNotFound(res);
     db.leads.splice(index, 1);
     writeDb(db);
     return sendJson(res, 200, { ok: true });
+  }
+
+  const deleteRequestMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/delete-requests$/);
+  if (req.method === "POST" && deleteRequestMatch) {
+    const payload = await readBody(req);
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, deleteRequestMatch[1], user);
+      if (!lead) return leadNotFound(res);
+      const activities = ensureActivityIds(lead.activities);
+      const requestActivity = normalizeDeleteRequest(payload, lead, user, activities);
+      const leads = await rest(`leads?id=eq.${encodeURIComponent(deleteRequestMatch[1])}&select=*`, {
+        method: "PATCH",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "return=representation" },
+        body: { activities: [requestActivity, ...activities], last_activity: requestActivity.at }
+      });
+      return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), request: requestActivity });
+    }
+    const lead = db.leads.find(item => item.id === deleteRequestMatch[1]);
+    if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    lead.activities = ensureActivityIds(lead.activities);
+    const requestActivity = normalizeDeleteRequest(payload, lead, user, lead.activities);
+    lead.activities.unshift(requestActivity);
+    lead.last_activity = requestActivity.at;
+    writeDb(db);
+    return sendJson(res, 201, { lead: leadWithDerivedFields(lead), request: requestActivity });
+  }
+
+  const deleteApprovalMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/delete-requests\/([^/]+)\/(approve|reject)$/);
+  if (req.method === "POST" && deleteApprovalMatch) {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const payload = await readBody(req);
+    if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
+      return sendJson(res, 403, { error: "Admin password confirmation is required." });
+    }
+    const leadId = deleteApprovalMatch[1];
+    const requestId = deleteApprovalMatch[2];
+    const action = deleteApprovalMatch[3];
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, leadId, user);
+      if (!lead) return leadNotFound(res);
+      const activities = ensureActivityIds(lead.activities);
+      const requestIndex = activities.findIndex(activity => activity.id === requestId && activity.delete_request);
+      if (requestIndex < 0) return sendJson(res, 404, { error: "Delete request not found." });
+      const requestActivity = activities[requestIndex];
+      if (requestActivity.request_status !== "pending") return sendJson(res, 409, { error: "This delete request has already been reviewed." });
+      if (action === "approve" && requestActivity.target_type === "lead") {
+        await rest(`leads?id=eq.${encodeURIComponent(leadId)}`, { method: "DELETE", ...supabaseDataOptions(user.token) });
+        return sendJson(res, 200, { ok: true, deleted: true });
+      }
+      activities[requestIndex] = {
+        ...requestActivity,
+        request_status: action === "approve" ? "approved" : "rejected",
+        reviewed_by: user.id,
+        reviewed_by_name: user.name || user.email || "Admin",
+        reviewed_at: new Date().toISOString(),
+        review_note: String(payload.note || "").trim()
+      };
+      const nextActivities = action === "approve" && requestActivity.target_type === "activity"
+        ? activities.filter(activity => activity.id !== requestActivity.target_activity_id)
+        : activities;
+      const leads = await rest(`leads?id=eq.${encodeURIComponent(leadId)}&select=*`, {
+        method: "PATCH",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "return=representation" },
+        body: { activities: nextActivities, last_activity: nextActivities[0]?.at || lead.last_activity }
+      });
+      return sendJson(res, 200, { lead: fromSupabaseLead(leads[0]), request: activities[requestIndex] });
+    }
+    const lead = db.leads.find(item => item.id === leadId);
+    if (!lead) return leadNotFound(res);
+    lead.activities = ensureActivityIds(lead.activities);
+    const requestIndex = lead.activities.findIndex(activity => activity.id === requestId && activity.delete_request);
+    if (requestIndex < 0) return sendJson(res, 404, { error: "Delete request not found." });
+    const requestActivity = lead.activities[requestIndex];
+    if (requestActivity.request_status !== "pending") return sendJson(res, 409, { error: "This delete request has already been reviewed." });
+    if (action === "approve" && requestActivity.target_type === "lead") {
+      db.leads = db.leads.filter(item => item.id !== leadId);
+      writeDb(db);
+      return sendJson(res, 200, { ok: true, deleted: true });
+    }
+    lead.activities[requestIndex] = {
+      ...requestActivity,
+      request_status: action === "approve" ? "approved" : "rejected",
+      reviewed_by: user.id,
+      reviewed_by_name: user.name || user.email || "Admin",
+      reviewed_at: new Date().toISOString(),
+      review_note: String(payload.note || "").trim()
+    };
+    if (action === "approve" && requestActivity.target_type === "activity") {
+      lead.activities = lead.activities.filter(activity => activity.id !== requestActivity.target_activity_id);
+    }
+    lead.last_activity = lead.activities[0]?.at || lead.last_activity;
+    writeDb(db);
+    return sendJson(res, 200, { lead: leadWithDerivedFields(lead), request: lead.activities[requestIndex] });
   }
 
   const stageMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/stage$/);
   if (req.method === "PATCH" && stageMatch) {
     const payload = await readBody(req);
     if (supabaseEnabled) {
-      const lead = await getSupabaseLead(user.token, stageMatch[1]);
-      if (!lead) return sendJson(res, 404, { error: "Lead not found" });
-      const activity = { at: new Date().toISOString().slice(0, 10), type: "Stage", text: `Stage changed to ${payload.stage || lead.stage}` };
+      const lead = await getSupabaseLead(user.token, stageMatch[1], user);
+      if (!lead) return leadNotFound(res);
+      const activity = { id: newRecordId("act"), at: new Date().toISOString().slice(0, 10), type: "Stage", text: `Stage changed to ${payload.stage || lead.stage}` };
       const leads = await rest(`leads?id=eq.${encodeURIComponent(stageMatch[1])}&select=*`, {
         method: "PATCH",
-        token: user.token,
+        ...supabaseDataOptions(user.token),
         headers: { Prefer: "return=representation" },
         body: { lead_status: String(payload.stage || lead.stage), last_activity: activity.at, activities: [activity, ...(lead.activities || [])] }
       });
       return sendJson(res, 200, fromSupabaseLead(leads[0]));
     }
     const lead = db.leads.find(item => item.id === stageMatch[1]);
-    if (!lead) return sendJson(res, 404, { error: "Lead not found" });
+    if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
     lead.stage = String(payload.stage || lead.stage);
     lead.last_activity = new Date().toISOString().slice(0, 10);
     lead.activities.unshift({
+      id: newRecordId("act"),
       at: lead.last_activity,
       type: "Stage",
       text: `Stage changed to ${lead.stage}`
@@ -1019,28 +1929,95 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, lead);
   }
 
+  const activityEditMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activities\/(\d+)$/);
+  if (req.method === "PATCH" && activityEditMatch) {
+    const payload = await readBody(req);
+    const activityIndex = Number(activityEditMatch[2]);
+    if (!Number.isInteger(activityIndex) || activityIndex < 0) return sendJson(res, 400, { error: "Invalid activity index." });
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, activityEditMatch[1], user);
+      if (!lead) return leadNotFound(res);
+      const activities = Array.isArray(lead.activities) ? [...lead.activities] : [];
+      if (!activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
+      activities[activityIndex] = editActivity(activities[activityIndex], payload, lead, user);
+      const leads = await rest(`leads?id=eq.${encodeURIComponent(activityEditMatch[1])}&select=*`, {
+        method: "PATCH",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "return=representation" },
+        body: { activities, last_activity: activities[0]?.at || lead.last_activity }
+      });
+      return sendJson(res, 200, { lead: fromSupabaseLead(leads[0]), activity: activities[activityIndex] });
+    }
+    const lead = db.leads.find(item => item.id === activityEditMatch[1]);
+    if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    lead.activities = Array.isArray(lead.activities) ? lead.activities : [];
+    if (!lead.activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
+    lead.activities[activityIndex] = editActivity(lead.activities[activityIndex], payload, lead, user);
+    lead.last_activity = lead.activities[0]?.at || lead.last_activity;
+    writeDb(db);
+    return sendJson(res, 200, { lead, activity: lead.activities[activityIndex] });
+  }
+
+  if (req.method === "DELETE" && activityEditMatch) {
+    if (!isAdmin(user)) {
+      return sendJson(res, 403, { error: "Salesman activity deletions require admin approval. Use Request Delete instead." });
+    }
+    const payload = await readBody(req);
+    if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
+      return sendJson(res, 403, { error: "Admin password confirmation is required to delete an activity." });
+    }
+    const activityIndex = Number(activityEditMatch[2]);
+    if (!Number.isInteger(activityIndex) || activityIndex < 0) return sendJson(res, 400, { error: "Invalid activity index." });
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, activityEditMatch[1], user);
+      if (!lead) return leadNotFound(res);
+      const activities = ensureActivityIds(lead.activities);
+      if (!activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
+      if (activities[activityIndex].delete_request) return sendJson(res, 400, { error: "Delete request audit entries cannot be removed." });
+      activities.splice(activityIndex, 1);
+      const leads = await rest(`leads?id=eq.${encodeURIComponent(activityEditMatch[1])}&select=*`, {
+        method: "PATCH",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "return=representation" },
+        body: { activities, last_activity: activities[0]?.at || lead.last_activity }
+      });
+      return sendJson(res, 200, { lead: fromSupabaseLead(leads[0]), ok: true });
+    }
+    const lead = db.leads.find(item => item.id === activityEditMatch[1]);
+    if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    lead.activities = ensureActivityIds(lead.activities);
+    if (!lead.activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
+    if (lead.activities[activityIndex].delete_request) return sendJson(res, 400, { error: "Delete request audit entries cannot be removed." });
+    lead.activities.splice(activityIndex, 1);
+    lead.last_activity = lead.activities[0]?.at || lead.last_activity;
+    writeDb(db);
+    return sendJson(res, 200, { lead, ok: true });
+  }
+
   const activityMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activities$/);
   if (req.method === "POST" && activityMatch) {
     const payload = await readBody(req);
     if (supabaseEnabled) {
-      const lead = await getSupabaseLead(user.token, activityMatch[1]);
-      if (!lead) return sendJson(res, 404, { error: "Lead not found" });
-      const activity = { at: new Date().toISOString().slice(0, 10), type: String(payload.type || "Note"), text: String(payload.text || "Activity added") };
+      const lead = await getSupabaseLead(user.token, activityMatch[1], user);
+      if (!lead) return leadNotFound(res);
+      const isReminder = String(payload.type || "").toLowerCase() === "reminder" || payload.reminder || Boolean(payload.due_date);
+      const activity = isReminder
+        ? normalizeReminderActivity(payload, lead, user)
+        : normalizePlainActivity(payload);
       const leads = await rest(`leads?id=eq.${encodeURIComponent(activityMatch[1])}&select=*`, {
         method: "PATCH",
-        token: user.token,
+        ...supabaseDataOptions(user.token),
         headers: { Prefer: "return=representation" },
         body: { last_activity: activity.at, activities: [activity, ...(lead.activities || [])] }
       });
       return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), activity });
     }
     const lead = db.leads.find(item => item.id === activityMatch[1]);
-    if (!lead) return sendJson(res, 404, { error: "Lead not found" });
-    const activity = {
-      at: new Date().toISOString().slice(0, 10),
-      type: String(payload.type || "Note"),
-      text: String(payload.text || "Activity added")
-    };
+    if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    const isReminder = String(payload.type || "").toLowerCase() === "reminder" || payload.reminder || Boolean(payload.due_date);
+    const activity = isReminder
+      ? normalizeReminderActivity(payload, lead, user)
+      : normalizePlainActivity(payload);
     lead.activities.unshift(activity);
     lead.last_activity = activity.at;
     writeDb(db);
@@ -1049,21 +2026,77 @@ async function handleApi(req, res, url) {
 
   const pmrMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/pmrs$/);
   if (pmrMatch) {
-    if (supabaseEnabled) return sendJson(res, 503, { error: "PMR storage migration must be applied before Supabase PMRs are enabled." });
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, pmrMatch[1], user);
+      if (!lead) return sendJson(res, 404, { error: "Company not found" });
+      if (req.method === "GET") {
+        const pmrs = await rest(`pmrs?lead_id=eq.${encodeURIComponent(lead.id)}&select=*&order=created_at.desc`, supabaseDataOptions(user.token));
+        return sendJson(res, 200, pmrs.map(fromSupabasePmr));
+      }
+      if (req.method === "POST") {
+        const payload = await readBody(req);
+        const pmrBody = toSupabasePmr(payload, lead, user);
+        const pmrs = await rest("pmrs?select=*", {
+          method: "POST",
+          ...supabaseDataOptions(user.token),
+          headers: { Prefer: "return=representation" },
+          body: pmrBody
+        });
+        const pmr = fromSupabasePmr(pmrs[0]);
+        const hasVoiceNote = Boolean(pmr.voice_note_url || pmr.voice_note_id);
+        const hasTranscript = Boolean(pmr.voice_note_transcript);
+        const activity = {
+          id: newRecordId("act"),
+          at: new Date().toISOString().slice(0, 10),
+          type: "In-Person Meeting",
+          text: `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.${hasVoiceNote ? " Voice note attached." : ""}${hasTranscript ? " AI transcript saved." : ""}`,
+          pmr_linked: true,
+          pmr_id: pmr.id,
+          voice_note: pmr.voice_note,
+          voice_note_id: pmr.voice_note_id,
+          voice_note_url: pmr.voice_note_url,
+          voice_note_path: pmr.voice_note_path,
+          voice_note_mime_type: pmr.voice_note_mime_type,
+          voice_note_size_bytes: pmr.voice_note_size_bytes,
+          voice_note_transcript: pmr.voice_note_transcript,
+          quotation_ref: String(payload.quotation_ref || "").trim()
+        };
+        const updated = await rest(`leads?id=eq.${encodeURIComponent(lead.id)}&select=*`, {
+          method: "PATCH",
+          ...supabaseDataOptions(user.token),
+          headers: { Prefer: "return=representation" },
+          body: {
+            last_activity: activity.at,
+            activities: [activity, ...(lead.activities || [])],
+            tags: [lead.tags, pmr.compliance_requirements, pmr.competitors_mentioned].filter(Boolean).join(", ")
+          }
+        });
+        return sendJson(res, 201, { pmr, lead: fromSupabaseLead(updated[0]) });
+      }
+    }
     const lead = db.leads.find(item => item.id === pmrMatch[1]);
-    if (!lead) return sendJson(res, 404, { error: "Company not found" });
+    if (!lead || !leadBelongsToUser(lead, user)) return sendJson(res, 404, { error: "Company not found" });
     if (req.method === "GET") {
       return sendJson(res, 200, db.pmrs.filter(pmr => pmr.company_id === lead.id));
     }
     if (req.method === "POST") {
       const payload = await readBody(req);
       const pmr = normalizePmr(payload, lead, publicUser(user));
+      const hasVoiceNote = Boolean(pmr.voice_note_url);
+      const hasTranscript = Boolean(pmr.voice_note_transcript);
       const activity = {
+        id: newRecordId("act"),
         at: new Date().toISOString().slice(0, 10),
         type: "In-Person Meeting",
-        text: `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.`,
+        text: `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.${hasVoiceNote ? " Voice note attached." : ""}${hasTranscript ? " AI transcript saved." : ""}`,
         pmr_linked: true,
         pmr_id: pmr.id,
+        voice_note: pmr.voice_note,
+        voice_note_id: pmr.voice_note_id,
+        voice_note_url: pmr.voice_note_url,
+        voice_note_mime_type: pmr.voice_note_mime_type,
+        voice_note_size_bytes: pmr.voice_note_size_bytes,
+        voice_note_transcript: pmr.voice_note_transcript,
         quotation_ref: String(payload.quotation_ref || "").trim()
       };
       db.pmrs.unshift(pmr);
@@ -1077,10 +2110,19 @@ async function handleApi(req, res, url) {
 
   const actionMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/ai-actions$/);
   if (req.method === "POST" && actionMatch) {
-    if (supabaseEnabled) return sendJson(res, 503, { error: "Relationship intelligence actions are currently enabled for the local company store. Apply the PMR migration before Supabase actions." });
     const payload = await readBody(req);
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, actionMatch[1], user);
+      if (!lead) return sendJson(res, 404, { error: "Company not found" });
+      const action = String(payload.action || "").trim();
+      return sendJson(res, 200, {
+        action,
+        output: actionResponse(action, lead, await latestSupabasePmr(user.token, lead.id)),
+        source: "Company record, activity log, and latest PMR"
+      });
+    }
     const lead = db.leads.find(item => item.id === actionMatch[1]);
-    if (!lead) return sendJson(res, 404, { error: "Company not found" });
+    if (!lead || !leadBelongsToUser(lead, user)) return sendJson(res, 404, { error: "Company not found" });
     const action = String(payload.action || "").trim();
     return sendJson(res, 200, {
       action,
@@ -1092,8 +2134,8 @@ async function handleApi(req, res, url) {
   const enrichmentMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/enrich$/);
   if (req.method === "POST" && enrichmentMatch) {
     if (!supabaseEnabled) return sendJson(res, 503, { error: "Hunter enrichment requires the Supabase backend configuration." });
-    const lead = await getSupabaseLead(user.token, enrichmentMatch[1]);
-    if (!lead) return sendJson(res, 404, { error: "Lead not found" });
+    const lead = await getSupabaseLead(user.token, enrichmentMatch[1], user);
+    if (!lead) return leadNotFound(res);
     await updateEnrichment(user.token, user.id, lead.id, "hunter", "pending");
     try {
       const enriched = await enrichHunter(lead.website, lead.company_name, clientIp(req));
@@ -1101,7 +2143,7 @@ async function handleApi(req, res, url) {
       if (emails.length) {
         await rest("contacts?on_conflict=lead_id,contact_email", {
           method: "POST",
-          token: user.token,
+          ...supabaseDataOptions(user.token),
           headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
           body: emails.map(item => ({
             company_id: lead.company_id,
@@ -1117,7 +2159,7 @@ async function handleApi(req, res, url) {
       const primary = [...emails].sort((a, b) => b.confidence - a.confidence).find(item => item.confidence >= 70) || null;
       const updated = await rest(`leads?id=eq.${encodeURIComponent(lead.id)}&select=*`, {
         method: "PATCH",
-        token: user.token,
+        ...supabaseDataOptions(user.token),
         headers: { Prefer: "return=representation" },
         body: {
           contact_email: primary?.email || lead.contact_email,
@@ -1133,7 +2175,7 @@ async function handleApi(req, res, url) {
       await updateEnrichment(user.token, user.id, lead.id, "hunter", "failed", {}, error.message);
       await rest(`leads?id=eq.${encodeURIComponent(lead.id)}`, {
         method: "PATCH",
-        token: user.token,
+        ...supabaseDataOptions(user.token),
         body: { enrichment_status: "failed", enrichment_updated_at: new Date().toISOString() }
       });
       throw error;
@@ -1184,6 +2226,11 @@ if (require.main === module) {
 
 server.handleApi = handleApi;
 server.normalizeLead = normalizeLead;
+server.normalizePmr = normalizePmr;
+server.normalizePmrAnalysisDraft = normalizePmrAnalysisDraft;
+server.leadBelongsToUser = leadBelongsToUser;
+server.visibleLeadsForUser = visibleLeadsForUser;
+server.prepareLeadPayloadForUser = prepareLeadPayloadForUser;
 server.normalizeEnglishText = normalizeEnglishText;
 server.transcribeAudio = transcribeAudio;
 module.exports = server;

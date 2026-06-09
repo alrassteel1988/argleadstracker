@@ -6,8 +6,8 @@
   "scripts": {
     "build": "node -e \"console.log('No asset compilation required for ARG Leads Tracker')\"",
     "start": "node server.js",
-    "check": "node --check server.js && node --check client.js && node --check supabase-client.js && node --check enrichment.js && node --check tests/enrichment.test.js",
-    "test": "node tests/enrichment.test.js"
+    "check": "node --check server.js && node --check client.js && node --check supabase-client.js && node --check enrichment.js && node --check tests/enrichment.test.js && node --check tests/pmr-voice-note.test.js && node --check tests/role-access.test.js && node --check tests/admin-salesman-permissions.e2e.test.js",
+    "test": "node tests/enrichment.test.js && node tests/pmr-voice-note.test.js && node tests/role-access.test.js && node tests/admin-salesman-permissions.e2e.test.js"
   },
   "engines": {
     "node": "24.x"

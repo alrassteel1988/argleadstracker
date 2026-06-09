@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ARG Leads Tracker CRM</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -22,7 +26,8 @@
     </main>
 
     <div class="app-shell hidden" id="appShell">
-      <aside class="sidebar">
+      <button class="menu-backdrop hidden" id="menuBackdrop" type="button" aria-label="Close navigation menu"></button>
+      <aside class="sidebar" id="mobileSidebar">
         <div class="brand">
           <div class="brand-mark">ARG</div>
           <div>
@@ -44,20 +49,25 @@
 
       <main class="main">
         <header class="topbar">
-          <div>
-            <h1>ARG CRM Command Center</h1>
-            <p>Track leads, assign salesmen, update pipeline stages, and keep mobile follow-ups synced.</p>
+          <div class="topbar-title">
+            <button class="mobile-menu-button" id="mobileMenuToggle" type="button" aria-expanded="false" aria-controls="mobileSidebar">Menu</button>
+            <div>
+              <h1>ARG CRM Command Center</h1>
+              <p>Track leads, assign salesmen, update pipeline stages, and keep mobile follow-ups synced.</p>
+            </div>
           </div>
           <div class="topbar-actions">
             <span class="signed-in-user" id="signedInUser"></span>
             <button class="ghost-button hidden" id="openSalesmanForm">Create Salesman Account</button>
+            <button class="ghost-button hidden" id="exportLeadsExcel">Export Excel</button>
+            <button class="ghost-button hidden" id="exportLeadsPdf">Export PDF</button>
             <button class="ghost-button" id="logoutButton">Sign Out</button>
             <button class="ghost-button" id="openPlacesSearch">Search Google Places</button>
             <button class="primary-button" id="openLeadForm">Add Lead</button>
           </div>
         </header>
 
-        <section class="metrics" aria-label="CRM metrics">
+        <section class="metrics" id="metricsPanel" aria-label="CRM metrics">
           <article>
             <span>Total Leads</span>
             <strong id="metricTotal">0</strong>
@@ -76,7 +86,104 @@
           </article>
         </section>
 
-        <section class="toolbar">
+        <section class="dashboard-view" id="dashboardView">
+          <div class="panel salesman-followup-panel hidden" id="salesmanFollowupPanel">
+            <div class="panel-header">
+              <div>
+                <h2>Due Follow-Up Breakdown</h2>
+                <span>Chronological priority view</span>
+              </div>
+            </div>
+            <div class="followup-groups" id="salesmanFollowupGroups"></div>
+          </div>
+          <div class="panel portfolio-panel hidden" id="portfolioPanel">
+            <div class="panel-header portfolio-header">
+              <div>
+                <h2>Lead Portfolio Analytics</h2>
+                <span>Territory, stage, and engagement distribution</span>
+              </div>
+            </div>
+            <div class="portfolio-kpis">
+              <article><span>Total Assigned Leads</span><strong id="portfolioTotal">0</strong></article>
+              <article><span>Active Leads</span><strong id="portfolioActive">0</strong></article>
+              <article><span>Dormant Leads</span><strong id="portfolioDormant">0</strong></article>
+              <article><span>Hot Leads</span><strong id="portfolioHot">0</strong></article>
+              <article><span>Follow-Ups Due</span><strong id="portfolioDue">0</strong></article>
+              <article><span>Overdue Follow-Ups</span><strong id="portfolioOverdue">0</strong></article>
+            </div>
+            <div class="portfolio-filters">
+              <label><span>Report View</span><select id="portfolioReportView"><option value="stage">Engagement Stage</option><option value="country">GCC Country</option><option value="emirate">Emirate</option></select></label>
+              <label><span>Engagement Stage</span><select id="portfolioStageFilter"><option value="all">All Stages</option></select></label>
+              <label><span>GCC Country</span><select id="portfolioCountryFilter"><option value="all">All GCC</option><option>UAE</option><option>Saudi Arabia</option><option>Qatar</option><option>Kuwait</option><option>Bahrain</option><option>Oman</option></select></label>
+              <label><span>Emirate</span><select id="portfolioEmirateFilter"><option value="all">All Emirates</option><option>Dubai</option><option>Abu Dhabi</option><option>Sharjah</option><option>Ajman</option><option>Ras Al Khaimah</option><option>Fujairah</option><option>Umm Al Quwain</option></select></label>
+            </div>
+            <div class="portfolio-visual">
+              <div class="portfolio-pie" id="portfolioPie" role="img" aria-label="Lead portfolio distribution"></div>
+              <div class="portfolio-legend" id="portfolioLegend"></div>
+            </div>
+            <div class="portfolio-insights" id="portfolioInsights"></div>
+          </div>
+          <div class="panel performance-panel hidden" id="performancePanel">
+            <div class="panel-header performance-header">
+              <div>
+                <h2>Salesman Performance Overview</h2>
+                <span>Lead ownership, activity, and follow-up productivity</span>
+              </div>
+              <label class="performance-filter">
+                <span>Stage</span>
+                <select id="performanceStageFilter">
+                  <option value="all">All Stages</option>
+                </select>
+              </label>
+            </div>
+            <div class="performance-kpis">
+              <article><span>Most Active Salesman</span><strong id="kpiMostActive">-</strong></article>
+              <article><span>Highest Lead Volume</span><strong id="kpiHighestVolume">-</strong></article>
+              <article><span>Most Follow-ups Completed</span><strong id="kpiMostFollowups">-</strong></article>
+              <article><span>Least Active Salesman</span><strong id="kpiLeastActive">-</strong></article>
+            </div>
+            <div class="performance-legend" aria-label="Chart legend">
+              <span><i class="legend-assigned"></i>Assigned</span>
+              <span><i class="legend-generated"></i>Generated</span>
+              <span><i class="legend-activities"></i>Activities</span>
+              <span><i class="legend-followups"></i>Follow-ups</span>
+              <span><i class="legend-stage"></i>Filtered stage</span>
+            </div>
+            <div class="performance-chart" id="performanceChart" aria-label="Salesman performance chart"></div>
+            <div class="performance-table-wrap">
+              <table class="performance-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Salesman Name</th>
+                    <th>Leads Assigned</th>
+                    <th>Leads in Current Filtered Stage</th>
+                    <th>Activities Logged</th>
+                    <th>Upcoming Follow-ups</th>
+                    <th>Last Activity Date</th>
+                  </tr>
+                </thead>
+                <tbody id="performanceTable"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel" id="relationshipFocusPanel">
+            <div class="panel-header">
+              <h2>Today’s Relationship Focus</h2>
+              <span>Priority accounts</span>
+            </div>
+            <div class="insight-list" id="dashboardFocus"></div>
+          </div>
+          <div class="panel" id="pipelineHealthPanel">
+            <div class="panel-header">
+              <h2>Pipeline Health</h2>
+              <span>By status</span>
+            </div>
+            <div class="status-grid" id="dashboardStatus"></div>
+          </div>
+        </section>
+
+        <section class="toolbar hidden" id="pipelineToolbar">
           <label class="search-box">
             <span>Search</span>
             <input id="searchInput" type="search" placeholder="Company, contact, product, territory">
@@ -95,7 +202,7 @@
           </label>
         </section>
 
-        <section class="content-grid">
+        <section class="content-grid hidden" id="pipelineView">
           <div class="panel leads-panel">
             <div class="panel-header">
               <h2>Live Lead List</h2>
@@ -109,6 +216,26 @@
               <strong>Select a lead</strong>
               <span>Open any record to view details, update stage, and log activity.</span>
             </div>
+          </div>
+        </section>
+
+        <section class="view-panel hidden" id="salesmenView">
+          <div class="panel">
+            <div class="panel-header">
+              <h2>Salesman Performance</h2>
+              <span id="salesmenSummary">0 salesmen</span>
+            </div>
+            <div class="salesmen-grid" id="salesmenGrid"></div>
+          </div>
+        </section>
+
+        <section class="view-panel hidden" id="activityView">
+          <div class="panel">
+            <div class="panel-header">
+              <h2>Activity Timeline</h2>
+              <span id="activitySummary">0 activities</span>
+            </div>
+            <div class="activity-feed" id="activityFeed"></div>
           </div>
         </section>
       </main>
@@ -206,9 +333,72 @@
           <label class="wide">Compliance requirements<textarea name="compliance_requirements" rows="2" placeholder="ISO, ICV, DNV, ADNOC approved"></textarea></label>
           <label class="wide">Raw document URL<input name="raw_document_url" type="url" placeholder="Google Drive or equivalent link"></label>
           <label class="wide">PMR notes<textarea name="notes" rows="3"></textarea></label>
+          <div class="wide voice-control pmr-voice-control">
+            <div class="voice-control-actions">
+              <button class="voice-button" id="recordPmrVoice" type="button">Record Voice Note</button>
+              <button class="ghost-button hidden" id="deletePmrVoice" type="button">Delete Recording</button>
+          </div>
+          <audio class="voice-preview hidden" id="pmrVoicePreview" controls></audio>
+          <span class="voice-status" id="pmrVoiceStatus" aria-live="polite">No PMR voice note recorded.</span>
+          </div>
+          <label class="wide hidden" id="pmrTranscriptLabel">AI transcript<textarea name="voice_note_transcript" rows="4" readonly placeholder="The meeting transcript will appear here after recording."></textarea></label>
+          <input name="voice_note_id" type="hidden">
+          <input name="voice_note_url" type="hidden">
+          <input name="voice_note_path" type="hidden">
+          <input name="voice_note_mime_type" type="hidden">
+          <input name="voice_note_size_bytes" type="hidden">
         </div>
         <span class="form-message" id="pmrMessage" aria-live="polite"></span>
         <button class="primary-button" type="submit">Save PMR</button>
+      </form>
+    </dialog>
+
+    <dialog id="activityEditDialog">
+      <form method="dialog" class="lead-form" id="activityEditForm">
+        <div class="dialog-header">
+          <div>
+            <h2>Edit Activity</h2>
+            <p>Revise the logged note without removing linked PMR or voice-note details.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeActivityEditForm">Close</button>
+        </div>
+        <div class="form-grid">
+          <input name="lead_id" type="hidden">
+          <input name="activity_index" type="hidden">
+          <label>Activity date<input name="at" type="date" required></label>
+          <label>Type
+            <select name="type">
+              <option>Note</option>
+              <option>Phone Call</option>
+              <option>Email</option>
+              <option>In-Person Meeting</option>
+              <option>Site Visit</option>
+              <option>Video Call</option>
+              <option>Quotation Sent</option>
+              <option>Order Placed</option>
+              <option>Reminder</option>
+              <option>Stage</option>
+            </select>
+          </label>
+          <label class="wide">Activity note<textarea name="text" rows="4" required></textarea></label>
+          <div class="wide form-grid hidden" id="activityEditReminderFields">
+            <label>Reminder type
+              <select name="reminder_type">
+                <option>Quotation follow-up</option>
+                <option>Planned visit</option>
+                <option>Important date</option>
+                <option>Payment follow-up</option>
+                <option>Sample approval</option>
+                <option>General follow-up</option>
+              </select>
+            </label>
+            <label>Due date<input name="due_date" type="date"></label>
+            <label>Due time<input name="due_time" type="time"></label>
+            <label class="wide">Required activity<input name="activity_required"></label>
+          </div>
+        </div>
+        <span class="form-message" id="activityEditMessage" aria-live="polite"></span>
+        <button class="primary-button" type="submit">Save Activity Changes</button>
       </form>
     </dialog>
 

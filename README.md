@@ -27,7 +27,10 @@ On another phone connected to the same network, use the computer's local IP addr
 - Fuzzy duplicate prevention during company creation
 - Relationship health indicator on company cards and detail pages
 - Structured Post-Meeting Report filing linked to company activity
+- PMR voice-note attachment with browser recording, preview, delete, re-record, and activity playback
 - One-click relationship intelligence actions grounded in the company record, activity log, and latest PMR
+- CRM reminders for quotation follow-ups, planned visits, important dates, payment follow-ups, sample approvals, and general follow-ups
+- Google Calendar add-to-calendar links for each reminder
 - Mobile voice-note recording with OpenAI Whisper translation into English text
 - Required email and password sign-in
 - Administrator-only salesman account creation
@@ -59,7 +62,7 @@ $env:GOOGLE_PLACES_API_KEY="your_google_places_key"
 $env:HUNTER_API_KEY="your_hunter_key"
 ```
 
-Get the Supabase URL from `Project Settings > API > Project URL`. Get the publishable or legacy anon key from `Project Settings > API Keys`. Get the service-role key from the server-side secret keys area and store it only in Vercel environment variables or your private local `.env`.
+Get the Supabase URL from `Project Settings > API > Project URL`. Get the publishable or legacy anon key from `Project Settings > API Keys`. For `SUPABASE_SERVICE_ROLE_KEY`, use the JWT-format legacy `service_role` key for this project (it starts with `eyJ...` and has three dot-separated parts). Store it only in Vercel environment variables or your private local `.env`; do not use the short `sb_secret_...` key with this Node server.
 
 Enable `Places API (New)` in Google Cloud and restrict the Google key to the server deployment. Store `GOOGLE_PLACES_API_KEY` only as a server/Vercel environment variable. It is never sent to `client.js` or browser code.
 
@@ -109,6 +112,38 @@ On mobile:
 
 The Add Lead form also supports recording directly into the notes field. Recordings are limited to two minutes in the browser and 20 MB on the backend.
 
+## AI-assisted PMR voice notes
+
+The `File PMR` form includes `Record Voice Note`, `Delete Recording`, and an audio preview. After recording stops, the backend transcribes the meeting voice note into English, analyzes the transcript, and drafts the PMR fields for review:
+
+- Products discussed
+- Competitors mentioned
+- Compliance requirements
+- PMR notes
+- First order timing
+- Potential annual value
+- Relationship heat
+- Director action
+- Account status
+
+The user can edit all drafted PMR fields before saving. The recording is uploaded only when the PMR is saved, then linked to the PMR record and the activity timeline entry. The original AI transcript is also saved with the PMR and can be reviewed from the lead activity timeline or the full activity log.
+
+Browser recording requires a secure origin. It works on `localhost` for development and on the HTTPS Vercel deployment. PMR audio attachments are limited to two minutes in the browser and 20 MB on the backend.
+
+Optional PMR analysis model override:
+
+```powershell
+$env:OPENAI_PMR_ANALYSIS_MODEL="gpt-4.1-mini"
+```
+
+## Google Calendar reminders
+
+Lead creation automatically converts the `Next action` and `Next action date` into a CRM reminder. Salesmen can also open a lead and use `Schedule Reminder` for quotation follow-ups, planned visits, important dates, payment follow-ups, sample approvals, or general follow-ups.
+
+Reminders are saved as structured lead activities and appear in the lead detail view and Activity page. Each reminder includes an `Add to Google Calendar` link that opens Google Calendar with the customer, date/time, and required activity prefilled.
+
+This does not silently write into a salesman's private Google Calendar account. Full automatic Google Calendar sync requires Google OAuth consent per salesman, or Google Workspace domain-wide delegation managed by your company administrator.
+
 ## API routes
 
 - `GET /api/health`
@@ -125,7 +160,10 @@ The Add Lead form also supports recording directly into the notes field. Recordi
 - `GET /api/leads/:id/pmrs`
 - `POST /api/leads/:id/pmrs`
 - `POST /api/leads/:id/ai-actions`
+- `POST /api/pmr-voice-notes`
+- `GET /api/pmr-voice-notes/:id`
 - `POST /api/transcriptions`
+- `POST /api/pmrs/analyze-transcript`
 - `POST /api/places/search`
 - `POST /api/leads/enrich-company`
 - `PATCH /api/leads/:id`
