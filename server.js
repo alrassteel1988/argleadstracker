@@ -1907,17 +1907,40 @@ async function handleApi(req, res, url) {
       const lead = await getSupabaseLead(user.token, stageMatch[1], user);
       if (!lead) return leadNotFound(res);
       const activity = { id: newRecordId("act"), at: new Date().toISOString().slice(0, 10), type: "Stage", text: `Stage changed to ${payload.stage || lead.stage}` };
-      const leads = await rest(`leads?id=eq.${encodeURIComponent(stageMatch[1])}&select=*`, {
-        method: "PATCH",
-        ...supabaseDataOptions(user.token),
-        headers: { Prefer: "return=representation" },
-        body: { lead_status: String(payload.stage || lead.stage), last_activity: activity.at, activities: [activity, ...(lead.activities || [])] }
-      });
+      const baseStageBody = {
+        lead_status: String(payload.stage || lead.stage),
+        last_activity: activity.at,
+        activities: [activity, ...(lead.activities || [])]
+      };
+      const stageBody = {
+        ...baseStageBody,
+        stage_updated_at: new Date().toISOString(),
+        stage_updated_by: user.id
+      };
+      let leads;
+      try {
+        leads = await rest(`leads?id=eq.${encodeURIComponent(stageMatch[1])}&select=*`, {
+          method: "PATCH",
+          ...supabaseDataOptions(user.token),
+          headers: { Prefer: "return=representation" },
+          body: stageBody
+        });
+      } catch (error) {
+        if (!/stage_updated_(at|by)|schema cache/i.test(error.message || "")) throw error;
+        leads = await rest(`leads?id=eq.${encodeURIComponent(stageMatch[1])}&select=*`, {
+          method: "PATCH",
+          ...supabaseDataOptions(user.token),
+          headers: { Prefer: "return=representation" },
+          body: baseStageBody
+        });
+      }
       return sendJson(res, 200, fromSupabaseLead(leads[0]));
     }
     const lead = db.leads.find(item => item.id === stageMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
     lead.stage = String(payload.stage || lead.stage);
+    lead.stage_updated_at = new Date().toISOString();
+    lead.stage_updated_by = user.id;
     lead.last_activity = new Date().toISOString().slice(0, 10);
     lead.activities.unshift({
       id: newRecordId("act"),

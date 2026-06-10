@@ -200,15 +200,46 @@
               <option value="all">All salesmen</option>
             </select>
           </label>
+          <label>
+            <span>Priority</span>
+            <select id="priorityFilter">
+              <option value="all">All priorities</option>
+            </select>
+          </label>
+          <label>
+            <span>Territory</span>
+            <select id="territoryFilter">
+              <option value="all">All territories</option>
+            </select>
+          </label>
+          <div class="view-toggle" aria-label="Pipeline view mode">
+            <span>View</span>
+            <div>
+              <button class="toggle-button active" type="button" data-pipeline-mode="list">List</button>
+              <button class="toggle-button" type="button" data-pipeline-mode="kanban">Kanban</button>
+            </div>
+          </div>
         </section>
 
         <section class="content-grid hidden" id="pipelineView">
-          <div class="panel leads-panel">
+          <div class="panel leads-panel" id="pipelineListPanel">
             <div class="panel-header">
               <h2>Live Lead List</h2>
               <span id="leadCount">0 records</span>
             </div>
             <div class="lead-list" id="leadList"></div>
+          </div>
+
+          <div class="panel kanban-panel hidden" id="kanbanPanel">
+            <div class="panel-header kanban-panel-header">
+              <div>
+                <h2>Kanban Pipeline</h2>
+                <span>Drag leads between stages to update pipeline status</span>
+              </div>
+              <span id="kanbanSummary">0 records</span>
+            </div>
+            <div class="kanban-mobile-tabs" id="kanbanMobileStages" aria-label="Kanban stage selector"></div>
+            <div class="kanban-board" id="kanbanBoard"></div>
           </div>
 
           <div class="panel detail-panel" id="detailPanel">
@@ -440,6 +471,8 @@
         <button class="primary-button" type="submit">Create Salesman</button>
       </form>
     </dialog>
+
+    <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="client.js"></script>
   </body>

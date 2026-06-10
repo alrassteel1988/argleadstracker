@@ -2,9 +2,12 @@ const state = {
   leads: [],
   settings: { stages: [], priorities: [], territories: [], salesmen: [] },
   selectedId: null,
-  filters: { search: "", stage: "all", salesman: "all" },
+  filters: { search: "", stage: "all", salesman: "all", priority: "all", territory: "all" },
   performanceStage: "all",
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
+  pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
+  kanbanStage: localStorage.getItem("arg_kanban_stage") || "PROSPECT",
+  draggedLeadId: "",
   currentUser: null
 };
 
@@ -33,6 +36,8 @@ const els = {
   searchInput: document.querySelector("#searchInput"),
   stageFilter: document.querySelector("#stageFilter"),
   salesmanFilter: document.querySelector("#salesmanFilter"),
+  priorityFilter: document.querySelector("#priorityFilter"),
+  territoryFilter: document.querySelector("#territoryFilter"),
   metricTotal: document.querySelector("#metricTotal"),
   metricValue: document.querySelector("#metricValue"),
   metricHot: document.querySelector("#metricHot"),
@@ -69,6 +74,11 @@ const els = {
   dashboardStatus: document.querySelector("#dashboardStatus"),
   pipelineToolbar: document.querySelector("#pipelineToolbar"),
   pipelineView: document.querySelector("#pipelineView"),
+  pipelineListPanel: document.querySelector("#pipelineListPanel"),
+  kanbanPanel: document.querySelector("#kanbanPanel"),
+  kanbanSummary: document.querySelector("#kanbanSummary"),
+  kanbanMobileStages: document.querySelector("#kanbanMobileStages"),
+  kanbanBoard: document.querySelector("#kanbanBoard"),
   salesmenView: document.querySelector("#salesmenView"),
   salesmenGrid: document.querySelector("#salesmenGrid"),
   salesmenSummary: document.querySelector("#salesmenSummary"),
@@ -94,7 +104,8 @@ const els = {
   activityEditDialog: document.querySelector("#activityEditDialog"),
   activityEditForm: document.querySelector("#activityEditForm"),
   activityEditMessage: document.querySelector("#activityEditMessage"),
-  activityEditReminderFields: document.querySelector("#activityEditReminderFields")
+  activityEditReminderFields: document.querySelector("#activityEditReminderFields"),
+  appToast: document.querySelector("#appToast")
 };
 
 const SESSION_KEY = "arg_crm_session";
@@ -144,6 +155,17 @@ const money = new Intl.NumberFormat("en-AE", {
   currency: "AED",
   maximumFractionDigits: 0
 });
+
+const KANBAN_STAGES = [
+  { key: "PROSPECT", label: "Prospect", color: "stage-prospect", aliases: ["PROSPECT", "NEW"] },
+  { key: "OUTREACH", label: "Qualified", color: "stage-qualified", aliases: ["OUTREACH", "QUALIFIED"] },
+  { key: "SAMPLING", label: "Proposal Sent", color: "stage-proposal", aliases: ["SAMPLING", "PROPOSAL", "PROPOSAL SENT"] },
+  { key: "ENGAGED", label: "Negotiation", color: "stage-negotiation", aliases: ["ENGAGED", "NEGOTIATION"] },
+  { key: "ACTIVE", label: "Won", color: "stage-won", aliases: ["ACTIVE", "WON"] },
+  { key: "DORMANT", label: "Lost", color: "stage-lost", aliases: ["DORMANT", "LOST", "AT RISK"] }
+];
+
+const KANBAN_STAGE_BY_KEY = Object.fromEntries(KANBAN_STAGES.map(stage => [stage.key, stage]));
 
 function addMinutes(date, minutes) {
   return new Date(date.getTime() + minutes * 60_000);
@@ -792,6 +814,15 @@ function setMessage(element, message, type = "") {
   element.classList.toggle("error", type === "error");
 }
 
+function setToast(message, type = "success") {
+  if (!els.appToast) return;
+  els.appToast.textContent = message;
+  els.appToast.classList.remove("hidden", "success", "error");
+  els.appToast.classList.add(type === "error" ? "error" : "success");
+  clearTimeout(setToast.timer);
+  setToast.timer = setTimeout(() => els.appToast.classList.add("hidden"), 2800);
+}
+
 function setEnrichmentStatus(message, type = "") {
   if (!els.leadEnrichmentStatus) return;
   els.leadEnrichmentStatus.textContent = message;
@@ -908,7 +939,16 @@ function filteredLeads() {
     const matchesQuery = !query || text.includes(query);
     const matchesStage = state.filters.stage === "all" || lead.stage === state.filters.stage;
     const matchesSalesman = state.filters.salesman === "all" || lead.assigned_salesman === state.filters.salesman;
-    return matchesQuery && matchesStage && matchesSalesman;
+    const matchesPriority = state.filters.priority === "all" || lead.priority === state.filters.priority;
+    const territoryOptions = [
+      lead.territory,
+      lead.country_emirate,
+      lead.location,
+      inferCountry(lead),
+      inferEmirate(lead)
+    ].map(value => String(value || "").trim().toLowerCase());
+    const matchesTerritory = state.filters.territory === "all" || territoryOptions.includes(state.filters.territory.toLowerCase());
+    return matchesQuery && matchesStage && matchesSalesman && matchesPriority && matchesTerritory;
   });
 }
 
@@ -1251,6 +1291,163 @@ function renderLeadList() {
       render();
     });
   });
+}
+
+function formatAED(value) {
+  const number = Number(value || 0);
+  return number ? `AED ${number.toLocaleString("en-AE")}` : "AED -";
+}
+
+function kanbanStageForLead(lead) {
+  const raw = String(lead.stage || "").trim().toUpperCase();
+  const match = KANBAN_STAGES.find(stage => stage.key === raw || stage.aliases.includes(raw));
+  return match?.key || "PROSPECT";
+}
+
+function canDragKanban() {
+  return ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
+}
+
+function kanbanPriorityTone(priority) {
+  const value = String(priority || "").toLowerCase();
+  if (value.includes("hot")) return "hot";
+  if (value.includes("warm")) return "warm";
+  return "cold";
+}
+
+function renderKanbanView() {
+  if (!els.kanbanPanel) return;
+  const leads = filteredLeads();
+  const activeStage = KANBAN_STAGE_BY_KEY[state.kanbanStage] ? state.kanbanStage : KANBAN_STAGES[0].key;
+  const dragEnabled = canDragKanban();
+  els.kanbanSummary.textContent = `${leads.length} record${leads.length === 1 ? "" : "s"}`;
+
+  els.kanbanMobileStages.innerHTML = KANBAN_STAGES.map(stage => {
+    const count = leads.filter(lead => kanbanStageForLead(lead) === stage.key).length;
+    return `
+      <button class="kanban-stage-tab ${stage.key === activeStage ? "active" : ""}" type="button" data-kanban-tab="${stage.key}">
+        ${escapeHtml(stage.label)} <span>${count}</span>
+      </button>
+    `;
+  }).join("");
+
+  els.kanbanBoard.innerHTML = KANBAN_STAGES.map(stage => {
+    const stageLeads = leads.filter(lead => kanbanStageForLead(lead) === stage.key);
+    const stageValue = stageLeads.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
+    const cards = stageLeads.length ? stageLeads.map(lead => {
+      const overdue = Boolean(lead.next_action_date) && new Date(`${lead.next_action_date}T23:59:59`) < new Date();
+      const priorityTone = kanbanPriorityTone(lead.priority);
+      return `
+        <article
+          class="kanban-card priority-${priorityTone}"
+          data-kanban-lead="${escapeHtml(lead.id)}"
+          draggable="${dragEnabled ? "true" : "false"}"
+          role="button"
+          tabindex="0"
+          aria-label="Open ${escapeHtml(lead.company_name || "lead")}"
+        >
+          <div class="kanban-card-title">
+            <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+            <span class="kanban-priority ${priorityTone}">${escapeHtml(lead.priority || "Cold")}</span>
+          </div>
+          <span class="kanban-salesman">${escapeHtml(lead.assigned_salesman || "Unassigned")}</span>
+          <div class="kanban-card-meta">
+            <span>${escapeHtml(formatAED(lead.estimated_value))}</span>
+            <span class="${overdue ? "overdue" : ""}">${overdue ? "! " : ""}${escapeHtml(lead.next_action_date || "No follow-up")}</span>
+          </div>
+          <span class="kanban-territory">${escapeHtml(lead.territory || inferEmirate(lead))}</span>
+        </article>
+      `;
+    }).join("") : `
+      <div class="kanban-empty">
+        <strong>No leads here</strong>
+        <span>${dragEnabled ? "Drag a card or add a new lead" : "No assigned leads in this stage"}</span>
+      </div>
+    `;
+    return `
+      <section class="kanban-column ${stage.key === activeStage ? "active" : ""}" data-kanban-stage="${stage.key}">
+        <div class="kanban-column-header ${stage.color}">
+          <div>
+            <h3>${escapeHtml(stage.label)}</h3>
+            <span>${stageLeads.length} lead${stageLeads.length === 1 ? "" : "s"}</span>
+          </div>
+          <strong>${escapeHtml(formatAED(stageValue))}</strong>
+        </div>
+        <div class="kanban-card-list">${cards}</div>
+      </section>
+    `;
+  }).join("");
+
+  bindKanbanEvents();
+}
+
+function bindKanbanEvents() {
+  document.querySelectorAll("[data-kanban-tab]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.kanbanStage = button.dataset.kanbanTab;
+      localStorage.setItem("arg_kanban_stage", state.kanbanStage);
+      renderKanbanView();
+    });
+  });
+
+  document.querySelectorAll("[data-kanban-lead]").forEach(card => {
+    card.addEventListener("click", () => {
+      state.selectedId = card.dataset.kanbanLead;
+      renderDetail();
+    });
+    card.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        state.selectedId = card.dataset.kanbanLead;
+        renderDetail();
+      }
+    });
+    card.addEventListener("dragstart", event => {
+      if (!canDragKanban()) {
+        event.preventDefault();
+        return;
+      }
+      state.draggedLeadId = card.dataset.kanbanLead;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", state.draggedLeadId);
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => {
+      state.draggedLeadId = "";
+      card.classList.remove("dragging");
+      document.querySelectorAll(".kanban-column.drag-over").forEach(column => column.classList.remove("drag-over"));
+    });
+  });
+
+  document.querySelectorAll("[data-kanban-stage]").forEach(column => {
+    column.addEventListener("dragover", event => {
+      if (!canDragKanban() || !state.draggedLeadId) return;
+      event.preventDefault();
+      column.classList.add("drag-over");
+    });
+    column.addEventListener("dragleave", () => column.classList.remove("drag-over"));
+    column.addEventListener("drop", async event => {
+      event.preventDefault();
+      column.classList.remove("drag-over");
+      await moveKanbanLead(state.draggedLeadId || event.dataTransfer.getData("text/plain"), column.dataset.kanbanStage);
+    });
+  });
+}
+
+async function moveKanbanLead(leadId, stage) {
+  if (!leadId || !stage || !canDragKanban()) return;
+  const lead = state.leads.find(item => item.id === leadId);
+  if (!lead || kanbanStageForLead(lead) === stage) return;
+  const label = KANBAN_STAGE_BY_KEY[stage]?.label || stage;
+  try {
+    const updated = await api(`/api/leads/${leadId}/stage`, { method: "PATCH", body: JSON.stringify({ stage }) });
+    const index = state.leads.findIndex(item => item.id === leadId);
+    if (index >= 0) state.leads[index] = { ...state.leads[index], ...updated };
+    setToast(`Lead moved to ${label}`, "success");
+    render();
+  } catch (error) {
+    setToast(error.message, "error");
+  }
 }
 
 function renderSalesmenView() {
@@ -1738,6 +1935,7 @@ function render() {
   renderMetrics();
   renderDashboardView();
   renderLeadList();
+  renderKanbanView();
   renderDetail();
   renderSalesmenView();
   renderActivityView();
@@ -1751,12 +1949,19 @@ function applyView() {
   }
   const isDashboard = currentView === "dashboard";
   const isPipeline = currentView === "pipeline";
+  const isKanban = state.pipelineViewMode === "kanban";
   els.metricsPanel.classList.toggle("hidden", !(isDashboard || isPipeline));
   els.dashboardView.classList.toggle("hidden", !isDashboard);
   els.pipelineToolbar.classList.toggle("hidden", !isPipeline);
   els.pipelineView.classList.toggle("hidden", !isPipeline);
+  els.pipelineView?.classList.toggle("kanban-mode", isPipeline && isKanban);
+  els.pipelineListPanel?.classList.toggle("hidden", isKanban);
+  els.kanbanPanel?.classList.toggle("hidden", !isKanban);
   els.salesmenView.classList.toggle("hidden", currentView !== "salesmen");
   els.activityView.classList.toggle("hidden", currentView !== "activity");
+  document.querySelectorAll("[data-pipeline-mode]").forEach(button => {
+    button.classList.toggle("active", button.dataset.pipelineMode === state.pipelineViewMode);
+  });
   document.querySelectorAll(".nav-item").forEach(item => {
     item.classList.toggle("active", item.dataset.view === currentView);
   });
@@ -1835,6 +2040,8 @@ function showApp(user) {
 async function loadWorkspace() {
   state.settings = await api("/api/settings");
   fillSelect(els.stageFilter, state.settings.stages, "All stages");
+  fillSelect(els.priorityFilter, state.settings.priorities || [], "All priorities");
+  fillSelect(els.territoryFilter, [...new Set([...(state.settings.territories || []), "UAE", "Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Ras Al Khaimah", "Fujairah", "Umm Al Quwain"])], "All territories");
   fillSelect(els.performanceStageFilter, state.settings.stages, "All Stages");
   els.performanceStageFilter.value = state.performanceStage;
   fillSelect(els.portfolioStageFilter, state.settings.stages, "All Stages");
@@ -1878,12 +2085,12 @@ async function init() {
 
 els.searchInput.addEventListener("input", event => {
   state.filters.search = event.target.value;
-  renderLeadList();
+  render();
 });
 
 els.stageFilter.addEventListener("change", event => {
   state.filters.stage = event.target.value;
-  renderLeadList();
+  render();
 });
 
 els.performanceStageFilter?.addEventListener("change", event => {
@@ -1913,7 +2120,25 @@ els.portfolioEmirateFilter?.addEventListener("change", event => {
 
 els.salesmanFilter.addEventListener("change", event => {
   state.filters.salesman = event.target.value;
-  renderLeadList();
+  render();
+});
+
+els.priorityFilter?.addEventListener("change", event => {
+  state.filters.priority = event.target.value;
+  render();
+});
+
+els.territoryFilter?.addEventListener("change", event => {
+  state.filters.territory = event.target.value;
+  render();
+});
+
+document.querySelectorAll("[data-pipeline-mode]").forEach(button => {
+  button.addEventListener("click", () => {
+    state.pipelineViewMode = button.dataset.pipelineMode;
+    localStorage.setItem("arg_pipeline_view_mode", state.pipelineViewMode);
+    render();
+  });
 });
 
 document.querySelector("#openLeadForm").addEventListener("click", () => {
