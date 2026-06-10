@@ -266,6 +266,39 @@
               <h2>Activity Timeline</h2>
               <span id="activitySummary">0 activities</span>
             </div>
+            <div class="activity-filter-shell">
+              <button class="ghost-button activity-filter-toggle" type="button" id="activityFilterToggle">Filters</button>
+              <div class="activity-filter-bar" id="activityFilterBar">
+                <label class="activity-salesman-filter">
+                  <span>Salesman</span>
+                  <select id="activitySalesmanFilter">
+                    <option value="all">All Salesmen</option>
+                  </select>
+                </label>
+                <div class="activity-type-filter">
+                  <span>Activity Type</span>
+                  <div class="activity-type-pills" id="activityTypePills"></div>
+                </div>
+                <div class="activity-date-filter">
+                  <span>Date Range</span>
+                  <div class="date-presets" id="activityDatePresets"></div>
+                  <div class="date-range-inputs">
+                    <label>From<input type="date" id="activityDateFrom"></label>
+                    <label>To<input type="date" id="activityDateTo"></label>
+                  </div>
+                </div>
+                <label class="activity-company-search">
+                  <span>Company / Lead</span>
+                  <div class="search-with-clear">
+                    <input id="activityCompanySearch" type="search" placeholder="Search company name">
+                    <button class="clear-search hidden" type="button" id="activitySearchClear" aria-label="Clear company search">&times;</button>
+                  </div>
+                </label>
+                <button class="ghost-button hidden" type="button" id="activityResetFilters">Reset Filters</button>
+              </div>
+              <div class="activity-results-summary" id="activityResultsSummary">Showing activity from the last 30 days</div>
+            </div>
+            <div class="activity-loading hidden" id="activityLoading">Loading activities...</div>
             <div class="activity-feed" id="activityFeed"></div>
           </div>
         </section>

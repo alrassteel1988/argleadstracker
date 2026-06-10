@@ -953,6 +953,81 @@ function visibleLeadsForUser(leads, user) {
   return isAdmin(user) ? leads : (leads || []).filter(lead => leadBelongsToUser(lead, user));
 }
 
+function activityDateValue(activity) {
+  return String(activity.activity_date || activity.at || activity.created_at || "").trim();
+}
+
+function activityDateOnly(activity) {
+  return activityDateValue(activity).slice(0, 10);
+}
+
+function activityTimeOnly(activity) {
+  const value = activityDateValue(activity);
+  const match = value.match(/T(\d{2}:\d{2})/);
+  return match ? match[1] : String(activity.time || "").slice(0, 5);
+}
+
+function normalizedActivityType(type) {
+  const value = String(type || "Note").trim();
+  const lower = value.toLowerCase();
+  if (lower === "call" || lower === "phone") return "Phone Call";
+  if (lower === "visit") return "Site Visit";
+  if (lower === "meeting") return "In-Person Meeting";
+  if (lower === "quote" || lower === "quotation") return "Quotation Sent";
+  if (lower === "order") return "Order Placed";
+  return value || "Note";
+}
+
+function flattenedActivitiesForUser(leads, user, filters = {}) {
+  const visible = visibleLeadsForUser(leads, user);
+  const typeSet = new Set(String(filters.types || "").split(",").map(item => item.trim()).filter(Boolean));
+  const salesman = String(filters.salesman || "").trim().toLowerCase();
+  const company = String(filters.company || "").trim().toLowerCase();
+  const from = String(filters.from || "").slice(0, 10);
+  const to = String(filters.to || "").slice(0, 10);
+
+  return visible.flatMap(lead => ensureActivityIds(lead.activities).map((activity, index) => {
+    const date = activityDateOnly(activity) || new Date().toISOString().slice(0, 10);
+    const type = normalizedActivityType(activity.type);
+    const salesmanName = activity.salesman_name || activity.created_by_name || activity.requested_by_name || lead.assigned_salesman || user.name || "";
+    return {
+      id: activity.id || `${lead.id}-${index}`,
+      lead_id: lead.id,
+      activity_index: index,
+      company_name: lead.company_name || "",
+      salesman_id: activity.salesman_id || activity.created_by || activity.requested_by || lead.assigned_to || "",
+      salesman_name: salesmanName,
+      assigned_salesman: lead.assigned_salesman || "",
+      type,
+      note: activity.note || activity.text || activity.activity_required || "",
+      text: activity.text || activity.note || activity.activity_required || "",
+      activity_date: activityDateValue(activity) || date,
+      activity_time: activityTimeOnly(activity),
+      reminder_due_date: activity.reminder_due_date || activity.due_date || "",
+      reminder_status: activity.reminder_status || (activity.followup_completed ? "completed" : ""),
+      stage: activity.stage || lead.stage || lead.lead_status || "",
+      delete_request: Boolean(activity.delete_request),
+      request_status: activity.request_status || "",
+      edited_at: activity.edited_at || "",
+      audio_url: activity.audio_url || "",
+      audio_signed_url: activity.audio_signed_url || "",
+      transcript: activity.transcript || activity.voice_transcript || ""
+    };
+  })).filter(activity => {
+    const date = activity.activity_date.slice(0, 10);
+    const salesmanTokens = [activity.salesman_id, activity.salesman_name, activity.assigned_salesman]
+      .map(value => String(value || "").trim().toLowerCase());
+    return (!typeSet.size || typeSet.has(activity.type))
+      && (!from || date >= from)
+      && (!to || date <= to)
+      && (!company || activity.company_name.toLowerCase().includes(company))
+      && (!salesman || salesman === "all" || salesmanTokens.includes(salesman));
+  }).sort((a, b) =>
+    String(b.activity_date || "").localeCompare(String(a.activity_date || ""))
+    || String(b.activity_time || "").localeCompare(String(a.activity_time || ""))
+  ).slice(0, 200);
+}
+
 function leadNotFound(res) {
   return sendJson(res, 404, { error: "Lead not found" });
 }
@@ -1717,6 +1792,21 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, visibleLeadsForUser(leads.map(fromSupabaseLead), user));
     }
     return sendJson(res, 200, visibleLeadsForUser(db.leads, user).map(leadWithDerivedFields));
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/activities") {
+    const filters = {
+      salesman: isAdmin(user) ? url.searchParams.get("salesman") : "",
+      types: url.searchParams.get("types"),
+      from: url.searchParams.get("from"),
+      to: url.searchParams.get("to"),
+      company: url.searchParams.get("company")
+    };
+    if (supabaseEnabled) {
+      const leads = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
+      return sendJson(res, 200, flattenedActivitiesForUser(leads.map(fromSupabaseLead), user, filters));
+    }
+    return sendJson(res, 200, flattenedActivitiesForUser(db.leads.map(leadWithDerivedFields), user, filters));
   }
 
   if (req.method === "POST" && url.pathname === "/api/leads") {

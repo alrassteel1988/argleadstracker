@@ -1,3 +1,17 @@
+const ACTIVITY_FILTER_KEY = "arg_activity_filters";
+const ACTIVITY_PRESETS = ["Today", "This Week", "This Month", "Last 30 Days", "Last 90 Days"];
+const ACTIVITY_TYPE_ICONS = {
+  "Note": "TXT",
+  "Phone Call": "TEL",
+  "Email": "@",
+  "In-Person Meeting": "MEET",
+  "Site Visit": "PIN",
+  "Video Call": "VID",
+  "Quotation Sent": "QUOTE",
+  "Order Placed": "AED",
+  "Reminder": "!"
+};
+
 const state = {
   leads: [],
   settings: { stages: [], priorities: [], territories: [], salesmen: [] },
@@ -8,6 +22,10 @@ const state = {
   pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
   kanbanStage: localStorage.getItem("arg_kanban_stage") || "PROSPECT",
   draggedLeadId: "",
+  activities: [],
+  activityLoading: false,
+  activityFiltersOpen: false,
+  activityFilters: loadActivityFilters(),
   currentUser: null
 };
 
@@ -85,6 +103,18 @@ const els = {
   activityView: document.querySelector("#activityView"),
   activityFeed: document.querySelector("#activityFeed"),
   activitySummary: document.querySelector("#activitySummary"),
+  activityFilterToggle: document.querySelector("#activityFilterToggle"),
+  activityFilterBar: document.querySelector("#activityFilterBar"),
+  activitySalesmanFilter: document.querySelector("#activitySalesmanFilter"),
+  activityTypePills: document.querySelector("#activityTypePills"),
+  activityDatePresets: document.querySelector("#activityDatePresets"),
+  activityDateFrom: document.querySelector("#activityDateFrom"),
+  activityDateTo: document.querySelector("#activityDateTo"),
+  activityCompanySearch: document.querySelector("#activityCompanySearch"),
+  activitySearchClear: document.querySelector("#activitySearchClear"),
+  activityResetFilters: document.querySelector("#activityResetFilters"),
+  activityResultsSummary: document.querySelector("#activityResultsSummary"),
+  activityLoading: document.querySelector("#activityLoading"),
   leadDialog: document.querySelector("#leadDialog"),
   leadForm: document.querySelector("#leadForm"),
   formSalesman: document.querySelector("#formSalesman"),
@@ -114,6 +144,7 @@ const leadFormTouched = new Set();
 const leadEnrichmentCache = new Map();
 let leadEnrichmentTimer = null;
 let leadEnrichmentKey = "";
+let activitySearchTimer = null;
 
 const enrichmentFieldMap = {
   company_name: "company_name",
@@ -166,6 +197,56 @@ const KANBAN_STAGES = [
 ];
 
 const KANBAN_STAGE_BY_KEY = Object.fromEntries(KANBAN_STAGES.map(stage => [stage.key, stage]));
+
+function allActivityTypes() {
+  return ["Note", "Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed", "Reminder"];
+}
+
+function isoDateFromDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function defaultActivityRange() {
+  const now = new Date();
+  return { dateFrom: isoDateFromDate(addDays(now, -30)), dateTo: isoDateFromDate(now) };
+}
+
+function defaultActivityFilters() {
+  const range = defaultActivityRange();
+  return {
+    salesmanId: "all",
+    types: allActivityTypes(),
+    dateFrom: range.dateFrom,
+    dateTo: range.dateTo,
+    companySearch: "",
+    preset: "Last 30 Days"
+  };
+}
+
+function loadActivityFilters() {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(ACTIVITY_FILTER_KEY) || "null");
+    if (!stored || typeof stored !== "object") return defaultActivityFilters();
+    const defaults = defaultActivityFilters();
+    return {
+      ...defaults,
+      ...stored,
+      types: Array.isArray(stored.types) && stored.types.length ? stored.types.filter(type => allActivityTypes().includes(type)) : defaults.types
+    };
+  } catch {
+    return defaultActivityFilters();
+  }
+}
+
+function saveActivityFilters() {
+  sessionStorage.setItem(ACTIVITY_FILTER_KEY, JSON.stringify(state.activityFilters));
+}
 
 function addMinutes(date, minutes) {
   return new Date(date.getTime() + minutes * 60_000);
@@ -1486,6 +1567,102 @@ function allActivities() {
     .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
 
+function activityPresetRange(preset) {
+  const now = new Date();
+  const start = new Date(now);
+  if (preset === "Today") {
+    return { dateFrom: isoDateFromDate(now), dateTo: isoDateFromDate(now) };
+  }
+  if (preset === "This Week") {
+    const day = start.getDay() || 7;
+    start.setDate(start.getDate() - day + 1);
+    return { dateFrom: isoDateFromDate(start), dateTo: isoDateFromDate(now) };
+  }
+  if (preset === "This Month") {
+    start.setDate(1);
+    return { dateFrom: isoDateFromDate(start), dateTo: isoDateFromDate(now) };
+  }
+  if (preset === "Last 90 Days") {
+    return { dateFrom: isoDateFromDate(addDays(now, -90)), dateTo: isoDateFromDate(now) };
+  }
+  return defaultActivityRange();
+}
+
+function activityFiltersAreDefault() {
+  const defaults = defaultActivityFilters();
+  const filters = state.activityFilters;
+  return filters.salesmanId === defaults.salesmanId
+    && filters.dateFrom === defaults.dateFrom
+    && filters.dateTo === defaults.dateTo
+    && filters.companySearch === defaults.companySearch
+    && filters.types.length === defaults.types.length
+    && filters.types.every(type => defaults.types.includes(type));
+}
+
+function updateActivityFilter(key, value) {
+  state.activityFilters = { ...state.activityFilters, [key]: value };
+  if (key === "dateFrom" || key === "dateTo") state.activityFilters.preset = "";
+  saveActivityFilters();
+  renderActivityFilters();
+  fetchActivities();
+}
+
+function resetActivityFilters() {
+  state.activityFilters = defaultActivityFilters();
+  saveActivityFilters();
+  renderActivityFilters();
+  fetchActivities();
+}
+
+function renderActivityFilters() {
+  const filters = state.activityFilters;
+  const admin = state.currentUser?.role === "admin" || state.currentUser?.role === "manager";
+  els.activityFilterBar?.classList.toggle("collapsed", !state.activityFiltersOpen);
+  els.activityFilterToggle?.classList.toggle("active", state.activityFiltersOpen);
+  els.activitySalesmanFilter?.closest("label")?.classList.toggle("hidden", !admin);
+  fillSelect(els.activitySalesmanFilter, state.settings.salesmen || [], "All Salesmen");
+  els.activitySalesmanFilter.value = filters.salesmanId || "all";
+  els.activityTypePills.innerHTML = allActivityTypes().map(type => `
+    <button class="type-pill ${filters.types.includes(type) ? "active" : ""}" type="button" data-activity-type="${escapeHtml(type)}">
+      <span>${escapeHtml(ACTIVITY_TYPE_ICONS[type] || "")}</span>${escapeHtml(type)}
+    </button>
+  `).join("");
+  els.activityDatePresets.innerHTML = ACTIVITY_PRESETS.map(preset => `
+    <button class="date-preset ${filters.preset === preset ? "active" : ""}" type="button" data-activity-preset="${escapeHtml(preset)}">${escapeHtml(preset)}</button>
+  `).join("");
+  els.activityDateFrom.value = filters.dateFrom || "";
+  els.activityDateTo.value = filters.dateTo || "";
+  els.activityCompanySearch.value = filters.companySearch || "";
+  els.activitySearchClear.classList.toggle("hidden", !filters.companySearch);
+  els.activityResetFilters.classList.toggle("hidden", activityFiltersAreDefault());
+  bindActivityFilterButtons();
+}
+
+function bindActivityFilterButtons() {
+  return true;
+}
+
+async function fetchActivities() {
+  const filters = state.activityFilters;
+  state.activityLoading = true;
+  renderActivityView();
+  const params = new URLSearchParams({
+    from: filters.dateFrom || "",
+    to: filters.dateTo || "",
+    company: filters.companySearch || ""
+  });
+  if (filters.salesmanId && filters.salesmanId !== "all") params.set("salesman", filters.salesmanId);
+  if (filters.types.length && filters.types.length < allActivityTypes().length) params.set("types", filters.types.join(","));
+  try {
+    state.activities = await api(`/api/activities?${params.toString()}`);
+  } catch (error) {
+    setToast(error.message, "error");
+  } finally {
+    state.activityLoading = false;
+    renderActivityView();
+  }
+}
+
 function isReminderActivity(activity) {
   return Boolean(activity?.reminder) || String(activity?.type || "").toLowerCase() === "reminder";
 }
@@ -1668,9 +1845,81 @@ function reminderCard(reminder, { compact = false } = {}) {
   `;
 }
 
+function activityDisplayDate(activity) {
+  return String(activity.activity_date || activity.at || today()).slice(0, 10);
+}
+
+function activityDisplayTime(activity) {
+  const value = String(activity.activity_date || activity.at || "");
+  const match = value.match(/T(\d{2}:\d{2})/);
+  return match ? match[1] : String(activity.activity_time || "").slice(0, 5);
+}
+
+function activityDateHeading(date) {
+  const dateValue = dateOnly(date);
+  const todayValue = dateOnly(today());
+  const diff = Math.round((todayValue - dateValue) / 86_400_000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return dateValue.toLocaleDateString("en-AE", { month: "long", day: "numeric", year: "numeric" });
+}
+
+function groupedActivities() {
+  return state.activities.reduce((groups, activity) => {
+    const date = activityDisplayDate(activity);
+    groups[date] = groups[date] || [];
+    groups[date].push(activity);
+    return groups;
+  }, {});
+}
+
+function activityTypeClass(type) {
+  return `activity-${String(type || "note").toLowerCase().replaceAll(" ", "-")}`;
+}
+
+function activitySummaryText(activities) {
+  const uniqueSalesmen = new Set(activities.map(activity => activity.salesman_name || activity.assigned_salesman).filter(Boolean));
+  const from = state.activityFilters.dateFrom || "Any date";
+  const to = state.activityFilters.dateTo || "Any date";
+  return `Showing ${activities.length} activit${activities.length === 1 ? "y" : "ies"} - ${uniqueSalesmen.size} ${uniqueSalesmen.size === 1 ? "salesman" : "salespeople"} - ${from} to ${to}`;
+}
+
+function activityCardMarkup(activity) {
+  const type = activity.type || "Note";
+  const note = activity.note || activity.text || "No note added.";
+  const admin = state.currentUser?.role === "admin" || state.currentUser?.role === "manager";
+  const isReminder = String(type).toLowerCase() === "reminder";
+  const dueDate = activity.reminder_due_date || activity.due_date || "";
+  const reminderOverdue = isReminder && dueDate && dueDate.slice(0, 10) < today() && activity.reminder_status !== "completed";
+  return `
+    <article class="activity-feed-item timeline-card ${activityTypeClass(type)}" data-activity-lead="${escapeHtml(activity.lead_id)}" tabindex="0">
+      <div class="activity-row">
+        <span class="activity-type-label"><i>${escapeHtml(ACTIVITY_TYPE_ICONS[type] || "ACT")}</i>${escapeHtml(type)}</span>
+        <span class="activity-actions">
+          ${activityEditButton(activity.lead_id, activity.activity_index, activity)}
+          ${activityDeleteButton(activity.lead_id, activity.activity_index, activity)}
+        </span>
+      </div>
+      <strong>${escapeHtml(activity.company_name)}</strong>
+      ${admin ? `<span class="meta-label">Salesman: ${escapeHtml(activity.salesman_name || activity.assigned_salesman || "Unassigned")}</span>` : ""}
+      <p class="activity-note clamp" data-expand-note>${escapeHtml(note)}</p>
+      <div class="chip-row">
+        <span class="chip">${escapeHtml([activityDisplayDate(activity), activityDisplayTime(activity)].filter(Boolean).join(" "))}</span>
+        <span class="chip ${priorityClass(activity.stage)}">${escapeHtml(activity.stage || "No stage")}</span>
+        ${isReminder ? `<span class="chip ${reminderOverdue ? "hot" : "warm"}">${escapeHtml(activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled"))}${dueDate ? ` - ${escapeHtml(dueDate.slice(0, 10))}` : ""}</span>` : ""}
+      </div>
+      ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Delete request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
+      ${activity.edited_at ? `<span class="meta-label">Edited ${escapeHtml(String(activity.edited_at).slice(0, 10))}</span>` : ""}
+      ${activityAudioMarkup(activity)}
+      ${activityTranscriptMarkup(activity)}
+    </article>
+  `;
+}
+
 function renderActivityView() {
-  const activities = allActivities();
+  const activities = state.activities || [];
   els.activitySummary.textContent = `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`;
+  renderActivityFilters();
   const upcoming = allReminders().filter(reminder => !reminder.due_date || reminder.due_date >= today()).slice(0, 8);
   const overdue = allReminders().filter(reminder => reminder.due_date && reminder.due_date < today()).slice(0, 6);
   const reminderHtml = `
@@ -1683,23 +1932,23 @@ function renderActivityView() {
       ${overdue.length ? `<div class="panel-header compact-header"><h2>Overdue</h2><span>${overdue.length} overdue</span></div><div class="reminder-grid">${overdue.map(reminder => reminderCard(reminder)).join("")}</div>` : ""}
     </section>
   `;
-  els.activityFeed.innerHTML = reminderHtml + activities.map(activity => `
-    <article class="activity-feed-item" data-activity-lead="${escapeHtml(activity.lead_id)}" tabindex="0">
-      <div class="activity-row">
-        <span class="meta-label">${escapeHtml(activity.at)} - ${escapeHtml(activity.type)}</span>
-        <span class="activity-actions">
-          ${activityEditButton(activity.lead_id, activity.activity_index, activity)}
-          ${activityDeleteButton(activity.lead_id, activity.activity_index, activity)}
-        </span>
-      </div>
-      <strong>${escapeHtml(activity.company_name)}</strong>
-      <p>${escapeHtml(activity.text)}</p>
-      ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Delete request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
-      ${activity.edited_at ? `<span class="meta-label">Edited ${escapeHtml(String(activity.edited_at).slice(0, 10))}</span>` : ""}
-      ${activityAudioMarkup(activity)}
-      ${activityTranscriptMarkup(activity)}
-    </article>
-  `).join("") || `<p class="empty-copy">No activity has been logged yet.</p>`;
+  els.activityLoading.classList.toggle("hidden", !state.activityLoading);
+  els.activityResultsSummary.textContent = activitySummaryText(activities);
+  const groups = groupedActivities();
+  const timelineHtml = Object.keys(groups).sort().reverse().map(date => `
+    <section class="timeline-day">
+      <div class="timeline-divider"><span>${escapeHtml(activityDateHeading(date))}</span></div>
+      <div class="timeline-cards">${groups[date].map(activityCardMarkup).join("")}</div>
+    </section>
+  `).join("");
+  const emptyHtml = `
+    <div class="timeline-empty">
+      <strong>No activities match your current filters.</strong>
+      <span>Try another salesman, date range, activity type, or company search.</span>
+      <button class="ghost-button" type="button" data-reset-activity-empty>Reset Filters</button>
+    </div>
+  `;
+  els.activityFeed.innerHTML = reminderHtml + (state.activityLoading ? "" : (timelineHtml || emptyHtml));
 
   document.querySelectorAll("[data-activity-lead], [data-reminder-lead]").forEach(item => {
     const openLead = () => {
@@ -1716,6 +1965,13 @@ function renderActivityView() {
       openLead();
     });
   });
+  document.querySelectorAll("[data-expand-note]").forEach(note => {
+    note.addEventListener("click", event => {
+      event.stopPropagation();
+      note.classList.toggle("clamp");
+    });
+  });
+  document.querySelector("[data-reset-activity-empty]")?.addEventListener("click", resetActivityFilters);
   bindActivityEditButtons();
   bindDeleteButtons();
 }
@@ -1993,6 +2249,7 @@ async function loadLeads() {
   if (!state.leads.some(lead => lead.id === state.selectedId)) {
     state.selectedId = state.leads[0]?.id || null;
   }
+  await fetchActivities();
   render();
 }
 
@@ -2140,6 +2397,56 @@ document.querySelectorAll("[data-pipeline-mode]").forEach(button => {
     render();
   });
 });
+
+els.activityFilterToggle?.addEventListener("click", () => {
+  state.activityFiltersOpen = !state.activityFiltersOpen;
+  renderActivityFilters();
+});
+
+els.activitySalesmanFilter?.addEventListener("change", event => {
+  updateActivityFilter("salesmanId", event.target.value);
+});
+
+els.activityTypePills?.addEventListener("click", event => {
+  const button = event.target.closest("[data-activity-type]");
+  if (!button) return;
+  const type = button.dataset.activityType;
+  const selected = state.activityFilters.types.includes(type)
+    ? state.activityFilters.types.filter(item => item !== type)
+    : [...state.activityFilters.types, type];
+  updateActivityFilter("types", selected.length ? selected : allActivityTypes());
+});
+
+els.activityDatePresets?.addEventListener("click", event => {
+  const button = event.target.closest("[data-activity-preset]");
+  if (!button) return;
+  const preset = button.dataset.activityPreset;
+  state.activityFilters = { ...state.activityFilters, ...activityPresetRange(preset), preset };
+  saveActivityFilters();
+  renderActivityFilters();
+  fetchActivities();
+});
+
+els.activityDateFrom?.addEventListener("change", event => {
+  updateActivityFilter("dateFrom", event.target.value);
+});
+
+els.activityDateTo?.addEventListener("change", event => {
+  updateActivityFilter("dateTo", event.target.value);
+});
+
+els.activityCompanySearch?.addEventListener("input", event => {
+  const value = event.target.value;
+  clearTimeout(activitySearchTimer);
+  activitySearchTimer = setTimeout(() => updateActivityFilter("companySearch", value), 300);
+  els.activitySearchClear?.classList.toggle("hidden", !value);
+});
+
+els.activitySearchClear?.addEventListener("click", () => {
+  updateActivityFilter("companySearch", "");
+});
+
+els.activityResetFilters?.addEventListener("click", resetActivityFilters);
 
 document.querySelector("#openLeadForm").addEventListener("click", () => {
   if (state.currentUser?.role !== "admin") els.formSalesman.value = state.currentUser.name;
