@@ -737,3 +737,25 @@ create policy "Salesmen can create own PMRs" on public.pmrs
   );
 
 -- END 20260609120000_supabase_pmrs_and_voice_storage.sql
+
+-- BEGIN 20260610120000_add_activity_completed_at_for_overdue_banner.sql
+alter table if exists public.activities
+  add column if not exists completed_at timestamptz;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'activities'
+  ) then
+    execute '
+      create index if not exists activities_open_reminders_due_idx
+      on public.activities (reminder_due_date)
+      where type = ''Reminder'' and completed_at is null
+    ';
+  end if;
+end $$;
+
+-- END 20260610120000_add_activity_completed_at_for_overdue_banner.sql

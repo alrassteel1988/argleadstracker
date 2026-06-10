@@ -144,6 +144,14 @@ Reminders are saved as structured lead activities and appear in the lead detail 
 
 This does not silently write into a salesman's private Google Calendar account. Full automatic Google Calendar sync requires Google OAuth consent per salesman, or Google Workspace domain-wide delegation managed by your company administrator.
 
+## Overdue follow-up banner
+
+The app shows a persistent red overdue follow-up banner below the top bar when the signed-in user has overdue lead next actions or overdue reminder activities. Salesmen see only their own assigned overdue items because `/api/leads` is role-scoped. Admin users see the full count with a per-salesman breakdown.
+
+The dismiss button hides the banner only for the current browser session. A fresh login clears the dismissal flag. `View All` opens Pipeline with an overdue-only filter for salesmen; `View Report` opens the Activity view for admins. When only one item is overdue, `Open Lead` opens the lead drawer directly.
+
+If your Supabase project has a normalized `public.activities` table, run [supabase/migrations/20260610120000_add_activity_completed_at_for_overdue_banner.sql](supabase/migrations/20260610120000_add_activity_completed_at_for_overdue_banner.sql) or the combined runner to add the nullable `completed_at` column and an index for open reminder due dates. Deployments using the existing `public.leads.activities` JSONB field do not need a schema change for the banner.
+
 ## API routes
 
 - `GET /api/health`

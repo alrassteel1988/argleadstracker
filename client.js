@@ -1,4 +1,5 @@
 const ACTIVITY_FILTER_KEY = "arg_activity_filters";
+const OVERDUE_BANNER_KEY = "arg_overdue_banner_dismissed";
 const ACTIVITY_PRESETS = ["Today", "This Week", "This Month", "Last 30 Days", "Last 90 Days"];
 const ACTIVITY_TYPE_ICONS = {
   "Note": "TXT",
@@ -17,6 +18,7 @@ const state = {
   settings: { stages: [], priorities: [], territories: [], salesmen: [] },
   selectedId: null,
   filters: { search: "", stage: "all", salesman: "all", priority: "all", territory: "all" },
+  overduePipelineOnly: false,
   performanceStage: "all",
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
   pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
@@ -96,6 +98,10 @@ const els = {
   dashboardFocus: document.querySelector("#dashboardFocus"),
   dashboardStatus: document.querySelector("#dashboardStatus"),
   pipelineToolbar: document.querySelector("#pipelineToolbar"),
+  overdueBanner: document.querySelector("#overdueBanner"),
+  overduePipelineFilter: document.querySelector("#overduePipelineFilter"),
+  overduePipelineCount: document.querySelector("#overduePipelineCount"),
+  clearOverdueFilter: document.querySelector("#clearOverdueFilter"),
   pipelineView: document.querySelector("#pipelineView"),
   pipelineListPanel: document.querySelector("#pipelineListPanel"),
   kanbanPanel: document.querySelector("#kanbanPanel"),
@@ -153,6 +159,7 @@ const leadEnrichmentCache = new Map();
 let leadEnrichmentTimer = null;
 let leadEnrichmentKey = "";
 let activitySearchTimer = null;
+let overdueRefreshTimer = null;
 
 const enrichmentFieldMap = {
   company_name: "company_name",
@@ -1037,7 +1044,8 @@ function filteredLeads() {
       inferEmirate(lead)
     ].map(value => String(value || "").trim().toLowerCase());
     const matchesTerritory = state.filters.territory === "all" || territoryOptions.includes(state.filters.territory.toLowerCase());
-    return matchesQuery && matchesStage && matchesSalesman && matchesPriority && matchesTerritory;
+    const matchesOverdue = !state.overduePipelineOnly || leadHasOverdueFollowup(lead);
+    return matchesQuery && matchesStage && matchesSalesman && matchesPriority && matchesTerritory && matchesOverdue;
   });
 }
 
@@ -1053,6 +1061,105 @@ function isOverdue(lead) {
   return lead.next_action_date <= today() && lead.stage !== "ACTIVE" && lead.stage !== "DORMANT";
 }
 
+function isAdminOrManager() {
+  return ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
+}
+
+function activeLeadForOverdue(lead) {
+  return !["WON", "LOST"].includes(String(lead?.stage || "").trim().toUpperCase());
+}
+
+function leadHasOverdueNextAction(lead) {
+  return Boolean(lead?.next_action_date) && String(lead.next_action_date).slice(0, 10) < today() && activeLeadForOverdue(lead);
+}
+
+function activityDueDate(activity = {}) {
+  return String(activity.reminder_due_date || activity.due_date || "").slice(0, 10);
+}
+
+function activityDueTime(activity = {}) {
+  return String(activity.reminder_due_time || activity.due_time || "").slice(0, 5);
+}
+
+function isCompletedReminder(activity = {}) {
+  return Boolean(activity.completed_at)
+    || Boolean(activity.followup_completed)
+    || String(activity.reminder_status || "").toLowerCase() === "completed";
+}
+
+function overdueReminderItemsForLead(lead) {
+  if (!activeLeadForOverdue(lead)) return [];
+  return (lead.activities || [])
+    .map((activity, activity_index) => ({ activity, activity_index }))
+    .filter(({ activity }) => isReminderActivity(activity) && !isCompletedReminder(activity))
+    .filter(({ activity }) => {
+      const dueDate = activityDueDate(activity);
+      return dueDate && dueDate < today();
+    })
+    .map(({ activity, activity_index }) => ({
+      id: `${lead.id}:reminder:${activity.id || activity_index}`,
+      kind: "reminder",
+      lead_id: lead.id,
+      company_name: lead.company_name || "Unnamed company",
+      assigned_salesman: lead.assigned_salesman || activity.salesman_name || "Unassigned",
+      due_date: activityDueDate(activity),
+      due_time: activityDueTime(activity),
+      stage: lead.stage,
+      text: activity.activity_required || activity.text || "Follow up with customer",
+      activity_index
+    }));
+}
+
+function overdueLeadItems() {
+  return state.leads
+    .filter(leadHasOverdueNextAction)
+    .map(lead => ({
+      id: `${lead.id}:lead`,
+      kind: "lead",
+      lead_id: lead.id,
+      company_name: lead.company_name || "Unnamed company",
+      assigned_salesman: lead.assigned_salesman || "Unassigned",
+      due_date: String(lead.next_action_date || "").slice(0, 10),
+      due_time: "09:00",
+      stage: lead.stage,
+      text: lead.next_action || "Follow up with customer"
+    }));
+}
+
+function overdueReminderItems() {
+  return state.leads.flatMap(overdueReminderItemsForLead);
+}
+
+function overdueItems() {
+  return [...overdueLeadItems(), ...overdueReminderItems()].sort((a, b) =>
+    String(a.due_date || "").localeCompare(String(b.due_date || ""))
+    || String(a.due_time || "").localeCompare(String(b.due_time || ""))
+    || String(a.company_name || "").localeCompare(String(b.company_name || ""))
+  );
+}
+
+function leadHasOverdueFollowup(lead) {
+  return leadHasOverdueNextAction(lead) || overdueReminderItemsForLead(lead).length > 0;
+}
+
+function daysOverdue(dateValue) {
+  const days = Math.max(0, Math.abs(daysUntil(dateValue)));
+  return days;
+}
+
+function daysOverdueLabel(dateValue) {
+  const days = daysOverdue(dateValue);
+  return days === 1 ? "1 day overdue" : `${days} days overdue`;
+}
+
+function overdueBreakdown(items) {
+  return items.reduce((acc, item) => {
+    const name = String(item.assigned_salesman || "Unassigned").trim() || "Unassigned";
+    acc[name] = (acc[name] || 0) + 1;
+    return acc;
+  }, {});
+}
+
 function renderMetrics() {
   const due = state.leads.filter(isOverdue).length;
   const openValue = state.leads
@@ -1062,6 +1169,97 @@ function renderMetrics() {
   els.metricValue.textContent = money.format(openValue);
   els.metricHot.textContent = state.leads.filter(lead => lead.priority === "Hot").length;
   els.metricDue.textContent = due;
+}
+
+function renderOverdueBanner() {
+  if (!els.overdueBanner || !state.currentUser) return;
+  const items = overdueItems();
+  if (!items.length || sessionStorage.getItem(OVERDUE_BANNER_KEY) === "true") {
+    els.overdueBanner.classList.add("hidden");
+    els.overdueBanner.innerHTML = "";
+    return;
+  }
+
+  const oldest = items[0];
+  const total = items.length;
+  const admin = isAdminOrManager();
+  const breakdown = overdueBreakdown(items);
+  const breakdownEntries = Object.entries(breakdown).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const shown = breakdownEntries.slice(0, 4);
+  const moreCount = Math.max(0, breakdownEntries.length - shown.length);
+  const actionLabel = total === 1 ? "Open Lead" : admin ? "View Report" : "View All";
+  const title = total === 1
+    ? `1 overdue follow-up: ${oldest.company_name} (${daysOverdueLabel(oldest.due_date)})`
+    : admin
+      ? `${total} overdue follow-ups across ${breakdownEntries.length} ${breakdownEntries.length === 1 ? "salesman" : "salesmen"}`
+      : `You have ${total} overdue follow-ups`;
+  const subtitle = total === 1
+    ? escapeHtml(oldest.text)
+    : admin
+      ? `${shown.map(([name, count]) => `<span class="overdue-pill">${escapeHtml(name)}: ${count}</span>`).join("")}${moreCount ? `<span class="overdue-pill">+${moreCount} more</span>` : ""}`
+      : `Oldest: ${escapeHtml(oldest.company_name)} - ${escapeHtml(daysOverdueLabel(oldest.due_date))}`;
+
+  els.overdueBanner.classList.remove("hidden");
+  els.overdueBanner.innerHTML = `
+    <div class="overdue-banner-icon" aria-hidden="true">!</div>
+    <div class="overdue-banner-copy">
+      <strong>${escapeHtml(title)}</strong>
+      <div>${subtitle}</div>
+    </div>
+    <div class="overdue-banner-actions">
+      <button class="overdue-action" type="button" data-overdue-action="${total === 1 ? "open" : admin ? "report" : "view"}" data-lead-id="${escapeHtml(oldest.lead_id)}">${escapeHtml(actionLabel)}</button>
+      <button class="overdue-dismiss" type="button" data-overdue-dismiss aria-label="Dismiss overdue follow-up banner">&times;</button>
+    </div>
+  `;
+
+  els.overdueBanner.querySelector("[data-overdue-dismiss]")?.addEventListener("click", () => {
+    sessionStorage.setItem(OVERDUE_BANNER_KEY, "true");
+    renderOverdueBanner();
+  });
+  els.overdueBanner.querySelector("[data-overdue-action]")?.addEventListener("click", event => {
+    const action = event.currentTarget.dataset.overdueAction;
+    if (action === "open") {
+      openLeadDrawer(event.currentTarget.dataset.leadId, "reminders");
+    } else if (action === "report") {
+      openOverdueActivityReport();
+    } else {
+      openOverduePipeline();
+    }
+  });
+}
+
+function openOverduePipeline() {
+  state.overduePipelineOnly = true;
+  state.filters = { ...state.filters, search: "", stage: "all", priority: "all", territory: "all", salesman: "all" };
+  state.pipelineViewMode = "list";
+  localStorage.setItem("arg_pipeline_view_mode", state.pipelineViewMode);
+  currentView = "pipeline";
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function openOverdueActivityReport() {
+  state.activityFilters = {
+    ...defaultActivityFilters(),
+    types: ["Reminder"],
+    dateFrom: "",
+    dateTo: today(),
+    companySearch: "",
+    preset: ""
+  };
+  state.activityFiltersOpen = true;
+  saveActivityFilters();
+  currentView = "activity";
+  render();
+  fetchActivities();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderPipelineFilterNotice() {
+  if (!els.overduePipelineFilter) return;
+  const count = state.leads.filter(leadHasOverdueFollowup).length;
+  els.overduePipelineCount.textContent = `${count} overdue record${count === 1 ? "" : "s"}`;
+  els.overduePipelineFilter.classList.toggle("hidden", !(currentView === "pipeline" && state.overduePipelineOnly));
 }
 
 function normalizedUserTokens(person) {
@@ -2575,6 +2773,7 @@ function renderDetail() {
 
 function render() {
   renderMetrics();
+  renderOverdueBanner();
   renderDashboardView();
   renderLeadList();
   renderKanbanView();
@@ -2582,6 +2781,7 @@ function render() {
   renderLeadDrawer();
   renderSalesmenView();
   renderActivityView();
+  renderPipelineFilterNotice();
   loadActivityAudioSources();
   applyView();
 }
@@ -2642,9 +2842,16 @@ async function loadLeads() {
 
 function showLogin(message = "") {
   state.currentUser = null;
+  state.overduePipelineOnly = false;
+  if (overdueRefreshTimer) {
+    clearInterval(overdueRefreshTimer);
+    overdueRefreshTimer = null;
+  }
   els.loginMessage.textContent = message;
   els.authScreen.classList.remove("hidden");
   els.appShell.classList.add("hidden");
+  els.overdueBanner?.classList.add("hidden");
+  els.overduePipelineFilter?.classList.add("hidden");
 }
 
 function configureRoleUi(user) {
@@ -2679,6 +2886,15 @@ function showApp(user) {
   configureRoleUi(user);
   els.authScreen.classList.add("hidden");
   els.appShell.classList.remove("hidden");
+  startOverdueRefresh();
+}
+
+function startOverdueRefresh() {
+  if (overdueRefreshTimer) clearInterval(overdueRefreshTimer);
+  overdueRefreshTimer = setInterval(() => {
+    if (!state.currentUser || !sessionStorage.getItem(SESSION_KEY)) return;
+    loadLeads().catch(error => setToast(error.message, "error"));
+  }, 60_000);
 }
 
 async function loadWorkspace() {
@@ -2774,6 +2990,11 @@ els.priorityFilter?.addEventListener("change", event => {
 
 els.territoryFilter?.addEventListener("change", event => {
   state.filters.territory = event.target.value;
+  render();
+});
+
+els.clearOverdueFilter?.addEventListener("click", () => {
+  state.overduePipelineOnly = false;
   render();
 });
 
@@ -2936,6 +3157,7 @@ els.loginForm.addEventListener("submit", async event => {
       method: "POST",
       body: JSON.stringify(Object.fromEntries(new FormData(els.loginForm).entries()))
     });
+    sessionStorage.removeItem(OVERDUE_BANNER_KEY);
     sessionStorage.setItem(SESSION_KEY, result.token);
     els.loginForm.reset();
     showApp(result.user);

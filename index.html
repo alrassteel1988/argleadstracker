@@ -67,6 +67,8 @@
           </div>
         </header>
 
+        <section class="overdue-banner hidden" id="overdueBanner" aria-live="polite"></section>
+
         <section class="metrics" id="metricsPanel" aria-label="CRM metrics">
           <article>
             <span>Total Leads</span>
@@ -219,6 +221,13 @@
               <button class="toggle-button" type="button" data-pipeline-mode="kanban">Kanban</button>
             </div>
           </div>
+        </section>
+        <section class="pipeline-filter-notice hidden" id="overduePipelineFilter">
+          <div>
+            <strong>Showing overdue follow-ups only</strong>
+            <span id="overduePipelineCount">0 overdue records</span>
+          </div>
+          <button class="small-action" id="clearOverdueFilter" type="button">Clear overdue filter</button>
         </section>
 
         <section class="content-grid hidden" id="pipelineView">
