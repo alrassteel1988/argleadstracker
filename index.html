@@ -169,6 +169,15 @@
               </table>
             </div>
           </div>
+          <div class="panel loss-reasons-panel hidden" id="lossReasonsPanel">
+            <div class="panel-header">
+              <div>
+                <h2>Loss Reasons</h2>
+                <span>Why deals were marked lost</span>
+              </div>
+            </div>
+            <div class="loss-reasons-chart" id="lossReasonsChart"></div>
+          </div>
           <div class="panel" id="relationshipFocusPanel">
             <div class="panel-header">
               <h2>Today’s Relationship Focus</h2>
@@ -479,6 +488,47 @@
         </div>
         <span class="form-message" id="activityEditMessage" aria-live="polite"></span>
         <button class="primary-button" type="submit">Save Activity Changes</button>
+      </form>
+    </dialog>
+
+    <dialog id="lostReasonDialog">
+      <form method="dialog" class="lead-form lost-reason-form" id="lostReasonForm">
+        <div class="dialog-header">
+          <div>
+            <h2>Why was this deal lost?</h2>
+            <p id="lostReasonLeadName">Lead</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeLostReasonForm">Close</button>
+        </div>
+        <div class="form-grid">
+          <label class="wide">Primary Reason *
+            <select name="lost_reason" id="lostReasonSelect">
+              <option value="">Select a reason...</option>
+              <option value="price">Price - competitor offered lower price</option>
+              <option value="no_budget">No Budget - project cancelled or deferred</option>
+              <option value="competitor_relationship">Competitor Relationship - existing supplier preferred</option>
+              <option value="lead_time">Lead Time - couldn't meet delivery timeline</option>
+              <option value="product_mismatch">Product Mismatch - we don't stock required specs</option>
+              <option value="no_response">No Response - contact went silent</option>
+              <option value="project_cancelled">Project Cancelled - end client cancelled project</option>
+              <option value="credit_terms">Credit Terms - payment terms not acceptable</option>
+              <option value="quality_concerns">Quality Concerns - MTC/grade requirements not met</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label class="wide hidden" id="lostCompetitorField">Competitor (if applicable)
+            <input name="lost_competitor" id="lostCompetitorInput" placeholder="e.g. Emirates Steel, Al Fara'a, Triton">
+          </label>
+          <label class="wide">Additional Notes
+            <textarea name="lost_reason_detail" id="lostReasonDetail" rows="4" maxlength="500" placeholder="What specifically caused us to lose this deal?"></textarea>
+          </label>
+          <span class="lost-char-count" id="lostReasonCount">0 / 500</span>
+        </div>
+        <span class="form-message" id="lostReasonMessage" aria-live="polite"></span>
+        <div class="lost-reason-actions">
+          <button class="text-button" id="skipLostReason" type="button">Skip for now</button>
+          <button class="danger-button" type="submit">Mark as Lost</button>
+        </div>
       </form>
     </dialog>
 

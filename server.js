@@ -64,6 +64,7 @@ const PMR_DIRECTOR_ACTION = ["None", "Awareness only", "Attend next visit", "Dir
 const PMR_ACCOUNT_STATUS = ["Cold", "Warm", "Hot", "Active"];
 const REMINDER_TYPES = ["Quotation follow-up", "Planned visit", "Important date", "Payment follow-up", "Sample approval", "General follow-up"];
 const ACTIVITY_EXTRA_FIELDS = ["followup_completed", "completed_due_date", "completed_activity_required", "completed_reminder_type"];
+const LOST_REASON_KEYS = ["price", "no_budget", "competitor_relationship", "lead_time", "product_mismatch", "no_response", "project_cancelled", "credit_terms", "quality_concerns", "other"];
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -508,6 +509,13 @@ function normalizePmrAnalysisDraft(input = {}) {
   return draft;
 }
 
+function normalizeStageValue(value, fallback = "PROSPECT") {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "LOST") return "DORMANT";
+  if (normalized === "WON") return "ACTIVE";
+  return COMPANY_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
 async function analyzePmrTranscriptText(transcript, lead = {}) {
   if (!OPENAI_API_KEY) {
     const error = new Error("AI PMR drafting is not configured. Add OPENAI_API_KEY on the server.");
@@ -611,9 +619,7 @@ async function transcribeAudio(req, res) {
 
 function normalizeLead(input) {
   const now = new Date().toISOString().slice(0, 10);
-  const status = COMPANY_STATUSES.includes(String(input.stage || input.status || input.lead_status || "").toUpperCase())
-    ? String(input.stage || input.status || input.lead_status).toUpperCase()
-    : "PROSPECT";
+  const status = normalizeStageValue(input.stage || input.status || input.lead_status, "PROSPECT");
   const tier = COMPANY_TIERS.includes(String(input.tier || "")) ? String(input.tier) : "2";
   return {
     id: input.id || `lead-${Date.now()}`,
@@ -660,8 +666,35 @@ function normalizeLead(input) {
     estimated_monthly_volume: String(input.estimated_monthly_volume || "").trim(),
     tags: String(input.tags || "").trim(),
     notes: String(input.notes || "").trim(),
+    lost_reason: LOST_REASON_KEYS.includes(String(input.lost_reason || "").trim()) ? String(input.lost_reason).trim() : "",
+    lost_reason_detail: String(input.lost_reason_detail || "").trim().slice(0, 500),
+    lost_competitor: String(input.lost_competitor || "").trim(),
+    lost_at: input.lost_at || null,
+    lost_by: String(input.lost_by || "").trim(),
     activities: Array.isArray(input.activities) ? input.activities : []
   };
+}
+
+function isLostStage(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return normalized === "DORMANT" || normalized === "LOST";
+}
+
+function normalizeLostFields(input = {}, user = {}) {
+  const reason = LOST_REASON_KEYS.includes(String(input.lost_reason || "").trim()) ? String(input.lost_reason).trim() : "";
+  return {
+    lost_reason: reason || null,
+    lost_reason_detail: String(input.lost_reason_detail || "").trim().slice(0, 500) || null,
+    lost_competitor: String(input.lost_competitor || "").trim() || null,
+    lost_at: input.lost_at || new Date().toISOString(),
+    lost_by: input.lost_by || user.id || null
+  };
+}
+
+function applyLostFields(target, input = {}, user = {}) {
+  if (!isLostStage(input.stage || input.lead_status || target.stage || target.lead_status)) return target;
+  Object.assign(target, normalizeLostFields(input, user));
+  return target;
 }
 
 function addMinutes(date, minutes) {
@@ -1057,6 +1090,11 @@ const LEAD_EXPORT_COLUMNS = [
   ["last_activity", "Last Activity Date"],
   ["source", "Source"],
   ["tags", "Tags"],
+  ["lost_reason", "Lost Reason"],
+  ["lost_competitor", "Lost Competitor"],
+  ["lost_reason_detail", "Lost Reason Detail"],
+  ["lost_at", "Lost At"],
+  ["lost_by", "Lost By"],
   ["enrichment_status", "Enrichment Status"],
   ["activities_count", "Activities Count"],
   ["latest_activity_note", "Latest Activity Note"],
@@ -1353,6 +1391,11 @@ function toSupabaseLead(input, user) {
     estimated_monthly_volume: lead.estimated_monthly_volume,
     tags: lead.tags,
     activities: lead.activities,
+    lost_reason: lead.lost_reason || null,
+    lost_reason_detail: lead.lost_reason_detail || null,
+    lost_competitor: lead.lost_competitor || null,
+    lost_at: lead.lost_at || null,
+    lost_by: lead.lost_by || null,
     enrichment_status: lead.enrichment_status,
     enrichment_source: lead.enrichment_source,
     enriched_at: lead.enriched_at,
@@ -1842,6 +1885,19 @@ async function handleApi(req, res, url) {
       const existing = await getSupabaseLead(user.token, leadMatch[1], user);
       if (!existing) return leadNotFound(res);
       payload = prepareLeadPayloadForUser(payload, user, existing);
+      const stageProvided = Boolean(payload.stage || payload.lead_status);
+      if (payload.stage || payload.lead_status) {
+        payload.lead_status = normalizeStageValue(payload.stage || payload.lead_status, existing.stage);
+        delete payload.stage;
+        if (isLostStage(payload.lead_status)) Object.assign(payload, normalizeLostFields(payload, user));
+      }
+      if (!stageProvided) {
+        delete payload.lost_reason;
+        delete payload.lost_reason_detail;
+        delete payload.lost_competitor;
+        delete payload.lost_at;
+        delete payload.lost_by;
+      }
       if (payload.company_name && String(payload.company_name).trim() !== String(existing.company_name || "").trim()) {
         payload = await googleEnrichPayload({ ...existing, ...payload, google_place_id: "" }, req);
       }
@@ -1851,7 +1907,8 @@ async function handleApi(req, res, url) {
         "hunter_confidence_score", "lead_status", "notes", "territory", "assigned_salesman", "priority",
         "estimated_value", "product_interest", "next_action", "next_action_date", "source",
         "legal_name", "year_established", "business_category", "opening_hours",
-        "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at"
+        "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at",
+        "lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by"
       ].filter(field => isAdmin(user) || !["assigned_salesman", "assigned_to", "created_by"].includes(field));
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
       const leads = await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}&select=*`, {
@@ -1866,8 +1923,30 @@ async function handleApi(req, res, url) {
     const lead = db.leads.find(item => item.id === leadMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
     payload = prepareLeadPayloadForUser(payload, user, lead);
+    const stageProvided = Boolean(payload.stage || payload.lead_status);
     if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
       payload = await googleEnrichPayload({ ...lead, ...payload, google_place_id: "" }, req);
+    }
+    if (payload.stage || payload.lead_status) {
+      payload.stage = normalizeStageValue(payload.stage || payload.lead_status, lead.stage);
+      if (isLostStage(payload.stage)) {
+        Object.assign(payload, normalizeLostFields(payload, user));
+      } else {
+        Object.assign(payload, {
+          lost_reason: "",
+          lost_reason_detail: "",
+          lost_competitor: "",
+          lost_at: null,
+          lost_by: ""
+        });
+      }
+    }
+    if (!stageProvided) {
+      delete payload.lost_reason;
+      delete payload.lost_reason_detail;
+      delete payload.lost_competitor;
+      delete payload.lost_at;
+      delete payload.lost_by;
     }
     Object.assign(lead, payload);
     writeDb(db);
@@ -1996,17 +2075,24 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const lead = await getSupabaseLead(user.token, stageMatch[1], user);
       if (!lead) return leadNotFound(res);
-      const activity = { id: newRecordId("act"), at: new Date().toISOString().slice(0, 10), type: "Stage", text: `Stage changed to ${payload.stage || lead.stage}` };
+      const nextStage = normalizeStageValue(payload.stage || lead.stage, lead.stage);
+      const lostFields = isLostStage(nextStage) ? normalizeLostFields(payload, user) : {};
+      const activityText = isLostStage(nextStage) && payload.lost_reason
+        ? `Stage changed to Lost. Reason: ${payload.lost_reason}${payload.lost_competitor ? `; competitor: ${payload.lost_competitor}` : ""}`
+        : `Stage changed to ${nextStage}`;
+      const activity = { id: newRecordId("act"), at: new Date().toISOString().slice(0, 10), type: "Stage", text: activityText };
       const baseStageBody = {
-        lead_status: String(payload.stage || lead.stage),
+        lead_status: nextStage,
         last_activity: activity.at,
         activities: [activity, ...(lead.activities || [])]
       };
       const stageBody = {
         ...baseStageBody,
+        ...lostFields,
         stage_updated_at: new Date().toISOString(),
         stage_updated_by: user.id
       };
+      const stageBodyWithoutAudit = { ...baseStageBody, ...lostFields };
       let leads;
       try {
         leads = await rest(`leads?id=eq.${encodeURIComponent(stageMatch[1])}&select=*`, {
@@ -2016,19 +2102,29 @@ async function handleApi(req, res, url) {
           body: stageBody
         });
       } catch (error) {
-        if (!/stage_updated_(at|by)|schema cache/i.test(error.message || "")) throw error;
+        if (!/stage_updated_(at|by)|lost_|schema cache/i.test(error.message || "")) throw error;
         leads = await rest(`leads?id=eq.${encodeURIComponent(stageMatch[1])}&select=*`, {
           method: "PATCH",
           ...supabaseDataOptions(user.token),
           headers: { Prefer: "return=representation" },
-          body: baseStageBody
+          body: /lost_|schema cache/i.test(error.message || "") ? baseStageBody : stageBodyWithoutAudit
         });
       }
       return sendJson(res, 200, fromSupabaseLead(leads[0]));
     }
     const lead = db.leads.find(item => item.id === stageMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
-    lead.stage = String(payload.stage || lead.stage);
+    const nextStage = normalizeStageValue(payload.stage || lead.stage, lead.stage);
+    lead.stage = nextStage;
+    if (isLostStage(nextStage)) {
+      applyLostFields(lead, { ...payload, stage: nextStage }, user);
+    } else {
+      lead.lost_reason = "";
+      lead.lost_reason_detail = "";
+      lead.lost_competitor = "";
+      lead.lost_at = null;
+      lead.lost_by = "";
+    }
     lead.stage_updated_at = new Date().toISOString();
     lead.stage_updated_by = user.id;
     lead.last_activity = new Date().toISOString().slice(0, 10);
@@ -2036,7 +2132,9 @@ async function handleApi(req, res, url) {
       id: newRecordId("act"),
       at: lead.last_activity,
       type: "Stage",
-      text: `Stage changed to ${lead.stage}`
+      text: isLostStage(nextStage) && payload.lost_reason
+        ? `Stage changed to Lost. Reason: ${payload.lost_reason}${payload.lost_competitor ? `; competitor: ${payload.lost_competitor}` : ""}`
+        : `Stage changed to ${lead.stage}`
     });
     writeDb(db);
     return sendJson(res, 200, lead);

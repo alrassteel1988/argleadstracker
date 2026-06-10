@@ -152,6 +152,20 @@ The dismiss button hides the banner only for the current browser session. A fres
 
 If your Supabase project has a normalized `public.activities` table, run [supabase/migrations/20260610120000_add_activity_completed_at_for_overdue_banner.sql](supabase/migrations/20260610120000_add_activity_completed_at_for_overdue_banner.sql) or the combined runner to add the nullable `completed_at` column and an index for open reminder due dates. Deployments using the existing `public.leads.activities` JSONB field do not need a schema change for the banner.
 
+## Lost reason capture
+
+When a lead is moved to the Lost pipeline stage, the CRM opens a structured Lost Reason modal before saving. This applies to Kanban drag-and-drop, the lead drawer stage selector, the legacy detail stage selector, and the Edit Lead form. Users can either choose a primary reason and optional competitor/notes, or use `Skip for now` to mark the lead lost without a reason.
+
+Captured fields:
+
+- `lost_reason`
+- `lost_reason_detail`
+- `lost_competitor`
+- `lost_at`
+- `lost_by`
+
+Run [supabase/migrations/20260610130000_add_lost_reason_fields.sql](supabase/migrations/20260610130000_add_lost_reason_fields.sql) in Supabase SQL Editor, or rerun the combined [RUN_ALL_IN_SUPABASE_SQL_EDITOR.sql](supabase/migrations/RUN_ALL_IN_SUPABASE_SQL_EDITOR.sql), before relying on these columns in production reports. Admin exports include the loss fields, and the dashboard shows a Loss Reasons chart when at least three lost leads have captured reason data.
+
 ## API routes
 
 - `GET /api/health`

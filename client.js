@@ -13,6 +13,19 @@ const ACTIVITY_TYPE_ICONS = {
   "Reminder": "!"
 };
 
+const LOST_REASON_LABELS = {
+  price: "Price - competitor offered lower price",
+  no_budget: "No Budget - project cancelled or deferred",
+  competitor_relationship: "Competitor Relationship - existing supplier preferred",
+  lead_time: "Lead Time - couldn't meet delivery timeline",
+  product_mismatch: "Product Mismatch - we don't stock required specs",
+  no_response: "No Response - contact went silent",
+  project_cancelled: "Project Cancelled - end client cancelled project",
+  credit_terms: "Credit Terms - payment terms not acceptable",
+  quality_concerns: "Quality Concerns - MTC/grade requirements not met",
+  other: "Other"
+};
+
 const state = {
   leads: [],
   settings: { stages: [], priorities: [], territories: [], salesmen: [] },
@@ -33,6 +46,9 @@ const state = {
   leadDrawerLoading: false,
   leadDrawerPmrs: [],
   editingLeadId: "",
+  editingOriginalStage: "",
+  editingLostData: null,
+  lostReasonRequest: null,
   currentUser: null
 };
 
@@ -93,6 +109,8 @@ const els = {
   kpiHighestVolume: document.querySelector("#kpiHighestVolume"),
   kpiMostFollowups: document.querySelector("#kpiMostFollowups"),
   kpiLeastActive: document.querySelector("#kpiLeastActive"),
+  lossReasonsPanel: document.querySelector("#lossReasonsPanel"),
+  lossReasonsChart: document.querySelector("#lossReasonsChart"),
   relationshipFocusPanel: document.querySelector("#relationshipFocusPanel"),
   pipelineHealthPanel: document.querySelector("#pipelineHealthPanel"),
   dashboardFocus: document.querySelector("#dashboardFocus"),
@@ -149,6 +167,16 @@ const els = {
   activityEditForm: document.querySelector("#activityEditForm"),
   activityEditMessage: document.querySelector("#activityEditMessage"),
   activityEditReminderFields: document.querySelector("#activityEditReminderFields"),
+  lostReasonDialog: document.querySelector("#lostReasonDialog"),
+  lostReasonForm: document.querySelector("#lostReasonForm"),
+  lostReasonLeadName: document.querySelector("#lostReasonLeadName"),
+  lostReasonSelect: document.querySelector("#lostReasonSelect"),
+  lostCompetitorField: document.querySelector("#lostCompetitorField"),
+  lostCompetitorInput: document.querySelector("#lostCompetitorInput"),
+  lostReasonDetail: document.querySelector("#lostReasonDetail"),
+  lostReasonCount: document.querySelector("#lostReasonCount"),
+  lostReasonMessage: document.querySelector("#lostReasonMessage"),
+  skipLostReason: document.querySelector("#skipLostReason"),
   appToast: document.querySelector("#appToast")
 };
 
@@ -1428,6 +1456,28 @@ function renderPerformanceAnalytics() {
   `).join("");
 }
 
+function renderLossReasonsAnalytics() {
+  if (!els.lossReasonsPanel || !els.lossReasonsChart) return;
+  const visible = state.currentUser?.role === "admin";
+  const lostLeads = state.leads.filter(lead => isLostStageValue(lead.stage) && lead.lost_reason);
+  els.lossReasonsPanel.classList.toggle("hidden", !visible || lostLeads.length < 3);
+  if (!visible || lostLeads.length < 3) {
+    els.lossReasonsChart.innerHTML = "";
+    return;
+  }
+  const rows = Object.entries(countBy(lostLeads, lead => lead.lost_reason))
+    .map(([reason, count]) => ({ reason, count, label: lostReasonLabel(reason) }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  const max = Math.max(1, ...rows.map(row => row.count));
+  els.lossReasonsChart.innerHTML = rows.map(row => `
+    <article class="loss-reason-row">
+      <span>${escapeHtml(row.label)}</span>
+      <div class="loss-reason-track"><i style="width:${Math.max(5, (row.count / max) * 100)}%"></i></div>
+      <strong>${row.count}</strong>
+    </article>
+  `).join("");
+}
+
 function renderSalesmanFollowups() {
   if (!els.salesmanFollowupPanel || state.currentUser?.role === "admin") return;
   const groups = ["Overdue Follow-Ups", "Today", "Tomorrow", "This Week", "Next Week", "Future Follow-Ups"];
@@ -1517,6 +1567,7 @@ function renderSalesmanDashboard() {
 
 function renderDashboardView() {
   renderPerformanceAnalytics();
+  renderLossReasonsAnalytics();
   renderSalesmanDashboard();
   const focus = [...state.leads]
     .sort((a, b) => {
@@ -1600,6 +1651,75 @@ function drawerStageClass(stage) {
   return KANBAN_STAGE_BY_KEY[key]?.color || "stage-prospect";
 }
 
+function isLostStageValue(stage) {
+  return kanbanStageForLead({ stage }) === "DORMANT" || String(stage || "").trim().toUpperCase() === "LOST";
+}
+
+function lostReasonLabel(value) {
+  return LOST_REASON_LABELS[value] || "Not captured";
+}
+
+function lostByLabel(lead) {
+  const lostBy = String(lead.lost_by || "").trim().toLowerCase();
+  if (!lostBy) return "";
+  const user = (state.settings.salesmen || []).find(person => {
+    const tokens = normalizedUserTokens(person);
+    return tokens.includes(lostBy);
+  });
+  return user ? salesmanName(user) : lead.lost_by;
+}
+
+function resetLostReasonForm() {
+  els.lostReasonForm?.reset();
+  if (els.lostReasonMessage) els.lostReasonMessage.textContent = "";
+  els.lostCompetitorField?.classList.add("hidden");
+  if (els.lostReasonCount) els.lostReasonCount.textContent = "0 / 500";
+}
+
+function updateLostReasonUi() {
+  const reason = els.lostReasonSelect?.value || "";
+  const needsCompetitor = reason === "price" || reason === "competitor_relationship";
+  els.lostCompetitorField?.classList.toggle("hidden", !needsCompetitor);
+  if (els.lostReasonCount && els.lostReasonDetail) {
+    els.lostReasonCount.textContent = `${els.lostReasonDetail.value.length} / 500`;
+  }
+}
+
+function promptLostReason(lead) {
+  return new Promise(resolve => {
+    state.lostReasonRequest = { leadId: lead.id, resolve };
+    resetLostReasonForm();
+    if (els.lostReasonLeadName) els.lostReasonLeadName.textContent = lead.company_name || "Selected lead";
+    els.lostReasonDialog?.showModal();
+  });
+}
+
+function resolveLostReason(value) {
+  const request = state.lostReasonRequest;
+  state.lostReasonRequest = null;
+  els.lostReasonDialog?.close();
+  if (request?.resolve) request.resolve(value);
+}
+
+async function saveStageWithLostPrompt(lead, stage, existingLossData = null) {
+  if (!lead) return { cancelled: true };
+  const wasLost = isLostStageValue(lead.stage);
+  const willBeLost = isLostStageValue(stage);
+  let lostData = existingLossData;
+  if (willBeLost && !wasLost && !lostData) {
+    lostData = await promptLostReason(lead);
+    if (!lostData) return { cancelled: true };
+  }
+  const body = willBeLost ? { stage, ...(lostData || {}) } : { stage };
+  const updated = await api(`/api/leads/${encodeURIComponent(lead.id)}/stage`, {
+    method: "PATCH",
+    body: JSON.stringify(body)
+  });
+  const index = state.leads.findIndex(item => item.id === lead.id);
+  if (index >= 0) state.leads[index] = { ...state.leads[index], ...updated };
+  return { updated };
+}
+
 function openLeadDrawer(leadId, tab = "overview") {
   const lead = state.leads.find(item => item.id === leadId);
   if (!lead) return;
@@ -1661,6 +1781,22 @@ function tagPills(value) {
     .map(tag => `<span class="chip">${escapeHtml(tag)}</span>`).join("") || `<span class="empty-copy">No tags added.</span>`;
 }
 
+function renderLossDetails(lead) {
+  if (!isLostStageValue(lead.stage)) return "";
+  return `
+    <section class="drawer-section loss-details">
+      <h3>Loss Details</h3>
+      <div class="drawer-field-grid">
+        ${detailField("Reason", lostReasonLabel(lead.lost_reason))}
+        ${detailField("Competitor", lead.lost_competitor)}
+        ${detailField("Lost on", lead.lost_at ? new Date(lead.lost_at).toLocaleDateString("en-AE", { year: "numeric", month: "long", day: "numeric" }) : "")}
+        ${detailField("Lost by", lostByLabel(lead))}
+      </div>
+      <p class="drawer-remarks">${escapeHtml(lead.lost_reason_detail || "No additional loss notes captured.")}</p>
+    </section>
+  `;
+}
+
 function renderDrawerOverview(lead) {
   const overdue = lead.next_action_date && lead.next_action_date < today();
   return `
@@ -1694,6 +1830,7 @@ function renderDrawerOverview(lead) {
       <div class="drawer-tags">${tagPills(lead.tags)}</div>
       <p class="drawer-remarks">${escapeHtml(lead.products_services_remarks || "No products/services remarks added.")}</p>
     </section>
+    ${renderLossDetails(lead)}
     <div class="drawer-quick-actions">
       <a class="ghost-button" href="${lead.phone ? `tel:${escapeHtml(lead.phone)}` : "#"}">Call</a>
       <a class="ghost-button" href="${lead.email ? `mailto:${escapeHtml(lead.email)}` : "#"}">Email</a>
@@ -1839,11 +1976,14 @@ function bindLeadDrawerEvents() {
     const lead = state.leads.find(item => item.id === leadId);
     if (!lead) return;
     const previous = lead.stage;
-    lead.stage = stage;
-    renderLeadDrawer();
     try {
-      const updated = await api(`/api/leads/${leadId}/stage`, { method: "PATCH", body: JSON.stringify({ stage }) });
-      Object.assign(lead, updated);
+      const result = await saveStageWithLostPrompt(lead, stage);
+      if (result.cancelled) {
+        event.target.value = previous;
+        renderLeadDrawer();
+        return;
+      }
+      Object.assign(lead, result.updated);
       setToast(`Lead moved to ${drawerStageLabel(stage)}`, "success");
       render();
     } catch (error) {
@@ -1950,6 +2090,8 @@ function openLeadEdit(leadId) {
   const lead = state.leads.find(item => item.id === leadId);
   if (!lead) return;
   state.editingLeadId = leadId;
+  state.editingOriginalStage = lead.stage || "";
+  state.editingLostData = null;
   leadFormTouched.clear();
   els.leadForm.reset();
   Object.entries(lead).forEach(([key, value]) => {
@@ -2013,6 +2155,7 @@ function renderKanbanView() {
             <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
             <span class="kanban-priority ${priorityTone}">${escapeHtml(lead.priority || "Cold")}</span>
           </div>
+          ${isLostStageValue(lead.stage) && lead.lost_reason ? `<span class="lost-reason-tag">${escapeHtml(lostReasonLabel(lead.lost_reason))}</span>` : ""}
           <span class="kanban-salesman">${escapeHtml(lead.assigned_salesman || "Unassigned")}</span>
           <div class="kanban-card-meta">
             <span>${escapeHtml(formatAED(lead.estimated_value))}</span>
@@ -2105,9 +2248,8 @@ async function moveKanbanLead(leadId, stage) {
   if (!lead || kanbanStageForLead(lead) === stage) return;
   const label = KANBAN_STAGE_BY_KEY[stage]?.label || stage;
   try {
-    const updated = await api(`/api/leads/${leadId}/stage`, { method: "PATCH", body: JSON.stringify({ stage }) });
-    const index = state.leads.findIndex(item => item.id === leadId);
-    if (index >= 0) state.leads[index] = { ...state.leads[index], ...updated };
+    const result = await saveStageWithLostPrompt(lead, stage);
+    if (result.cancelled) return;
     setToast(`Lead moved to ${label}`, "success");
     render();
   } catch (error) {
@@ -2667,7 +2809,11 @@ function renderDetail() {
 
   document.querySelector("#saveStage").addEventListener("click", async () => {
     const stage = document.querySelector("#detailStage").value;
-    await api(`/api/leads/${lead.id}/stage`, { method: "PATCH", body: JSON.stringify({ stage }) });
+    const result = await saveStageWithLostPrompt(lead, stage);
+    if (result.cancelled) {
+      document.querySelector("#detailStage").value = lead.stage;
+      return;
+    }
     await loadLeads();
   });
 
@@ -3062,11 +3208,15 @@ document.addEventListener("keydown", event => {
 
 document.querySelector("#openLeadForm").addEventListener("click", () => {
   state.editingLeadId = "";
+  state.editingOriginalStage = "";
+  state.editingLostData = null;
   if (state.currentUser?.role !== "admin") els.formSalesman.value = state.currentUser.name;
   els.leadDialog.showModal();
 });
 document.querySelector("#closeLeadForm").addEventListener("click", () => {
   state.editingLeadId = "";
+  state.editingOriginalStage = "";
+  state.editingLostData = null;
   els.leadDialog.close();
 });
 document.querySelector("#closeSalesmanForm").addEventListener("click", () => els.salesmanDialog.close());
@@ -3075,8 +3225,51 @@ document.querySelector("#closePmrForm").addEventListener("click", () => {
   els.pmrDialog.close();
 });
 document.querySelector("#closeActivityEditForm")?.addEventListener("click", () => els.activityEditDialog.close());
+els.formStage?.addEventListener("change", async event => {
+  if (!state.editingLeadId) return;
+  const lead = state.leads.find(item => item.id === state.editingLeadId);
+  if (!lead) return;
+  const nextStage = event.target.value;
+  if (!isLostStageValue(nextStage)) {
+    state.editingLostData = null;
+    return;
+  }
+  if (isLostStageValue(state.editingOriginalStage)) return;
+  const result = await promptLostReason(lead);
+  if (!result) {
+    event.target.value = state.editingOriginalStage || lead.stage || event.target.value;
+    state.editingLostData = null;
+    return;
+  }
+  state.editingLostData = result;
+});
 els.activityEditForm?.elements.type?.addEventListener("change", event => {
   els.activityEditReminderFields.classList.toggle("hidden", String(event.target.value).toLowerCase() !== "reminder");
+});
+els.lostReasonSelect?.addEventListener("change", updateLostReasonUi);
+els.lostReasonDetail?.addEventListener("input", updateLostReasonUi);
+els.lostReasonDialog?.addEventListener("cancel", event => {
+  event.preventDefault();
+  resolveLostReason(null);
+});
+document.querySelector("#closeLostReasonForm")?.addEventListener("click", () => resolveLostReason(null));
+els.skipLostReason?.addEventListener("click", () => resolveLostReason({
+  lost_reason: "",
+  lost_reason_detail: "",
+  lost_competitor: ""
+}));
+els.lostReasonForm?.addEventListener("submit", event => {
+  event.preventDefault();
+  const payload = Object.fromEntries(new FormData(els.lostReasonForm).entries());
+  if (!payload.lost_reason) {
+    setMessage(els.lostReasonMessage, "Select the primary reason before marking this lead as lost.", "error");
+    return;
+  }
+  resolveLostReason({
+    lost_reason: payload.lost_reason,
+    lost_reason_detail: String(payload.lost_reason_detail || "").slice(0, 500),
+    lost_competitor: payload.lost_competitor || ""
+  });
 });
 els.recordPmrVoice?.addEventListener("click", togglePmrVoiceRecording);
 els.deletePmrVoice?.addEventListener("click", resetPmrVoiceNote);
@@ -3244,9 +3437,23 @@ els.leadForm.addEventListener("submit", async event => {
   let lead;
   if (state.editingLeadId) {
     try {
+      const existing = state.leads.find(item => item.id === state.editingLeadId);
+      if (existing && isLostStageValue(payload.stage) && !isLostStageValue(state.editingOriginalStage)) {
+        if (!state.editingLostData) {
+          state.editingLostData = await promptLostReason(existing);
+        }
+        if (!state.editingLostData) {
+          payload.stage = state.editingOriginalStage || existing.stage;
+          els.leadForm.elements.stage.value = payload.stage;
+          return;
+        }
+        Object.assign(payload, state.editingLostData);
+      }
       lead = await api(`/api/leads/${encodeURIComponent(state.editingLeadId)}`, { method: "PATCH", body: JSON.stringify(payload) });
       state.selectedId = lead.id;
       state.editingLeadId = "";
+      state.editingOriginalStage = "";
+      state.editingLostData = null;
       els.leadDialog.close();
       await loadLeads();
       openLeadDrawer(lead.id, "overview");
