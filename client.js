@@ -26,6 +26,11 @@ const state = {
   activityLoading: false,
   activityFiltersOpen: false,
   activityFilters: loadActivityFilters(),
+  leadDrawerOpen: false,
+  leadDrawerTab: "overview",
+  leadDrawerLoading: false,
+  leadDrawerPmrs: [],
+  editingLeadId: "",
   currentUser: null
 };
 
@@ -115,6 +120,9 @@ const els = {
   activityResetFilters: document.querySelector("#activityResetFilters"),
   activityResultsSummary: document.querySelector("#activityResultsSummary"),
   activityLoading: document.querySelector("#activityLoading"),
+  leadDrawerShell: document.querySelector("#leadDrawerShell"),
+  leadDrawerBackdrop: document.querySelector("#leadDrawerBackdrop"),
+  leadDrawerContent: document.querySelector("#leadDrawerContent"),
   leadDialog: document.querySelector("#leadDialog"),
   leadForm: document.querySelector("#leadForm"),
   formSalesman: document.querySelector("#formSalesman"),
@@ -803,7 +811,7 @@ function bindFollowupActions() {
   document.querySelectorAll("[data-followup-open]").forEach(button => {
     button.addEventListener("click", () => {
       state.selectedId = button.dataset.followupOpen;
-      setView("pipeline");
+      openLeadDrawer(button.dataset.followupOpen, "reminders");
     });
   });
   document.querySelectorAll("[data-followup-complete]").forEach(button => {
@@ -1332,7 +1340,7 @@ function renderDashboardView() {
   document.querySelectorAll("[data-focus-lead]").forEach(button => {
     button.addEventListener("click", () => {
       state.selectedId = button.dataset.focusLead;
-      setView("pipeline");
+      openLeadDrawer(button.dataset.focusLead);
     });
   });
 
@@ -1369,6 +1377,7 @@ function renderLeadList() {
   document.querySelectorAll(".lead-card").forEach(card => {
     card.addEventListener("click", () => {
       state.selectedId = card.dataset.leadId;
+      openLeadDrawer(card.dataset.leadId);
       render();
     });
   });
@@ -1377,6 +1386,381 @@ function renderLeadList() {
 function formatAED(value) {
   const number = Number(value || 0);
   return number ? `AED ${number.toLocaleString("en-AE")}` : "AED -";
+}
+
+function leadInitial(lead) {
+  return String(lead?.company_name || "?").trim().charAt(0).toUpperCase() || "?";
+}
+
+function drawerStageLabel(stage) {
+  const match = KANBAN_STAGES.find(item => item.key === String(stage || "").toUpperCase() || item.aliases.includes(String(stage || "").toUpperCase()));
+  return match?.label || stage || "Prospect";
+}
+
+function drawerStageClass(stage) {
+  const key = kanbanStageForLead({ stage });
+  return KANBAN_STAGE_BY_KEY[key]?.color || "stage-prospect";
+}
+
+function openLeadDrawer(leadId, tab = "overview") {
+  const lead = state.leads.find(item => item.id === leadId);
+  if (!lead) return;
+  state.selectedId = leadId;
+  state.leadDrawerOpen = true;
+  state.leadDrawerTab = tab;
+  state.leadDrawerLoading = true;
+  state.leadDrawerPmrs = [];
+  renderLeadDrawer();
+  api(`/api/leads/${encodeURIComponent(leadId)}/pmrs`)
+    .then(pmrs => {
+      if (state.selectedId === leadId) state.leadDrawerPmrs = pmrs || [];
+    })
+    .catch(error => {
+      state.leadDrawerPmrs = [];
+      setToast(`PMRs could not be loaded: ${error.message}`, "error");
+    })
+    .finally(() => {
+      if (state.selectedId === leadId) {
+        state.leadDrawerLoading = false;
+        renderLeadDrawer();
+        loadActivityAudioSources();
+      }
+    });
+}
+
+function closeLeadDrawer() {
+  state.leadDrawerOpen = false;
+  state.leadDrawerLoading = false;
+  if (els.leadDrawerShell) {
+    els.leadDrawerShell.classList.add("closing");
+    setTimeout(() => {
+      els.leadDrawerShell.classList.add("hidden");
+      els.leadDrawerShell.classList.remove("open", "closing");
+      els.leadDrawerShell.setAttribute("aria-hidden", "true");
+    }, 240);
+  }
+}
+
+function drawerSkeleton() {
+  return `
+    <div class="drawer-skeleton">
+      <span></span><span></span><span></span><span></span>
+      <div></div><div></div><div></div>
+    </div>
+  `;
+}
+
+function detailField(label, value, options = {}) {
+  if (!value) value = "Not added";
+  const content = options.href
+    ? `<a href="${escapeHtml(options.href)}" ${options.external ? 'target="_blank" rel="noopener"' : ""}>${escapeHtml(value)}</a>`
+    : escapeHtml(value);
+  return `<article class="drawer-field ${options.overdue ? "overdue" : ""}"><span>${escapeHtml(label)}</span><strong>${content}</strong></article>`;
+}
+
+function tagPills(value) {
+  return String(value || "").split(",").map(tag => tag.trim()).filter(Boolean)
+    .map(tag => `<span class="chip">${escapeHtml(tag)}</span>`).join("") || `<span class="empty-copy">No tags added.</span>`;
+}
+
+function renderDrawerOverview(lead) {
+  const overdue = lead.next_action_date && lead.next_action_date < today();
+  return `
+    <section class="drawer-section">
+      <h3>Contact Information</h3>
+      <div class="drawer-field-grid">
+        ${detailField("Primary contact", [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - "))}
+        ${detailField("Phone", lead.phone, lead.phone ? { href: `tel:${lead.phone}` } : {})}
+        ${detailField("Email", lead.email, lead.email ? { href: `mailto:${lead.email}` } : {})}
+        ${detailField("Secondary contact", [lead.secondary_contact_name, lead.secondary_contact_title].filter(Boolean).join(" - "))}
+        ${detailField("Secondary phone", lead.secondary_contact_mobile, lead.secondary_contact_mobile ? { href: `tel:${lead.secondary_contact_mobile}` } : {})}
+        ${detailField("Secondary email", lead.secondary_contact_email, lead.secondary_contact_email ? { href: `mailto:${lead.secondary_contact_email}` } : {})}
+        ${detailField("Website", lead.website, lead.website ? { href: lead.website, external: true } : {})}
+        ${detailField("Google Maps", lead.google_maps_url ? "Open map" : "", lead.google_maps_url ? { href: lead.google_maps_url, external: true } : {})}
+      </div>
+    </section>
+    <section class="drawer-section">
+      <h3>Company & Commercial Details</h3>
+      <div class="drawer-field-grid">
+        ${detailField("Legal name", lead.legal_name)}
+        ${detailField("Year established", lead.year_established)}
+        ${detailField("Industry", lead.industry || lead.business_category)}
+        ${detailField("Product interest", lead.product_interest)}
+        ${detailField("Quotation ref", lead.quotation_ref)}
+        ${detailField("First order date", lead.first_order_date)}
+        ${detailField("Monthly volume", lead.estimated_monthly_volume)}
+        ${detailField("Assigned salesman", lead.assigned_salesman)}
+        ${detailField("Next action date", lead.next_action_date ? `${lead.next_action_date}${overdue ? " - overdue" : ""}` : "", { overdue })}
+        ${detailField("Next action", lead.next_action)}
+      </div>
+      <div class="drawer-tags">${tagPills(lead.tags)}</div>
+      <p class="drawer-remarks">${escapeHtml(lead.products_services_remarks || "No products/services remarks added.")}</p>
+    </section>
+    <div class="drawer-quick-actions">
+      <a class="ghost-button" href="${lead.phone ? `tel:${escapeHtml(lead.phone)}` : "#"}">Call</a>
+      <a class="ghost-button" href="${lead.email ? `mailto:${escapeHtml(lead.email)}` : "#"}">Email</a>
+      <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button>
+      <button class="primary-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit Lead</button>
+    </div>
+  `;
+}
+
+function renderDrawerActivities(lead) {
+  const activities = [...(lead.activities || [])].sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  return `
+    <section class="drawer-section">
+      <div class="drawer-tab-heading"><h3>Activities</h3><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log New Activity</button></div>
+      <div class="drawer-list">
+        ${activities.map((activity, index) => `
+          <article class="drawer-activity ${activityTypeClass(activity.type)}">
+            <div><span class="activity-type-label"><i>${escapeHtml(ACTIVITY_TYPE_ICONS[activity.type] || "ACT")}</i>${escapeHtml(activity.type || "Note")}</span><span class="meta-label">${escapeHtml(activity.at || "")}</span></div>
+            <p class="activity-note clamp" data-expand-note>${escapeHtml(activity.text || activity.note || "No note added.")}</p>
+            <div class="activity-actions">${activityEditButton(lead.id, index, activity)}${activityDeleteButton(lead.id, index, activity)}</div>
+          </article>
+        `).join("") || `<div class="timeline-empty"><strong>No activities logged yet.</strong><span>Log the first one.</span><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button></div>`}
+      </div>
+    </section>
+  `;
+}
+
+function heatClass(value) {
+  const score = Number(value || 0);
+  if (score >= 4) return "hot";
+  if (score >= 2) return "warm";
+  return "cold";
+}
+
+function renderDrawerPmrs(lead) {
+  return `
+    <section class="drawer-section">
+      <div class="drawer-tab-heading"><h3>Post-Meeting Reports</h3><button class="ghost-button" type="button" data-drawer-file-pmr="${escapeHtml(lead.id)}">File New PMR</button></div>
+      <div class="drawer-list">
+        ${state.leadDrawerPmrs.map(pmr => `
+          <article class="drawer-pmr">
+            <div class="drawer-card-title"><strong>${escapeHtml(pmr.meeting_date || "Meeting")}</strong><span class="chip ${heatClass(pmr.relationship_heat_score)}">Heat ${escapeHtml(pmr.relationship_heat_score || "3")}/5</span></div>
+            <div class="chip-row">
+              <span class="chip">${escapeHtml(pmr.first_order_timing || "Timing unknown")}</span>
+              <span class="chip">${escapeHtml(pmr.potential_annual_value || "Value unknown")}</span>
+              <span class="chip">${escapeHtml(pmr.director_action_required || "No director action")}</span>
+            </div>
+            <p class="activity-note clamp" data-expand-note>${escapeHtml(pmr.notes || "No PMR notes added.")}</p>
+            ${pmr.voice_note_url || pmr.voice_note_id ? `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(pmr.voice_note_id || "")}" ${pmr.voice_note_url ? `src="${escapeHtml(pmr.voice_note_url)}"` : ""}></audio>` : ""}
+          </article>
+        `).join("") || `<div class="timeline-empty"><strong>No PMRs filed yet.</strong><span>File a report after the next customer meeting.</span></div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderDrawerReminders(lead) {
+  const reminders = remindersForLead(lead);
+  const overdue = reminders.filter(reminder => reminder.due_date && reminder.due_date < today());
+  const upcoming = reminders.filter(reminder => !reminder.due_date || reminder.due_date >= today());
+  const card = reminder => {
+    const days = daysUntil(reminder.due_date);
+    return `<article class="reminder-card ${days < 0 ? "overdue" : ""}">
+      <div><span class="meta-label">${escapeHtml([reminder.due_date, reminder.due_time].filter(Boolean).join(" "))}</span><strong>${escapeHtml(reminder.reminder_type || "Reminder")}</strong><p>${escapeHtml(reminder.activity_required || reminder.text || "Follow up")}</p></div>
+      <span class="chip ${days < 0 ? "hot" : "warm"}">${days < 0 ? `${Math.abs(days)} days overdue` : `Due in ${days} days`}</span>
+    </article>`;
+  };
+  return `
+    <section class="drawer-section">
+      <div class="drawer-tab-heading"><h3>Reminders</h3><button class="ghost-button" type="button" data-drawer-add-reminder="${escapeHtml(lead.id)}">Add Reminder</button></div>
+      ${overdue.length ? `<h4>Overdue</h4><div class="drawer-list">${overdue.map(card).join("")}</div>` : ""}
+      <h4>Upcoming</h4><div class="drawer-list">${upcoming.map(card).join("") || `<p class="empty-copy">No upcoming reminders.</p>`}</div>
+    </section>
+  `;
+}
+
+function renderDrawerNotes(lead) {
+  return `
+    <section class="drawer-section">
+      <div class="drawer-tab-heading"><h3>Notes</h3><button class="ghost-button" type="button" data-drawer-edit-notes>Edit Notes</button></div>
+      <div class="drawer-notes-view">
+        <p>${escapeHtml(lead.notes || "No notes added yet.")}</p>
+      </div>
+      <form class="drawer-notes-form hidden" id="drawerNotesForm">
+        <textarea name="notes" rows="8">${escapeHtml(lead.notes || "")}</textarea>
+        <button class="primary-button" type="submit">Save Notes</button>
+      </form>
+      ${lead.voice_note_url ? `<audio class="activity-audio" controls src="${escapeHtml(lead.voice_note_url)}"></audio>` : ""}
+    </section>
+  `;
+}
+
+function renderLeadDrawer() {
+  const lead = state.leads.find(item => item.id === state.selectedId);
+  if (!state.leadDrawerOpen || !lead || !els.leadDrawerShell) return;
+  els.leadDrawerShell.classList.remove("hidden", "closing");
+  requestAnimationFrame(() => els.leadDrawerShell.classList.add("open"));
+  els.leadDrawerShell.setAttribute("aria-hidden", "false");
+  const admin = ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
+  const tabs = ["overview", "activities", "pmr", "reminders", "notes"];
+  const tabLabels = { overview: "Overview", activities: "Activities", pmr: "PMR", reminders: "Reminders", notes: "Notes" };
+  const body = state.leadDrawerLoading ? drawerSkeleton() : ({
+    overview: renderDrawerOverview(lead),
+    activities: renderDrawerActivities(lead),
+    pmr: renderDrawerPmrs(lead),
+    reminders: renderDrawerReminders(lead),
+    notes: renderDrawerNotes(lead)
+  }[state.leadDrawerTab] || renderDrawerOverview(lead));
+  els.leadDrawerContent.innerHTML = `
+    <header class="drawer-header">
+      <div class="drawer-title-row">
+        <div class="drawer-avatar ${kanbanPriorityTone(lead.priority)}">${escapeHtml(leadInitial(lead))}</div>
+        <div>
+          <h2 id="leadDrawerTitle">${escapeHtml(lead.company_name || "Lead")}</h2>
+          <p>${escapeHtml([lead.sector || lead.industry, inferEmirate(lead), lead.territory].filter(Boolean).join(" - "))}</p>
+        </div>
+        <button class="drawer-close" type="button" id="leadDrawerClose" aria-label="Close lead drawer">&times;</button>
+      </div>
+      <div class="drawer-badges">
+        ${admin ? `<select class="drawer-stage-select ${drawerStageClass(lead.stage)}" id="drawerStageSelect">${(state.settings.stages || []).map(stage => `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(drawerStageLabel(stage))}</option>`).join("")}</select>` : `<span class="drawer-stage-pill ${drawerStageClass(lead.stage)}">${escapeHtml(drawerStageLabel(lead.stage))}</span>`}
+        <span class="chip ${priorityClass(lead.priority)}">${escapeHtml(lead.priority || "Cold")}</span>
+        <span class="chip">${escapeHtml(formatAED(lead.estimated_value))}</span>
+      </div>
+    </header>
+    <nav class="drawer-tabs">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}">${tabLabels[tab]}</button>`).join("")}</nav>
+    <div class="drawer-body">${body}</div>
+  `;
+  bindLeadDrawerEvents();
+}
+
+function bindLeadDrawerEvents() {
+  document.querySelector("#leadDrawerClose")?.addEventListener("click", closeLeadDrawer);
+  document.querySelectorAll("[data-drawer-tab]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.leadDrawerTab = button.dataset.drawerTab;
+      renderLeadDrawer();
+      loadActivityAudioSources();
+    });
+  });
+  document.querySelector("#drawerStageSelect")?.addEventListener("change", async event => {
+    const leadId = state.selectedId;
+    const stage = event.target.value;
+    const lead = state.leads.find(item => item.id === leadId);
+    if (!lead) return;
+    const previous = lead.stage;
+    lead.stage = stage;
+    renderLeadDrawer();
+    try {
+      const updated = await api(`/api/leads/${leadId}/stage`, { method: "PATCH", body: JSON.stringify({ stage }) });
+      Object.assign(lead, updated);
+      setToast(`Lead moved to ${drawerStageLabel(stage)}`, "success");
+      render();
+    } catch (error) {
+      lead.stage = previous;
+      setToast(error.message, "error");
+      renderLeadDrawer();
+    }
+  });
+  document.querySelectorAll("[data-drawer-log-activity]").forEach(button => {
+    button.addEventListener("click", () => logDrawerActivity(button.dataset.drawerLogActivity));
+  });
+  document.querySelectorAll("[data-drawer-add-reminder]").forEach(button => {
+    button.addEventListener("click", () => addDrawerReminder(button.dataset.drawerAddReminder));
+  });
+  document.querySelectorAll("[data-drawer-file-pmr]").forEach(button => {
+    button.addEventListener("click", () => openPmrForLead(button.dataset.drawerFilePmr));
+  });
+  document.querySelectorAll("[data-drawer-edit-lead]").forEach(button => {
+    button.addEventListener("click", () => openLeadEdit(button.dataset.drawerEditLead));
+  });
+  document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
+    document.querySelector(".drawer-notes-view")?.classList.add("hidden");
+    document.querySelector("#drawerNotesForm")?.classList.remove("hidden");
+  });
+  document.querySelector("#drawerNotesForm")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const lead = state.leads.find(item => item.id === state.selectedId);
+    if (!lead) return;
+    const notes = new FormData(event.currentTarget).get("notes");
+    try {
+      const updated = await api(`/api/leads/${lead.id}`, { method: "PATCH", body: JSON.stringify({ notes }) });
+      Object.assign(lead, updated);
+      setToast("Notes updated.", "success");
+      renderLeadDrawer();
+      renderDetail();
+    } catch (error) {
+      setToast(error.message, "error");
+    }
+  });
+  document.querySelectorAll("[data-expand-note]").forEach(note => {
+    note.addEventListener("click", event => {
+      event.stopPropagation();
+      note.classList.toggle("clamp");
+    });
+  });
+  bindActivityEditButtons();
+  bindDeleteButtons();
+}
+
+async function logDrawerActivity(leadId) {
+  const text = window.prompt("Activity note:");
+  if (!text?.trim()) return;
+  try {
+    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+      method: "POST",
+      body: JSON.stringify({ type: "Note", text: text.trim() })
+    });
+    setToast("Activity logged.", "success");
+    await loadLeads();
+    openLeadDrawer(leadId, "activities");
+  } catch (error) {
+    setToast(error.message, "error");
+  }
+}
+
+async function addDrawerReminder(leadId) {
+  const activity_required = window.prompt("Reminder note:");
+  if (!activity_required?.trim()) return;
+  const due_date = window.prompt("Reminder date (YYYY-MM-DD):", today());
+  if (!due_date?.trim()) return;
+  try {
+    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "Reminder",
+        reminder: true,
+        reminder_type: "General follow-up",
+        activity_required: activity_required.trim(),
+        text: activity_required.trim(),
+        due_date: due_date.trim(),
+        due_time: "09:00"
+      })
+    });
+    setToast("Reminder added.", "success");
+    await loadLeads();
+    openLeadDrawer(leadId, "reminders");
+  } catch (error) {
+    setToast(error.message, "error");
+  }
+}
+
+function openPmrForLead(leadId) {
+  const lead = state.leads.find(item => item.id === leadId);
+  if (!lead) return;
+  els.pmrMessage.textContent = "";
+  els.pmrForm.reset();
+  resetPmrVoiceNote();
+  els.pmrForm.elements.company_id.value = lead.id;
+  els.pmrForm.elements.meeting_date.value = today();
+  els.pmrDialog.showModal();
+}
+
+function openLeadEdit(leadId) {
+  const lead = state.leads.find(item => item.id === leadId);
+  if (!lead) return;
+  state.editingLeadId = leadId;
+  leadFormTouched.clear();
+  els.leadForm.reset();
+  Object.entries(lead).forEach(([key, value]) => {
+    const field = els.leadForm.elements[key];
+    if (!field) return;
+    field.value = formValue(value);
+  });
+  setEnrichmentStatus("Editing existing lead. Review changes before saving.", "success");
+  els.leadDialog.showModal();
 }
 
 function kanbanStageForLead(lead) {
@@ -1474,12 +1858,14 @@ function bindKanbanEvents() {
   document.querySelectorAll("[data-kanban-lead]").forEach(card => {
     card.addEventListener("click", () => {
       state.selectedId = card.dataset.kanbanLead;
+      openLeadDrawer(card.dataset.kanbanLead);
       renderDetail();
     });
     card.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         state.selectedId = card.dataset.kanbanLead;
+        openLeadDrawer(card.dataset.kanbanLead);
         renderDetail();
       }
     });
@@ -1953,7 +2339,7 @@ function renderActivityView() {
   document.querySelectorAll("[data-activity-lead], [data-reminder-lead]").forEach(item => {
     const openLead = () => {
       state.selectedId = item.dataset.activityLead || item.dataset.reminderLead;
-      setView("pipeline");
+      openLeadDrawer(state.selectedId, item.dataset.reminderLead ? "reminders" : "activities");
     };
     item.addEventListener("click", event => {
       if (event.target.closest("audio, details, summary, a, button")) return;
@@ -2193,6 +2579,7 @@ function render() {
   renderLeadList();
   renderKanbanView();
   renderDetail();
+  renderLeadDrawer();
   renderSalesmenView();
   renderActivityView();
   loadActivityAudioSources();
@@ -2447,12 +2834,20 @@ els.activitySearchClear?.addEventListener("click", () => {
 });
 
 els.activityResetFilters?.addEventListener("click", resetActivityFilters);
+els.leadDrawerBackdrop?.addEventListener("click", closeLeadDrawer);
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && state.leadDrawerOpen) closeLeadDrawer();
+});
 
 document.querySelector("#openLeadForm").addEventListener("click", () => {
+  state.editingLeadId = "";
   if (state.currentUser?.role !== "admin") els.formSalesman.value = state.currentUser.name;
   els.leadDialog.showModal();
 });
-document.querySelector("#closeLeadForm").addEventListener("click", () => els.leadDialog.close());
+document.querySelector("#closeLeadForm").addEventListener("click", () => {
+  state.editingLeadId = "";
+  els.leadDialog.close();
+});
 document.querySelector("#closeSalesmanForm").addEventListener("click", () => els.salesmanDialog.close());
 document.querySelector("#closePmrForm").addEventListener("click", () => {
   resetPmrVoiceNote();
@@ -2625,6 +3020,20 @@ els.leadForm.addEventListener("submit", async event => {
   const payload = Object.fromEntries(new FormData(els.leadForm).entries());
   payload.estimated_value = Number(payload.estimated_value || 0);
   let lead;
+  if (state.editingLeadId) {
+    try {
+      lead = await api(`/api/leads/${encodeURIComponent(state.editingLeadId)}`, { method: "PATCH", body: JSON.stringify(payload) });
+      state.selectedId = lead.id;
+      state.editingLeadId = "";
+      els.leadDialog.close();
+      await loadLeads();
+      openLeadDrawer(lead.id, "overview");
+      setToast("Lead updated.", "success");
+    } catch (error) {
+      setEnrichmentStatus(error.message, "error");
+    }
+    return;
+  }
   try {
     lead = await api("/api/leads", { method: "POST", body: JSON.stringify(payload) });
   } catch (error) {
@@ -2646,6 +3055,7 @@ els.leadForm.addEventListener("submit", async event => {
   els.leadForm.elements.next_action_date.value = today();
   els.leadDialog.close();
   await loadLeads();
+  openLeadDrawer(lead.id, "overview");
 });
 
 els.pmrForm.addEventListener("submit", async event => {
@@ -2667,6 +3077,7 @@ els.pmrForm.addEventListener("submit", async event => {
     resetPmrVoiceNote();
     els.pmrDialog.close();
     await loadLeads();
+    if (state.leadDrawerOpen) openLeadDrawer(companyId, "pmr");
   } catch (error) {
     setMessage(els.pmrMessage, error.message, "error");
   }
