@@ -1,6 +1,12 @@
 const ACTIVITY_FILTER_KEY = "arg_activity_filters";
 const OVERDUE_BANNER_KEY = "arg_overdue_banner_dismissed";
+const PWA_VISIT_KEY = "arg_pwa_visit_count";
+const PWA_INSTALL_DISMISSED_KEY = "arg_pwa_install_dismissed_until";
+const OUTBOX_DB_NAME = "arg_leads_pwa_outbox";
+const OUTBOX_STORE = "outbox";
 const ACTIVITY_PRESETS = ["Today", "This Week", "This Month", "Last 30 Days", "Last 90 Days"];
+const QUICK_LOG_TYPES = ["Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed"];
+const QUICK_PHRASES = ["Discussed pricing", "Requested quotation", "Sample feedback", "Follow-up agreed", "Met procurement"];
 const ACTIVITY_TYPE_ICONS = {
   "Note": "TXT",
   "Phone Call": "TEL",
@@ -10,7 +16,8 @@ const ACTIVITY_TYPE_ICONS = {
   "Video Call": "VID",
   "Quotation Sent": "QUOTE",
   "Order Placed": "AED",
-  "Reminder": "!"
+  "Reminder": "!",
+  "Handoff": "MOVE"
 };
 
 const LOST_REASON_LABELS = {
@@ -31,12 +38,15 @@ const state = {
   settings: { stages: [], priorities: [], territories: [], salesmen: [] },
   selectedId: null,
   filters: { search: "", stage: "all", salesman: "all", priority: "all", territory: "all" },
+  importedAfter: "",
   overduePipelineOnly: false,
   performanceStage: "all",
+  marketSnapshotSalesman: "all",
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
   pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
   kanbanStage: localStorage.getItem("arg_kanban_stage") || "PROSPECT",
   draggedLeadId: "",
+  importLeads: null,
   activities: [],
   activityLoading: false,
   activityFiltersOpen: false,
@@ -45,6 +55,23 @@ const state = {
   leadDrawerTab: "overview",
   leadDrawerLoading: false,
   leadDrawerPmrs: [],
+  leadDrawerIntel: [],
+  leadDrawerHandoffs: [],
+  duplicateMatches: [],
+  duplicateChecking: false,
+  integrations: { linkedin_titles: [], agent_examples: [], configuration_agent_examples: [], ai_agent: false },
+  agentOpen: false,
+  agentLoading: false,
+  configAgent: { loading: false, proposal: null, audit: [], examples: [] },
+  attentionFlags: [],
+  aiAction: { scope: "company", leadId: "", action: "", label: "", output: "", loading: false, error: "", provider: "", type: "markdown", metrics: null, insight: "" },
+  aiCooldownUntil: 0,
+  dailyPipelineSummary: null,
+  dailyAiLoading: false,
+  installPrompt: null,
+  quickLog: { leadId: "", type: "In-Person Meeting", nearbyLeadId: "" },
+  sync: { online: navigator.onLine, syncing: false, pending: 0, failed: 0 },
+  marketIntel: { items: [], heat_map: [], disabled: false },
   editingLeadId: "",
   editingOriginalStage: "",
   editingLostData: null,
@@ -60,13 +87,32 @@ const els = {
   loginForm: document.querySelector("#loginForm"),
   loginMessage: document.querySelector("#loginMessage"),
   signedInUser: document.querySelector("#signedInUser"),
+  syncStatusPill: document.querySelector("#syncStatusPill"),
+  mobileAlertsBadge: document.querySelector("#mobileAlertsBadge"),
+  installBanner: document.querySelector("#installBanner"),
+  installBannerTitle: document.querySelector("#installBannerTitle"),
+  installBannerText: document.querySelector("#installBannerText"),
+  installAppButton: document.querySelector("#installAppButton"),
+  dismissInstallBanner: document.querySelector("#dismissInstallBanner"),
+  updateBanner: document.querySelector("#updateBanner"),
+  refreshAppButton: document.querySelector("#refreshAppButton"),
   logoutButton: document.querySelector("#logoutButton"),
   openSalesmanForm: document.querySelector("#openSalesmanForm"),
   exportLeadsExcel: document.querySelector("#exportLeadsExcel"),
   exportLeadsPdf: document.querySelector("#exportLeadsPdf"),
+  openImportLeads: document.querySelector("#openImportLeads"),
+  importLeadsDialog: document.querySelector("#importLeadsDialog"),
+  closeImportLeads: document.querySelector("#closeImportLeads"),
+  importStepper: document.querySelector("#importStepper"),
+  importLeadsTitle: document.querySelector("#importLeadsTitle"),
+  importLeadsSubtitle: document.querySelector("#importLeadsSubtitle"),
+  importLeadsBody: document.querySelector("#importLeadsBody"),
+  importLeadsMessage: document.querySelector("#importLeadsMessage"),
+  importLeadsActions: document.querySelector("#importLeadsActions"),
   salesmanDialog: document.querySelector("#salesmanDialog"),
   salesmanForm: document.querySelector("#salesmanForm"),
   salesmanMessage: document.querySelector("#salesmanMessage"),
+  salesmanTerritory: document.querySelector("#salesmanTerritory"),
   placesDialog: document.querySelector("#placesDialog"),
   placesForm: document.querySelector("#placesForm"),
   placesMessage: document.querySelector("#placesMessage"),
@@ -80,11 +126,20 @@ const els = {
   priorityFilter: document.querySelector("#priorityFilter"),
   territoryFilter: document.querySelector("#territoryFilter"),
   metricTotal: document.querySelector("#metricTotal"),
+  metricTotalSub: document.querySelector("#metricTotalSub"),
   metricValue: document.querySelector("#metricValue"),
   metricHot: document.querySelector("#metricHot"),
   metricDue: document.querySelector("#metricDue"),
+  metricDueSub: document.querySelector("#metricDueSub"),
+  quickTaskBadge: document.querySelector("#quickTaskBadge"),
+  greetingLabel: document.querySelector("#greetingLabel"),
+  dashboardUserName: document.querySelector("#dashboardUserName"),
+  dashboardSubline: document.querySelector("#dashboardSubline"),
   metricsPanel: document.querySelector("#metricsPanel"),
   dashboardView: document.querySelector("#dashboardView"),
+  dailyAiPanel: document.querySelector("#dailyAiPanel"),
+  dailyAiGreeting: document.querySelector("#dailyAiGreeting"),
+  dailyAiSummary: document.querySelector("#dailyAiSummary"),
   salesmanFollowupPanel: document.querySelector("#salesmanFollowupPanel"),
   salesmanFollowupGroups: document.querySelector("#salesmanFollowupGroups"),
   portfolioPanel: document.querySelector("#portfolioPanel"),
@@ -101,10 +156,29 @@ const els = {
   portfolioPie: document.querySelector("#portfolioPie"),
   portfolioLegend: document.querySelector("#portfolioLegend"),
   portfolioInsights: document.querySelector("#portfolioInsights"),
+  marketIntelPanel: document.querySelector("#marketIntelPanel"),
+  marketIntelKicker: document.querySelector("#marketIntelKicker"),
+  marketIntelTitle: document.querySelector("#marketIntelTitle"),
+  marketIntelFeed: document.querySelector("#marketIntelFeed"),
+  refreshMarketIntel: document.querySelector("#refreshMarketIntel"),
+  needsAttentionPanel: document.querySelector("#needsAttentionPanel"),
+  needsAttentionList: document.querySelector("#needsAttentionList"),
+  needsAttentionCount: document.querySelector("#needsAttentionCount"),
   performancePanel: document.querySelector("#performancePanel"),
   performanceStageFilter: document.querySelector("#performanceStageFilter"),
+  performanceLeaderboard: document.querySelector("#performanceLeaderboard"),
   performanceChart: document.querySelector("#performanceChart"),
   performanceTable: document.querySelector("#performanceTable"),
+  performanceFeed: document.querySelector("#performanceFeed"),
+  marketSnapshotPanel: document.querySelector("#marketSnapshotPanel"),
+  marketSnapshotSalesmanFilter: document.querySelector("#marketSnapshotSalesmanFilter"),
+  marketLocationPie: document.querySelector("#marketLocationPie"),
+  marketLocationLegend: document.querySelector("#marketLocationLegend"),
+  marketSectorPie: document.querySelector("#marketSectorPie"),
+  marketSectorLegend: document.querySelector("#marketSectorLegend"),
+  actionPlanPanel: document.querySelector("#actionPlanPanel"),
+  actionPlanSummary: document.querySelector("#actionPlanSummary"),
+  actionPlanList: document.querySelector("#actionPlanList"),
   kpiMostActive: document.querySelector("#kpiMostActive"),
   kpiHighestVolume: document.querySelector("#kpiHighestVolume"),
   kpiMostFollowups: document.querySelector("#kpiMostFollowups"),
@@ -115,6 +189,23 @@ const els = {
   pipelineHealthPanel: document.querySelector("#pipelineHealthPanel"),
   dashboardFocus: document.querySelector("#dashboardFocus"),
   dashboardStatus: document.querySelector("#dashboardStatus"),
+  dashboardActivityFeed: document.querySelector("#dashboardActivityFeed"),
+  agentPanel: document.querySelector("#agentPanel"),
+  agentToggle: document.querySelector("#agentToggle"),
+  agentBody: document.querySelector("#agentBody"),
+  agentPrompt: document.querySelector("#agentPrompt"),
+  agentAsk: document.querySelector("#agentAsk"),
+  agentExamples: document.querySelector("#agentExamples"),
+  agentAnswer: document.querySelector("#agentAnswer"),
+  agentMessage: document.querySelector("#agentMessage"),
+  configAgentPanel: document.querySelector("#configAgentPanel"),
+  configAgentPrompt: document.querySelector("#configAgentPrompt"),
+  configAgentPropose: document.querySelector("#configAgentPropose"),
+  configAgentApply: document.querySelector("#configAgentApply"),
+  configAgentExamples: document.querySelector("#configAgentExamples"),
+  configAgentResult: document.querySelector("#configAgentResult"),
+  configAgentAudit: document.querySelector("#configAgentAudit"),
+  configAgentMessage: document.querySelector("#configAgentMessage"),
   pipelineToolbar: document.querySelector("#pipelineToolbar"),
   overdueBanner: document.querySelector("#overdueBanner"),
   overduePipelineFilter: document.querySelector("#overduePipelineFilter"),
@@ -131,6 +222,7 @@ const els = {
   salesmenSummary: document.querySelector("#salesmenSummary"),
   activityView: document.querySelector("#activityView"),
   activityFeed: document.querySelector("#activityFeed"),
+  activityWeeklyLog: document.querySelector("#activityWeeklyLog"),
   activitySummary: document.querySelector("#activitySummary"),
   activityFilterToggle: document.querySelector("#activityFilterToggle"),
   activityFilterBar: document.querySelector("#activityFilterBar"),
@@ -154,15 +246,63 @@ const els = {
   formPriority: document.querySelector("#formPriority"),
   formSector: document.querySelector("#formSector"),
   formTier: document.querySelector("#formTier"),
+  formTerritory: document.querySelector("#formTerritory"),
+  duplicateWarning: document.querySelector("#duplicateWarning"),
   leadEnrichmentStatus: document.querySelector("#leadEnrichmentStatus"),
+  handoffDialog: document.querySelector("#handoffDialog"),
+  handoffForm: document.querySelector("#handoffForm"),
+  handoffTitle: document.querySelector("#handoffTitle"),
+  handoffSubtitle: document.querySelector("#handoffSubtitle"),
+  handoffSummary: document.querySelector("#handoffSummary"),
+  handoffMessage: document.querySelector("#handoffMessage"),
+  confirmHandoff: document.querySelector("#confirmHandoff"),
+  cancelHandoff: document.querySelector("#cancelHandoff"),
   pmrDialog: document.querySelector("#pmrDialog"),
   pmrForm: document.querySelector("#pmrForm"),
+  pmrActivityLink: document.querySelector("#pmrActivityLink"),
   pmrMessage: document.querySelector("#pmrMessage"),
   recordPmrVoice: document.querySelector("#recordPmrVoice"),
   deletePmrVoice: document.querySelector("#deletePmrVoice"),
   pmrVoicePreview: document.querySelector("#pmrVoicePreview"),
   pmrVoiceStatus: document.querySelector("#pmrVoiceStatus"),
   pmrTranscriptLabel: document.querySelector("#pmrTranscriptLabel"),
+  aiActionDialog: document.querySelector("#aiActionDialog"),
+  aiActionTitle: document.querySelector("#aiActionTitle"),
+  aiActionSubtitle: document.querySelector("#aiActionSubtitle"),
+  aiActionLoading: document.querySelector("#aiActionLoading"),
+  aiActionLoadingText: document.querySelector("#aiActionLoadingText"),
+  aiActionResult: document.querySelector("#aiActionResult"),
+  aiActionMessage: document.querySelector("#aiActionMessage"),
+  aiActionFooter: document.querySelector("#aiActionFooter"),
+  flagAttentionDialog: document.querySelector("#flagAttentionDialog"),
+  flagAttentionForm: document.querySelector("#flagAttentionForm"),
+  flagAttentionTitle: document.querySelector("#flagAttentionTitle"),
+  flagAttentionMessage: document.querySelector("#flagAttentionMessage"),
+  quickLogDialog: document.querySelector("#quickLogDialog"),
+  quickLogForm: document.querySelector("#quickLogForm"),
+  closeQuickLog: document.querySelector("#closeQuickLog"),
+  quickLogSyncStatus: document.querySelector("#quickLogSyncStatus"),
+  quickLogCompanySearch: document.querySelector("#quickLogCompanySearch"),
+  quickLogNear: document.querySelector("#quickLogNear"),
+  quickLogRecent: document.querySelector("#quickLogRecent"),
+  quickLogLeadSelect: document.querySelector("#quickLogLeadSelect"),
+  quickLogTypes: document.querySelector("#quickLogTypes"),
+  quickLogNote: document.querySelector("#quickLogNote"),
+  quickPhraseChips: document.querySelector("#quickPhraseChips"),
+  quickQuoteField: document.querySelector("#quickQuoteField"),
+  quickQuotationRef: document.querySelector("#quickQuotationRef"),
+  quickOrderField: document.querySelector("#quickOrderField"),
+  quickOrderVolume: document.querySelector("#quickOrderVolume"),
+  quickNextAction: document.querySelector("#quickNextAction"),
+  quickNextDate: document.querySelector("#quickNextDate"),
+  quickLogMessage: document.querySelector("#quickLogMessage"),
+  pendingChangesDialog: document.querySelector("#pendingChangesDialog"),
+  closePendingChanges: document.querySelector("#closePendingChanges"),
+  pendingChangesList: document.querySelector("#pendingChangesList"),
+  syncNowButton: document.querySelector("#syncNowButton"),
+  mobileMapDialog: document.querySelector("#mobileMapDialog"),
+  closeMobileMap: document.querySelector("#closeMobileMap"),
+  mobileMapList: document.querySelector("#mobileMapList"),
   activityEditDialog: document.querySelector("#activityEditDialog"),
   activityEditForm: document.querySelector("#activityEditForm"),
   activityEditMessage: document.querySelector("#activityEditMessage"),
@@ -186,8 +326,12 @@ const leadFormTouched = new Set();
 const leadEnrichmentCache = new Map();
 let leadEnrichmentTimer = null;
 let leadEnrichmentKey = "";
+let leadCompanyInputKey = "";
 let activitySearchTimer = null;
+let quotationValidationTimer = null;
+let duplicateCheckTimer = null;
 let overdueRefreshTimer = null;
+let performanceChartInstance = null;
 
 const enrichmentFieldMap = {
   company_name: "company_name",
@@ -198,6 +342,8 @@ const enrichmentFieldMap = {
   email: "email",
   address: "address",
   google_maps_url: "google_maps_url",
+  latitude: "latitude",
+  longitude: "longitude",
   business_category: "business_category",
   industry: "industry",
   products_services_remarks: "products_services_remarks",
@@ -224,6 +370,10 @@ const userReviewFields = new Set([
   "products_services_remarks"
 ]);
 
+const leadAutoEnrichmentFields = new Set(
+  Object.values(enrichmentFieldMap).filter(fieldName => fieldName !== "company_name")
+);
+
 const money = new Intl.NumberFormat("en-AE", {
   style: "currency",
   currency: "AED",
@@ -239,7 +389,100 @@ const KANBAN_STAGES = [
   { key: "DORMANT", label: "Lost", color: "stage-lost", aliases: ["DORMANT", "LOST", "AT RISK"] }
 ];
 
+const NEXT_ACTION_PLAN_OPTIONS = ["To Call", "To Send Email", "To Visit"];
+const ACTIVITY_PURPOSE_OPTIONS = [
+  "Company Introductory",
+  "New Requirements",
+  "Quotation Submission",
+  "Quotation Follow-Up",
+  "Meeting"
+];
+
+function normalizeNextActionPlan(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return NEXT_ACTION_PLAN_OPTIONS[0];
+  if (NEXT_ACTION_PLAN_OPTIONS.includes(raw)) return raw;
+  const upper = raw.toUpperCase();
+  if (/(EMAIL|MAIL|QUOTE|QUOTATION|SUBMIT)/.test(upper)) return "To Send Email";
+  if (/(VISIT|MEET|MEETING|SITE)/.test(upper)) return "To Visit";
+  return "To Call";
+}
+
+function normalizeActivityPurpose(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return ACTIVITY_PURPOSE_OPTIONS[0];
+  if (ACTIVITY_PURPOSE_OPTIONS.includes(raw)) return raw;
+  const upper = raw.toUpperCase();
+  if (/(FOLLOW[\s-]?UP)/.test(upper) && /QUOTATION|QUOTE/.test(upper)) return "Quotation Follow-Up";
+  if (/QUOTATION|QUOTE/.test(upper)) return "Quotation Submission";
+  if (/REQUIREMENT/.test(upper)) return "New Requirements";
+  if (/MEET|MEETING|VISIT|SITE/.test(upper)) return "Meeting";
+  return ACTIVITY_PURPOSE_OPTIONS[0];
+}
+
 const KANBAN_STAGE_BY_KEY = Object.fromEntries(KANBAN_STAGES.map(stage => [stage.key, stage]));
+
+const IMPORT_STEPS = ["Upload", "Map", "Preview", "Import", "Done"];
+const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+const IMPORT_MAX_ROWS = 500;
+const IMPORT_BATCH_SIZE = 50;
+const IMPORT_FIELD_DEFINITIONS = [
+  { key: "", label: "Skip this column" },
+  { key: "company_name", label: "Company Name *", required: true },
+  { key: "legal_name", label: "Legal Name" },
+  { key: "contact_person", label: "Contact Person" },
+  { key: "primary_contact_title", label: "Title" },
+  { key: "phone", label: "Phone" },
+  { key: "email", label: "Email" },
+  { key: "secondary_contact_name", label: "Secondary Contact" },
+  { key: "secondary_contact_mobile", label: "Secondary Phone" },
+  { key: "secondary_contact_email", label: "Secondary Email" },
+  { key: "website", label: "Website" },
+  { key: "country_emirate", label: "Country / Emirate" },
+  { key: "territory", label: "Territory" },
+  { key: "location", label: "Location" },
+  { key: "address", label: "Address" },
+  { key: "industry", label: "Industry" },
+  { key: "sector", label: "Sector" },
+  { key: "tags", label: "Tags" },
+  { key: "stage", label: "Stage" },
+  { key: "priority", label: "Priority" },
+  { key: "estimated_value", label: "Estimated Value" },
+  { key: "next_action_date", label: "Next Action Date" },
+  { key: "next_action", label: "Next Action" },
+  { key: "product_interest", label: "Product Interest" },
+  { key: "assigned_salesman", label: "Assigned Salesman" },
+  { key: "notes", label: "Notes" }
+];
+const IMPORT_HEADER_SYNONYMS = [
+  { key: "company_name", patterns: ["company", "company name", "business", "account", "customer", "client"] },
+  { key: "legal_name", patterns: ["legal name", "official name", "trade license name"] },
+  { key: "contact_person", patterns: ["contact", "contact person", "person", "name", "buyer"] },
+  { key: "primary_contact_title", patterns: ["title", "job title", "designation", "position"] },
+  { key: "phone", patterns: ["phone", "mobile", "tel", "telephone", "number", "contact number"] },
+  { key: "email", patterns: ["email", "email address", "e-mail", "mail"] },
+  { key: "secondary_contact_name", patterns: ["secondary contact", "second contact", "alternate contact"] },
+  { key: "secondary_contact_mobile", patterns: ["secondary phone", "secondary mobile", "alternate phone"] },
+  { key: "secondary_contact_email", patterns: ["secondary email", "alternate email"] },
+  { key: "website", patterns: ["website", "web", "url", "domain"] },
+  { key: "territory", patterns: ["territory", "area", "emirate", "city"] },
+  { key: "location", patterns: ["location", "place"] },
+  { key: "country_emirate", patterns: ["country", "country emirate", "country / emirate"] },
+  { key: "address", patterns: ["address", "formatted address"] },
+  { key: "industry", patterns: ["industry", "category", "type", "business type"] },
+  { key: "sector", patterns: ["sector", "segment"] },
+  { key: "tags", patterns: ["tags", "tag", "labels"] },
+  { key: "assigned_salesman", patterns: ["salesman", "assigned to", "rep", "owner", "sales person", "salesperson"] },
+  { key: "stage", patterns: ["stage", "status", "pipeline", "lead status"] },
+  { key: "priority", patterns: ["priority", "tier", "heat"] },
+  { key: "estimated_value", patterns: ["value", "estimated value", "est value", "estimated value aed", "estimated value (aed)"] },
+  { key: "next_action_date", patterns: ["next action date", "follow up", "follow-up date", "follow up date", "due date"] },
+  { key: "next_action", patterns: ["next action", "required action", "follow up action"] },
+  { key: "product_interest", patterns: ["product interest", "products", "products interest", "item", "items"] },
+  { key: "notes", patterns: ["notes", "remarks", "comment", "comments"] }
+];
+const IMPORT_TEMPLATE = `Company Name,Legal Name,Contact Person,Title,Phone,Email,Secondary Contact,Secondary Phone,Secondary Email,Website,Country,Emirate,Address,Industry,Sector,Tags,Stage,Priority,Estimated Value (AED),Next Action Date (YYYY-MM-DD),Product Interest,Notes
+Gulf Steel Fabricators LLC,Gulf Steel Fabricators LLC,Ahmed Al Rashidi,Procurement Manager,0501234567,ahmed@gulfsteel.ae,Sara Khalid,0507654321,sara@gulfsteel.ae,www.gulfsteel.ae,UAE,Dubai,Al Quoz Industrial Area 3,Steel Fabrication,Construction,fabricator;structural,Prospect,Hot,250000,2026-06-20,HEA/HEB Beams;Flat Bars,Regular buyer for villa projects`;
 
 function allActivityTypes() {
   return ["Note", "Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed", "Reminder"];
@@ -341,6 +584,216 @@ async function api(path, options = {}) {
     throw error;
   }
   return result;
+}
+
+function openOutboxDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OUTBOX_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
+        const store = db.createObjectStore(OUTBOX_STORE, { keyPath: "id" });
+        store.createIndex("created_at", "created_at");
+        store.createIndex("status", "status");
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function withOutboxStore(mode, callback) {
+  const db = await openOutboxDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OUTBOX_STORE, mode);
+    const store = tx.objectStore(OUTBOX_STORE);
+    const result = callback(store);
+    tx.oncomplete = () => {
+      db.close();
+      resolve(result);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
+async function outboxItems() {
+  const db = await openOutboxDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OUTBOX_STORE, "readonly");
+    const request = tx.objectStore(OUTBOX_STORE).getAll();
+    request.onsuccess = () => resolve((request.result || []).sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0)));
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+async function getOutboxItem(id) {
+  const db = await openOutboxDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OUTBOX_STORE, "readonly");
+    const request = tx.objectStore(OUTBOX_STORE).get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+async function putOutboxItem(item) {
+  await withOutboxStore("readwrite", store => store.put(item));
+  await refreshSyncState();
+  registerBackgroundSync();
+}
+
+async function deleteOutboxItem(id) {
+  await withOutboxStore("readwrite", store => store.delete(id));
+  await refreshSyncState();
+}
+
+async function updateOutboxItem(item) {
+  await withOutboxStore("readwrite", store => store.put(item));
+  await refreshSyncState();
+}
+
+async function refreshSyncState() {
+  try {
+    const items = await outboxItems();
+    state.sync.pending = items.length;
+    state.sync.failed = items.filter(item => item.status === "failed").length;
+  } catch {
+    state.sync.pending = 0;
+    state.sync.failed = 0;
+  }
+  renderSyncStatus();
+}
+
+function renderSyncStatus() {
+  const pending = Number(state.sync.pending || 0);
+  const failed = Number(state.sync.failed || 0);
+  let label = "All synced";
+  let tone = "synced";
+  if (!state.sync.online) {
+    label = `Offline - ${pending} pending`;
+    tone = "offline";
+  } else if (state.sync.syncing) {
+    label = "Syncing...";
+    tone = "syncing";
+  } else if (failed) {
+    label = `${failed} failed sync`;
+    tone = "failed";
+  } else if (pending) {
+    label = `${pending} pending`;
+    tone = "pending";
+  }
+  if (els.syncStatusPill) {
+    els.syncStatusPill.textContent = label;
+    els.syncStatusPill.className = `sync-status-pill ${tone}`;
+    els.syncStatusPill.classList.toggle("hidden", !state.currentUser || (!pending && state.sync.online && !state.sync.syncing));
+  }
+  if (els.mobileAlertsBadge) {
+    const attention = (state.attentionFlags || []).filter(flag => flag.status === "open").length;
+    const count = pending + failed + attention;
+    els.mobileAlertsBadge.textContent = String(count);
+    els.mobileAlertsBadge.classList.toggle("hidden", !count);
+  }
+  if (els.quickLogSyncStatus) {
+    els.quickLogSyncStatus.textContent = state.sync.online
+      ? pending ? `${pending} item(s) waiting to sync.` : "Online and ready."
+      : `Offline mode - saved logs will sync later. ${pending} pending.`;
+  }
+}
+
+async function syncOutbox() {
+  if (state.sync.syncing || !navigator.onLine || !state.currentUser) {
+    await refreshSyncState();
+    return;
+  }
+  state.sync.syncing = true;
+  renderSyncStatus();
+  try {
+    const items = await outboxItems();
+    for (const item of items) {
+      if (item.status === "failed" && Number(item.attempts || 0) >= 5) continue;
+      const next = { ...item, status: "syncing" };
+      await updateOutboxItem(next);
+      try {
+        if (next.kind === "activity") {
+          await api(`/api/leads/${encodeURIComponent(next.lead_id)}/activities`, {
+            method: "POST",
+            body: JSON.stringify(next.payload)
+          });
+        } else if (next.kind === "pmr") {
+          await syncPendingPmr(next);
+        } else if (next.kind === "lead_update") {
+          await api(`/api/leads/${encodeURIComponent(next.lead_id)}`, {
+            method: "PATCH",
+            body: JSON.stringify(next.payload)
+          });
+        }
+        await deleteOutboxItem(next.id);
+      } catch (error) {
+        const attempts = Number(next.attempts || 0) + 1;
+        const latest = await getOutboxItem(next.id).catch(() => null);
+        await updateOutboxItem({
+          ...(latest || next),
+          status: attempts >= 5 ? "failed" : "pending",
+          attempts,
+          last_error: error.message || "Sync failed"
+        });
+        if (!navigator.onLine) break;
+      }
+    }
+    await refreshSyncState();
+    if (!state.sync.pending) {
+      setToast("All pending changes synced.", "success");
+      await loadLeads();
+    }
+  } finally {
+    state.sync.syncing = false;
+    await refreshSyncState();
+  }
+}
+
+async function syncPendingPmr(item) {
+  let payload = { ...(item.payload || {}) };
+  if (item.voice_note_blob && !payload.voice_note_id) {
+    const uploaded = await uploadPmrVoiceBlob(item.voice_note_blob, item.voice_note_mime_type || "audio/webm");
+    payload = {
+      ...payload,
+      voice_note_id: uploaded.id || "",
+      voice_note_url: uploaded.url || "",
+      voice_note_path: uploaded.path || "",
+      voice_note_mime_type: uploaded.mime_type || item.voice_note_mime_type || "audio/webm",
+      voice_note_size_bytes: String(uploaded.size_bytes || item.voice_note_size_bytes || "")
+    };
+    await updateOutboxItem({
+      ...item,
+      payload,
+      voice_note_blob: null,
+      voice_note_uploaded: true
+    });
+  }
+  await api(`/api/leads/${encodeURIComponent(item.lead_id)}/pmrs`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+function registerBackgroundSync() {
+  if (!("serviceWorker" in navigator) || !("SyncManager" in window)) return;
+  navigator.serviceWorker.ready
+    .then(registration => registration.sync.register("arg-outbox-sync"))
+    .catch(() => null);
+}
+
+function isNetworkFailure(error) {
+  return !navigator.onLine || error?.name === "TypeError" || /network|fetch|offline/i.test(error?.message || "");
+}
+
+function clientId(prefix = "local") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 async function downloadExport(path, fallbackName) {
@@ -590,22 +1043,29 @@ async function uploadPmrVoiceNote() {
     };
   }
 
-  const token = sessionStorage.getItem(SESSION_KEY);
-  const response = await fetch("/api/pmr-voice-notes", {
-    method: "POST",
-    headers: {
-      "Content-Type": pmrVoiceBlob.type || "audio/webm",
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: pmrVoiceBlob
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || `Voice note upload failed: ${response.status}`);
+  const result = await uploadPmrVoiceBlob(pmrVoiceBlob, pmrVoiceBlob.type || "audio/webm");
   els.pmrForm.elements.voice_note_id.value = result.id || "";
   els.pmrForm.elements.voice_note_url.value = result.url || "";
   els.pmrForm.elements.voice_note_path.value = result.path || "";
   els.pmrForm.elements.voice_note_mime_type.value = result.mime_type || pmrVoiceBlob.type || "audio/webm";
   els.pmrForm.elements.voice_note_size_bytes.value = String(result.size_bytes || pmrVoiceBlob.size || "");
+  return result;
+}
+
+async function uploadPmrVoiceBlob(blob, fallbackType = "audio/webm") {
+  const token = sessionStorage.getItem(SESSION_KEY);
+  const mimeType = blob.type || fallbackType || "audio/webm";
+  const body = blob.type ? blob : blob.slice(0, blob.size, mimeType);
+  const response = await fetch("/api/pmr-voice-notes", {
+    method: "POST",
+    headers: {
+      "Content-Type": mimeType,
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || `Voice note upload failed: ${response.status}`);
   return result;
 }
 
@@ -639,13 +1099,12 @@ function activityTranscriptMarkup(activity) {
 
 function activityEditButton(leadId, activityIndex, activity = {}) {
   if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
-  return `<button class="small-action" type="button" data-edit-activity-lead="${escapeHtml(leadId)}" data-edit-activity-index="${escapeHtml(activityIndex)}">Edit</button>`;
+  return `<button class="small-action" type="button" data-edit-activity-lead="${escapeHtml(leadId)}" data-edit-activity-index="${escapeHtml(activityIndex)}">Correct</button>`;
 }
 
 function activityDeleteButton(leadId, activityIndex, activity = {}) {
   if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
-  const admin = state.currentUser?.role === "admin";
-  return `<button class="small-action danger" type="button" data-delete-activity-lead="${escapeHtml(leadId)}" data-delete-activity-index="${escapeHtml(activityIndex)}">${admin ? "Delete" : "Request Delete"}</button>`;
+  return `<button class="small-action" type="button" data-delete-activity-lead="${escapeHtml(leadId)}" data-delete-activity-index="${escapeHtml(activityIndex)}">Request Review</button>`;
 }
 
 function activityItemMarkup(activity, leadId, activityIndex) {
@@ -659,8 +1118,10 @@ function activityItemMarkup(activity, leadId, activityIndex) {
         </span>
       </div>
       <p>${escapeHtml(activity.text)}</p>
-      ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Delete request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
-      ${activity.edited_at ? `<span class="meta-label">Edited ${escapeHtml(String(activity.edited_at).slice(0, 10))}</span>` : ""}
+      ${activity.quotation_ref ? `<button class="quote-ref-pill" type="button" data-quotation-ref="${escapeHtml(activity.quotation_ref)}">Quote ${escapeHtml(activity.quotation_ref)}</button>` : ""}
+      ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Review request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
+      ${activity.correction ? `<span class="meta-label">Correction for ${escapeHtml(activity.target_activity_summary || "previous activity")}</span>` : ""}
+      ${activity.edited_at ? `<span class="meta-label">Legacy edited entry ${escapeHtml(String(activity.edited_at).slice(0, 10))}</span>` : ""}
       ${activityAudioMarkup(activity)}
       ${activityTranscriptMarkup(activity)}
     </div>
@@ -706,7 +1167,7 @@ function openActivityEdit(leadId, activityIndex) {
   form.activity_index.value = String(activityIndex);
   form.at.value = activity.at || today();
   form.type.value = activity.type || "Note";
-  form.text.value = activity.text || "";
+  form.text.value = "";
   form.reminder_type.value = activity.reminder_type || "General follow-up";
   form.due_date.value = activity.due_date || activity.at || today();
   form.due_time.value = activity.due_time || "09:00";
@@ -720,7 +1181,10 @@ function adminPasswordPrompt(action) {
 }
 
 async function submitDeleteRequest(leadId, targetType, activityIndex = null) {
-  const reason = window.prompt(`Reason for requesting ${targetType} deletion:`);
+  const promptText = targetType === "activity"
+    ? "Reason for requesting activity review. The original activity will stay in history:"
+    : "Reason for requesting lead deletion:";
+  const reason = window.prompt(promptText);
   if (!reason?.trim()) return;
   await api(`/api/leads/${encodeURIComponent(leadId)}/delete-requests`, {
     method: "POST",
@@ -730,22 +1194,12 @@ async function submitDeleteRequest(leadId, targetType, activityIndex = null) {
       reason: reason.trim()
     })
   });
-  window.alert("Delete request sent to admin for approval.");
+  window.alert(targetType === "activity" ? "Activity review request sent to admin." : "Delete request sent to admin for approval.");
   await loadLeads();
 }
 
 async function handleActivityDelete(leadId, activityIndex) {
-  if (state.currentUser?.role !== "admin") {
-    await submitDeleteRequest(leadId, "activity", activityIndex);
-    return;
-  }
-  const password = adminPasswordPrompt("delete this activity");
-  if (!password) return;
-  await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityIndex)}`, {
-    method: "DELETE",
-    body: JSON.stringify({ admin_password: password })
-  });
-  await loadLeads();
+  await submitDeleteRequest(leadId, "activity", activityIndex);
 }
 
 async function reviewDeleteRequest(leadId, requestId, action) {
@@ -820,13 +1274,14 @@ async function rescheduleFollowup(button) {
       })
     });
   } else {
+    const normalizedAction = normalizeNextActionPlan(text);
     await api(`/api/leads/${encodeURIComponent(leadId)}`, {
       method: "PATCH",
-      body: JSON.stringify({ next_action: text, next_action_date: date })
+      body: JSON.stringify({ next_action: normalizedAction, next_action_date: date })
     });
     await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
       method: "POST",
-      body: JSON.stringify({ type: "Note", text: `Follow-up rescheduled to ${date} ${time}: ${text}` })
+      body: JSON.stringify({ type: "Note", text: `Follow-up rescheduled to ${date} ${time}: ${normalizedAction}` })
     });
   }
   await loadLeads();
@@ -893,7 +1348,7 @@ function deleteRequestPanel(lead) {
   return `
     <section class="delete-approval-panel">
       <div class="section-title-row">
-        <h2>Delete Approvals</h2>
+        <h2>Review Requests</h2>
         <span>${visible.length} request${visible.length === 1 ? "" : "s"}</span>
       </div>
       <div class="delete-request-list">
@@ -901,14 +1356,14 @@ function deleteRequestPanel(lead) {
           <article class="delete-request-card">
             <div>
               <span class="request-status ${escapeHtml(request.request_status || "pending")}">${escapeHtml(request.request_status || "pending")}</span>
-              <strong>${escapeHtml(request.target_type === "lead" ? "Lead deletion" : "Activity deletion")}</strong>
+              <strong>${escapeHtml(request.target_type === "lead" ? "Lead deletion" : "Activity review")}</strong>
               <p>${escapeHtml(request.reason || request.text || "No reason provided.")}</p>
               ${request.target_activity_summary ? `<p class="meta-label">${escapeHtml(request.target_activity_summary)}</p>` : ""}
               <span class="meta-label">Requested by ${escapeHtml(request.requested_by_name || "User")} on ${escapeHtml(String(request.requested_at || request.at || "").slice(0, 10))}</span>
             </div>
             ${state.currentUser?.role === "admin" && request.request_status === "pending" ? `
               <div class="delete-request-actions">
-                <button class="small-action danger" type="button" data-review-delete-lead="${escapeHtml(lead.id)}" data-review-delete-request="${escapeHtml(request.id)}" data-review-delete-action="approve">Approve Delete</button>
+                <button class="small-action ${request.target_type === "lead" ? "danger" : ""}" type="button" data-review-delete-lead="${escapeHtml(lead.id)}" data-review-delete-request="${escapeHtml(request.id)}" data-review-delete-action="approve">${request.target_type === "lead" ? "Approve Delete" : "Mark Reviewed"}</button>
                 <button class="small-action" type="button" data-review-delete-lead="${escapeHtml(lead.id)}" data-review-delete-request="${escapeHtml(request.id)}" data-review-delete-action="reject">Reject</button>
               </div>
             ` : ""}
@@ -921,6 +1376,21 @@ function deleteRequestPanel(lead) {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  return date.toLocaleString("en-AE", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function daysSince(dateValue) {
+  const date = String(dateValue || "").slice(0, 10);
+  if (!date) return 999;
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return 999;
+  const start = new Date(`${today()}T00:00:00`);
+  return Math.round((start - parsed) / 86_400_000);
 }
 
 function escapeHtml(value) {
@@ -947,6 +1417,676 @@ function setToast(message, type = "success") {
   setToast.timer = setTimeout(() => els.appToast.classList.add("hidden"), 2800);
 }
 
+function isIosSafari() {
+  const ua = navigator.userAgent || "";
+  return /iphone|ipad|ipod/i.test(ua) && /safari/i.test(ua) && !/crios|fxios|edgios/i.test(ua);
+}
+
+function isStandalonePwa() {
+  return window.matchMedia?.("(display-mode: standalone)")?.matches || navigator.standalone === true;
+}
+
+function maybeShowInstallBanner() {
+  if (!els.installBanner || isStandalonePwa() || !state.currentUser) return;
+  const dismissedUntil = Number(localStorage.getItem(PWA_INSTALL_DISMISSED_KEY) || 0);
+  if (Date.now() < dismissedUntil) return;
+  const visits = Number(localStorage.getItem(PWA_VISIT_KEY) || 0) + 1;
+  localStorage.setItem(PWA_VISIT_KEY, String(visits));
+  if (visits < 3) return;
+  const ios = isIosSafari();
+  if (!state.installPrompt && !ios) return;
+  els.installBannerTitle.textContent = ios ? "Add ARG Leads to Home Screen" : "Install ARG Leads";
+  els.installBannerText.textContent = ios
+    ? "On iPhone, tap Share, then Add to Home Screen for app-style access."
+    : "Install ARG Leads on your phone for one-tap access and offline activity logging.";
+  els.installAppButton.classList.toggle("hidden", ios);
+  els.installBanner.classList.remove("hidden");
+}
+
+function initPwaShell() {
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    state.installPrompt = event;
+    maybeShowInstallBanner();
+  });
+
+  els.installAppButton?.addEventListener("click", async () => {
+    if (!state.installPrompt) return;
+    state.installPrompt.prompt();
+    await state.installPrompt.userChoice.catch(() => null);
+    state.installPrompt = null;
+    els.installBanner?.classList.add("hidden");
+  });
+
+  els.dismissInstallBanner?.addEventListener("click", () => {
+    localStorage.setItem(PWA_INSTALL_DISMISSED_KEY, String(Date.now() + 14 * 24 * 60 * 60 * 1000));
+    els.installBanner?.classList.add("hidden");
+  });
+
+  els.refreshAppButton?.addEventListener("click", () => {
+    navigator.serviceWorker?.controller?.postMessage({ type: "SKIP_WAITING" });
+    window.location.reload();
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").then(registration => {
+      if (registration.waiting) els.updateBanner?.classList.remove("hidden");
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        worker?.addEventListener("statechange", () => {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) {
+            els.updateBanner?.classList.remove("hidden");
+          }
+        });
+      });
+    }).catch(() => null);
+    navigator.serviceWorker.addEventListener("message", event => {
+      if (event.data?.type === "SYNC_OUTBOX") syncOutbox();
+    });
+  }
+
+  window.addEventListener("online", () => {
+    state.sync.online = true;
+    refreshSyncState();
+    syncOutbox();
+  });
+  window.addEventListener("offline", () => {
+    state.sync.online = false;
+    refreshSyncState();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) syncOutbox();
+  });
+}
+
+function recentQuickLogLeads() {
+  return [...state.leads]
+    .sort((a, b) => String(b.last_activity || "").localeCompare(String(a.last_activity || "")))
+    .slice(0, 5);
+}
+
+function quickLogLeadOptions() {
+  const query = String(els.quickLogCompanySearch?.value || "").trim().toLowerCase();
+  const leads = query
+    ? state.leads.filter(lead => [
+      lead.company_name,
+      lead.contact_name,
+      lead.territory,
+      lead.location,
+      lead.address
+    ].some(value => String(value || "").toLowerCase().includes(query)))
+    : state.leads;
+  return leads.slice(0, 80);
+}
+
+function setQuickLogType(type) {
+  state.quickLog.type = type;
+  renderQuickLogSheet();
+}
+
+function renderQuickLogSheet() {
+  if (!els.quickLogDialog) return;
+  const options = quickLogLeadOptions();
+  const selected = state.quickLog.leadId || options[0]?.id || state.leads[0]?.id || "";
+  state.quickLog.leadId = selected;
+  if (els.quickLogLeadSelect) {
+    els.quickLogLeadSelect.innerHTML = options.map(lead => `<option value="${escapeHtml(lead.id)}" ${lead.id === selected ? "selected" : ""}>${escapeHtml(lead.company_name || "Unnamed company")} - ${escapeHtml(lead.territory || lead.location || "No territory")}</option>`).join("");
+    els.quickLogLeadSelect.value = selected;
+  }
+  if (els.quickLogRecent) {
+    els.quickLogRecent.innerHTML = recentQuickLogLeads().map(lead => `<button type="button" data-quick-lead="${escapeHtml(lead.id)}">${escapeHtml(lead.company_name)}</button>`).join("");
+  }
+  if (els.quickLogTypes) {
+    els.quickLogTypes.innerHTML = QUICK_LOG_TYPES.map(type => `<button type="button" class="${state.quickLog.type === type ? "active" : ""}" data-quick-type="${escapeHtml(type)}">${escapeHtml(ACTIVITY_TYPE_ICONS[type] || "")}<span>${escapeHtml(type)}</span></button>`).join("");
+  }
+  if (els.quickPhraseChips) {
+    els.quickPhraseChips.innerHTML = QUICK_PHRASES.map(phrase => `<button type="button" data-quick-phrase="${escapeHtml(phrase)}">${escapeHtml(phrase)}</button>`).join("");
+  }
+  els.quickQuoteField?.classList.toggle("hidden", state.quickLog.type !== "Quotation Sent");
+  els.quickOrderField?.classList.toggle("hidden", state.quickLog.type !== "Order Placed");
+  renderSyncStatus();
+}
+
+function openQuickLog(leadId = "") {
+  state.quickLog.leadId = leadId || state.selectedId || state.leads[0]?.id || "";
+  state.quickLog.type = state.quickLog.type || "In-Person Meeting";
+  if (els.quickLogCompanySearch) els.quickLogCompanySearch.value = "";
+  if (els.quickLogNote) els.quickLogNote.value = "";
+  if (els.quickNextAction) els.quickNextAction.value = "";
+  if (els.quickNextDate) els.quickNextDate.value = "";
+  if (els.quickQuotationRef) els.quickQuotationRef.value = "";
+  if (els.quickOrderVolume) els.quickOrderVolume.value = "";
+  setMessage(els.quickLogMessage, "");
+  renderQuickLogSheet();
+  els.quickLogDialog?.showModal();
+  requestQuickLogLocation();
+}
+
+function appendQuickPhrase(phrase) {
+  if (!els.quickLogNote) return;
+  const current = els.quickLogNote.value.trim();
+  els.quickLogNote.value = current ? `${current}; ${phrase}` : phrase;
+  els.quickLogNote.focus();
+}
+
+function setQuickDate(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + Number(days || 0));
+  if (els.quickNextDate) els.quickNextDate.value = date.toISOString().slice(0, 10);
+}
+
+function distanceKm(a, b) {
+  const lat1 = Number(a.lat);
+  const lon1 = Number(a.lng);
+  const lat2 = Number(b.lat);
+  const lon2 = Number(b.lng);
+  if ([lat1, lon1, lat2, lon2].some(value => Number.isNaN(value))) return Infinity;
+  const toRad = value => value * Math.PI / 180;
+  const earth = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earth * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function requestQuickLogLocation() {
+  if (!navigator.geolocation || !els.quickLogNear) return;
+  navigator.geolocation.getCurrentPosition(position => {
+    const here = { lat: position.coords.latitude, lng: position.coords.longitude };
+    const nearby = state.leads
+      .map(lead => ({
+        lead,
+        km: distanceKm(here, { lat: lead.latitude, lng: lead.longitude })
+      }))
+      .filter(item => item.km <= 0.5)
+      .sort((a, b) => a.km - b.km)[0];
+    if (!nearby) return;
+    els.quickLogNear.innerHTML = `<button type="button" data-quick-lead="${escapeHtml(nearby.lead.id)}">Near you: ${escapeHtml(nearby.lead.company_name)} (${nearby.km.toFixed(1)} km)</button>`;
+    els.quickLogNear.classList.remove("hidden");
+    state.quickLog.type = "Site Visit";
+    renderQuickLogSheet();
+  }, () => null, { maximumAge: 300000, timeout: 2500, enableHighAccuracy: false });
+}
+
+function quickLogPayload() {
+  const leadId = els.quickLogLeadSelect?.value || state.quickLog.leadId;
+  const note = String(els.quickLogNote?.value || "").trim();
+  const nextAction = String(els.quickNextAction?.value || "").trim();
+  const nextDate = String(els.quickNextDate?.value || "").trim();
+  const type = state.quickLog.type || "Note";
+  const payload = {
+    id: clientId("act"),
+    type,
+    text: note || type
+  };
+  if (type === "Quotation Sent" && els.quickQuotationRef?.value?.trim()) {
+    payload.quotation_ref = els.quickQuotationRef.value.trim();
+    payload.quotation_status = "pending";
+  }
+  if (type === "Order Placed" && els.quickOrderVolume?.value?.trim()) {
+    payload.order_volume_mt = els.quickOrderVolume.value.trim();
+    payload.text = [payload.text, `Order volume: ${payload.order_volume_mt}`].filter(Boolean).join("; ");
+  }
+  if (nextAction && nextDate) {
+    payload.reminder = true;
+    payload.reminder_type = "General follow-up";
+    payload.due_date = nextDate;
+    payload.due_time = "09:00";
+    payload.activity_required = nextAction;
+    payload.text = [payload.text, `Next action: ${nextAction} on ${nextDate}`].filter(Boolean).join("; ");
+  }
+  return { leadId, payload };
+}
+
+function applyOptimisticActivity(leadId, payload) {
+  const lead = state.leads.find(item => item.id === leadId);
+  if (!lead) return;
+  if ((lead.activities || []).some(activity => activity.id && activity.id === payload.id)) return;
+  const activityDate = payload.at || today();
+  lead.activities = [{ ...payload, at: activityDate, pending_sync: true }, ...(lead.activities || [])];
+  lead.last_activity = activityDate;
+  render();
+}
+
+async function queueActivityForSync(leadId, payload) {
+  const queuedPayload = { ...payload, id: payload.id || clientId("act") };
+  await putOutboxItem({
+    id: queuedPayload.id,
+    created_at: Date.now(),
+    kind: "activity",
+    lead_id: leadId,
+    payload: queuedPayload,
+    status: "pending",
+    attempts: 0,
+    last_error: null
+  });
+  applyOptimisticActivity(leadId, queuedPayload);
+}
+
+async function mergePendingActivitiesIntoState() {
+  try {
+    const items = await outboxItems();
+    items
+      .filter(item => item.kind === "activity" && item.payload)
+      .forEach(item => applyOptimisticActivity(item.lead_id, item.payload));
+  } catch {
+    // IndexedDB may be unavailable in private browsing; normal server data still renders.
+  }
+}
+
+async function saveQuickLog() {
+  const { leadId, payload } = quickLogPayload();
+  if (!leadId) {
+    setMessage(els.quickLogMessage, "Choose a company first.", "error");
+    return;
+  }
+  try {
+    if (!navigator.onLine) throw new Error("offline");
+    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    setToast("Activity logged.", "success");
+    els.quickLogDialog?.close();
+    await loadLeads();
+    if (["In-Person Meeting", "Site Visit"].includes(payload.type)) {
+      setToast("Meeting logged. Open the company record to file PMR.", "success");
+    }
+  } catch (error) {
+    if (!isNetworkFailure(error) && error.message !== "offline") {
+      setMessage(els.quickLogMessage, error.message, "error");
+      return;
+    }
+    await queueActivityForSync(leadId, payload);
+    els.quickLogDialog?.close();
+    setToast("Saved - will sync when online.", "success");
+  }
+}
+
+async function renderPendingChanges() {
+  const items = await outboxItems();
+  if (!els.pendingChangesList) return;
+  els.pendingChangesList.innerHTML = items.length ? items.map(item => {
+    const lead = state.leads.find(record => record.id === item.lead_id);
+    const label = item.kind === "pmr"
+      ? `PMR${item.voice_note_blob ? " + voice note" : item.voice_note_uploaded ? " + uploaded voice" : ""}`
+      : item.kind || "change";
+    const summary = item.kind === "pmr"
+      ? item.payload?.notes || item.payload?.meeting_date || "Post-meeting report"
+      : item.payload?.type || item.payload?.stage || "Pending change";
+    return `
+      <article class="pending-item ${escapeHtml(item.status || "pending")}">
+        <strong>${escapeHtml(label)} - ${escapeHtml(lead?.company_name || "Lead")}</strong>
+        <span>${escapeHtml(summary)} - ${new Date(item.created_at).toLocaleString()}</span>
+        ${item.last_error ? `<small>${escapeHtml(item.last_error)}</small>` : ""}
+      </article>
+    `;
+  }).join("") : `<p class="empty-copy">No pending changes on this device.</p>`;
+}
+
+function openPendingChanges() {
+  renderPendingChanges();
+  els.pendingChangesDialog?.showModal();
+}
+
+function renderMobileMap() {
+  if (!els.mobileMapList) return;
+  const leads = state.leads.filter(lead => lead.google_maps_url || (lead.latitude && lead.longitude)).slice(0, 50);
+  els.mobileMapList.innerHTML = leads.length ? leads.map(lead => {
+    const destination = lead.latitude && lead.longitude ? `${lead.latitude},${lead.longitude}` : encodeURIComponent(lead.address || lead.company_name || "");
+    const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+    return `
+      <article class="pending-item">
+        <strong>${escapeHtml(lead.company_name)}</strong>
+        <span>${escapeHtml([lead.stage, lead.territory, lead.last_activity].filter(Boolean).join(" - "))}</span>
+        <div class="pending-actions">
+          <a class="ghost-button" href="${escapeHtml(lead.google_maps_url || navUrl)}" target="_blank" rel="noopener">Open map</a>
+          <a class="primary-button" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener">Navigate</a>
+          <button class="ghost-button" type="button" data-map-log="${escapeHtml(lead.id)}">Log</button>
+        </div>
+      </article>
+    `;
+  }).join("") : `<p class="empty-copy">No map links or coordinates saved yet.</p>`;
+}
+
+function openMobileMap() {
+  renderMobileMap();
+  els.mobileMapDialog?.showModal();
+}
+
+const AI_ACTION_LABELS = {
+  prepare: "Prepare me for this meeting",
+  next: "What should I do next?",
+  email: "Draft follow-up email",
+  summary: "Summarise this relationship",
+  prepare_meeting: "Prepare me for this meeting",
+  next_action: "What should I do next?",
+  draft_email: "Draft follow-up email",
+  summarise_relationship: "Summarise this relationship"
+};
+
+const SALESPERSON_ACTION_LABELS = {
+  focus_today: "What should I focus on today?",
+  neglected: "Who have I neglected?",
+  pipeline_health: "My pipeline health",
+  new_intel: "Any new intel on my prospects?"
+};
+
+const AI_LOADING_MESSAGES = [
+  "Reading activity history...",
+  "Reviewing the latest PMR...",
+  "Checking open actions...",
+  "Drafting a grounded answer..."
+];
+
+function aiLead() {
+  return state.leads.find(lead => lead.id === state.aiAction.leadId) || {};
+}
+
+function linkCompanyNames(html) {
+  let next = html;
+  [...state.leads]
+    .sort((a, b) => String(b.company_name || "").length - String(a.company_name || "").length)
+    .forEach(lead => {
+      const name = String(lead.company_name || "").trim();
+      if (!name) return;
+      const escaped = escapeHtml(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      next = next.replace(new RegExp(`(?<![">])${escaped}(?![^<]*>|[^<>]*</button>)`, "g"), `<button class="ai-company-link" type="button" data-ai-company="${escapeHtml(lead.id)}">${escapeHtml(name)}</button>`);
+    });
+  return next;
+}
+
+function simpleMarkdown(markdown) {
+  const lines = String(markdown || "").split(/\r?\n/);
+  let html = "";
+  let inList = false;
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (inList) {
+        html += "</ul>";
+        inList = false;
+      }
+      return;
+    }
+    if (trimmed.startsWith("## ")) {
+      if (inList) {
+        html += "</ul>";
+        inList = false;
+      }
+      html += `<h3>${escapeHtml(trimmed.slice(3))}</h3>`;
+      return;
+    }
+    if (trimmed.startsWith("- ")) {
+      if (!inList) {
+        html += "<ul>";
+        inList = true;
+      }
+      html += `<li>${escapeHtml(trimmed.slice(2))}</li>`;
+      return;
+    }
+    if (inList) {
+      html += "</ul>";
+      inList = false;
+    }
+    html += `<p>${escapeHtml(trimmed)}</p>`;
+  });
+  if (inList) html += "</ul>";
+  return html || "<p>No result returned.</p>";
+}
+
+function renderPipelineMetrics(metrics = {}, insight = "") {
+  const byStatus = metrics.by_status || {};
+  const max = Math.max(1, ...Object.values(byStatus).map(Number));
+  const trend = metrics.activity_trend;
+  const trendClass = trend == null ? "neutral" : trend >= 0 ? "up" : "down";
+  const trendText = trend == null ? "No last-month baseline" : `${trend >= 0 ? "Up" : "Down"} ${Math.abs(trend)}%`;
+  const bars = (state.settings.stages || Object.keys(byStatus)).map(status => {
+    const count = Number(byStatus[status] || 0);
+    return `
+      <div class="pipeline-health-row">
+        <span>${escapeHtml(status)}</span>
+        <i><b style="width:${Math.max(4, (count / max) * 100)}%"></b></i>
+        <strong>${count}</strong>
+      </div>
+    `;
+  }).join("");
+  const overdue = metrics.overdue_action_companies || [];
+  return `
+    <div class="pipeline-health-result">
+      ${insight ? `<p class="pipeline-insight">${escapeHtml(insight)}</p>` : ""}
+      <article class="pipeline-total"><span>Total companies</span><strong>${Number(metrics.total_companies || 0)}</strong></article>
+      <div class="pipeline-health-bars">${bars}</div>
+      <div class="pipeline-health-alerts">
+        <button class="pipeline-health-shortcut" type="button" data-salesperson-ai-action="neglected">
+          Past expected contact frequency: <strong>${Number(metrics.contact_overdue_count || 0)}</strong> companies
+        </button>
+        <span class="trend ${trendClass}">Activity trend: ${escapeHtml(trendText)} (${Number(metrics.activities_this_month || 0)} this month vs ${Number(metrics.activities_last_month || 0)} last month)</span>
+      </div>
+      <section class="pipeline-overdue-list">
+        <h3>Overdue next actions: ${Number(metrics.overdue_next_actions || 0)}</h3>
+        ${overdue.map(item => `
+          <button type="button" data-ai-company="${escapeHtml(item.id)}">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${escapeHtml(item.action)} - ${Number(item.days_overdue || 0)} days overdue</span>
+          </button>
+        `).join("") || `<p>No overdue next actions.</p>`}
+      </section>
+    </div>
+  `;
+}
+
+async function copyText(text, success = "Copied.") {
+  await navigator.clipboard?.writeText(String(text || ""));
+  setToast(success, "success");
+}
+
+function parseEmailDraft(output) {
+  const text = String(output || "");
+  const subjectMatch = text.match(/^Subject:\s*(.+)$/im);
+  const subject = subjectMatch?.[1]?.trim() || "Follow-up from Al Ras Steel";
+  const body = text.replace(/^Subject:\s*.+$/im, "").trim();
+  return { subject, body };
+}
+
+function aiFooterMarkup(action) {
+  const base = `<button class="ghost-button" type="button" data-ai-regenerate>Regenerate</button>`;
+  if (state.aiAction.scope === "salesperson") {
+    return `${base}<button class="primary-button" type="button" data-ai-copy>${state.aiAction.type === "metrics" ? "Copy summary" : "Copy"}</button>`;
+  }
+  if (action === "prepare" || action === "prepare_meeting") {
+    return `${base}<button class="primary-button" type="button" data-ai-copy>Copy brief</button><button class="ghost-button" type="button" data-ai-save-activity>Save to activity log</button>`;
+  }
+  if (action === "next" || action === "next_action") {
+    return `${base}<button class="primary-button" type="button" data-ai-copy>Copy</button><button class="ghost-button" type="button" data-ai-set-next>Set as next action</button>`;
+  }
+  if (action === "email" || action === "draft_email") {
+    return `${base}<button class="primary-button" type="button" data-ai-copy>Copy email</button><button class="ghost-button" type="button" data-ai-mailto>Open in mail app</button>`;
+  }
+  return `${base}<button class="primary-button" type="button" data-ai-copy>Copy</button><button class="ghost-button" type="button" data-ai-save-notes>Save to notes</button>`;
+}
+
+function renderAiActionDialog() {
+  if (!els.aiActionDialog) return;
+  const lead = aiLead();
+  const action = state.aiAction.action;
+  els.aiActionTitle.textContent = state.aiAction.label || AI_ACTION_LABELS[action] || "AI Action";
+  els.aiActionSubtitle.textContent = state.aiAction.scope === "salesperson"
+    ? "Generated from your visible portfolio only"
+    : lead.company_name ? `${lead.company_name} - grounded in CRM records` : "Generated from CRM records";
+  els.aiActionLoading?.classList.toggle("hidden", !state.aiAction.loading);
+  const hasResult = state.aiAction.type === "metrics" ? Boolean(state.aiAction.metrics) : Boolean(state.aiAction.output);
+  els.aiActionResult?.classList.toggle("hidden", state.aiAction.loading || !hasResult);
+  if (els.aiActionResult) {
+    els.aiActionResult.innerHTML = state.aiAction.type === "metrics"
+      ? renderPipelineMetrics(state.aiAction.metrics, state.aiAction.insight)
+      : state.aiAction.scope === "salesperson"
+        ? linkCompanyNames(simpleMarkdown(state.aiAction.output))
+        : simpleMarkdown(state.aiAction.output);
+  }
+  if (els.aiActionFooter) {
+    els.aiActionFooter.innerHTML = hasResult
+      ? `${aiFooterMarkup(action)}<span>AI-generated from your CRM data - review before acting.</span>`
+      : `<button class="ghost-button" type="button" data-ai-regenerate>Retry</button>`;
+  }
+  if (els.aiActionMessage) {
+    setMessage(
+      els.aiActionMessage,
+      state.aiAction.error || (state.aiAction.provider === "fallback" ? "Server AI key is not configured, so a CRM-data fallback was used." : ""),
+      state.aiAction.error ? "error" : state.aiAction.provider === "fallback" ? "" : "success"
+    );
+  }
+}
+
+function startAiLoadingTicker() {
+  clearInterval(startAiLoadingTicker.timer);
+  let index = 0;
+  if (els.aiActionLoadingText) els.aiActionLoadingText.textContent = AI_LOADING_MESSAGES[index];
+  startAiLoadingTicker.timer = setInterval(() => {
+    index = (index + 1) % AI_LOADING_MESSAGES.length;
+    if (els.aiActionLoadingText) els.aiActionLoadingText.textContent = AI_LOADING_MESSAGES[index];
+  }, 1800);
+}
+
+async function runLeadAiAction(lead, action) {
+  if (!lead || state.aiAction.loading) return;
+  if (!navigator.onLine) {
+    setToast("AI briefings need a connection.", "error");
+    return;
+  }
+  if (Date.now() < state.aiCooldownUntil) {
+    setToast("Please wait a few seconds before running another AI action.", "error");
+    return;
+  }
+  state.aiAction = { scope: "company", leadId: lead.id, action, label: AI_ACTION_LABELS[action] || "AI Action", output: "", loading: true, error: "", provider: "", type: "markdown", metrics: null, insight: "" };
+  renderAiActionDialog();
+  els.aiActionDialog?.showModal();
+  startAiLoadingTicker();
+  try {
+    const result = await api(`/api/leads/${encodeURIComponent(lead.id)}/ai-actions`, {
+      method: "POST",
+      body: JSON.stringify({ action })
+    });
+    state.aiAction = {
+      scope: "company",
+      leadId: lead.id,
+      action: result.action || action,
+      label: result.label || AI_ACTION_LABELS[action] || "AI Action",
+      output: result.output || "",
+      loading: false,
+      error: "",
+      provider: result.provider || "",
+      type: "markdown",
+      metrics: null,
+      insight: ""
+    };
+    state.aiCooldownUntil = Date.now() + 3000;
+  } catch (error) {
+    state.aiAction = { ...state.aiAction, loading: false, error: "Couldn't generate this right now. Please try again.", output: "", provider: "", metrics: null };
+  } finally {
+    clearInterval(startAiLoadingTicker.timer);
+    renderAiActionDialog();
+  }
+}
+
+async function runSalespersonAiAction(action, { showDialog = true } = {}) {
+  if (!navigator.onLine) {
+    setToast("AI briefings need a connection.", "error");
+    return;
+  }
+  if (state.dailyAiLoading || Date.now() < state.aiCooldownUntil) return;
+  state.dailyAiLoading = true;
+  state.aiAction = { scope: "salesperson", leadId: "", action, label: SALESPERSON_ACTION_LABELS[action] || "Daily AI", output: "", loading: true, error: "", provider: "", type: "markdown", metrics: null, insight: "" };
+  if (showDialog) {
+    renderAiActionDialog();
+    els.aiActionDialog?.showModal();
+    startAiLoadingTicker();
+  }
+  try {
+    const result = await api("/api/salesperson-ai-actions", {
+      method: "POST",
+      body: JSON.stringify({ action })
+    });
+    state.aiAction = {
+      scope: "salesperson",
+      leadId: "",
+      action: result.action || action,
+      label: result.label || SALESPERSON_ACTION_LABELS[action] || "Daily AI",
+      output: result.result || "",
+      loading: false,
+      error: "",
+      provider: result.provider || "",
+      type: result.type || "markdown",
+      metrics: result.metrics || null,
+      insight: result.insight || ""
+    };
+    if (action === "pipeline_health" && result.metrics) state.dailyPipelineSummary = { metrics: result.metrics, insight: result.insight || "" };
+    state.aiCooldownUntil = Date.now() + 3000;
+  } catch {
+    state.aiAction = { ...state.aiAction, loading: false, error: "Couldn't generate this right now. Please try again.", output: "", metrics: null };
+  } finally {
+    state.dailyAiLoading = false;
+    clearInterval(startAiLoadingTicker.timer);
+    if (showDialog) renderAiActionDialog();
+    renderDailyAiPanel();
+  }
+}
+
+async function saveAiOutputToActivity() {
+  const lead = aiLead();
+  if (!lead.id || !state.aiAction.output) return;
+  await api(`/api/leads/${encodeURIComponent(lead.id)}/activities`, {
+    method: "POST",
+    body: JSON.stringify({ type: "Note", text: `Meeting prep generated:\n${state.aiAction.output}` })
+  });
+  setToast("AI brief saved to activity log.", "success");
+  await loadLeads();
+}
+
+async function setAiOutputAsNextAction() {
+  const lead = aiLead();
+  if (!lead.id || !state.aiAction.output) return;
+  const defaultAction = state.aiAction.output.split(/\r?\n/).map(line => line.replace(/^#+\s*/, "").trim()).find(line => line && !["Next action", "Why this action", "Watch out for"].includes(line)) || "";
+  const nextAction = window.prompt("Confirm next action:", defaultAction.slice(0, 220));
+  if (!nextAction?.trim()) return;
+  const nextDate = window.prompt("Due date (YYYY-MM-DD):", lead.next_action_date || today()) || lead.next_action_date || today();
+  const normalizedAction = normalizeNextActionPlan(nextAction);
+  await api(`/api/leads/${encodeURIComponent(lead.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ next_action: normalizedAction, next_action_date: nextDate })
+  });
+  setToast("Next action updated.", "success");
+  await loadLeads();
+}
+
+async function saveAiOutputToNotes() {
+  const lead = aiLead();
+  if (!lead.id || !state.aiAction.output) return;
+  const note = [`AI relationship summary (${today()}):`, state.aiAction.output].join("\n");
+  await api(`/api/leads/${encodeURIComponent(lead.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ notes: [lead.notes, note].filter(Boolean).join("\n\n") })
+  });
+  setToast("Summary appended to lead notes.", "success");
+  await loadLeads();
+}
+
+function openAiMail() {
+  const lead = aiLead();
+  const draft = parseEmailDraft(state.aiAction.output);
+  const url = `mailto:${encodeURIComponent(lead.email || "")}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+  window.location.href = url;
+}
+
+function openFlagAttentionModal(lead) {
+  if (!lead || !els.flagAttentionDialog) return;
+  els.flagAttentionForm.reset();
+  els.flagAttentionForm.elements.company_id.value = lead.id;
+  els.flagAttentionTitle.textContent = `Flag ${lead.company_name} for director attention`;
+  setMessage(els.flagAttentionMessage, "");
+  els.flagAttentionDialog.showModal();
+}
+
 function setEnrichmentStatus(message, type = "") {
   if (!els.leadEnrichmentStatus) return;
   els.leadEnrichmentStatus.textContent = message;
@@ -957,6 +2097,74 @@ function setEnrichmentStatus(message, type = "") {
 function formValue(value) {
   if (Array.isArray(value)) return value.join("\n");
   return String(value ?? "").trim();
+}
+
+function clearDynamicLeadFormOptions(name) {
+  const field = els.leadForm?.elements?.[name];
+  if (!field || field.tagName !== "SELECT") return;
+  [...field.options].forEach(option => {
+    if (option.dataset.dynamic === "true") option.remove();
+  });
+}
+
+function ensureLeadFormSelectValue(name, value, fallback = "") {
+  const field = els.leadForm?.elements?.[name];
+  if (!field || field.tagName !== "SELECT") return;
+  clearDynamicLeadFormOptions(name);
+  const normalized = formValue(value);
+  if (!normalized) {
+    if (fallback) field.value = fallback;
+    return;
+  }
+  const exists = [...field.options].some(option => option.value === normalized);
+  if (!exists) {
+    const option = document.createElement("option");
+    option.value = normalized;
+    option.textContent = normalized;
+    option.dataset.dynamic = "true";
+    field.appendChild(option);
+  }
+  field.value = normalized;
+}
+
+function clearLeadAutoEnrichmentFields() {
+  leadAutoEnrichmentFields.forEach(fieldName => {
+    const field = els.leadForm.elements[fieldName];
+    if (!field) return;
+    field.value = "";
+    leadFormTouched.delete(fieldName);
+  });
+}
+
+function resetLeadEnrichmentSession({ clearFields = false } = {}) {
+  clearTimeout(leadEnrichmentTimer);
+  leadEnrichmentTimer = null;
+  leadEnrichmentKey = "";
+  leadCompanyInputKey = "";
+  if (clearFields) clearLeadAutoEnrichmentFields();
+}
+
+function resetLeadFormForNewLead() {
+  state.editingLeadId = "";
+  state.editingOriginalStage = "";
+  state.editingLostData = null;
+  els.leadForm.reset();
+  leadFormTouched.clear();
+  state.duplicateMatches = [];
+  state.duplicateChecking = false;
+  clearTimeout(duplicateCheckTimer);
+  resetLeadEnrichmentSession();
+  if (!isAdminOrManager()) {
+    els.formSalesman.value = state.currentUser.name;
+    if (els.formTerritory) els.formTerritory.value = state.currentUser.territory || els.formTerritory.value;
+  }
+  if (els.leadForm.elements.next_action_date) {
+    els.leadForm.elements.next_action_date.value = today();
+  }
+  ensureLeadFormSelectValue("next_action", NEXT_ACTION_PLAN_OPTIONS[0], NEXT_ACTION_PLAN_OPTIONS[0]);
+  ensureLeadFormSelectValue("activity_purpose", ACTIVITY_PURPOSE_OPTIONS[0], ACTIVITY_PURPOSE_OPTIONS[0]);
+  renderDuplicateWarning();
+  setEnrichmentStatus("Type a company name to fetch Google business info.");
 }
 
 function applyLeadEnrichment(enrichment, { overwrite = false } = {}) {
@@ -999,16 +2207,178 @@ function leadEnrichmentRequestKey(companyName, location) {
   return [companyName, location].map(value => String(value || "").trim().toLowerCase()).join("|");
 }
 
+function leadCompanyOnlyKey(companyName) {
+  return String(companyName || "").trim().toLowerCase();
+}
+
+function clientFuzzyNormalise(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[.,\-&']/g, " ")
+    .replace(/\b(l\s*l\s*c|llc|l\.l\.c|fze|fzco|wll|bsc|co|company|ltd|limited|trading|group|industries|international|est|establishment|contracting|construction|services|solutions)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function clientJaroWinkler(leftInput, rightInput) {
+  const left = String(leftInput || "");
+  const right = String(rightInput || "");
+  if (left === right) return 1;
+  if (!left.length || !right.length) return 0;
+  const matchDistance = Math.max(Math.floor(Math.max(left.length, right.length) / 2) - 1, 0);
+  const leftMatches = new Array(left.length).fill(false);
+  const rightMatches = new Array(right.length).fill(false);
+  let matches = 0;
+  let transpositions = 0;
+  for (let i = 0; i < left.length; i += 1) {
+    const start = Math.max(0, i - matchDistance);
+    const end = Math.min(i + matchDistance + 1, right.length);
+    for (let j = start; j < end; j += 1) {
+      if (rightMatches[j] || left[i] !== right[j]) continue;
+      leftMatches[i] = true;
+      rightMatches[j] = true;
+      matches += 1;
+      break;
+    }
+  }
+  if (!matches) return 0;
+  let rightIndex = 0;
+  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
+    if (!leftMatches[leftIndex]) continue;
+    while (!rightMatches[rightIndex]) rightIndex += 1;
+    if (left[leftIndex] !== right[rightIndex]) transpositions += 1;
+    rightIndex += 1;
+  }
+  const jaro = (matches / left.length + matches / right.length + (matches - transpositions / 2) / matches) / 3;
+  let prefix = 0;
+  for (let i = 0; i < Math.min(4, left.length, right.length); i += 1) {
+    if (left[i] === right[i]) prefix += 1;
+    else break;
+  }
+  return jaro + prefix * 0.1 * (1 - jaro);
+}
+
+function clientDuplicateCandidates(companyName, leads, duplicateThreshold = 0.85, warnThreshold = 0.75) {
+  const input = clientFuzzyNormalise(companyName);
+  if (input.length < 4) return [];
+  return (leads || [])
+    .map(lead => ({
+      id: lead.id,
+      company_name: lead.company_name,
+      assigned_salesman: lead.assigned_salesman,
+      territory: lead.territory,
+      stage: lead.stage,
+      score: clientJaroWinkler(input, clientFuzzyNormalise(lead.company_name))
+    }))
+    .filter(match => match.score >= warnThreshold)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(match => ({ ...match, isDuplicate: match.score >= duplicateThreshold }));
+}
+
+function handleLeadCompanyNameInput() {
+  const companyKey = leadCompanyOnlyKey(els.leadForm.elements.company_name.value);
+  if (companyKey !== leadCompanyInputKey) {
+    leadCompanyInputKey = companyKey;
+    leadEnrichmentKey = "";
+    clearLeadAutoEnrichmentFields();
+  }
+  scheduleDuplicateCheck();
+  scheduleLeadCompanyEnrichment();
+}
+
+function handleLeadLocationInput() {
+  leadEnrichmentKey = "";
+  scheduleLeadCompanyEnrichment();
+}
+
 function scheduleLeadCompanyEnrichment() {
   clearTimeout(leadEnrichmentTimer);
   const companyName = els.leadForm.elements.company_name.value.trim();
   const location = els.leadForm.elements.location.value.trim() || els.leadForm.elements.territory.value.trim();
   if (!companyName) {
+    resetLeadEnrichmentSession({ clearFields: !state.editingLeadId });
     setEnrichmentStatus("Type a company name to fetch Google business info.");
     return;
   }
   if (companyName.length < 2) return;
   leadEnrichmentTimer = setTimeout(() => enrichLeadFormCompany(companyName, location), 850);
+}
+
+function renderDuplicateWarning() {
+  if (!els.duplicateWarning) return;
+  const matches = state.duplicateMatches || [];
+  const severe = matches.some(match => match.isDuplicate);
+  const crossSalesmanMatches = matches.filter(match => match.owner_type === "other_salesman");
+  els.duplicateWarning.classList.toggle("hidden", !state.duplicateChecking && !matches.length);
+  els.duplicateWarning.classList.toggle("duplicate-danger", severe);
+  els.duplicateWarning.classList.toggle("duplicate-warn", !severe);
+  if (state.duplicateChecking) {
+    els.duplicateWarning.innerHTML = `<strong>Checking similar companies...</strong>`;
+    return;
+  }
+  if (!matches.length) {
+    els.duplicateWarning.innerHTML = "";
+    return;
+  }
+  els.duplicateWarning.innerHTML = `
+    <strong>${crossSalesmanMatches.length ? "This company appears to be already registered by another salesman." : (severe ? "Probable duplicate - this company may already exist." : "Similar companies already exist - please check before creating.")}</strong>
+    <div class="duplicate-list">
+      ${matches.map(match => `
+        <article>
+          <span>${escapeHtml(match.company_name)}</span>
+          <small>
+            ${escapeHtml(match.owner_type === "other_salesman" ? `Registered by ${match.owner_type === "other_salesman" ? match.assigned_salesman || "another salesman" : match.assigned_salesman || "Unassigned"}` : `Owned by ${match.owner_type === "self" ? "you" : match.assigned_salesman || "Unassigned"}`)}
+            · Territory: ${escapeHtml(match.territory || "Not set")} · Stage: ${escapeHtml(match.stage || "Unknown")} · ${Math.round(Number(match.score || 0) * 100)}%
+          </small>
+          <button class="small-action" type="button" data-view-duplicate="${escapeHtml(match.id)}">View record</button>
+        </article>
+      `).join("")}
+    </div>
+    <p>${crossSalesmanMatches.length ? "Please review this before creating another lead. If this is a different legal entity, continue manually." : "This might be the same company. You can still create a new record if it is genuinely separate."}</p>
+  `;
+  els.duplicateWarning.querySelectorAll("[data-view-duplicate]").forEach(button => {
+    button.addEventListener("click", () => {
+      els.leadDialog.close();
+      openLeadDrawer(button.dataset.viewDuplicate);
+    });
+  });
+}
+
+function scheduleDuplicateCheck() {
+  clearTimeout(duplicateCheckTimer);
+  const companyName = els.leadForm.elements.company_name.value.trim();
+  state.duplicateMatches = [];
+  state.duplicateCache = state.duplicateCache || new Map();
+  if (companyName.length < 4) {
+    state.duplicateChecking = false;
+    renderDuplicateWarning();
+    return;
+  }
+  state.duplicateChecking = true;
+  renderDuplicateWarning();
+  duplicateCheckTimer = setTimeout(async () => {
+    const cacheKey = companyName.toLowerCase();
+    const cached = state.duplicateCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.at < 30000) {
+      state.duplicateMatches = cached.matches;
+      state.duplicateChecking = false;
+      renderDuplicateWarning();
+      return;
+    }
+    try {
+      const result = await api(`/api/leads/duplicates?name=${encodeURIComponent(companyName)}`);
+      if (els.leadForm.elements.company_name.value.trim() !== companyName) return;
+      state.duplicateMatches = result.matches || [];
+      state.duplicateCache.set(cacheKey, { matches: state.duplicateMatches, at: now });
+    } catch {
+      state.duplicateMatches = [];
+    } finally {
+      state.duplicateChecking = false;
+      renderDuplicateWarning();
+    }
+  }, 500);
 }
 
 async function enrichLeadFormCompany(companyName, location) {
@@ -1025,6 +2395,9 @@ async function enrichLeadFormCompany(companyName, location) {
       });
       leadEnrichmentCache.set(key, result);
     }
+    const latestCompanyName = els.leadForm.elements.company_name.value.trim();
+    const latestLocation = els.leadForm.elements.location.value.trim() || els.leadForm.elements.territory.value.trim();
+    if (leadEnrichmentRequestKey(latestCompanyName, latestLocation) !== key) return;
     const enrichment = result.enrichment || {};
     applyLeadEnrichment(enrichment);
     const status = enrichment.enrichment_status || "partial";
@@ -1047,6 +2420,532 @@ function fillSelect(select, values, firstLabel) {
     option.textContent = typeof value === "string" ? value : value.name;
     select.appendChild(option);
   });
+}
+
+function newImportState() {
+  return {
+    step: 1,
+    fileName: "",
+    headers: [],
+    rawRows: [],
+    mapping: {},
+    previewRows: [],
+    previewFilter: "all",
+    duplicateMode: "skip",
+    progress: 0,
+    result: null,
+    sessionStart: new Date().toISOString()
+  };
+}
+
+function importHeaderKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function importCompanyKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\b(llc|l\.l\.c|fze|fzco|ltd|limited|co|company|est|establishment)\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function guessImportField(header) {
+  const key = importHeaderKey(header);
+  if (!key) return "";
+  const exact = IMPORT_HEADER_SYNONYMS.find(item => item.patterns.some(pattern => key === importHeaderKey(pattern)));
+  if (exact) return exact.key;
+  const fuzzy = IMPORT_HEADER_SYNONYMS.find(item => item.patterns.some(pattern => key.includes(importHeaderKey(pattern))));
+  return fuzzy?.key || "";
+}
+
+function parseCsvText(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    const next = source[i + 1];
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") i += 1;
+      row.push(cell);
+      if (row.some(value => String(value || "").trim())) rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    cell += char;
+  }
+  row.push(cell);
+  if (row.some(value => String(value || "").trim())) rows.push(row);
+  if (!rows.length) return { headers: [], rows: [] };
+  const headers = rows[0].map(header => String(header || "").trim());
+  const data = rows.slice(1).map(values => {
+    const record = {};
+    headers.forEach((header, index) => {
+      record[header] = String(values[index] || "").trim();
+    });
+    return record;
+  });
+  return { headers, rows: data };
+}
+
+function downloadTextFile(filename, content, type = "text/csv;charset=utf-8") {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadImportTemplate() {
+  downloadTextFile("arg-leads-import-template.csv", IMPORT_TEMPLATE);
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function importErrorReport(rows) {
+  const headers = ["Row", "Company Name", "Status", "Reasons"];
+  const body = rows.map(row => [
+    row.rowNumber,
+    row.data.company_name || "",
+    row.errors.length ? "Error" : row.duplicate ? "Duplicate skipped" : "Warning",
+    [...row.errors, ...row.warnings, row.duplicate ? "Duplicate company name" : ""].filter(Boolean).join("; ")
+  ]);
+  return [headers, ...body].map(line => line.map(csvEscape).join(",")).join("\n");
+}
+
+function normalizeImportStage(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "PROSPECT";
+  const upper = raw.toUpperCase();
+  const stage = KANBAN_STAGES.find(item => item.key === upper || item.aliases.includes(upper) || item.label.toUpperCase() === upper);
+  if (stage) return stage.key;
+  return "";
+}
+
+function normalizeImportPriority(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "New";
+  const match = (state.settings.priorities || []).find(priority => priority.toLowerCase() === raw.toLowerCase());
+  if (match) return match;
+  if (raw.toLowerCase() === "cold") return "New";
+  return "";
+}
+
+function normalizeImportDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function normalizeImportValue(value) {
+  const raw = String(value || "").replace(/aed|,/gi, "").trim();
+  if (!raw) return 0;
+  const number = Number(raw);
+  return Number.isFinite(number) ? number : null;
+}
+
+function mappedImportRows() {
+  const importState = state.importLeads;
+  if (!importState) return [];
+  const existingByCompany = new Map(state.leads.map(lead => [importCompanyKey(lead.company_name), lead]));
+  return importState.rawRows.map((raw, index) => {
+    const data = {};
+    Object.entries(importState.mapping).forEach(([header, field]) => {
+      if (!field) return;
+      const value = String(raw[header] || "").trim();
+      if (!value) return;
+      if (field === "territory" && data.territory) return;
+      data[field] = value;
+    });
+
+    const warnings = [];
+    const errors = [];
+    if (!String(data.company_name || "").trim()) errors.push("Company name is required.");
+    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) warnings.push("Email format looks invalid.");
+    if (data.phone && data.phone.replace(/\D/g, "").length < 7) warnings.push("Phone has fewer than 7 digits.");
+    const stage = normalizeImportStage(data.stage);
+    if (!stage) warnings.push("Stage not recognised; defaulted to Prospect.");
+    data.stage = stage || "PROSPECT";
+    const priority = normalizeImportPriority(data.priority);
+    if (!priority) warnings.push("Priority not recognised; defaulted to New.");
+    data.priority = priority || "New";
+    if (data.next_action_date) {
+      const date = normalizeImportDate(data.next_action_date);
+      if (!date) warnings.push("Next action date is invalid; imported as blank.");
+      data.next_action_date = date;
+    }
+    if (data.estimated_value !== undefined) {
+      const value = normalizeImportValue(data.estimated_value);
+      if (value === null) warnings.push("Estimated value is not numeric; imported as 0.");
+      data.estimated_value = value === null ? 0 : value;
+    }
+    data.next_action = normalizeNextActionPlan(data.next_action);
+    data.activity_purpose = normalizeActivityPurpose(data.activity_purpose);
+    if (!data.territory && data.country_emirate) data.territory = data.country_emirate;
+    if (!data.location && data.territory) data.location = data.territory;
+    data.source = "CSV import";
+
+    const exactDuplicate = existingByCompany.get(importCompanyKey(data.company_name));
+    const fuzzyDuplicate = exactDuplicate ? null : clientDuplicateCandidates(data.company_name, state.leads)[0];
+    const duplicate = exactDuplicate || fuzzyDuplicate;
+    if (exactDuplicate) {
+      warnings.push(`Duplicate candidate: ${exactDuplicate.company_name}.`);
+    } else if (fuzzyDuplicate) {
+      warnings.push(`${fuzzyDuplicate.isDuplicate ? "Probable duplicate" : "Similar company"}: ${fuzzyDuplicate.company_name} (${Math.round(fuzzyDuplicate.score * 100)}% match).`);
+    }
+    return {
+      rowNumber: index + 2,
+      raw,
+      data,
+      errors,
+      warnings,
+      duplicate: duplicate ? {
+        id: duplicate.id,
+        company_name: duplicate.company_name,
+        score: duplicate.score || 1,
+        isDuplicate: duplicate.isDuplicate ?? true,
+        assigned_salesman: duplicate.assigned_salesman,
+        territory: duplicate.territory,
+        stage: duplicate.stage
+      } : null
+    };
+  });
+}
+
+function importSummary(rows) {
+  const errors = rows.filter(row => row.errors.length).length;
+  const warnings = rows.filter(row => !row.errors.length && row.warnings.length).length;
+  const duplicates = rows.filter(row => !row.errors.length && row.duplicate).length;
+  const ready = rows.length - errors;
+  return { ready, warnings, errors, duplicates };
+}
+
+function renderImportStepper() {
+  const importState = state.importLeads || newImportState();
+  els.importStepper.innerHTML = IMPORT_STEPS.map((label, index) => `
+    <span class="import-step ${importState.step === index + 1 ? "active" : ""} ${importState.step > index + 1 ? "done" : ""}">
+      <b>${index + 1}</b>${escapeHtml(label)}
+    </span>
+  `).join("");
+}
+
+function renderImportLeadsModal() {
+  const importState = state.importLeads || newImportState();
+  state.importLeads = importState;
+  renderImportStepper();
+  setMessage(els.importLeadsMessage, "");
+  const titles = {
+    1: ["Import Leads from CSV", "Upload an Excel-exported CSV file."],
+    2: ["Map CSV Columns", `${importState.headers.length} column${importState.headers.length === 1 ? "" : "s"} detected in ${importState.fileName}.`],
+    3: ["Review Before Importing", "Check warnings, duplicates, and rows that will be skipped."],
+    4: ["Importing Leads", "The server is saving rows in controlled batches."],
+    5: ["Import Complete", "Review the result and download any error report if needed."]
+  };
+  [els.importLeadsTitle.textContent, els.importLeadsSubtitle.textContent] = titles[importState.step] || titles[1];
+
+  if (importState.step === 1) renderImportUploadStep();
+  if (importState.step === 2) renderImportMappingStep();
+  if (importState.step === 3) renderImportPreviewStep();
+  if (importState.step === 4) renderImportProgressStep();
+  if (importState.step === 5) renderImportCompleteStep();
+}
+
+function renderImportUploadStep() {
+  els.importLeadsBody.innerHTML = `
+    <label class="import-dropzone" for="importCsvFile">
+      <input id="importCsvFile" type="file" accept=".csv,text/csv">
+      <strong>Drop your CSV file here or tap to browse</strong>
+      <span>Accepted: .csv only, max 5MB, up to ${IMPORT_MAX_ROWS} leads per import.</span>
+    </label>
+    <button class="ghost-button" type="button" id="downloadImportTemplate">Download Template CSV</button>
+  `;
+  els.importLeadsActions.innerHTML = "";
+  const dropzone = els.importLeadsBody.querySelector(".import-dropzone");
+  const input = els.importLeadsBody.querySelector("#importCsvFile");
+  const handleFile = file => readImportFile(file);
+  input.addEventListener("change", () => input.files?.[0] && handleFile(input.files[0]));
+  dropzone.addEventListener("dragover", event => {
+    event.preventDefault();
+    dropzone.classList.add("dragging");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragging"));
+  dropzone.addEventListener("drop", event => {
+    event.preventDefault();
+    dropzone.classList.remove("dragging");
+    const file = event.dataTransfer?.files?.[0];
+    if (file) handleFile(file);
+  });
+  els.importLeadsBody.querySelector("#downloadImportTemplate").addEventListener("click", downloadImportTemplate);
+}
+
+async function readImportFile(file) {
+  if (!file.name.toLowerCase().endsWith(".csv")) {
+    setMessage(els.importLeadsMessage, "Please upload a .csv file exported from Excel.", "error");
+    return;
+  }
+  if (file.size > IMPORT_MAX_BYTES) {
+    setMessage(els.importLeadsMessage, "CSV file is too large. Keep it under 5MB.", "error");
+    return;
+  }
+  const text = await file.text();
+  const parsed = parseCsvText(text);
+  if (!parsed.headers.length || !parsed.rows.length) {
+    setMessage(els.importLeadsMessage, "No CSV rows found. Check that the file has headers and data.", "error");
+    return;
+  }
+  if (parsed.rows.length > IMPORT_MAX_ROWS) {
+    setMessage(els.importLeadsMessage, `This file has ${parsed.rows.length} rows. Please import ${IMPORT_MAX_ROWS} or fewer at a time.`, "error");
+    return;
+  }
+  const mapping = Object.fromEntries(parsed.headers.map(header => [header, guessImportField(header)]));
+  state.importLeads = {
+    ...newImportState(),
+    step: 2,
+    fileName: file.name,
+    headers: parsed.headers,
+    rawRows: parsed.rows,
+    mapping
+  };
+  renderImportLeadsModal();
+}
+
+function importFieldOptions(selected) {
+  return IMPORT_FIELD_DEFINITIONS.map(field => `
+    <option value="${escapeHtml(field.key)}" ${field.key === selected ? "selected" : ""}>${escapeHtml(field.label)}</option>
+  `).join("");
+}
+
+function renderImportMappingStep() {
+  const importState = state.importLeads;
+  els.importLeadsBody.innerHTML = `
+    <div class="import-map-list">
+      ${importState.headers.map(header => `
+        <label class="import-map-row">
+          <span>${escapeHtml(header)}</span>
+          <select data-import-map="${escapeHtml(header)}">${importFieldOptions(importState.mapping[header] || "")}</select>
+        </label>
+      `).join("")}
+    </div>
+  `;
+  els.importLeadsActions.innerHTML = `
+    <button class="ghost-button" type="button" data-import-back>Back</button>
+    <button class="primary-button" type="button" data-import-next>Next</button>
+  `;
+  els.importLeadsBody.querySelectorAll("[data-import-map]").forEach(select => {
+    select.addEventListener("change", () => {
+      importState.mapping[select.dataset.importMap] = select.value;
+    });
+  });
+  els.importLeadsActions.querySelector("[data-import-back]").addEventListener("click", () => {
+    state.importLeads = newImportState();
+    renderImportLeadsModal();
+  });
+  els.importLeadsActions.querySelector("[data-import-next]").addEventListener("click", () => {
+    if (!Object.values(importState.mapping).includes("company_name")) {
+      setMessage(els.importLeadsMessage, "Map one CSV column to Company Name before continuing.", "error");
+      return;
+    }
+    importState.previewRows = mappedImportRows();
+    importState.step = 3;
+    renderImportLeadsModal();
+  });
+}
+
+function previewRowsForFilter(rows, filter) {
+  if (filter === "errors") return rows.filter(row => row.errors.length);
+  if (filter === "warnings") return rows.filter(row => !row.errors.length && row.warnings.length);
+  return rows;
+}
+
+function importStatusLabel(row) {
+  if (row.errors.length) return `<span class="import-status error">Error</span>`;
+  if (row.warnings.length) return `<span class="import-status warning">Warning</span>`;
+  return `<span class="import-status ok">OK</span>`;
+}
+
+function renderImportPreviewStep() {
+  const importState = state.importLeads;
+  const rows = importState.previewRows.length ? importState.previewRows : mappedImportRows();
+  importState.previewRows = rows;
+  const summary = importSummary(rows);
+  const filtered = previewRowsForFilter(rows, importState.previewFilter).slice(0, 10);
+  const importableCount = rows.filter(row => !row.errors.length && (importState.duplicateMode !== "skip" || !row.duplicate)).length;
+  els.importLeadsBody.innerHTML = `
+    <div class="import-summary-grid">
+      <article><strong>${summary.ready}</strong><span>rows ready</span></article>
+      <article><strong>${summary.warnings}</strong><span>warnings</span></article>
+      <article><strong>${summary.errors}</strong><span>errors skipped</span></article>
+      <article><strong>${summary.duplicates}</strong><span>duplicates found</span></article>
+    </div>
+    <div class="import-filter-row">
+      <button class="small-action ${importState.previewFilter === "all" ? "active" : ""}" type="button" data-preview-filter="all">Show all</button>
+      <button class="small-action ${importState.previewFilter === "warnings" ? "active" : ""}" type="button" data-preview-filter="warnings">Show warnings</button>
+      <button class="small-action ${importState.previewFilter === "errors" ? "active" : ""}" type="button" data-preview-filter="errors">Show errors only</button>
+    </div>
+    <div class="import-table-wrap">
+      <table class="import-table">
+        <thead><tr><th>Row</th><th>Company</th><th>Duplicate check</th><th>Phone</th><th>Stage</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>
+          ${filtered.map(row => `
+            <tr class="${row.errors.length ? "has-error" : row.warnings.length ? "has-warning" : ""}">
+              <td>${row.rowNumber}</td>
+              <td>${escapeHtml(row.data.company_name || "(empty)")}</td>
+              <td>${row.duplicate ? `<strong>${escapeHtml(row.duplicate.company_name)}</strong><br><small>${escapeHtml(row.duplicate.assigned_salesman || "Unassigned")} / ${escapeHtml(row.duplicate.territory || "No territory")} / ${Math.round(Number(row.duplicate.score || 0) * 100)}%</small>` : "-"}</td>
+              <td>${escapeHtml(row.data.phone || "-")}</td>
+              <td>${escapeHtml(drawerStageLabel(row.data.stage))}</td>
+              <td>${importStatusLabel(row)}</td>
+              <td>${escapeHtml([...row.errors, ...row.warnings].join(" "))}</td>
+            </tr>
+          `).join("") || `<tr><td colspan="7">No rows match this preview filter.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    <fieldset class="duplicate-options">
+      <legend>Duplicate handling</legend>
+      <label><input type="radio" name="duplicateMode" value="skip" ${importState.duplicateMode === "skip" ? "checked" : ""}> Skip duplicates</label>
+      <label><input type="radio" name="duplicateMode" value="update" ${importState.duplicateMode === "update" ? "checked" : ""}> Update existing</label>
+      <label><input type="radio" name="duplicateMode" value="import_all" ${importState.duplicateMode === "import_all" ? "checked" : ""}> Import all</label>
+    </fieldset>
+  `;
+  els.importLeadsActions.innerHTML = `
+    <button class="ghost-button" type="button" data-import-back>Back</button>
+    <button class="primary-button" type="button" data-import-start ${importableCount ? "" : "disabled"}>Import ${importableCount} Leads</button>
+  `;
+  els.importLeadsBody.querySelectorAll("[data-preview-filter]").forEach(button => {
+    button.addEventListener("click", () => {
+      importState.previewFilter = button.dataset.previewFilter;
+      renderImportLeadsModal();
+    });
+  });
+  els.importLeadsBody.querySelectorAll('input[name="duplicateMode"]').forEach(input => {
+    input.addEventListener("change", () => {
+      importState.duplicateMode = input.value;
+      renderImportLeadsModal();
+    });
+  });
+  els.importLeadsActions.querySelector("[data-import-back]").addEventListener("click", () => {
+    importState.step = 2;
+    renderImportLeadsModal();
+  });
+  els.importLeadsActions.querySelector("[data-import-start]").addEventListener("click", startLeadImport);
+}
+
+function renderImportProgressStep() {
+  const importState = state.importLeads;
+  const total = importState.previewRows.filter(row => !row.errors.length).length || 1;
+  const width = Math.min(100, Math.round((importState.progress / total) * 100));
+  els.importLeadsBody.innerHTML = `
+    <div class="import-progress">
+      <div class="import-progress-track"><span style="width:${width}%"></span></div>
+      <strong>${Math.min(importState.progress, total)} / ${total}</strong>
+      <p>Saving in batches of ${IMPORT_BATCH_SIZE}. Keep this window open.</p>
+    </div>
+  `;
+  els.importLeadsActions.innerHTML = "";
+}
+
+function renderImportCompleteStep() {
+  const importState = state.importLeads;
+  const result = importState.result || {};
+  const failedRows = [
+    ...(importState.previewRows || []).filter(row => row.errors.length),
+    ...((result.failed_rows || []).map(item => ({
+      rowNumber: item.row_number || item.index || "-",
+      data: item.data || {},
+      errors: [item.reason || "Import failed"],
+      warnings: [],
+      duplicate: null
+    })))
+  ];
+  els.importLeadsBody.innerHTML = `
+    <div class="import-complete">
+      <article><strong>${result.imported || 0}</strong><span>leads imported</span></article>
+      <article><strong>${result.updated || 0}</strong><span>updated</span></article>
+      <article><strong>${result.skipped || 0}</strong><span>duplicates skipped</span></article>
+      <article><strong>${failedRows.length}</strong><span>failed/skipped rows</span></article>
+    </div>
+  `;
+  els.importLeadsActions.innerHTML = `
+    <button class="ghost-button" type="button" data-import-errors ${failedRows.length ? "" : "disabled"}>Download Error Report</button>
+    <button class="primary-button" type="button" data-import-view>View Imported Leads</button>
+    <button class="ghost-button" type="button" data-import-close>Close</button>
+  `;
+  els.importLeadsActions.querySelector("[data-import-errors]").addEventListener("click", () => {
+    downloadTextFile(`arg-leads-import-errors-${today()}.csv`, importErrorReport(failedRows));
+  });
+  els.importLeadsActions.querySelector("[data-import-view]").addEventListener("click", async () => {
+    state.importedAfter = importState.sessionStart;
+    currentView = "pipeline";
+    els.importLeadsDialog.close();
+    await loadLeads();
+    setToast("Showing leads from the latest import session.", "success");
+  });
+  els.importLeadsActions.querySelector("[data-import-close]").addEventListener("click", () => els.importLeadsDialog.close());
+}
+
+async function startLeadImport() {
+  const importState = state.importLeads;
+  const importable = importState.previewRows
+    .filter(row => !row.errors.length)
+    .filter(row => importState.duplicateMode !== "skip" || !row.duplicate);
+  if (!importable.length) return;
+  importState.step = 4;
+  importState.progress = 0;
+  renderImportLeadsModal();
+  try {
+    importState.progress = Math.min(importable.length, IMPORT_BATCH_SIZE);
+    renderImportProgressStep();
+    const result = await api("/api/leads/import", {
+      method: "POST",
+      body: JSON.stringify({
+        rows: importable.map(row => ({ row_number: row.rowNumber, data: row.data })),
+        duplicate_mode: importState.duplicateMode,
+        session_start: importState.sessionStart
+      })
+    });
+    importState.progress = importable.length;
+    importState.result = result;
+    importState.step = 5;
+    await loadLeads();
+    renderImportLeadsModal();
+  } catch (error) {
+    importState.step = 3;
+    renderImportLeadsModal();
+    setMessage(els.importLeadsMessage, error.message, "error");
+  }
 }
 
 function filteredLeads() {
@@ -1073,7 +2972,10 @@ function filteredLeads() {
     ].map(value => String(value || "").trim().toLowerCase());
     const matchesTerritory = state.filters.territory === "all" || territoryOptions.includes(state.filters.territory.toLowerCase());
     const matchesOverdue = !state.overduePipelineOnly || leadHasOverdueFollowup(lead);
-    return matchesQuery && matchesStage && matchesSalesman && matchesPriority && matchesTerritory && matchesOverdue;
+    const importedAt = Date.parse(lead.imported_at || "");
+    const importedAfter = Date.parse(state.importedAfter || "");
+    const matchesImported = !state.importedAfter || (Number.isFinite(importedAt) && importedAt >= importedAfter);
+    return matchesQuery && matchesStage && matchesSalesman && matchesPriority && matchesTerritory && matchesOverdue && matchesImported;
   });
 }
 
@@ -1090,7 +2992,7 @@ function isOverdue(lead) {
 }
 
 function isAdminOrManager() {
-  return ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
+  return ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase());
 }
 
 function activeLeadForOverdue(lead) {
@@ -1190,13 +3092,23 @@ function overdueBreakdown(items) {
 
 function renderMetrics() {
   const due = state.leads.filter(isOverdue).length;
+  const overdue = overdueItems().length;
   const openValue = state.leads
     .filter(lead => lead.stage !== "ACTIVE" && lead.stage !== "DORMANT")
     .reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
-  els.metricTotal.textContent = state.leads.length;
+  const active = state.leads.filter(lead => lead.stage === "ACTIVE").length;
+  const atRisk = state.leads.filter(lead => lead.health?.label === "RED" || lead.stage === "DORMANT" || lead.priority === "At Risk").length;
+  renderHeaderSummary();
+  els.metricTotal.textContent = active;
+  if (els.metricTotalSub) els.metricTotalSub.textContent = `of ${state.leads.length}`;
   els.metricValue.textContent = money.format(openValue);
-  els.metricHot.textContent = state.leads.filter(lead => lead.priority === "Hot").length;
+  els.metricHot.textContent = atRisk;
   els.metricDue.textContent = due;
+  if (els.metricDueSub) els.metricDueSub.textContent = `${overdue} overdue`;
+  if (els.quickTaskBadge) {
+    els.quickTaskBadge.textContent = due;
+    els.quickTaskBadge.classList.toggle("hidden", due === 0);
+  }
 }
 
 function renderOverdueBanner() {
@@ -1328,6 +3240,31 @@ function leadGeneratedBySalesman(lead, person) {
   return Boolean(createdBy && tokens.includes(createdBy));
 }
 
+function leadOriginForCurrentUser(lead, person = state.currentUser) {
+  const createdBy = String(lead.created_by || "").trim().toLowerCase();
+  const assignedTo = String(lead.assigned_to || "").trim().toLowerCase();
+  const assignedSalesman = String(lead.assigned_salesman || "").trim().toLowerCase();
+
+  if (!createdBy) {
+    return assignedTo || assignedSalesman ? "Self-generated" : "Admin-assigned";
+  }
+
+  if (assignedTo) {
+    return createdBy === assignedTo ? "Self-generated" : "Admin-assigned";
+  }
+
+  if (!person) return "Self-generated";
+  if (leadGeneratedBySalesman(lead, person)) return "Self-generated";
+  if (assignedSalesman && normalizedUserTokens(person).includes(assignedSalesman)) return "Self-generated";
+  return "Admin-assigned";
+}
+
+function leadOriginChipClass(originLabel) {
+  return String(originLabel).toLowerCase().includes("admin")
+    ? "chip-admin-assigned"
+    : "chip-self-generated";
+}
+
 function completedFollowupActivity(activity) {
   if (!activity || activity.delete_request || isReminderActivity(activity)) return false;
   const text = `${activity.type || ""} ${activity.text || ""}`.toLowerCase();
@@ -1393,67 +3330,312 @@ function salesmanPerformanceRows() {
   );
 }
 
-function metricWinner(rows, key) {
-  const winner = [...rows].sort((a, b) => b[key] - a[key] || a.name.localeCompare(b.name))[0];
-  return winner ? `${winner.name} (${winner[key]})` : "-";
+function performanceRawScore(row) {
+  return (row.activitiesLogged * 3)
+    + (row.totalAssigned * 2)
+    + (row.followupsCompleted * 2)
+    + row.filteredStageCount;
+}
+
+function scoreSalesmanPerformanceRows(rows) {
+  const withRaw = rows.map(row => ({ ...row, rawPerformanceScore: performanceRawScore(row) }));
+  const maxPossibleScore = Math.max(0, ...withRaw.map(row => row.rawPerformanceScore));
+  return withRaw
+    .map(row => ({
+      ...row,
+      performanceScore: maxPossibleScore ? Math.round((row.rawPerformanceScore / maxPossibleScore) * 100) : 0
+    }))
+    .sort((a, b) =>
+      b.performanceScore - a.performanceScore
+      || b.rawPerformanceScore - a.rawPerformanceScore
+      || b.totalAssigned - a.totalAssigned
+      || a.name.localeCompare(b.name)
+    );
+}
+
+function salesmanInitials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "??";
+  return `${parts[0][0] || ""}${(parts[parts.length - 1][0] || parts[0][1] || "")}`.toUpperCase();
+}
+
+function performanceRankColor(index, inactive = false) {
+  if (inactive) return "#888780";
+  if (index === 0) return "#378ADD";
+  if (index === 1) return "#1D9E75";
+  return "#888780";
+}
+
+function lastActiveMarkup(dateValue) {
+  const days = daysAgo(dateValue);
+  if (days === 0) return `<span class="sp-fresh">today</span>`;
+  if (days === 1) return `<span class="sp-fresh">yesterday</span>`;
+  if (days >= 9999) return `<span class="sp-stale-red">No activity logged</span>`;
+  return `<span class="${days >= 3 ? "sp-stale-red" : "sp-fresh"}">${days} days ago</span>`;
+}
+
+function relativeActivityTime(dateValue) {
+  const days = daysAgo(String(dateValue || "").slice(0, 10));
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  if (days < 9999) return `${Math.max(1, Math.round(days / 7))}w ago`;
+  return "-";
+}
+
+function heatmapClass(value) {
+  const number = Number(value || 0);
+  if (number === 0) return "hm-0";
+  if (number <= 2) return "hm-1";
+  if (number <= 5) return "hm-2";
+  return "hm-3";
+}
+
+function scoreHeatmapClass(score) {
+  const value = Number(score || 0);
+  if (value === 0) return "hm-0";
+  if (value <= 40) return "hm-1";
+  if (value <= 70) return "hm-2";
+  return "hm-3";
+}
+
+function leaderboardCard(row, index) {
+  const color = performanceRankColor(index);
+  const subtitle = index === 0 ? "1st - Most active" : index === 1 ? "2nd - Active" : `${index + 1}th - Active`;
+  return `
+    <article class="sp-leader-card ${index === 0 ? "top" : ""}">
+      <div class="sp-leader-top">
+        <div class="sp-avatar ${index === 0 ? "sp-av-blue" : index === 1 ? "sp-av-teal" : "sp-av-gray"}">${escapeHtml(salesmanInitials(row.name))}</div>
+        <div>
+          <p class="sp-leader-name">${escapeHtml(row.name)}</p>
+          <p class="sp-leader-sub">${escapeHtml(subtitle)}</p>
+        </div>
+      </div>
+      <div class="sp-score-row">
+        <div class="sp-score-bar-bg"><div class="sp-score-bar-fill" style="width:${row.performanceScore}%; background:${color};"></div></div>
+        <span class="sp-score-pct">${row.performanceScore}%</span>
+      </div>
+      <div class="sp-stats-row">
+        <div class="sp-stat-mini"><span class="sp-stat-mini-val">${row.activitiesLogged}</span><span class="sp-stat-mini-lbl">Activities</span></div>
+        <div class="sp-stat-mini"><span class="sp-stat-mini-val">${row.totalAssigned}</span><span class="sp-stat-mini-lbl">Leads</span></div>
+        <div class="sp-stat-mini"><span class="sp-stat-mini-val">${row.followupsCompleted}</span><span class="sp-stat-mini-lbl">Follow-ups</span></div>
+      </div>
+      <p class="sp-stale">Last active: ${lastActiveMarkup(row.lastActivityDate)}</p>
+    </article>
+  `;
+}
+
+function inactiveLeaderboardCard(rows) {
+  const names = rows.map(row => row.name).join(", ");
+  return `
+    <article class="sp-leader-card">
+      <div class="sp-leader-top">
+        <div class="sp-avatar sp-av-gray">+${rows.length}</div>
+        <div>
+          <p class="sp-leader-name">${rows.length} inactive</p>
+          <p class="sp-leader-sub">${escapeHtml(names || "No inactive salesmen")}</p>
+        </div>
+      </div>
+      <div class="sp-score-row">
+        <div class="sp-score-bar-bg"><div class="sp-score-bar-fill" style="width:0%; background:#888780;"></div></div>
+        <span class="sp-score-pct">0%</span>
+      </div>
+      <div class="sp-stats-row">
+        <div class="sp-stat-mini"><span class="sp-stat-mini-val">0</span><span class="sp-stat-mini-lbl">Activities</span></div>
+        <div class="sp-stat-mini"><span class="sp-stat-mini-val">0</span><span class="sp-stat-mini-lbl">Leads</span></div>
+        <div class="sp-stat-mini"><span class="sp-stat-mini-val">0</span><span class="sp-stat-mini-lbl">Follow-ups</span></div>
+      </div>
+      <p class="sp-stale"><span class="sp-stale-red">No activity logged</span></p>
+    </article>
+  `;
+}
+
+function renderPerformanceLeaderboard(rows) {
+  if (!els.performanceLeaderboard) return;
+  const active = rows.filter(row => row.activitiesLogged > 0 || row.rawPerformanceScore > 0);
+  const inactive = rows.filter(row => row.activitiesLogged === 0);
+  const cards = active.slice(0, 2).map(leaderboardCard);
+  if (inactive.length) cards.push(inactiveLeaderboardCard(inactive));
+  else if (active[2]) cards.push(leaderboardCard(active[2], 2));
+  els.performanceLeaderboard.innerHTML = cards.join("") || `<p class="empty-copy">No salesman records available.</p>`;
+}
+
+function chartLabelName(name) {
+  const value = String(name || "Unassigned").trim();
+  return value.length > 10 ? value.split(/\s+/)[0] || value.slice(0, 10) : value;
+}
+
+function applyPerformanceChartWidth(rows) {
+  const frame = els.performanceChart?.closest(".sp-chart-frame");
+  if (!frame) return;
+  const chartMinWidth = Math.max(960, rows.length * 180);
+  frame.style.setProperty("--performance-chart-min-width", `${chartMinWidth}px`);
+}
+
+function renderPerformanceChart(rows) {
+  if (!els.performanceChart) return;
+  applyPerformanceChartWidth(rows);
+  if (typeof Chart === "undefined") {
+    els.performanceChart.replaceWith(Object.assign(document.createElement("p"), {
+      className: "empty-copy",
+      textContent: "Chart.js is still loading. Performance data is available in the heatmap below."
+    }));
+    return;
+  }
+  if (performanceChartInstance) performanceChartInstance.destroy();
+  performanceChartInstance = new Chart(els.performanceChart, {
+    type: "bar",
+    data: {
+      labels: rows.map(row => chartLabelName(row.name)),
+      datasets: [
+        { label: "Assigned leads", data: rows.map(row => row.totalAssigned), backgroundColor: "#378ADD", borderRadius: 6, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.72, maxBarThickness: 40 },
+        { label: "Activities logged", data: rows.map(row => row.activitiesLogged), backgroundColor: "#7F77DD", borderRadius: 6, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.72, maxBarThickness: 40 },
+        { label: "Follow-ups", data: rows.map(row => row.followupsCompleted), backgroundColor: "#BA7517", borderRadius: 6, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.72, maxBarThickness: 40 },
+        { label: "Stage leads", data: rows.map(row => row.filteredStageCount), backgroundColor: "#1D9E75", borderRadius: 6, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.72, maxBarThickness: 40 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: {
+        padding: {
+          top: 6,
+          right: 16,
+          bottom: 0,
+          left: 6
+        }
+      },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { display: false },
+          offset: true,
+          ticks: {
+            font: { size: 11 },
+            color: "#888780",
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: false,
+            padding: 10
+          }
+        },
+        y: {
+          grid: { color: "rgba(136,135,128,0.15)" },
+          ticks: { font: { size: 11 }, color: "#888780", stepSize: 1, precision: 0 },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+function performanceActivityItems(rows) {
+  const colorByName = new Map(rows.map((row, index) => [row.name.toLowerCase(), performanceRankColor(index, row.activitiesLogged === 0)]));
+  const activities = state.leads.flatMap(lead => (Array.isArray(lead.activities) ? lead.activities : [])
+    .filter(activity => !activity.delete_request)
+    .map(activity => ({
+      salesman: lead.assigned_salesman || "Unassigned",
+      company: lead.company_name || "Unnamed company",
+      type: activity.type || "Note",
+      at: activity.activity_date || activity.at || lead.last_activity || "",
+      color: colorByName.get(String(lead.assigned_salesman || "Unassigned").toLowerCase()) || "#888780"
+    })))
+    .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  const inactiveItems = rows
+    .filter(row => row.activitiesLogged === 0)
+    .map(row => ({
+      salesman: row.name,
+      company: "No activity logged",
+      type: "",
+      at: row.created_at || "",
+      color: "#888780",
+      empty: true
+    }));
+  return [
+    ...activities.slice(0, Math.max(0, 8 - inactiveItems.length)),
+    ...inactiveItems
+  ].slice(0, 8);
+}
+
+function renderPerformanceFeed(rows) {
+  if (!els.performanceFeed) return;
+  const items = performanceActivityItems(rows);
+  els.performanceFeed.innerHTML = items.map(item => `
+    <div class="sp-feed-item">
+      <span class="sp-feed-dot" style="background:${item.color};"></span>
+      <div class="sp-feed-body">
+        <p class="sp-feed-name">${escapeHtml(item.salesman)}</p>
+        <p class="sp-feed-detail ${item.empty ? "sp-feed-empty" : ""}">${escapeHtml(item.empty ? "No activity logged" : `${item.company} - ${item.type}`)}</p>
+      </div>
+      <span class="sp-feed-time ${item.empty ? "sp-stale-red" : ""}">${escapeHtml(item.empty ? "7d+" : relativeActivityTime(item.at))}</span>
+    </div>
+  `).join("") || `
+    <div class="sp-feed-item">
+      <span class="sp-feed-dot" style="background:#888780;"></span>
+      <div class="sp-feed-body">
+        <p class="sp-feed-name">No activity</p>
+        <p class="sp-feed-detail sp-feed-empty">No activity logged</p>
+      </div>
+      <span class="sp-feed-time">-</span>
+    </div>
+  `;
 }
 
 function renderPerformanceAnalytics() {
   if (!els.performancePanel || state.currentUser?.role !== "admin") return;
-  const rows = salesmanPerformanceRows();
-  const leastActive = [...rows].sort((a, b) => a.score - b.score || daysAgo(b.lastActivityDate) - daysAgo(a.lastActivityDate))[0];
-  els.kpiMostActive.textContent = metricWinner(rows, "activitiesLogged");
-  els.kpiHighestVolume.textContent = metricWinner(rows, "totalAssigned");
-  els.kpiMostFollowups.textContent = metricWinner(rows, "followupsCompleted");
-  els.kpiLeastActive.textContent = leastActive ? `${leastActive.name} (${leastActive.activitiesLogged})` : "-";
+  const rows = scoreSalesmanPerformanceRows(salesmanPerformanceRows());
+  renderPerformanceLeaderboard(rows);
+  renderPerformanceChart(rows);
+  if (els.performanceTable) {
+    els.performanceTable.innerHTML = rows.map(row => `
+      <tr>
+        <td>${escapeHtml(row.name)}</td>
+        <td class="${heatmapClass(row.totalAssigned)}">${row.totalAssigned}</td>
+        <td class="${heatmapClass(row.activitiesLogged)}">${row.activitiesLogged}</td>
+        <td class="${heatmapClass(row.followupsCompleted)}">${row.followupsCompleted}</td>
+        <td class="${scoreHeatmapClass(row.performanceScore)}">${row.performanceScore}%</td>
+      </tr>
+    `).join("");
+  }
+  renderPerformanceFeed(rows);
+}
 
-  const maxValue = Math.max(1, ...rows.flatMap(row => [
-    row.totalAssigned,
-    row.totalGenerated,
-    row.activitiesLogged,
-    row.followupsCompleted,
-    row.filteredStageCount
-  ]));
-  els.performanceChart.innerHTML = rows.map(row => {
-    const bars = [
-      ["assigned", row.totalAssigned],
-      ["generated", row.totalGenerated],
-      ["activities", row.activitiesLogged],
-      ["followups", row.followupsCompleted],
-      ["stage", row.filteredStageCount]
-    ];
-    return `
-      <article class="performance-chart-row">
-        <div class="performance-chart-name">
-          <strong>${escapeHtml(row.name)}</strong>
-          <span class="performance-indicator ${row.status}">${row.status}</span>
-        </div>
-        <div class="performance-bars">
-          ${bars.map(([key, value]) => `
-            <div class="performance-bar-line">
-              <span>${escapeHtml(key)}</span>
-              <div class="performance-bar-track">
-                <i class="performance-bar ${escapeHtml(key)}" style="width:${Math.max(4, (value / maxValue) * 100)}%"></i>
-              </div>
-              <b>${value}</b>
-            </div>
-          `).join("")}
-        </div>
-      </article>
-    `;
-  }).join("") || `<p class="empty-copy">No salesman records available.</p>`;
+function leadSectorLabel(lead) {
+  return String(lead.sector || lead.business_category || lead.industry || "Unspecified").trim() || "Unspecified";
+}
 
-  els.performanceTable.innerHTML = rows.map((row, index) => `
-    <tr>
-      <td data-label="Rank">${index + 1}</td>
-      <td data-label="Salesman Name"><span class="performance-indicator ${row.status}">${row.status}</span> ${escapeHtml(row.name)}</td>
-      <td data-label="Leads Assigned">${row.totalAssigned}</td>
-      <td data-label="Filtered Stage">${row.filteredStageCount}</td>
-      <td data-label="Activities Logged">${row.activitiesLogged}</td>
-      <td data-label="Upcoming Follow-ups">${row.upcomingFollowups}</td>
-      <td data-label="Last Activity Date">${escapeHtml(row.lastActivityDate || "No activity")}</td>
-    </tr>
-  `).join("");
+function marketSnapshotLeads() {
+  if (state.currentUser?.role !== "admin") return [];
+  if (!state.marketSnapshotSalesman || state.marketSnapshotSalesman === "all") return state.leads;
+  const person = (state.settings.salesmen || []).find(item => salesmanName(item) === state.marketSnapshotSalesman)
+    || state.marketSnapshotSalesman;
+  return state.leads.filter(lead => leadMatchesSalesman(lead, person));
+}
+
+function renderSnapshotPie(target, legend, entries, totalLabel) {
+  if (!target || !legend) return;
+  const slices = pieSlices(entries);
+  target.style.background = slices.length
+    ? `conic-gradient(${slices.map(slice => `${slice.color} ${slice.start}% ${slice.end}%`).join(", ")})`
+    : "#edf2f7";
+  target.innerHTML = `<span>${entries.reduce((sum, [, count]) => sum + count, 0)}<small>${escapeHtml(totalLabel)}</small></span>`;
+  legend.innerHTML = slices.length
+    ? slices.map(slice => `<span><i style="background:${slice.color}"></i>${escapeHtml(slice.label)} <strong>${slice.count}</strong></span>`).join("")
+    : `<p class="empty-copy">No leads match this filter yet.</p>`;
+}
+
+function renderMarketSnapshotPanel() {
+  if (!els.marketSnapshotPanel) return;
+  const admin = state.currentUser?.role === "admin";
+  els.marketSnapshotPanel.classList.toggle("hidden", !admin);
+  if (!admin) return;
+  const leads = marketSnapshotLeads();
+  const locationEntries = Object.entries(countBy(leads, lead => inferEmirate(lead) || inferCountry(lead) || "Unspecified"))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const sectorEntries = Object.entries(countBy(leads, leadSectorLabel))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  renderSnapshotPie(els.marketLocationPie, els.marketLocationLegend, locationEntries, "locations");
+  renderSnapshotPie(els.marketSectorPie, els.marketSectorLegend, sectorEntries, "sectors");
 }
 
 function renderLossReasonsAnalytics() {
@@ -1561,14 +3743,234 @@ function renderPortfolioAnalytics() {
 }
 
 function renderSalesmanDashboard() {
+  renderDailyAiPanel();
   renderSalesmanFollowups();
   renderPortfolioAnalytics();
 }
 
+function renderDailyAiPanel() {
+  if (!els.dailyAiPanel) return;
+  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  els.dailyAiPanel.classList.toggle("hidden", !salesman);
+  if (!salesman) return;
+  if (els.dailyAiGreeting) els.dailyAiGreeting.textContent = `${greetingText()}, ${firstName(state.currentUser.name || state.currentUser.email)}`;
+  els.dailyAiPanel.querySelectorAll("[data-salesperson-ai-action]").forEach(button => {
+    button.disabled = state.dailyAiLoading || Date.now() < state.aiCooldownUntil;
+  });
+  if (!els.dailyAiSummary) return;
+  if (!state.dailyPipelineSummary?.metrics) {
+    els.dailyAiSummary.classList.add("hidden");
+    return;
+  }
+  const metrics = state.dailyPipelineSummary.metrics;
+  const trend = metrics.activity_trend;
+  els.dailyAiSummary.classList.remove("hidden");
+  els.dailyAiSummary.innerHTML = `
+    <strong>${Number(metrics.total_companies || 0)} companies</strong>
+    <span>${Number(metrics.overdue_next_actions || 0)} overdue</span>
+    <span>${trend == null ? "trend baseline pending" : `${trend >= 0 ? "Up" : "Down"} ${Math.abs(trend)}% activity`}</span>
+  `;
+}
+
+function maybeAutoRunDailyPipeline() {
+  if (!state.currentUser || state.currentUser.role === "admin") return;
+  const key = `arg_daily_pipeline_${state.currentUser.id || state.currentUser.email}_${today()}`;
+  if (localStorage.getItem(key) === "true") return;
+  localStorage.setItem(key, "true");
+  runSalespersonAiAction("pipeline_health", { showDialog: false }).catch(() => null);
+}
+
+function renderAgentPanel() {
+  if (!els.agentPanel) return;
+  els.agentPanel.classList.toggle("agent-open", state.agentOpen);
+  els.agentBody?.classList.toggle("hidden", !state.agentOpen);
+  if (els.agentToggle) els.agentToggle.textContent = `${state.agentOpen ? "Hide" : "Ask"} the database`;
+  if (els.agentAsk) {
+    els.agentAsk.disabled = state.agentLoading || !state.integrations.ai_agent;
+    els.agentAsk.textContent = state.agentLoading ? "Thinking..." : "Ask";
+  }
+  if (els.agentMessage && !state.agentLoading) {
+    setMessage(
+      els.agentMessage,
+      state.integrations.ai_agent
+        ? "Read-only - this agent cannot create or modify records."
+        : "AI database agent is not configured. Add ANTHROPIC_API_KEY on the server.",
+      state.integrations.ai_agent ? "" : "error"
+    );
+  }
+  if (els.agentExamples) {
+    const examples = state.integrations.agent_examples?.length
+      ? state.integrations.agent_examples
+      : [
+        "Which accounts have overdue follow-ups?",
+        "How many leads are in ENGAGED status?",
+        "Who has the most activity this month?"
+      ];
+    els.agentExamples.innerHTML = examples.map(prompt => `
+      <button class="agent-chip" type="button" data-agent-example="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>
+    `).join("");
+  }
+}
+
+function configDiffHtml(diff = []) {
+  if (!diff.length) return `<p class="empty-copy">No changes detected.</p>`;
+  return diff.map(row => `
+    <article class="config-diff-row">
+      <strong>${escapeHtml(row.label || row.field)}</strong>
+      <div>
+        <span>Before</span>
+        <p>${escapeHtml((row.before || []).join(", ") || "Empty")}</p>
+      </div>
+      <div>
+        <span>After</span>
+        <p>${escapeHtml((row.after || []).join(", ") || "Empty")}</p>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderConfigAgentPanel() {
+  if (!els.configAgentPanel) return;
+  const admin = state.currentUser?.role === "admin";
+  els.configAgentPanel.classList.toggle("hidden", !admin);
+  if (!admin) return;
+  if (els.configAgentPropose) {
+    els.configAgentPropose.disabled = state.configAgent.loading;
+    els.configAgentPropose.textContent = state.configAgent.loading ? "Preparing..." : "Generate Proposal";
+  }
+  if (els.configAgentApply) {
+    const hasChanges = Boolean(state.configAgent.proposal?.diff?.length);
+    els.configAgentApply.disabled = state.configAgent.loading || !hasChanges;
+  }
+  if (els.configAgentExamples) {
+    const examples = state.configAgent.examples?.length
+      ? state.configAgent.examples
+      : state.integrations.configuration_agent_examples || [];
+    els.configAgentExamples.innerHTML = examples.map(prompt => `
+      <button class="agent-chip" type="button" data-config-agent-example="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>
+    `).join("");
+  }
+  if (els.configAgentResult) {
+    const proposal = state.configAgent.proposal;
+    if (!proposal) {
+      els.configAgentResult.innerHTML = `<p class="empty-copy">Ask for a safe CRM configuration change. The agent will prepare a proposal before anything is applied.</p>`;
+    } else {
+      els.configAgentResult.innerHTML = `
+        <div class="config-proposal-head">
+          <strong>${escapeHtml(proposal.summary || "Configuration proposal")}</strong>
+          <span>${escapeHtml(proposal.status || "draft")}</span>
+        </div>
+        ${proposal.warnings?.length ? `<div class="config-warning">${proposal.warnings.map(escapeHtml).join("<br>")}</div>` : ""}
+        <div class="config-diff-list">${configDiffHtml(proposal.diff || [])}</div>
+      `;
+    }
+  }
+  if (els.configAgentAudit) {
+    const rows = state.configAgent.audit || [];
+    els.configAgentAudit.innerHTML = rows.length ? rows.slice(0, 8).map(item => `
+      <article class="config-audit-item">
+        <div>
+          <strong>${escapeHtml(String(item.action || "").replace(/_/g, " "))}</strong>
+          <p>${escapeHtml(item.actor_name || item.actor_uid || "Admin")} - ${escapeHtml(formatDateTime(item.timestamp || item.created_at))}</p>
+        </div>
+        <span>${Number(item.diff?.length || 0)} change${Number(item.diff?.length || 0) === 1 ? "" : "s"}</span>
+      </article>
+    `).join("") : `<p class="empty-copy">No configuration audit entries yet.</p>`;
+  }
+}
+
+async function loadConfigurationAgentState() {
+  if (state.currentUser?.role !== "admin") {
+    state.configAgent = { loading: false, proposal: null, audit: [], examples: [] };
+    renderConfigAgentPanel();
+    return;
+  }
+  try {
+    const result = await api("/api/configuration-agent/state");
+    state.configAgent.audit = result.audit || [];
+    state.configAgent.examples = result.examples || [];
+  } catch (error) {
+    state.configAgent.audit = [];
+    setMessage(els.configAgentMessage, error.message, "error");
+  }
+  renderConfigAgentPanel();
+}
+
+async function proposeConfigChange() {
+  const prompt = els.configAgentPrompt?.value.trim() || "";
+  if (!prompt || state.configAgent.loading) return;
+  state.configAgent.loading = true;
+  setMessage(els.configAgentMessage, "Preparing configuration proposal...");
+  renderConfigAgentPanel();
+  try {
+    const proposal = await api("/api/configuration-agent/propose", {
+      method: "POST",
+      body: JSON.stringify({ prompt })
+    });
+    state.configAgent.proposal = proposal;
+    await loadConfigurationAgentState();
+    setMessage(els.configAgentMessage, proposal.diff?.length ? "Proposal ready. Review the diff before applying." : "No change was detected.", proposal.diff?.length ? "success" : "");
+  } catch (error) {
+    setMessage(els.configAgentMessage, error.message, "error");
+  } finally {
+    state.configAgent.loading = false;
+    renderConfigAgentPanel();
+  }
+}
+
+async function applyConfigProposal() {
+  const proposal = state.configAgent.proposal;
+  if (!proposal?.diff?.length || state.configAgent.loading) return;
+  const adminPassword = adminPasswordPrompt("apply configuration changes");
+  if (!adminPassword) return;
+  const reason = window.prompt("Reason for this configuration change:", proposal.prompt || "");
+  state.configAgent.loading = true;
+  setMessage(els.configAgentMessage, "Applying configuration...");
+  renderConfigAgentPanel();
+  try {
+    await api("/api/configuration-agent/apply", {
+      method: "POST",
+      body: JSON.stringify({
+        changes: proposal.changes,
+        proposal_id: proposal.id,
+        reason: reason || proposal.prompt,
+        admin_password: adminPassword
+      })
+    });
+    state.configAgent.proposal = null;
+    if (els.configAgentPrompt) els.configAgentPrompt.value = "";
+    await loadWorkspace();
+    await loadConfigurationAgentState();
+    setMessage(els.configAgentMessage, "Configuration applied and audit trail updated.", "success");
+  } catch (error) {
+    setMessage(els.configAgentMessage, error.message, "error");
+  } finally {
+    state.configAgent.loading = false;
+    renderConfigAgentPanel();
+  }
+}
+
 function renderDashboardView() {
+  renderNeedsAttentionPanel();
   renderPerformanceAnalytics();
+  renderMarketSnapshotPanel();
+  renderActionPlanPanel();
   renderLossReasonsAnalytics();
   renderSalesmanDashboard();
+  renderMarketIntelPanel();
+  renderAgentPanel();
+  renderConfigAgentPanel();
+  renderHeaderSummary();
+  const focusHeader = els.relationshipFocusPanel?.querySelector(".panel-header");
+  if (focusHeader) {
+    focusHeader.innerHTML = `
+      <div>
+        <span>Needs Attention</span>
+        <h2>Cold relationships</h2>
+      </div>
+      <strong class="panel-icon">!</strong>
+    `;
+  }
   const focus = [...state.leads]
     .sort((a, b) => {
       const healthRank = { RED: 0, AMBER: 1, GREEN: 2 };
@@ -1577,12 +3979,13 @@ function renderDashboardView() {
     })
     .slice(0, 5);
   els.dashboardFocus.innerHTML = focus.map(lead => `
-    <button class="insight-item" data-focus-lead="${escapeHtml(lead.id)}">
-      <div>
+    <button class="dashboard-activity-item dashboard-focus-item" type="button" data-focus-lead="${escapeHtml(lead.id)}">
+      <span class="activity-pin attention-square ${drawerStageClass(lead.stage)}" aria-hidden="true"></span>
+      <div class="dashboard-focus-copy">
         <strong>${escapeHtml(lead.company_name)}</strong>
-        <p>${escapeHtml(lead.next_action || "Qualify relationship")}</p>
+        <p>${escapeHtml([inferEmirate(lead), daysAgoLabel(lead.last_activity)].filter(Boolean).join(" - "))}</p>
       </div>
-      <span class="chip ${healthClass(lead.health)}">${escapeHtml(lead.health?.label || "AMBER")}</span>
+      <span class="stage-badge compact ${drawerStageClass(lead.stage)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span>
     </button>
   `).join("") || `<p class="empty-copy">No companies yet.</p>`;
 
@@ -1602,26 +4005,145 @@ function renderDashboardView() {
       </article>
     `;
   }).join("");
+  if (els.dashboardActivityFeed) {
+    const latest = (state.activities || []).slice(0, 5);
+    els.dashboardActivityFeed.innerHTML = latest.map(activity => `
+      <button class="dashboard-activity-item" type="button" data-dashboard-activity-lead="${escapeHtml(activity.lead_id)}">
+        <span class="activity-pin">${escapeHtml(ACTIVITY_TYPE_ICONS[activity.type] || "PIN")}</span>
+        <div>
+          <strong>${escapeHtml(activity.company_name || "Unnamed account")}</strong>
+          <p>${escapeHtml(activity.note || activity.text || "No note added.")}</p>
+        </div>
+      </button>
+    `).join("") || `<p class="empty-copy">No recent interactions yet.</p>`;
+    document.querySelectorAll("[data-dashboard-activity-lead]").forEach(button => {
+      button.addEventListener("click", () => {
+        state.selectedId = button.dataset.dashboardActivityLead;
+        openLeadDrawer(state.selectedId, "activities");
+      });
+    });
+  }
+}
+
+function renderMarketIntelPanel() {
+  if (!els.marketIntelPanel || !els.marketIntelFeed) return;
+  const admin = ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
+  els.marketIntelPanel.classList.toggle("hidden", false);
+  els.refreshMarketIntel?.classList.toggle("hidden", !admin);
+  if (els.marketIntelKicker) els.marketIntelKicker.textContent = admin ? "Intel Overview" : "Market Intel";
+  if (els.marketIntelTitle) els.marketIntelTitle.textContent = admin ? "Last 7 days across territories" : "Signals matched to your prospects";
+  const items = (state.marketIntel.items || []).slice(0, admin ? 8 : 5);
+  if (state.marketIntel.disabled) {
+    els.marketIntelFeed.innerHTML = `<p class="empty-copy">Market intelligence feed is disabled until ZAWYA_API_KEY and feed URL are configured.</p>`;
+    return;
+  }
+  els.marketIntelFeed.innerHTML = items.length
+    ? items.map(intelItemMarkup).join("")
+    : `<p class="empty-copy">No market intelligence items matched yet. Weekly feeds will appear here after sources are configured.</p>`;
+}
+
+function snapshotValue(snapshot, key, fallback = "Not recorded") {
+  return escapeHtml(snapshot?.[key] || fallback);
+}
+
+function attentionFlagCard(flag) {
+  const company = flag.company_snapshot || {};
+  const pmr = flag.latest_pmr_snapshot || {};
+  return `
+    <article class="attention-flag-card">
+      <details>
+        <summary>
+          <span class="flag-status">${escapeHtml(flag.status || "open")}</span>
+          <strong>${escapeHtml(flag.company_name || company.company_name || "Company")}</strong>
+          <small>Flagged by ${escapeHtml(flag.flagged_by_name || "User")} - ${escapeHtml(String(flag.flagged_at || flag.created_at || "").slice(0, 10) || "today")}</small>
+        </summary>
+        <p>${escapeHtml(flag.reason || "No reason provided.")}</p>
+        <div class="flag-snapshot-grid">
+          <span><b>Stage</b>${snapshotValue(company, "stage")}</span>
+          <span><b>Owner</b>${snapshotValue(company, "assigned_salesman")}</span>
+          <span><b>Next action</b>${snapshotValue(company, "next_action")}</span>
+          <span><b>Due</b>${snapshotValue(company, "next_action_date")}</span>
+          <span><b>Latest PMR heat</b>${snapshotValue(pmr, "relationship_heat_score")}</span>
+          <span><b>PMR director action</b>${snapshotValue(pmr, "director_action_required")}</span>
+        </div>
+        ${pmr.notes ? `<p class="flag-pmr-note"><b>Latest PMR notes:</b> ${escapeHtml(pmr.notes)}</p>` : ""}
+        <div class="flag-actions">
+          <button class="small-action" type="button" data-open-flag-lead="${escapeHtml(flag.company_id)}">Open company record</button>
+          ${String(flag.status || "open") === "open" ? `<button class="small-action" type="button" data-flag-action="acknowledge" data-flag-id="${escapeHtml(flag.id || flag.flag_id)}">Acknowledge</button>` : ""}
+          ${String(flag.status || "") !== "resolved" ? `<button class="small-action danger" type="button" data-flag-action="resolve" data-flag-id="${escapeHtml(flag.id || flag.flag_id)}">Resolve</button>` : ""}
+        </div>
+      </details>
+    </article>
+  `;
+}
+
+function renderNeedsAttentionPanel() {
+  if (!els.needsAttentionPanel || !els.needsAttentionList) return;
+  const admin = state.currentUser?.role === "admin";
+  els.needsAttentionPanel.classList.toggle("hidden", !admin);
+  if (!admin) return;
+  const open = (state.attentionFlags || []).filter(flag => String(flag.status || "open") === "open");
+  if (els.needsAttentionCount) els.needsAttentionCount.textContent = `${open.length} open`;
+  els.needsAttentionList.innerHTML = open.length
+    ? open.map(attentionFlagCard).join("")
+    : `<p class="empty-copy">No open director alerts.</p>`;
+  els.needsAttentionList.querySelectorAll("[data-open-flag-lead]").forEach(button => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.openFlagLead;
+      state.selectedId = id;
+      openLeadDrawer(id);
+    });
+  });
+  els.needsAttentionList.querySelectorAll("[data-flag-action]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const action = button.dataset.flagAction;
+      const body = { action };
+      if (action === "resolve") {
+        const note = window.prompt("Resolution note:");
+        if (!note?.trim()) return;
+        body.resolution_note = note.trim();
+      }
+      button.disabled = true;
+      try {
+        await api(`/api/attention-flags/${encodeURIComponent(button.dataset.flagId)}`, {
+          method: "PATCH",
+          body: JSON.stringify(body)
+        });
+        await fetchAttentionFlags();
+        renderNeedsAttentionPanel();
+        setToast(action === "resolve" ? "Director alert resolved." : "Director alert acknowledged.", "success");
+      } catch (error) {
+        setToast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
 }
 
 function renderLeadList() {
   const leads = filteredLeads();
-  els.leadCount.textContent = `${leads.length} record${leads.length === 1 ? "" : "s"}`;
-  els.leadList.innerHTML = leads.map(lead => `
+  els.leadCount.textContent = `${leads.length} record${leads.length === 1 ? "" : "s"}${state.importedAfter ? " from latest import" : ""}`;
+  els.leadList.innerHTML = leads.map(lead => {
+    const origin = leadOriginForCurrentUser(lead, state.currentUser);
+    return `
     <button class="lead-card ${lead.id === state.selectedId ? "active" : ""}" data-lead-id="${escapeHtml(lead.id)}">
       <div class="lead-title">
+        <span class="priority-dot ${priorityClass(lead.priority)}"></span>
         <strong>${escapeHtml(lead.company_name)}</strong>
-        <span class="chip ${priorityClass(lead.priority)}">${escapeHtml(lead.priority)}</span>
+        <span class="lead-chevron">&rsaquo;</span>
       </div>
-      <p>${escapeHtml(lead.product_interest)}</p>
+      <p>${escapeHtml([inferEmirate(lead), daysAgoLabel(lead.last_activity)].filter(Boolean).join(" - "))}</p>
+      ${leadActionPlanMarkup(lead)}
       <div class="chip-row">
-        <span class="chip ${priorityClass(lead.stage)}">${escapeHtml(lead.stage)}</span>
+        <span class="stage-badge ${drawerStageClass(lead.stage)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span>
         <span class="chip ${healthClass(lead.health)}">${escapeHtml(lead.health?.label || "AMBER")}</span>
         <span class="chip">${escapeHtml(lead.territory)}</span>
+        <span class="chip ${leadOriginChipClass(origin)}">${escapeHtml(origin)}</span>
         <span class="chip">${escapeHtml(lead.assigned_salesman)}</span>
       </div>
     </button>
-  `).join("");
+    `;
+  }).join("");
 
   document.querySelectorAll(".lead-card").forEach(card => {
     card.addEventListener("click", () => {
@@ -1635,6 +4157,48 @@ function renderLeadList() {
 function formatAED(value) {
   const number = Number(value || 0);
   return number ? `AED ${number.toLocaleString("en-AE")}` : "AED -";
+}
+
+function greetingText() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function firstName(value) {
+  return String(value || "").trim().split(/\s+/)[0] || "Team";
+}
+
+function stageDisplayLabel(stage) {
+  const key = kanbanStageForLead({ stage });
+  if (key === "OUTREACH") return "CONTACTED";
+  if (key === "SAMPLING") return "QUOTATION SENT";
+  if (key === "ENGAGED") return "NEGOTIATION";
+  if (key === "ACTIVE") return "WON";
+  if (key === "DORMANT") return "LOST";
+  return "NEW";
+}
+
+function daysAgoLabel(dateValue) {
+  if (!dateValue) return "No activity yet";
+  const days = daysSince(dateValue);
+  if (days <= 0) return "today";
+  if (days === 1) return "1 day ago";
+  if (days >= 999) return "No activity yet";
+  return `${days} days ago`;
+}
+
+function renderHeaderSummary() {
+  if (!state.currentUser) return;
+  const territory = state.currentUser.role === "admin"
+    ? "All territories"
+    : (state.currentUser.territory || "UAE");
+  if (els.greetingLabel) els.greetingLabel.textContent = greetingText();
+  if (els.dashboardUserName) els.dashboardUserName.textContent = firstName(state.currentUser.name || state.currentUser.email);
+  if (els.dashboardSubline) {
+    els.dashboardSubline.textContent = `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} - ${territory}`;
+  }
 }
 
 function leadInitial(lead) {
@@ -1694,6 +4258,70 @@ function promptLostReason(lead) {
   });
 }
 
+function salesmanByName(name) {
+  const target = String(name || "").trim().toLowerCase();
+  return (state.settings.salesmen || []).find(person => salesmanName(person).toLowerCase() === target);
+}
+
+function promptHandoff(existingLead, newSalesmanName) {
+  if (!els.handoffDialog || !els.handoffForm) return Promise.resolve(null);
+  const oldOwner = existingLead.assigned_salesman || "Unassigned";
+  const newOwner = newSalesmanName || "Unassigned";
+  const newProfile = salesmanByName(newOwner);
+  const oldTerritory = existingLead.territory || "Not set";
+  const newTerritory = newProfile?.territory || oldTerritory;
+  els.handoffForm.reset();
+  if (els.handoffTitle) els.handoffTitle.textContent = `Reassign ${existingLead.company_name || "lead"}`;
+  if (els.handoffSubtitle) els.handoffSubtitle.textContent = "Add a handoff note so the ownership change is auditable.";
+  if (els.handoffSummary) {
+    els.handoffSummary.innerHTML = `
+      <span><strong>Owner:</strong> ${escapeHtml(oldOwner)} to ${escapeHtml(newOwner)}</span>
+      <span><strong>Territory:</strong> ${escapeHtml(oldTerritory)} to ${escapeHtml(newTerritory)}</span>
+    `;
+  }
+  if (els.handoffMessage) setMessage(els.handoffMessage, "Minimum 20 characters. Mention what changed and what the new owner should do next.");
+  if (els.confirmHandoff) els.confirmHandoff.disabled = true;
+
+  return new Promise(resolve => {
+    const noteField = els.handoffForm.elements.handoff_note;
+    const cleanup = () => {
+      noteField.removeEventListener("input", onInput);
+      els.handoffForm.removeEventListener("submit", onSubmit);
+      els.cancelHandoff?.removeEventListener("click", onCancel);
+      els.handoffDialog.removeEventListener("cancel", onCancel);
+    };
+    const onInput = () => {
+      const valid = noteField.value.trim().length >= 20;
+      if (els.confirmHandoff) els.confirmHandoff.disabled = !valid;
+      if (els.handoffMessage) {
+        setMessage(els.handoffMessage, valid ? "Ready to confirm reassignment." : "Minimum 20 characters. Mention what changed and what the new owner should do next.", valid ? "success" : "");
+      }
+    };
+    const onCancel = event => {
+      event?.preventDefault?.();
+      cleanup();
+      els.handoffDialog.close();
+      resolve(null);
+    };
+    const onSubmit = event => {
+      event.preventDefault();
+      const note = noteField.value.trim();
+      if (note.length < 20) {
+        setMessage(els.handoffMessage, "A handoff note is required before reassigning.", "error");
+        return;
+      }
+      cleanup();
+      els.handoffDialog.close();
+      resolve(note);
+    };
+    noteField.addEventListener("input", onInput);
+    els.handoffForm.addEventListener("submit", onSubmit);
+    els.cancelHandoff?.addEventListener("click", onCancel);
+    els.handoffDialog.addEventListener("cancel", onCancel);
+    els.handoffDialog.showModal();
+  });
+}
+
 function resolveLostReason(value) {
   const request = state.lostReasonRequest;
   state.lostReasonRequest = null;
@@ -1728,14 +4356,32 @@ function openLeadDrawer(leadId, tab = "overview") {
   state.leadDrawerTab = tab;
   state.leadDrawerLoading = true;
   state.leadDrawerPmrs = [];
+  state.leadDrawerIntel = [];
+  state.leadDrawerHandoffs = [];
   renderLeadDrawer();
-  api(`/api/leads/${encodeURIComponent(leadId)}/pmrs`)
-    .then(pmrs => {
-      if (state.selectedId === leadId) state.leadDrawerPmrs = pmrs || [];
-    })
-    .catch(error => {
-      state.leadDrawerPmrs = [];
-      setToast(`PMRs could not be loaded: ${error.message}`, "error");
+  Promise.allSettled([
+    api(`/api/leads/${encodeURIComponent(leadId)}/pmrs`),
+    api(`/api/leads/${encodeURIComponent(leadId)}/intel`),
+    api(`/api/leads/${encodeURIComponent(leadId)}/handoffs`),
+    outboxItems()
+  ])
+    .then(results => {
+      if (state.selectedId !== leadId) return;
+      const syncedPmrs = results[0].status === "fulfilled" ? results[0].value || [] : [];
+      const pendingPmrs = results[3].status === "fulfilled"
+        ? results[3].value
+          .filter(item => item.kind === "pmr" && item.lead_id === leadId)
+          .map(item => ({
+            ...(item.payload || {}),
+            id: item.id,
+            company_id: leadId,
+            pending_sync: true,
+            voice_note_pending_upload: Boolean(item.voice_note_blob)
+          }))
+        : [];
+      state.leadDrawerPmrs = [...pendingPmrs, ...syncedPmrs];
+      if (results[1].status === "fulfilled") state.leadDrawerIntel = results[1].value || [];
+      if (results[2].status === "fulfilled") state.leadDrawerHandoffs = results[2].value || [];
     })
     .finally(() => {
       if (state.selectedId === leadId) {
@@ -1770,15 +4416,163 @@ function drawerSkeleton() {
 
 function detailField(label, value, options = {}) {
   if (!value) value = "Not added";
+  const auto = options.auto ? `<span class="auto-tag">Auto</span>` : "";
   const content = options.href
     ? `<a href="${escapeHtml(options.href)}" ${options.external ? 'target="_blank" rel="noopener"' : ""}>${escapeHtml(value)}</a>`
     : escapeHtml(value);
-  return `<article class="drawer-field ${options.overdue ? "overdue" : ""}"><span>${escapeHtml(label)}</span><strong>${content}</strong></article>`;
+  return `<article class="drawer-field ${options.overdue ? "overdue" : ""}"><span>${escapeHtml(label)}${auto}</span><strong>${content}</strong></article>`;
 }
 
 function tagPills(value) {
   return String(value || "").split(",").map(tag => tag.trim()).filter(Boolean)
     .map(tag => `<span class="chip">${escapeHtml(tag)}</span>`).join("") || `<span class="empty-copy">No tags added.</span>`;
+}
+
+function autoEnrichmentData(lead) {
+  return lead?.auto_enrichment?.data && typeof lead.auto_enrichment.data === "object" ? lead.auto_enrichment.data : {};
+}
+
+function isAutoPending(lead) {
+  return lead?.auto_enrichment?.status === "pending_review" || lead?.auto_enrichment?.status === "failed";
+}
+
+function autoField(lead, key) {
+  return isAutoPending(lead) && Object.hasOwn(autoEnrichmentData(lead), key);
+}
+
+function autoEnrichmentBanner(lead) {
+  if (!lead?.auto_enrichment) return "";
+  const status = lead.auto_enrichment.status || "pending_review";
+  if (status === "verified") return "";
+  const date = lead.auto_enrichment.enriched_at
+    ? new Date(lead.auto_enrichment.enriched_at).toLocaleDateString("en-AE", { year: "numeric", month: "short", day: "numeric" })
+    : "recently";
+  const warning = lead.auto_enrichment.low_confidence ? `<span>Low confidence - verify before saving.</span>` : "";
+  return `
+    <div class="auto-enrichment-banner ${lead.auto_enrichment.low_confidence ? "low" : ""}">
+      <div>
+        <strong>${status === "failed" ? "Auto-enrichment unavailable" : `Auto-enriched on ${escapeHtml(date)} - please review and confirm.`}</strong>
+        ${warning}
+      </div>
+      <div class="auto-enrichment-actions">
+        ${status !== "failed" ? `<button class="ghost-button" type="button" data-confirm-auto-enrichment="${escapeHtml(lead.id)}">Apply All</button>` : ""}
+        <button class="ghost-button" type="button" data-reenrich-lead="${escapeHtml(lead.id)}">Re-enrich</button>
+        <button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit</button>
+      </div>
+    </div>
+  `;
+}
+
+function autoValue(value) {
+  if (Array.isArray(value)) {
+    if (!value.length) return "";
+    if (typeof value[0] === "object") {
+      return value.map(item => [item.name, item.title].filter(Boolean).join(" - ")).filter(Boolean).join("; ");
+    }
+    return value.join(", ");
+  }
+  return String(value || "").trim();
+}
+
+function autoReviewRows(lead) {
+  const data = autoEnrichmentData(lead);
+  return [
+    { key: "sector_classification", label: "Sector", current: lead.sector || lead.industry, auto: data.sector_classification },
+    { key: "estimated_scale", label: "Scale", current: lead.estimated_scale, auto: data.estimated_scale },
+    { key: "estimated_annual_revenue", label: "Annual revenue", current: lead.estimated_annual_revenue, auto: data.estimated_annual_revenue },
+    { key: "key_personnel", label: "Key personnel", current: lead.key_personnel, auto: data.key_personnel },
+    { key: "recent_projects", label: "Recent projects", current: lead.recent_projects, auto: data.recent_projects },
+    { key: "certifications", label: "Certifications", current: lead.certifications, auto: data.certifications },
+    { key: "compliance_flags", label: "Compliance flags", current: lead.certifications, auto: data.compliance_flags },
+    { key: "steel_products_likely_needed", label: "Likely steel products", current: lead.steel_products_likely_needed, auto: data.steel_products_likely_needed },
+    { key: "competitors_likely_using", label: "Likely competitors", current: lead.competitors_likely_using, auto: data.competitors_likely_using }
+  ].filter(row => autoValue(row.auto));
+}
+
+function autoEnrichmentReviewPanel(lead) {
+  if (!isAutoPending(lead) || lead.auto_enrichment?.status === "failed") return "";
+  const rows = autoReviewRows(lead);
+  if (!rows.length) return "";
+  return `
+    <section class="auto-review-panel ${lead.auto_enrichment?.low_confidence ? "low" : ""}">
+      <div class="drawer-tab-heading">
+        <div>
+          <h3>Review Auto-Enrichment</h3>
+          <span class="meta-label">${lead.auto_enrichment?.low_confidence ? "Low confidence - verify before applying." : "Apply only details you trust."}</span>
+        </div>
+        <button class="primary-button" type="button" data-confirm-auto-enrichment="${escapeHtml(lead.id)}">Apply All</button>
+      </div>
+      <div class="auto-review-table">
+        <div class="auto-review-head"><span>Field</span><span>Current</span><span>Auto-Enriched</span><span></span></div>
+        ${rows.map(row => `
+          <article class="auto-review-row">
+            <strong>${escapeHtml(row.label)}</strong>
+            <span>${escapeHtml(autoValue(row.current) || "Not added")}</span>
+            <span>${escapeHtml(autoValue(row.auto))}</span>
+            <button class="small-action" type="button" data-apply-auto-field="${escapeHtml(row.key)}" data-lead-id="${escapeHtml(lead.id)}">Apply</button>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function linkedinControls(lead) {
+  const titles = state.integrations.linkedin_titles?.length
+    ? state.integrations.linkedin_titles
+    : ["Procurement Manager", "Supply Chain Manager", "Project Manager", "Estimation Manager", "MD CEO"];
+  return `
+    <div class="linkedin-search">
+      <select data-linkedin-title="${escapeHtml(lead.id)}">
+        ${titles.map(title => `<option value="${escapeHtml(title)}">${escapeHtml(title)}</option>`).join("")}
+      </select>
+      <button class="ghost-button" type="button" data-linkedin-search="${escapeHtml(lead.id)}">Find contact on LinkedIn</button>
+    </div>
+  `;
+}
+
+function intelItemMarkup(item) {
+  return `
+    <article class="intel-item">
+      <div class="intel-title-row">
+        <span class="source-badge">${escapeHtml(item.source || "Source")}</span>
+        <span class="meta-label">${escapeHtml(String(item.published_at || item.fetched_at || "").slice(0, 10))}</span>
+      </div>
+      <strong>${escapeHtml(item.title || "Untitled intelligence item")}</strong>
+      <p>${escapeHtml(item.summary || "No summary available.")}</p>
+      <div class="chip-row">
+        ${(item.sector_tags || []).slice(0, 3).map(tag => `<span class="chip">${escapeHtml(tag)}</span>`).join("")}
+        ${(item.geography_tags || []).slice(0, 3).map(tag => `<span class="chip warm">${escapeHtml(tag)}</span>`).join("")}
+      </div>
+      ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">View source</a>` : ""}
+    </article>
+  `;
+}
+
+function validateQuotationInput(input, statusEl) {
+  clearTimeout(quotationValidationTimer);
+  const ref = input?.value?.trim() || "";
+  if (!statusEl) return;
+  if (!ref) {
+    statusEl.textContent = "";
+    statusEl.className = "quote-ref-status";
+    return;
+  }
+  statusEl.textContent = "Checking...";
+  statusEl.className = "quote-ref-status checking";
+  quotationValidationTimer = setTimeout(async () => {
+    try {
+      const result = await api("/api/erp/validate-quotation", {
+        method: "POST",
+        body: JSON.stringify({ ref })
+      });
+      statusEl.textContent = result.valid ? "Valid ref" : "Invalid ref";
+      statusEl.className = `quote-ref-status ${result.valid ? "valid" : "invalid"}`;
+    } catch {
+      statusEl.textContent = "ERP unavailable";
+      statusEl.className = "quote-ref-status invalid";
+    }
+  }, 450);
 }
 
 function renderLossDetails(lead) {
@@ -1800,10 +4594,11 @@ function renderLossDetails(lead) {
 function renderDrawerOverview(lead) {
   const overdue = lead.next_action_date && lead.next_action_date < today();
   return `
+    ${autoEnrichmentBanner(lead)}
     <section class="drawer-section">
       <h3>Contact Information</h3>
       <div class="drawer-field-grid">
-        ${detailField("Primary contact", [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - "))}
+        ${detailField("Primary contact", [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - "), { auto: autoField(lead, "key_personnel") })}
         ${detailField("Phone", lead.phone, lead.phone ? { href: `tel:${lead.phone}` } : {})}
         ${detailField("Email", lead.email, lead.email ? { href: `mailto:${lead.email}` } : {})}
         ${detailField("Secondary contact", [lead.secondary_contact_name, lead.secondary_contact_title].filter(Boolean).join(" - "))}
@@ -1818,33 +4613,53 @@ function renderDrawerOverview(lead) {
       <div class="drawer-field-grid">
         ${detailField("Legal name", lead.legal_name)}
         ${detailField("Year established", lead.year_established)}
-        ${detailField("Industry", lead.industry || lead.business_category)}
+        ${detailField("Industry", lead.industry || lead.business_category || lead.sector, { auto: autoField(lead, "sector_classification") })}
         ${detailField("Product interest", lead.product_interest)}
         ${detailField("Quotation ref", lead.quotation_ref)}
         ${detailField("First order date", lead.first_order_date)}
         ${detailField("Monthly volume", lead.estimated_monthly_volume)}
         ${detailField("Assigned salesman", lead.assigned_salesman)}
+        ${detailField("Activity purpose", normalizeActivityPurpose(lead.activity_purpose))}
         ${detailField("Next action date", lead.next_action_date ? `${lead.next_action_date}${overdue ? " - overdue" : ""}` : "", { overdue })}
-        ${detailField("Next action", lead.next_action)}
+        ${detailField("Next action", lead.next_action ? normalizeNextActionPlan(lead.next_action) : "")}
       </div>
       <div class="drawer-tags">${tagPills(lead.tags)}</div>
-      <p class="drawer-remarks">${escapeHtml(lead.products_services_remarks || "No products/services remarks added.")}</p>
+      <p class="drawer-remarks">${autoField(lead, "recent_projects") ? `<span class="auto-tag">Auto</span> ` : ""}${escapeHtml(lead.products_services_remarks || "No products/services remarks added.")}</p>
     </section>
     ${renderLossDetails(lead)}
+    ${autoEnrichmentReviewPanel(lead)}
     <div class="drawer-quick-actions">
       <a class="ghost-button" href="${lead.phone ? `tel:${escapeHtml(lead.phone)}` : "#"}">Call</a>
       <a class="ghost-button" href="${lead.email ? `mailto:${escapeHtml(lead.email)}` : "#"}">Email</a>
       <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button>
       <button class="primary-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit Lead</button>
     </div>
+    ${linkedinControls(lead)}
   `;
 }
 
 function renderDrawerActivities(lead) {
   const activities = [...(lead.activities || [])].sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  const handoffs = [...(state.leadDrawerHandoffs || [])].sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
   return `
     <section class="drawer-section">
       <div class="drawer-tab-heading"><h3>Activities</h3><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log New Activity</button></div>
+      ${handoffs.length ? `
+        <div class="handoff-history">
+          <h4>Ownership Handoff History</h4>
+          ${handoffs.map(item => `
+            <article class="handoff-event">
+              <div>
+                <span class="activity-type-label"><i>MOVE</i>Handoff</span>
+                <span class="meta-label">${escapeHtml(String(item.timestamp || "").slice(0, 10))}</span>
+              </div>
+              <strong>${escapeHtml(item.previous_owner_name || "Unassigned")} to ${escapeHtml(item.new_owner_name || "Unassigned")}</strong>
+              <small>${escapeHtml(item.previous_territory || "No territory")} to ${escapeHtml(item.new_territory || "No territory")} - by ${escapeHtml(item.initiated_by_name || "Admin")}</small>
+              <p class="activity-note clamp" data-expand-note>${escapeHtml(item.handoff_note || "No handoff note saved.")}</p>
+            </article>
+          `).join("")}
+        </div>
+      ` : ""}
       <div class="drawer-list">
         ${activities.map((activity, index) => `
           <article class="drawer-activity ${activityTypeClass(activity.type)}">
@@ -1865,6 +4680,13 @@ function heatClass(value) {
   return "cold";
 }
 
+function linkedActivityLabel(lead, activityId) {
+  if (!activityId) return "";
+  const activity = (lead.activities || []).find(item => String(item.id || "") === String(activityId));
+  if (!activity) return `Linked activity ${String(activityId).slice(0, 12)}`;
+  return `${activity.at || "No date"} - ${activity.type || "Activity"}`;
+}
+
 function renderDrawerPmrs(lead) {
   return `
     <section class="drawer-section">
@@ -1874,9 +4696,12 @@ function renderDrawerPmrs(lead) {
           <article class="drawer-pmr">
             <div class="drawer-card-title"><strong>${escapeHtml(pmr.meeting_date || "Meeting")}</strong><span class="chip ${heatClass(pmr.relationship_heat_score)}">Heat ${escapeHtml(pmr.relationship_heat_score || "3")}/5</span></div>
             <div class="chip-row">
+              ${pmr.pending_sync ? `<span class="chip warm">Pending sync</span>` : ""}
+              ${pmr.voice_note_pending_upload ? `<span class="chip warm">Voice upload queued</span>` : ""}
               <span class="chip">${escapeHtml(pmr.first_order_timing || "Timing unknown")}</span>
               <span class="chip">${escapeHtml(pmr.potential_annual_value || "Value unknown")}</span>
               <span class="chip">${escapeHtml(pmr.director_action_required || "No director action")}</span>
+              ${pmr.activity_id ? `<span class="chip">${escapeHtml(linkedActivityLabel(lead, pmr.activity_id))}</span>` : ""}
             </div>
             <p class="activity-note clamp" data-expand-note>${escapeHtml(pmr.notes || "No PMR notes added.")}</p>
             ${pmr.voice_note_url || pmr.voice_note_id ? `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(pmr.voice_note_id || "")}" ${pmr.voice_note_url ? `src="${escapeHtml(pmr.voice_note_url)}"` : ""}></audio>` : ""}
@@ -1923,6 +4748,21 @@ function renderDrawerNotes(lead) {
   `;
 }
 
+function renderDrawerIntel(lead) {
+  const items = state.leadDrawerIntel || [];
+  return `
+    <section class="drawer-section">
+      <div class="drawer-tab-heading">
+        <h3>Market Intel</h3>
+        <button class="ghost-button" type="button" data-refresh-lead-intel="${escapeHtml(lead.id)}">Refresh</button>
+      </div>
+      <div class="drawer-list intel-list">
+        ${items.length ? items.map(intelItemMarkup).join("") : `<div class="timeline-empty"><strong>No matched intel yet.</strong><span>Weekly feeds will appear here when sources are configured.</span></div>`}
+      </div>
+    </section>
+  `;
+}
+
 function renderLeadDrawer() {
   const lead = state.leads.find(item => item.id === state.selectedId);
   if (!state.leadDrawerOpen || !lead || !els.leadDrawerShell) return;
@@ -1930,13 +4770,14 @@ function renderLeadDrawer() {
   requestAnimationFrame(() => els.leadDrawerShell.classList.add("open"));
   els.leadDrawerShell.setAttribute("aria-hidden", "false");
   const admin = ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
-  const tabs = ["overview", "activities", "pmr", "reminders", "notes"];
-  const tabLabels = { overview: "Overview", activities: "Activities", pmr: "PMR", reminders: "Reminders", notes: "Notes" };
+  const tabs = ["overview", "activities", "pmr", "reminders", "intel", "notes"];
+  const tabLabels = { overview: "Overview", activities: "Activities", pmr: "PMR", reminders: "Reminders", intel: "Intel", notes: "Notes" };
   const body = state.leadDrawerLoading ? drawerSkeleton() : ({
     overview: renderDrawerOverview(lead),
     activities: renderDrawerActivities(lead),
     pmr: renderDrawerPmrs(lead),
     reminders: renderDrawerReminders(lead),
+    intel: renderDrawerIntel(lead),
     notes: renderDrawerNotes(lead)
   }[state.leadDrawerTab] || renderDrawerOverview(lead));
   els.leadDrawerContent.innerHTML = `
@@ -2003,6 +4844,75 @@ function bindLeadDrawerEvents() {
   });
   document.querySelectorAll("[data-drawer-edit-lead]").forEach(button => {
     button.addEventListener("click", () => openLeadEdit(button.dataset.drawerEditLead));
+  });
+  document.querySelectorAll("[data-confirm-auto-enrichment]").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        const updated = await api(`/api/leads/${button.dataset.confirmAutoEnrichment}/auto-enrichment/confirm`, {
+          method: "POST",
+          body: JSON.stringify({ apply_all: true })
+        });
+        const lead = state.leads.find(item => item.id === updated.id);
+        if (lead) Object.assign(lead, updated);
+        setToast("Auto-enrichment applied.", "success");
+        render();
+      } catch (error) {
+        setToast(error.message, "error");
+      }
+    });
+  });
+  document.querySelectorAll("[data-apply-auto-field]").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        const updated = await api(`/api/leads/${button.dataset.leadId}/auto-enrichment/confirm`, {
+          method: "POST",
+          body: JSON.stringify({ fields: [button.dataset.applyAutoField] })
+        });
+        const lead = state.leads.find(item => item.id === updated.id);
+        if (lead) Object.assign(lead, updated);
+        setToast("Auto-enrichment field applied.", "success");
+        render();
+      } catch (error) {
+        setToast(error.message, "error");
+      }
+    });
+  });
+  document.querySelectorAll("[data-reenrich-lead]").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        setToast("Refreshing company intelligence...", "");
+        const updated = await api(`/api/leads/${button.dataset.reenrichLead}/auto-enrichment/retry`, { method: "POST" });
+        const lead = state.leads.find(item => item.id === updated.id);
+        if (lead) Object.assign(lead, updated);
+        setToast("Company intelligence refreshed.", "success");
+        render();
+      } catch (error) {
+        setToast("Auto-enrichment unavailable - add details manually.", "error");
+      }
+    });
+  });
+  document.querySelectorAll("[data-linkedin-search]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const lead = state.leads.find(item => item.id === button.dataset.linkedinSearch);
+      const title = document.querySelector(`[data-linkedin-title="${CSS.escape(button.dataset.linkedinSearch)}"]`)?.value || "";
+      if (!lead) return;
+      try {
+        const result = await api(`/api/linkedin/search-url?company=${encodeURIComponent(lead.company_name)}&title=${encodeURIComponent(title)}`);
+        window.open(result.url, "_blank", "noopener");
+      } catch {
+        window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${lead.company_name} ${title || "Procurement Manager"}`)}`, "_blank", "noopener");
+      }
+    });
+  });
+  document.querySelectorAll("[data-refresh-lead-intel]").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        state.leadDrawerIntel = await api(`/api/leads/${button.dataset.refreshLeadIntel}/intel`);
+        renderLeadDrawer();
+      } catch (error) {
+        setToast(error.message, "error");
+      }
+    });
   });
   document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
     document.querySelector(".drawer-notes-view")?.classList.add("hidden");
@@ -2075,6 +4985,28 @@ async function addDrawerReminder(leadId) {
   }
 }
 
+function pmrLinkableActivities(lead) {
+  const meetingTypes = new Set(["in-person meeting", "site visit", "customer meeting", "phone call", "video call", "visit"]);
+  return (lead.activities || []).filter(activity => {
+    if (!activity?.id || activity.delete_request || activity.correction || activity.pmr_linked) return false;
+    const type = String(activity.type || "").trim().toLowerCase();
+    const text = String(activity.text || activity.note || "").toLowerCase();
+    return meetingTypes.has(type) || text.includes("meeting") || text.includes("visit");
+  });
+}
+
+function populatePmrActivityOptions(lead) {
+  if (!els.pmrActivityLink) return;
+  const activities = pmrLinkableActivities(lead);
+  els.pmrActivityLink.innerHTML = [
+    `<option value="">Create a new meeting activity for this PMR</option>`,
+    ...activities.map(activity => {
+      const label = `${activity.at || "No date"} - ${activity.type || "Activity"} - ${activity.text || activity.note || "No note"}`;
+      return `<option value="${escapeHtml(activity.id)}">${escapeHtml(label.slice(0, 140))}</option>`;
+    })
+  ].join("");
+}
+
 function openPmrForLead(leadId) {
   const lead = state.leads.find(item => item.id === leadId);
   if (!lead) return;
@@ -2083,6 +5015,7 @@ function openPmrForLead(leadId) {
   resetPmrVoiceNote();
   els.pmrForm.elements.company_id.value = lead.id;
   els.pmrForm.elements.meeting_date.value = today();
+  populatePmrActivityOptions(lead);
   els.pmrDialog.showModal();
 }
 
@@ -2093,12 +5026,16 @@ function openLeadEdit(leadId) {
   state.editingOriginalStage = lead.stage || "";
   state.editingLostData = null;
   leadFormTouched.clear();
+  resetLeadEnrichmentSession();
   els.leadForm.reset();
   Object.entries(lead).forEach(([key, value]) => {
     const field = els.leadForm.elements[key];
     if (!field) return;
     field.value = formValue(value);
   });
+  ensureLeadFormSelectValue("next_action", normalizeNextActionPlan(lead.next_action), NEXT_ACTION_PLAN_OPTIONS[0]);
+  ensureLeadFormSelectValue("activity_purpose", normalizeActivityPurpose(lead.activity_purpose), ACTIVITY_PURPOSE_OPTIONS[0]);
+  leadCompanyInputKey = leadCompanyOnlyKey(lead.company_name);
   setEnrichmentStatus("Editing existing lead. Review changes before saving.", "success");
   els.leadDialog.showModal();
 }
@@ -2140,6 +5077,7 @@ function renderKanbanView() {
     const stageLeads = leads.filter(lead => kanbanStageForLead(lead) === stage.key);
     const stageValue = stageLeads.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
     const cards = stageLeads.length ? stageLeads.map(lead => {
+      const origin = leadOriginForCurrentUser(lead, state.currentUser);
       const overdue = Boolean(lead.next_action_date) && new Date(`${lead.next_action_date}T23:59:59`) < new Date();
       const priorityTone = kanbanPriorityTone(lead.priority);
       return `
@@ -2157,7 +5095,9 @@ function renderKanbanView() {
           </div>
           ${isLostStageValue(lead.stage) && lead.lost_reason ? `<span class="lost-reason-tag">${escapeHtml(lostReasonLabel(lead.lost_reason))}</span>` : ""}
           <span class="kanban-salesman">${escapeHtml(lead.assigned_salesman || "Unassigned")}</span>
+          ${leadActionPlanMarkup(lead, true)}
           <div class="kanban-card-meta">
+            <span class="chip ${leadOriginChipClass(origin)}">${escapeHtml(origin)}</span>
             <span>${escapeHtml(formatAED(lead.estimated_value))}</span>
             <span class="${overdue ? "overdue" : ""}">${overdue ? "! " : ""}${escapeHtml(lead.next_action_date || "No follow-up")}</span>
           </div>
@@ -2263,11 +5203,11 @@ function renderSalesmenView() {
     els.salesmenGrid.innerHTML = `<p class="empty-copy">Salesman accounts are visible to administrators only.</p>`;
     return;
   }
-  const salesmen = state.settings.salesmen || [];
+  const salesmen = analyticsSalesmen().filter(person => salesmanName(person) !== "Unassigned");
   els.salesmenSummary.textContent = `${salesmen.length} ${salesmen.length === 1 ? "salesman" : "salespeople"}`;
   els.salesmenGrid.innerHTML = salesmen.map(person => {
     const name = typeof person === "string" ? person : person.name;
-    const owned = state.leads.filter(lead => lead.assigned_salesman === name);
+    const owned = state.leads.filter(lead => leadMatchesSalesman(lead, person)).sort(compareLeadPlans);
     const value = owned.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
     const overdue = owned.filter(isOverdue).length;
     const hot = owned.filter(lead => lead.priority === "Hot").length;
@@ -2283,9 +5223,113 @@ function renderSalesmenView() {
           <span><strong>${hot}</strong> Hot</span>
           <span><strong>${overdue}</strong> Overdue</span>
         </div>
+        <div class="salesman-plan-list compact">
+          ${owned.map(lead => {
+            const plan = leadActionPlanState(lead);
+            return `
+              <button class="salesman-plan-item" type="button" data-salesman-plan-lead="${escapeHtml(lead.id)}">
+                <div class="salesman-plan-copy">
+                  <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+                  <p>${escapeHtml(plan.action)}</p>
+                </div>
+                <div class="salesman-plan-meta">
+                  <span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span>
+                </div>
+              </button>
+            `;
+          }).join("") || `<p class="empty-copy">No registered leads yet.</p>`}
+        </div>
       </article>
     `;
   }).join("") || `<p class="empty-copy">No salesman accounts found.</p>`;
+  els.salesmenGrid.querySelectorAll("[data-salesman-plan-lead]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedId = button.dataset.salesmanPlanLead;
+      openLeadDrawer(button.dataset.salesmanPlanLead);
+      render();
+    });
+  });
+}
+
+function renderActionPlanPanel() {
+  if (!els.actionPlanPanel || !els.actionPlanList || !els.actionPlanSummary) return;
+  const admin = state.currentUser?.role === "admin";
+  els.actionPlanPanel.classList.toggle("hidden", !admin);
+  if (!admin) return;
+  const groups = analyticsSalesmen()
+    .filter(person => salesmanName(person) !== "Unassigned")
+    .map(person => {
+      const leads = state.leads.filter(lead => leadMatchesSalesman(lead, person)).sort(compareNewestLeadFirst);
+      return {
+        person,
+        name: salesmanName(person),
+        leads,
+        overdue: leads.filter(lead => leadActionPlanState(lead).chipClass === "hot").length
+      };
+    })
+    .filter(group => group.leads.length);
+  const totalLeads = groups.reduce((sum, group) => sum + group.leads.length, 0);
+  els.actionPlanSummary.textContent = `${totalLeads} lead${totalLeads === 1 ? "" : "s"} tracked`;
+  els.actionPlanList.innerHTML = groups.map(group => `
+    <article class="salesman-plan-card">
+      <div class="salesman-plan-head">
+        <div>
+          <h3>${escapeHtml(group.name)}</h3>
+          <p>${escapeHtml((group.person.territory || "").trim() || "Territory not set")} | ${group.leads.length} registered lead${group.leads.length === 1 ? "" : "s"} | ${group.overdue} overdue</p>
+        </div>
+        <div class="salesman-plan-head-meta">
+          ${group.leads.length > 10 ? `<span class="chip plan-soon">Latest 10 visible</span>` : ""}
+          <span class="chip ${group.overdue ? "hot" : "plan-upcoming"}">${group.overdue ? `${group.overdue} overdue` : "On track"}</span>
+        </div>
+      </div>
+      <div class="salesman-plan-table-wrap">
+        <table class="salesman-plan-table">
+          <thead>
+            <tr>
+              <th>Lead Registration Date</th>
+              <th>Lead Name</th>
+              <th>Next Action Plan Date</th>
+              <th>Purpose of Activity</th>
+              <th>Action Plan</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${group.leads.map(lead => {
+              const plan = leadActionPlanState(lead);
+              return `
+                <tr class="salesman-plan-row" data-action-plan-lead="${escapeHtml(lead.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
+                  <td data-label="Lead Registration Date">${escapeHtml(formatPlanDate(leadRegistrationDate(lead)) || "Not recorded")}</td>
+                  <td data-label="Lead Name">
+                    <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+                    <span class="salesman-plan-row-meta">${escapeHtml(stageDisplayLabel(lead.stage))}</span>
+                  </td>
+                  <td data-label="Next Action Plan Date">${escapeHtml(formatPlanDate(lead.next_action_date) || "Not set")}</td>
+                  <td data-label="Purpose of Activity">${escapeHtml(normalizeActivityPurpose(lead.activity_purpose))}</td>
+                  <td data-label="Action Plan">${escapeHtml(plan.action)}</td>
+                  <td data-label="Status"><span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span></td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  `).join("") || `<p class="empty-copy">No registered leads available for action-plan tracking yet.</p>`;
+  els.actionPlanList.querySelectorAll("[data-action-plan-lead]").forEach(row => {
+    const openLead = () => {
+      state.selectedId = row.dataset.actionPlanLead;
+      openLeadDrawer(row.dataset.actionPlanLead);
+      render();
+    };
+    row.addEventListener("click", openLead);
+    row.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openLead();
+      }
+    });
+  });
 }
 
 function allActivities() {
@@ -2471,6 +5515,77 @@ function daysUntil(dateValue) {
   return Math.round((dateOnly(dateValue) - dateOnly(today())) / 86_400_000);
 }
 
+function formatPlanDate(dateValue) {
+  const value = String(dateValue || "").slice(0, 10);
+  if (!value) return "";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-AE", { month: "short", day: "numeric" });
+}
+
+function leadRegistrationDate(lead) {
+  return String(lead?.created_at || lead?.imported_at || "").slice(0, 10);
+}
+
+function compareNewestLeadFirst(a, b) {
+  const aDate = leadRegistrationDate(a) || "";
+  const bDate = leadRegistrationDate(b) || "";
+  return String(bDate).localeCompare(String(aDate))
+    || String(b.created_at || b.imported_at || "").localeCompare(String(a.created_at || a.imported_at || ""))
+    || String(a.company_name || "").localeCompare(String(b.company_name || ""));
+}
+
+function leadActionPlanState(lead) {
+  const rawAction = String(lead?.next_action || "").trim();
+  const action = rawAction ? normalizeNextActionPlan(rawAction) : "";
+  const dueDate = String(lead?.next_action_date || "").slice(0, 10);
+  if (!action && !dueDate) {
+    return { action: "Next action plan not set", dueDate: "", dueLabel: "Plan needed", chipClass: "plan-missing", overdue: false };
+  }
+  if (!dueDate) {
+    return { action: action || "Next action plan not set", dueDate: "", dueLabel: "Due date not set", chipClass: "plan-missing", overdue: false };
+  }
+  const days = daysUntil(dueDate);
+  if (days < 0) {
+    return { action: action || "Follow up with customer", dueDate, dueLabel: daysOverdueLabel(dueDate), chipClass: "hot", overdue: true };
+  }
+  if (days === 0) {
+    return { action: action || "Follow up with customer", dueDate, dueLabel: "Due today", chipClass: "warm", overdue: false };
+  }
+  if (days <= 3) {
+    return { action: action || "Follow up with customer", dueDate, dueLabel: `Due in ${days} day${days === 1 ? "" : "s"}`, chipClass: "plan-soon", overdue: false };
+  }
+  return { action: action || "Follow up with customer", dueDate, dueLabel: `Due ${formatPlanDate(dueDate)}`, chipClass: "plan-upcoming", overdue: false };
+}
+
+function leadActionPlanMarkup(lead, compact = false) {
+  const plan = leadActionPlanState(lead);
+  return `
+    <div class="next-action-block ${compact ? "compact" : ""}">
+      <span class="next-action-label">Next Action</span>
+      <strong class="next-action-text ${plan.overdue ? "overdue" : ""}">${escapeHtml(plan.action)}</strong>
+      <div class="next-action-meta">
+        <span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span>
+        ${plan.dueDate ? `<span>${escapeHtml(formatPlanDate(plan.dueDate))}</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function compareLeadPlans(a, b) {
+  const rank = lead => {
+    const chipClass = leadActionPlanState(lead).chipClass;
+    if (chipClass === "hot") return 0;
+    if (chipClass === "warm") return 1;
+    if (chipClass === "plan-soon") return 2;
+    if (chipClass === "plan-upcoming") return 3;
+    return 4;
+  };
+  return rank(a) - rank(b)
+    || String(a.next_action_date || "9999-12-31").localeCompare(String(b.next_action_date || "9999-12-31"))
+    || String(a.company_name || "").localeCompare(String(b.company_name || ""));
+}
+
 function followupPriority(reminder) {
   const days = daysUntil(reminder.due_date);
   if (days < 0) return { label: "Overdue", className: "red" };
@@ -2629,17 +5744,133 @@ function activityCardMarkup(activity) {
       <strong>${escapeHtml(activity.company_name)}</strong>
       ${admin ? `<span class="meta-label">Salesman: ${escapeHtml(activity.salesman_name || activity.assigned_salesman || "Unassigned")}</span>` : ""}
       <p class="activity-note clamp" data-expand-note>${escapeHtml(note)}</p>
+      ${activity.quotation_ref ? `<button class="quote-ref-pill" type="button" data-quotation-ref="${escapeHtml(activity.quotation_ref)}">Quote ${escapeHtml(activity.quotation_ref)}</button>` : ""}
       <div class="chip-row">
         <span class="chip">${escapeHtml([activityDisplayDate(activity), activityDisplayTime(activity)].filter(Boolean).join(" "))}</span>
         <span class="chip ${priorityClass(activity.stage)}">${escapeHtml(activity.stage || "No stage")}</span>
         ${isReminder ? `<span class="chip ${reminderOverdue ? "hot" : "warm"}">${escapeHtml(activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled"))}${dueDate ? ` - ${escapeHtml(dueDate.slice(0, 10))}` : ""}</span>` : ""}
       </div>
-      ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Delete request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
-      ${activity.edited_at ? `<span class="meta-label">Edited ${escapeHtml(String(activity.edited_at).slice(0, 10))}</span>` : ""}
+      ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Review request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
+      ${activity.correction ? `<span class="meta-label">Correction for ${escapeHtml(activity.target_activity_summary || "previous activity")}</span>` : ""}
+      ${activity.edited_at ? `<span class="meta-label">Legacy edited entry ${escapeHtml(String(activity.edited_at).slice(0, 10))}</span>` : ""}
       ${activityAudioMarkup(activity)}
       ${activityTranscriptMarkup(activity)}
     </article>
   `;
+}
+
+function weekStart(dateValue = today()) {
+  const date = dateOnly(dateValue);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return date;
+}
+
+function weekDays(dateValue = today()) {
+  const start = weekStart(dateValue);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(start, index);
+    return {
+      date: isoDateFromDate(date),
+      day: date.toLocaleDateString("en-US", { weekday: "short" }),
+      number: date.getDate()
+    };
+  });
+}
+
+function calendarHourForTime(timeValue, fallbackIndex = 0) {
+  const match = String(timeValue || "").match(/^(\d{1,2})/);
+  const hour = match ? Number(match[1]) : 9 + (fallbackIndex % 8);
+  return Math.min(17, Math.max(9, hour));
+}
+
+function activityWeeklyItems(activities) {
+  const days = weekDays();
+  const dayIndex = new Map(days.map((day, index) => [day.date, index]));
+  const activityItems = activities
+    .filter(activity => dayIndex.has(activityDisplayDate(activity)))
+    .map((activity, index) => {
+      const date = activityDisplayDate(activity);
+      const time = activityDisplayTime(activity) || `${String(9 + (index % 8)).padStart(2, "0")}:00`;
+      return {
+        leadId: activity.lead_id,
+        date,
+        time,
+        type: activity.type || "Note",
+        title: activity.note || activity.text || activity.company_name || "Activity logged",
+        company: activity.company_name || "Unnamed account",
+        dayIndex: dayIndex.get(date),
+        hour: calendarHourForTime(time, index),
+        offset: index % 3
+      };
+    });
+  const reminderItems = allReminders()
+    .filter(reminder => dayIndex.has(String(reminder.due_date || "").slice(0, 10)))
+    .map((reminder, index) => {
+      const date = String(reminder.due_date || "").slice(0, 10);
+      const time = reminder.due_time || "09:00";
+      return {
+        leadId: reminder.lead_id,
+        date,
+        time,
+        type: "Reminder",
+        title: reminder.activity_required || reminder.text || reminder.reminder_type || "Follow-up reminder",
+        company: reminder.company_name || "Unnamed account",
+        dayIndex: dayIndex.get(date),
+        hour: calendarHourForTime(time, index),
+        offset: index % 3
+      };
+    });
+  return [...activityItems, ...reminderItems]
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+}
+
+function renderWeeklyActivityLog(activities) {
+  if (!els.activityWeeklyLog) return;
+  const days = weekDays();
+  const hours = Array.from({ length: 9 }, (_, index) => 9 + index);
+  const items = activityWeeklyItems(activities);
+  const weekRange = `${days[0].date.slice(5)} to ${days[6].date.slice(5)}`;
+  els.activityWeeklyLog.innerHTML = `
+    <div class="weekly-log-header">
+      <div>
+        <strong>Weekly priority view</strong>
+        <span>${escapeHtml(weekRange)} - ${items.length} scheduled move${items.length === 1 ? "" : "s"}</span>
+      </div>
+    </div>
+    <div class="weekly-calendar" style="--hour-count: ${hours.length}">
+      <div class="calendar-corner" aria-hidden="true">CAL</div>
+      ${days.map(day => `
+        <div class="calendar-day-head ${day.date === today() ? "today" : ""}">
+          <strong>${escapeHtml(day.day)}</strong>
+          <span>${escapeHtml(day.number)}</span>
+        </div>
+      `).join("")}
+      ${hours.map(hour => `
+        <div class="calendar-time">${String(hour).padStart(2, "0")}.00</div>
+        ${days.map(() => `<div class="calendar-slot"></div>`).join("")}
+      `).join("")}
+      ${items.map(item => `
+        <button
+          type="button"
+          class="calendar-event ${activityTypeClass(item.type)}"
+          data-calendar-lead="${escapeHtml(item.leadId)}"
+          style="grid-column: ${item.dayIndex + 2}; grid-row: ${item.hour - 7}; --event-offset: ${item.offset};"
+          title="${escapeHtml(`${item.company}: ${item.title}`)}"
+        >
+          <span>${escapeHtml(item.title)}</span>
+        </button>
+      `).join("")}
+      ${items.length ? "" : `<p class="calendar-empty">No activity scheduled this week.</p>`}
+    </div>
+  `;
+  els.activityWeeklyLog.querySelectorAll("[data-calendar-lead]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedId = button.dataset.calendarLead;
+      openLeadDrawer(state.selectedId, "activities");
+    });
+  });
 }
 
 function renderActivityView() {
@@ -2660,6 +5891,7 @@ function renderActivityView() {
   `;
   els.activityLoading.classList.toggle("hidden", !state.activityLoading);
   els.activityResultsSummary.textContent = activitySummaryText(activities);
+  renderWeeklyActivityLog(activities);
   const groups = groupedActivities();
   const timelineHtml = Object.keys(groups).sort().reverse().map(date => `
     <section class="timeline-day">
@@ -2729,15 +5961,17 @@ function renderDetail() {
         </div>
         <span class="chip ${healthClass(lead.health)}">${escapeHtml(lead.health?.label || "AMBER")}</span>
       </div>
+      ${autoEnrichmentBanner(lead)}
+      ${autoEnrichmentReviewPanel(lead)}
 
       <div class="ai-actions">
         <button class="ghost-button" data-ai-action="prepare" type="button">Prepare Me For This Meeting</button>
         <button class="ghost-button" data-ai-action="next" type="button">What Should I Do Next?</button>
         <button class="ghost-button" data-ai-action="email" type="button">Draft Follow-Up Email</button>
         <button class="ghost-button" data-ai-action="summary" type="button">Summarise Relationship</button>
-        <button class="ghost-button" data-ai-action="flag" type="button">Flag Needs Attention</button>
+        <button class="ghost-button danger" data-ai-action="flag" type="button">Flag Needs Attention</button>
       </div>
-      <pre class="ai-output hidden" id="aiOutput"></pre>
+      ${(lead.activities || []).length ? "" : `<p class="ai-tip">Tip: log activities and PMRs to get richer AI briefs.</p>`}
 
       <div class="meta-grid">
         <div class="meta-box"><span class="meta-label">Contact</span><span class="meta-value">${escapeHtml(lead.contact_person)}</span></div>
@@ -2758,19 +5992,27 @@ function renderDetail() {
         <div class="meta-box"><span class="meta-label">Health reason</span><span class="meta-value">${escapeHtml(lead.health?.reason || "Not calculated")}</span></div>
         <div class="meta-box"><span class="meta-label">Quotation ref</span><span class="meta-value">${escapeHtml(lead.quotation_ref || "Not added")}</span></div>
         <div class="meta-box"><span class="meta-label">Monthly volume</span><span class="meta-value">${escapeHtml(lead.estimated_monthly_volume || "Not added")}</span></div>
+        <div class="meta-box"><span class="meta-label">Estimated scale</span><span class="meta-value">${escapeHtml(lead.estimated_scale || "Not added")}</span></div>
+        <div class="meta-box"><span class="meta-label">Annual revenue</span><span class="meta-value">${escapeHtml(lead.estimated_annual_revenue || "Not added")}</span></div>
+        <div class="meta-box"><span class="meta-label">Certifications</span><span class="meta-value">${escapeHtml(autoValue(lead.certifications) || "Not added")}</span></div>
+        <div class="meta-box"><span class="meta-label">Likely products</span><span class="meta-value">${escapeHtml(autoValue(lead.steel_products_likely_needed) || "Not added")}</span></div>
+        <div class="meta-box"><span class="meta-label">Likely competitors</span><span class="meta-value">${escapeHtml(autoValue(lead.competitors_likely_using) || "Not added")}</span></div>
         <div class="meta-box"><span class="meta-label">Tags</span><span class="meta-value">${escapeHtml(lead.tags || "Not added")}</span></div>
         <div class="meta-box"><span class="meta-label">Estimated value</span><span class="meta-value">${money.format(lead.estimated_value || 0)}</span></div>
-        <div class="meta-box"><span class="meta-label">Next action</span><span class="meta-value">${escapeHtml(lead.next_action)}</span></div>
+        <div class="meta-box"><span class="meta-label">Activity purpose</span><span class="meta-value">${escapeHtml(normalizeActivityPurpose(lead.activity_purpose) || "Not added")}</span></div>
+        <div class="meta-box"><span class="meta-label">Next action</span><span class="meta-value">${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "")}</span></div>
         <div class="meta-box"><span class="meta-label">Due date</span><span class="meta-value">${escapeHtml(lead.next_action_date)}</span></div>
         <div class="meta-box"><span class="meta-label">Products/services remarks</span><span class="meta-value">${escapeHtml(lead.products_services_remarks || "Not added")}</span></div>
       </div>
 
       <div class="detail-actions">
         <button class="ghost-button" id="enrichLead" type="button">Enrich with Hunter</button>
+        <button class="ghost-button" id="manualReenrichLead" type="button">Re-enrich Company</button>
         <button class="ghost-button" id="openPmrForm" type="button">File PMR</button>
         <button class="ghost-button danger" id="deleteLead" type="button">${state.currentUser?.role === "admin" ? "Delete Lead" : "Request Delete Lead"}</button>
         <span class="form-message" id="detailMessage" aria-live="polite"></span>
       </div>
+      ${linkedinControls(lead)}
 
       ${deleteRequestPanel(lead)}
 
@@ -2781,6 +6023,10 @@ function renderDetail() {
 
       <div class="quick-note">
         <input id="activityText" placeholder="Log a call, visit, email, or follow-up note">
+        <div class="activity-quote-row">
+          <input id="activityQuotationRef" placeholder="Optional quotation ref">
+          <span class="quote-ref-status" id="activityQuotationStatus" aria-live="polite"></span>
+        </div>
         <div class="activity-reminder-fields" aria-label="Optional activity reminder">
           <label>Optional reminder date<input id="activityReminderDate" type="date"></label>
           <label>Reminder time<input id="activityReminderTime" type="time" value="09:00"></label>
@@ -2818,19 +6064,12 @@ function renderDetail() {
   });
 
   document.querySelectorAll("[data-ai-action]").forEach(button => {
-    button.addEventListener("click", async () => {
-      const output = document.querySelector("#aiOutput");
-      output.classList.remove("hidden");
-      output.textContent = "Preparing relationship intelligence...";
-      try {
-        const result = await api(`/api/leads/${lead.id}/ai-actions`, {
-          method: "POST",
-          body: JSON.stringify({ action: button.dataset.aiAction })
-        });
-        output.textContent = result.output;
-      } catch (error) {
-        output.textContent = error.message;
+    button.addEventListener("click", () => {
+      if (button.dataset.aiAction === "flag") {
+        openFlagAttentionModal(lead);
+        return;
       }
+      runLeadAiAction(lead, button.dataset.aiAction);
     });
   });
 
@@ -2838,6 +6077,7 @@ function renderDetail() {
     const input = document.querySelector("#activityText");
     const reminderDate = document.querySelector("#activityReminderDate");
     const reminderTime = document.querySelector("#activityReminderTime");
+    const quotationRef = document.querySelector("#activityQuotationRef");
     const note = input.value.trim();
     if (!note) return;
     const body = reminderDate.value
@@ -2851,14 +6091,40 @@ function renderDetail() {
         text: note
       }
       : { type: "Note", text: note };
-    await api(`/api/leads/${lead.id}/activities`, {
-      method: "POST",
-      body: JSON.stringify(body)
-    });
+    if (quotationRef?.value?.trim()) {
+      body.quotation_ref = quotationRef.value.trim();
+      body.quotation_status = "validated";
+    }
+    body.id = body.id || clientId("act");
+    try {
+      if (!navigator.onLine) throw new Error("offline");
+      await api(`/api/leads/${lead.id}/activities`, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      setToast("Activity logged.", "success");
+    } catch (error) {
+      if (!isNetworkFailure(error) && error.message !== "offline") {
+        setToast(error.message, "error");
+        return;
+      }
+      await queueActivityForSync(lead.id, body);
+      setToast("Activity saved offline and will sync when online.", "success");
+    }
     input.value = "";
+    if (quotationRef) quotationRef.value = "";
+    const quotationStatus = document.querySelector("#activityQuotationStatus");
+    if (quotationStatus) {
+      quotationStatus.textContent = "";
+      quotationStatus.className = "quote-ref-status";
+    }
     reminderDate.value = "";
     reminderTime.value = "09:00";
     await loadLeads();
+  });
+
+  document.querySelector("#activityQuotationRef")?.addEventListener("input", event => {
+    validateQuotationInput(event.currentTarget, document.querySelector("#activityQuotationStatus"));
   });
 
   document.querySelector("#recordActivityVoice").addEventListener("click", () => {
@@ -2881,13 +6147,55 @@ function renderDetail() {
     }
   });
 
+  els.detailPanel.querySelector("#manualReenrichLead")?.addEventListener("click", async () => {
+    const message = document.querySelector("#detailMessage");
+    setMessage(message, "Refreshing company intelligence...");
+    try {
+      const updated = await api(`/api/leads/${lead.id}/auto-enrichment/retry`, { method: "POST" });
+      Object.assign(lead, updated);
+      setMessage(message, "Company intelligence refreshed. Review before confirming.", "success");
+      await loadLeads();
+    } catch {
+      setMessage(message, "Auto-enrichment unavailable - add details manually.", "error");
+    }
+  });
+
+  els.detailPanel.querySelectorAll("[data-confirm-auto-enrichment]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const message = document.querySelector("#detailMessage");
+      setMessage(message, "Confirming auto-enrichment...");
+      try {
+        const updated = await api(`/api/leads/${button.dataset.confirmAutoEnrichment}/auto-enrichment/confirm`, { method: "POST" });
+        Object.assign(lead, updated);
+        setMessage(message, "Auto-enrichment confirmed.", "success");
+        await loadLeads();
+      } catch (error) {
+        setMessage(message, error.message, "error");
+      }
+    });
+  });
+
+  els.detailPanel.querySelectorAll("[data-reenrich-lead]").forEach(button => {
+    button.addEventListener("click", () => els.detailPanel.querySelector("#manualReenrichLead")?.click());
+  });
+
+  els.detailPanel.querySelectorAll("[data-drawer-edit-lead]").forEach(button => {
+    button.addEventListener("click", () => openLeadEdit(button.dataset.drawerEditLead));
+  });
+
+  els.detailPanel.querySelector("[data-linkedin-search]")?.addEventListener("click", async buttonEvent => {
+    const button = buttonEvent.currentTarget;
+    const title = els.detailPanel.querySelector(`[data-linkedin-title="${CSS.escape(button.dataset.linkedinSearch)}"]`)?.value || "";
+    try {
+      const result = await api(`/api/linkedin/search-url?company=${encodeURIComponent(lead.company_name)}&title=${encodeURIComponent(title)}`);
+      window.open(result.url, "_blank", "noopener");
+    } catch {
+      window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${lead.company_name} ${title || "Procurement Manager"}`)}`, "_blank", "noopener");
+    }
+  });
+
   document.querySelector("#openPmrForm").addEventListener("click", () => {
-    els.pmrMessage.textContent = "";
-    els.pmrForm.reset();
-    resetPmrVoiceNote();
-    els.pmrForm.elements.company_id.value = lead.id;
-    els.pmrForm.elements.meeting_date.value = today();
-    els.pmrDialog.showModal();
+    openPmrForLead(lead.id);
   });
 
   document.querySelector("#deleteLead").addEventListener("click", async () => {
@@ -2930,6 +6238,7 @@ function render() {
   renderPipelineFilterNotice();
   loadActivityAudioSources();
   applyView();
+  renderSyncStatus();
 }
 
 function applyView() {
@@ -2952,7 +6261,7 @@ function applyView() {
     button.classList.toggle("active", button.dataset.pipelineMode === state.pipelineViewMode);
   });
   document.querySelectorAll(".nav-item").forEach(item => {
-    item.classList.toggle("active", item.dataset.view === currentView);
+    item.classList.toggle("active", item.dataset.view === currentView && !item.dataset.mobileAction);
   });
 }
 
@@ -2979,11 +6288,40 @@ function setView(view) {
 
 async function loadLeads() {
   state.leads = await api("/api/leads");
+  await mergePendingActivitiesIntoState();
   if (!state.leads.some(lead => lead.id === state.selectedId)) {
     state.selectedId = state.leads[0]?.id || null;
   }
   await fetchActivities();
+  await fetchAttentionFlags();
+  await fetchMarketIntel();
   render();
+}
+
+async function loadIntegrationStatus() {
+  try {
+    state.integrations = await api("/api/integrations/status");
+  } catch {
+    state.integrations = { linkedin_titles: [], agent_examples: [], configuration_agent_examples: [], ai_agent: false };
+  }
+}
+
+async function fetchMarketIntel() {
+  try {
+    state.marketIntel = await api("/api/market-intelligence");
+  } catch {
+    state.marketIntel = { items: [], heat_map: [], disabled: true };
+  }
+}
+
+async function fetchAttentionFlags() {
+  try {
+    state.attentionFlags = state.currentUser?.role === "admin"
+      ? await api("/api/attention-flags?status=open")
+      : [];
+  } catch {
+    state.attentionFlags = [];
+  }
 }
 
 function showLogin(message = "") {
@@ -2998,11 +6336,14 @@ function showLogin(message = "") {
   els.appShell.classList.add("hidden");
   els.overdueBanner?.classList.add("hidden");
   els.overduePipelineFilter?.classList.add("hidden");
+  els.installBanner?.classList.add("hidden");
+  els.updateBanner?.classList.add("hidden");
+  els.syncStatusPill?.classList.add("hidden");
 }
 
 function configureRoleUi(user) {
   const admin = user.role === "admin";
-  document.querySelectorAll('[data-view="salesmen"]').forEach(item => {
+  document.querySelectorAll('.sidebar [data-view="salesmen"]').forEach(item => {
     item.classList.toggle("hidden", !admin);
   });
   els.salesmanFilter?.closest("label")?.classList.toggle("hidden", !admin);
@@ -3010,16 +6351,17 @@ function configureRoleUi(user) {
   els.openSalesmanForm.classList.toggle("hidden", !admin);
   els.exportLeadsExcel?.classList.toggle("hidden", !admin);
   els.exportLeadsPdf?.classList.toggle("hidden", !admin);
+  els.openImportLeads?.classList.toggle("hidden", !admin);
   els.performancePanel?.classList.toggle("hidden", !admin);
+  els.needsAttentionPanel?.classList.toggle("hidden", !admin);
+  els.dailyAiPanel?.classList.toggle("hidden", admin);
   els.salesmanFollowupPanel?.classList.toggle("hidden", admin);
   els.portfolioPanel?.classList.toggle("hidden", admin);
   els.relationshipFocusPanel?.classList.toggle("hidden", !admin);
   els.pipelineHealthPanel?.classList.toggle("hidden", !admin);
-  document.querySelector(".topbar h1").textContent = admin ? "ARG CRM Command Center" : "My Sales Dashboard";
-  document.querySelector(".topbar p").textContent = admin
-    ? "Track leads, assign salesmen, update pipeline stages, and keep mobile follow-ups synced."
-    : "Track your assigned leads, follow-ups, customer activity, and post-meeting reports.";
-  document.querySelector(".sidebar .brand span").textContent = admin ? "Shared CRM platform" : "Salesman workspace";
+  els.configAgentPanel?.classList.toggle("hidden", !admin);
+  renderHeaderSummary();
+  renderConfigAgentPanel();
   if (!admin) {
     state.filters.salesman = "all";
     if (currentView === "salesmen") currentView = "dashboard";
@@ -3032,6 +6374,8 @@ function showApp(user) {
   configureRoleUi(user);
   els.authScreen.classList.add("hidden");
   els.appShell.classList.remove("hidden");
+  maybeShowInstallBanner();
+  refreshSyncState();
   startOverdueRefresh();
 }
 
@@ -3044,12 +6388,15 @@ function startOverdueRefresh() {
 }
 
 async function loadWorkspace() {
+  await loadIntegrationStatus();
   state.settings = await api("/api/settings");
   fillSelect(els.stageFilter, state.settings.stages, "All stages");
   fillSelect(els.priorityFilter, state.settings.priorities || [], "All priorities");
   fillSelect(els.territoryFilter, [...new Set([...(state.settings.territories || []), "UAE", "Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Ras Al Khaimah", "Fujairah", "Umm Al Quwain"])], "All territories");
   fillSelect(els.performanceStageFilter, state.settings.stages, "All Stages");
   els.performanceStageFilter.value = state.performanceStage;
+  fillSelect(els.marketSnapshotSalesmanFilter, state.settings.salesmen || [], "All salesmen");
+  if (els.marketSnapshotSalesmanFilter) els.marketSnapshotSalesmanFilter.value = state.marketSnapshotSalesman || "all";
   fillSelect(els.portfolioStageFilter, state.settings.stages, "All Stages");
   els.portfolioReportView.value = state.portfolioFilters.reportView;
   els.portfolioStageFilter.value = state.portfolioFilters.stage;
@@ -3057,20 +6404,27 @@ async function loadWorkspace() {
   els.portfolioEmirateFilter.value = state.portfolioFilters.emirate;
   fillSelect(els.salesmanFilter, state.settings.salesmen, "All salesmen");
   fillSelect(els.formSalesman, state.settings.salesmen);
-  if (state.currentUser?.role !== "admin") {
+  if (!isAdminOrManager()) {
     els.formSalesman.value = state.currentUser.name;
   }
   fillSelect(els.formStage, state.settings.stages);
   fillSelect(els.formPriority, state.settings.priorities);
   fillSelect(els.formSector, state.settings.sectors || []);
   fillSelect(els.formTier, state.settings.tiers || []);
+  fillSelect(els.formTerritory, state.settings.territories || []);
+  if (!isAdminOrManager() && els.formTerritory) {
+    els.formTerritory.value = state.currentUser.territory || els.formTerritory.value;
+  }
+  fillSelect(els.salesmanTerritory, state.settings.territories || []);
   fillSelect(document.querySelector("#pmrHeat"), state.settings.pmr?.heat || ["1", "2", "3", "4", "5"]);
   fillSelect(document.querySelector("#pmrOrderTiming"), state.settings.pmr?.firstOrderTiming || []);
   fillSelect(document.querySelector("#pmrPotentialValue"), state.settings.pmr?.potentialValue || []);
   fillSelect(document.querySelector("#pmrDirectorAction"), state.settings.pmr?.directorAction || []);
   fillSelect(document.querySelector("#pmrAccountStatus"), state.settings.pmr?.accountStatus || []);
   els.leadForm.elements.next_action_date.value = today();
+  await loadConfigurationAgentState();
   await loadLeads();
+  maybeAutoRunDailyPipeline();
 }
 
 async function init() {
@@ -3090,11 +6444,13 @@ async function init() {
 }
 
 els.searchInput.addEventListener("input", event => {
+  state.importedAfter = "";
   state.filters.search = event.target.value;
   render();
 });
 
 els.stageFilter.addEventListener("change", event => {
+  state.importedAfter = "";
   state.filters.stage = event.target.value;
   render();
 });
@@ -3102,6 +6458,11 @@ els.stageFilter.addEventListener("change", event => {
 els.performanceStageFilter?.addEventListener("change", event => {
   state.performanceStage = event.target.value;
   renderPerformanceAnalytics();
+});
+
+els.marketSnapshotSalesmanFilter?.addEventListener("change", event => {
+  state.marketSnapshotSalesman = event.target.value;
+  renderMarketSnapshotPanel();
 });
 
 els.portfolioReportView?.addEventListener("change", event => {
@@ -3125,16 +6486,19 @@ els.portfolioEmirateFilter?.addEventListener("change", event => {
 });
 
 els.salesmanFilter.addEventListener("change", event => {
+  state.importedAfter = "";
   state.filters.salesman = event.target.value;
   render();
 });
 
 els.priorityFilter?.addEventListener("change", event => {
+  state.importedAfter = "";
   state.filters.priority = event.target.value;
   render();
 });
 
 els.territoryFilter?.addEventListener("change", event => {
+  state.importedAfter = "";
   state.filters.territory = event.target.value;
   render();
 });
@@ -3206,17 +6570,34 @@ document.addEventListener("keydown", event => {
   if (event.key === "Escape" && state.leadDrawerOpen) closeLeadDrawer();
 });
 
+document.addEventListener("click", async event => {
+  const quoteButton = event.target.closest("[data-quotation-ref]");
+  if (!quoteButton) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const ref = quoteButton.dataset.quotationRef;
+  try {
+    const result = await api("/api/erp/validate-quotation", {
+      method: "POST",
+      body: JSON.stringify({ ref })
+    });
+    window.alert(result.data
+      ? JSON.stringify(result.data, null, 2)
+      : `Quotation ${ref}: ${result.valid ? "valid reference. ERP details are not connected yet." : result.error || "not valid."}`);
+  } catch (error) {
+    window.alert(error.message);
+  }
+});
+
 document.querySelector("#openLeadForm").addEventListener("click", () => {
-  state.editingLeadId = "";
-  state.editingOriginalStage = "";
-  state.editingLostData = null;
-  if (state.currentUser?.role !== "admin") els.formSalesman.value = state.currentUser.name;
+  resetLeadFormForNewLead();
   els.leadDialog.showModal();
 });
 document.querySelector("#closeLeadForm").addEventListener("click", () => {
   state.editingLeadId = "";
   state.editingOriginalStage = "";
   state.editingLostData = null;
+  resetLeadEnrichmentSession();
   els.leadDialog.close();
 });
 document.querySelector("#closeSalesmanForm").addEventListener("click", () => els.salesmanDialog.close());
@@ -3302,7 +6683,13 @@ els.placesForm.addEventListener("submit", async event => {
     document.querySelectorAll("[data-place-index]").forEach(button => {
       button.addEventListener("click", () => {
         const place = result.matches[Number(button.dataset.placeIndex)];
+        clearLeadAutoEnrichmentFields();
         applyLeadEnrichment(place, { overwrite: true });
+        leadCompanyInputKey = leadCompanyOnlyKey(els.leadForm.elements.company_name.value);
+        leadEnrichmentKey = leadEnrichmentRequestKey(
+          els.leadForm.elements.company_name.value,
+          els.leadForm.elements.location.value || els.leadForm.elements.territory.value
+        );
         setEnrichmentStatus("Google business selected. Review fields before saving.", "success");
         els.placesDialog.close();
         els.leadDialog.showModal();
@@ -3318,7 +6705,7 @@ els.activityEditForm?.addEventListener("submit", async event => {
   const payload = Object.fromEntries(new FormData(els.activityEditForm).entries());
   const leadId = payload.lead_id;
   const activityIndex = payload.activity_index;
-  setMessage(els.activityEditMessage, "Saving activity changes...");
+  setMessage(els.activityEditMessage, "Appending correction...");
   try {
     await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityIndex)}`, {
       method: "PATCH",
@@ -3333,7 +6720,7 @@ els.activityEditForm?.addEventListener("submit", async event => {
         activity_required: payload.activity_required
       })
     });
-    setMessage(els.activityEditMessage, "Activity updated.", "success");
+    setMessage(els.activityEditMessage, "Correction appended. Original activity was not changed.", "success");
     els.activityEditDialog.close();
     await loadLeads();
   } catch (error) {
@@ -3358,6 +6745,12 @@ els.loginForm.addEventListener("submit", async event => {
   } catch (error) {
     els.loginMessage.textContent = error.message;
   }
+});
+
+document.querySelectorAll("[data-quick-view]").forEach(button => {
+  button.addEventListener("click", () => {
+    setView(button.dataset.quickView || "dashboard");
+  });
 });
 
 els.logoutButton.addEventListener("click", async () => {
@@ -3391,6 +6784,203 @@ els.exportLeadsPdf?.addEventListener("click", async () => {
   }
 });
 
+els.refreshMarketIntel?.addEventListener("click", async () => {
+  try {
+    els.refreshMarketIntel.textContent = "Refreshing...";
+    const result = await api("/api/market-intelligence/fetch", { method: "POST" });
+    await fetchMarketIntel();
+    renderMarketIntelPanel();
+    setToast(result.disabled ? "Market intelligence source is not configured yet." : `Imported ${result.imported} intel item(s).`, result.disabled ? "" : "success");
+  } catch (error) {
+    setToast(error.message, "error");
+  } finally {
+    els.refreshMarketIntel.textContent = "Refresh Intel";
+  }
+});
+
+async function submitAgentPrompt() {
+  const prompt = els.agentPrompt?.value.trim() || "";
+  if (!prompt || state.agentLoading) return;
+  state.agentLoading = true;
+  let finalMessage = "";
+  let finalType = "";
+  if (els.agentAnswer) {
+    els.agentAnswer.classList.add("hidden");
+    els.agentAnswer.textContent = "";
+  }
+  setMessage(els.agentMessage, "Thinking against visible CRM records...");
+  renderAgentPanel();
+  try {
+    const result = await api("/api/agent/query", {
+      method: "POST",
+      body: JSON.stringify({ prompt })
+    });
+    if (els.agentAnswer) {
+      els.agentAnswer.textContent = result.answer || "No answer returned.";
+      els.agentAnswer.classList.remove("hidden");
+    }
+    finalMessage = `Read-only answer. Tools used: ${(result.tools_used || []).join(", ") || "none"}.`;
+    finalType = "success";
+  } catch (error) {
+    finalMessage = error.message || "Query failed. Please try again.";
+    finalType = "error";
+  } finally {
+    state.agentLoading = false;
+    renderAgentPanel();
+    if (finalMessage) setMessage(els.agentMessage, finalMessage, finalType);
+  }
+}
+
+els.agentToggle?.addEventListener("click", () => {
+  state.agentOpen = !state.agentOpen;
+  renderAgentPanel();
+});
+
+els.agentAsk?.addEventListener("click", submitAgentPrompt);
+els.agentPrompt?.addEventListener("keydown", event => {
+  if (event.key === "Enter") submitAgentPrompt();
+});
+els.agentExamples?.addEventListener("click", event => {
+  const button = event.target.closest("[data-agent-example]");
+  if (!button || !els.agentPrompt) return;
+  els.agentPrompt.value = button.dataset.agentExample || "";
+  els.agentPrompt.focus();
+});
+
+els.configAgentPropose?.addEventListener("click", proposeConfigChange);
+els.configAgentApply?.addEventListener("click", applyConfigProposal);
+els.configAgentPrompt?.addEventListener("keydown", event => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) proposeConfigChange();
+});
+els.configAgentExamples?.addEventListener("click", event => {
+  const button = event.target.closest("[data-config-agent-example]");
+  if (!button || !els.configAgentPrompt) return;
+  els.configAgentPrompt.value = button.dataset.configAgentExample || "";
+  els.configAgentPrompt.focus();
+});
+
+document.querySelector("#closeAiActionDialog")?.addEventListener("click", () => els.aiActionDialog?.close());
+els.aiActionFooter?.addEventListener("click", async event => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  try {
+    if (button.matches("[data-ai-regenerate]")) {
+      if (state.aiAction.scope === "salesperson") await runSalespersonAiAction(state.aiAction.action);
+      else await runLeadAiAction(aiLead(), state.aiAction.action);
+    } else if (button.matches("[data-ai-copy]")) {
+      await copyText(state.aiAction.output, "AI result copied.");
+    } else if (button.matches("[data-ai-save-activity]")) {
+      await saveAiOutputToActivity();
+    } else if (button.matches("[data-ai-set-next]")) {
+      await setAiOutputAsNextAction();
+    } else if (button.matches("[data-ai-mailto]")) {
+      openAiMail();
+    } else if (button.matches("[data-ai-save-notes]")) {
+      await saveAiOutputToNotes();
+    }
+  } catch (error) {
+    setMessage(els.aiActionMessage, error.message, "error");
+  }
+});
+
+els.aiActionResult?.addEventListener("click", event => {
+  const shortcutButton = event.target.closest("[data-salesperson-ai-action]");
+  if (shortcutButton) {
+    runSalespersonAiAction(shortcutButton.dataset.salespersonAiAction);
+    return;
+  }
+  const companyButton = event.target.closest("[data-ai-company]");
+  if (!companyButton) return;
+  state.selectedId = companyButton.dataset.aiCompany;
+  els.aiActionDialog?.close();
+  openLeadDrawer(state.selectedId);
+  render();
+});
+
+els.dailyAiPanel?.addEventListener("click", event => {
+  const button = event.target.closest("[data-salesperson-ai-action]");
+  if (!button) {
+    if (event.target.closest("#dailyAiSummary")) {
+      runSalespersonAiAction("pipeline_health");
+    }
+    return;
+  }
+  runSalespersonAiAction(button.dataset.salespersonAiAction);
+});
+
+els.syncStatusPill?.addEventListener("click", openPendingChanges);
+els.closePendingChanges?.addEventListener("click", () => els.pendingChangesDialog?.close());
+els.syncNowButton?.addEventListener("click", () => syncOutbox());
+els.closeQuickLog?.addEventListener("click", () => els.quickLogDialog?.close());
+els.closeMobileMap?.addEventListener("click", () => els.mobileMapDialog?.close());
+
+els.quickLogCompanySearch?.addEventListener("input", renderQuickLogSheet);
+els.quickLogLeadSelect?.addEventListener("change", event => {
+  state.quickLog.leadId = event.target.value;
+});
+els.quickLogTypes?.addEventListener("click", event => {
+  const button = event.target.closest("[data-quick-type]");
+  if (button) setQuickLogType(button.dataset.quickType);
+});
+els.quickLogRecent?.addEventListener("click", event => {
+  const button = event.target.closest("[data-quick-lead]");
+  if (!button) return;
+  state.quickLog.leadId = button.dataset.quickLead;
+  renderQuickLogSheet();
+});
+els.quickLogNear?.addEventListener("click", event => {
+  const button = event.target.closest("[data-quick-lead]");
+  if (!button) return;
+  state.quickLog.leadId = button.dataset.quickLead;
+  renderQuickLogSheet();
+});
+els.quickPhraseChips?.addEventListener("click", event => {
+  const button = event.target.closest("[data-quick-phrase]");
+  if (button) appendQuickPhrase(button.dataset.quickPhrase);
+});
+els.quickLogForm?.querySelectorAll("[data-quick-date]").forEach(button => {
+  button.addEventListener("click", () => setQuickDate(button.dataset.quickDate));
+});
+els.quickLogForm?.addEventListener("submit", event => {
+  event.preventDefault();
+  saveQuickLog();
+});
+els.mobileMapList?.addEventListener("click", event => {
+  const button = event.target.closest("[data-map-log]");
+  if (!button) return;
+  els.mobileMapDialog?.close();
+  openQuickLog(button.dataset.mapLog);
+});
+
+document.querySelector("#closeFlagAttention")?.addEventListener("click", () => els.flagAttentionDialog?.close());
+document.querySelector("#cancelFlagAttention")?.addEventListener("click", () => els.flagAttentionDialog?.close());
+els.flagAttentionForm?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const companyId = els.flagAttentionForm.elements.company_id.value;
+  const reason = els.flagAttentionForm.elements.reason.value.trim();
+  setMessage(els.flagAttentionMessage, "Flagging for director attention...");
+  try {
+    await api(`/api/leads/${encodeURIComponent(companyId)}/attention-flags`, {
+      method: "POST",
+      body: JSON.stringify({ reason })
+    });
+    els.flagAttentionDialog.close();
+    setToast("Flagged - directors will be notified.", "success");
+    await loadLeads();
+  } catch (error) {
+    setMessage(els.flagAttentionMessage, error.message, "error");
+  }
+});
+
+els.openImportLeads?.addEventListener("click", () => {
+  if (state.currentUser?.role !== "admin") return;
+  state.importLeads = newImportState();
+  renderImportLeadsModal();
+  els.importLeadsDialog?.showModal();
+});
+
+els.closeImportLeads?.addEventListener("click", () => els.importLeadsDialog?.close());
+
 els.openSalesmanForm.addEventListener("click", () => {
   els.salesmanMessage.textContent = "";
   els.salesmanDialog.showModal();
@@ -3419,8 +7009,8 @@ els.leadForm.querySelectorAll("input, textarea, select").forEach(field => {
   });
 });
 
-els.leadForm.elements.company_name.addEventListener("input", scheduleLeadCompanyEnrichment);
-els.leadForm.elements.location.addEventListener("input", scheduleLeadCompanyEnrichment);
+els.leadForm.elements.company_name.addEventListener("input", handleLeadCompanyNameInput);
+els.leadForm.elements.location.addEventListener("input", handleLeadLocationInput);
 
 document.querySelector("#recordLeadVoice").addEventListener("click", () => {
   toggleVoiceRecording({
@@ -3449,6 +7039,18 @@ els.leadForm.addEventListener("submit", async event => {
         }
         Object.assign(payload, state.editingLostData);
       }
+      if (
+        existing
+        && isAdminOrManager()
+        && String(payload.assigned_salesman || "").trim() !== String(existing.assigned_salesman || "").trim()
+      ) {
+        const note = await promptHandoff(existing, payload.assigned_salesman);
+        if (!note) {
+          els.leadForm.elements.assigned_salesman.value = existing.assigned_salesman || els.leadForm.elements.assigned_salesman.value;
+          return;
+        }
+        payload.handoff_note = note;
+      }
       lead = await api(`/api/leads/${encodeURIComponent(state.editingLeadId)}`, { method: "PATCH", body: JSON.stringify(payload) });
       state.selectedId = lead.id;
       state.editingLeadId = "";
@@ -3468,7 +7070,11 @@ els.leadForm.addEventListener("submit", async event => {
   } catch (error) {
     if (error.status === 409 && error.details?.duplicate) {
       const duplicate = error.details.duplicate;
-      const proceed = window.confirm(`Possible duplicate found: ${duplicate.company_name}, owned by ${duplicate.assigned_salesman}. Create a separate company record anyway?`);
+      const isFromAnotherSalesman = duplicate.owner_type === "other_salesman";
+      const ownerName = duplicate.owner_name || duplicate.assigned_salesman || "another account";
+      const proceed = window.confirm(
+        `Possible duplicate found: ${duplicate.company_name}. It appears to be linked to ${ownerName}.${isFromAnotherSalesman ? " It is linked to another salesman. " : " "}Do you still want to create a separate lead?`
+      );
       if (!proceed) return;
       lead = await api("/api/leads", { method: "POST", body: JSON.stringify({ ...payload, allow_duplicate: true }) });
     } else {
@@ -3477,30 +7083,70 @@ els.leadForm.addEventListener("submit", async event => {
     }
   }
   state.selectedId = lead.id;
-  els.leadForm.reset();
-  leadFormTouched.clear();
-  leadEnrichmentKey = "";
-  setEnrichmentStatus("Type a company name to fetch Google business info.");
-  els.leadForm.elements.next_action_date.value = today();
+  resetLeadFormForNewLead();
   els.leadDialog.close();
   await loadLeads();
   openLeadDrawer(lead.id, "overview");
 });
+
+function pmrPayloadFromForm() {
+  return Object.fromEntries(new FormData(els.pmrForm).entries());
+}
+
+function applyOptimisticPmr(leadId, payload, hasVoiceNote = false) {
+  const optimistic = {
+    ...payload,
+    id: payload.id || clientId("pmr"),
+    company_id: leadId,
+    pending_sync: true,
+    voice_note_pending_upload: hasVoiceNote && !payload.voice_note_id
+  };
+  if (state.leadDrawerOpen && state.selectedId === leadId) {
+    state.leadDrawerPmrs = [optimistic, ...(state.leadDrawerPmrs || [])];
+  }
+  render();
+}
+
+async function queuePmrForSync(leadId, payload) {
+  const voicePending = Boolean(pmrVoiceBlob && !payload.voice_note_id);
+  const queuedPayload = { ...payload };
+  if (voicePending) {
+    queuedPayload.voice_note_mime_type = queuedPayload.voice_note_mime_type || pmrVoiceBlob.type || "audio/webm";
+    queuedPayload.voice_note_size_bytes = queuedPayload.voice_note_size_bytes || String(pmrVoiceBlob.size || "");
+  }
+  await putOutboxItem({
+    id: clientId("pmr"),
+    created_at: Date.now(),
+    kind: "pmr",
+    lead_id: leadId,
+    payload: queuedPayload,
+    voice_note_blob: voicePending ? pmrVoiceBlob : null,
+    voice_note_mime_type: voicePending ? (pmrVoiceBlob.type || "audio/webm") : "",
+    voice_note_size_bytes: voicePending ? pmrVoiceBlob.size : 0,
+    status: "pending",
+    attempts: 0,
+    last_error: null
+  });
+  applyOptimisticPmr(leadId, queuedPayload, voicePending);
+}
 
 els.pmrForm.addEventListener("submit", async event => {
   event.preventDefault();
   const companyId = els.pmrForm.elements.company_id.value;
   if (!companyId) return;
   els.pmrMessage.textContent = "Saving PMR...";
+  let payload = pmrPayloadFromForm();
   try {
+    if (!navigator.onLine) throw new Error("offline");
     if (pmrVoiceBlob && !els.pmrForm.elements.voice_note_id.value) {
       els.pmrMessage.textContent = "Uploading PMR voice note...";
       await uploadPmrVoiceNote();
       els.pmrMessage.textContent = "Saving PMR...";
+      payload = pmrPayloadFromForm();
     }
     await api(`/api/leads/${companyId}/pmrs`, {
       method: "POST",
-      body: JSON.stringify(Object.fromEntries(new FormData(els.pmrForm).entries()))
+      body: JSON.stringify(payload)
     });
     els.pmrMessage.textContent = "PMR saved.";
     resetPmrVoiceNote();
@@ -3508,15 +7154,41 @@ els.pmrForm.addEventListener("submit", async event => {
     await loadLeads();
     if (state.leadDrawerOpen) openLeadDrawer(companyId, "pmr");
   } catch (error) {
+    payload = pmrPayloadFromForm();
+    if (isNetworkFailure(error) || error.message === "offline") {
+      await queuePmrForSync(companyId, payload);
+      els.pmrMessage.textContent = "PMR saved offline. It will sync with the voice note when online.";
+      resetPmrVoiceNote();
+      els.pmrDialog.close();
+      if (state.leadDrawerOpen) renderLeadDrawer();
+      return;
+    }
     setMessage(els.pmrMessage, error.message, "error");
   }
 });
 
 document.querySelectorAll(".nav-item").forEach(item => {
   item.addEventListener("click", () => {
+    if (item.dataset.mobileAction === "quick-log") {
+      openQuickLog();
+      return;
+    }
+    if (item.dataset.mobileAction === "map") {
+      openMobileMap();
+      return;
+    }
+    if (item.dataset.mobileAction === "alerts") {
+      openPendingChanges();
+      return;
+    }
     setView(item.dataset.view || "dashboard");
   });
 });
+
+initPwaShell();
+setInterval(() => {
+  if (state.sync.pending) syncOutbox();
+}, 60_000);
 
 init().catch(error => {
   document.body.innerHTML = `<main class="empty-state"><strong>Could not load ARG CRM</strong><span>${escapeHtml(error.message)}</span></main>`;

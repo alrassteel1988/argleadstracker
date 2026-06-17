@@ -13,5 +13,8 @@
     { "src": "/client.js", "dest": "/client.js" },
     { "src": "/styles.css", "dest": "/styles.css" },
     { "src": "/(.*)", "dest": "server.js" }
+  ],
+  "crons": [
+    { "path": "/api/cron/fetch-market-intelligence", "schedule": "0 2 * * 1" }
   ]
 }

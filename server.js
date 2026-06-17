@@ -2,6 +2,22 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+
+function bootstrapEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  fs.readFileSync(filePath, "utf8").split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return;
+    const separator = trimmed.indexOf("=");
+    if (separator < 1) return;
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim().replace(/^(['"])(.*)\1$/, "$2");
+    if (!process.env[key]) process.env[key] = value;
+  });
+}
+
+bootstrapEnvFile(path.join(__dirname, ".env"));
+
 const {
   bearerToken,
   createAuthUser,
@@ -22,6 +38,39 @@ const {
   mergeLeadWithEnrichment,
   searchGooglePlaces
 } = require("./enrichment");
+const integrations = require("./src/config/integrations");
+const contactRules = require("./src/config/contactRules");
+const { validateQuotationRef } = require("./src/services/erpService");
+const { linkedInPeopleSearchUrl, titleOptions } = require("./src/services/linkedinService");
+const {
+  fetchMarketIntelligence,
+  heatMapFromIntel,
+  matchIntelligenceToLeads
+} = require("./src/services/marketIntelService");
+const {
+  mergeVerifiedAutoEnrichment,
+  runCompanyAutoEnrichment
+} = require("./src/services/enrichmentService");
+const {
+  AGENT_EXAMPLE_PROMPTS,
+  runAgentQuery
+} = require("./src/services/agentService");
+const {
+  CONFIGURATION_AGENT_EXAMPLES,
+  normalizeConfiguration,
+  proposeConfigurationChange,
+  sanitizeConfigPatch,
+  configurationDiff
+} = require("./src/services/configurationAgentService");
+const {
+  normalizeAiAction,
+  runCompanyAiAction
+} = require("./src/services/companyAiActionService");
+const {
+  SALESPERSON_AI_ACTIONS,
+  runSalespersonAiAction
+} = require("./src/services/salespersonAiActionService");
+const { findDuplicates, normalise } = require("./src/utils/fuzzyMatch");
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -56,15 +105,53 @@ const COMPANY_STATUSES = ["PROSPECT", "OUTREACH", "ENGAGED", "SAMPLING", "ACTIVE
 const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
 const COMPANY_TIERS = ["1", "2", "3"];
 const GCC_TERRITORIES = ["UAE-North", "UAE-South", "Saudi", "Kuwait", "Bahrain", "Oman", "Mixed"];
-const ACTIVITY_TYPES = ["Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed", "Note", "Stage"];
+const ACTIVITY_TYPES = ["Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed", "Note", "Stage", "Handoff"];
+const NEXT_ACTION_OPTIONS = ["To Call", "To Send Email", "To Visit"];
+const ACTIVITY_PURPOSE_OPTIONS = ["Company Introductory", "New Requirements", "Quotation Submission", "Quotation Follow-Up", "Meeting"];
 const PMR_HEAT = ["1", "2", "3", "4", "5"];
 const PMR_ORDER_TIMING = ["within 30 days", "30-90 days", "90 days-6 months", "6 months+", "unknown"];
 const PMR_VALUE = ["<500K", "500K-2M", "2M-5M", "5M+"];
 const PMR_DIRECTOR_ACTION = ["None", "Awareness only", "Attend next visit", "Direct contact"];
 const PMR_ACCOUNT_STATUS = ["Cold", "Warm", "Hot", "Active"];
 const REMINDER_TYPES = ["Quotation follow-up", "Planned visit", "Important date", "Payment follow-up", "Sample approval", "General follow-up"];
-const ACTIVITY_EXTRA_FIELDS = ["followup_completed", "completed_due_date", "completed_activity_required", "completed_reminder_type"];
+const ACTIVITY_EXTRA_FIELDS = ["followup_completed", "completed_due_date", "completed_activity_required", "completed_reminder_type", "quotation_ref", "quotation_status"];
 const LOST_REASON_KEYS = ["price", "no_budget", "competitor_relationship", "lead_time", "product_mismatch", "no_response", "project_cancelled", "credit_terms", "quality_concerns", "other"];
+const OPTIONAL_SUPABASE_LEAD_COLUMNS = [
+  "activity_purpose",
+  "lost_reason",
+  "lost_reason_detail",
+  "lost_competitor",
+  "lost_at",
+  "lost_by",
+  "imported_at",
+  "imported_by",
+  "auto_enrichment",
+  "latitude",
+  "longitude",
+  "steel_products_likely_needed",
+  "competitors_likely_using",
+  "certifications",
+  "estimated_scale",
+  "estimated_annual_revenue",
+  "key_personnel",
+  "recent_projects"
+];
+
+function defaultCrmConfiguration() {
+  return normalizeConfiguration({
+    priorities: ["New", "Warm", "Hot", "At Risk"],
+    sectors: COMPANY_SECTORS,
+    territories: GCC_TERRITORIES,
+    activityTypes: ACTIVITY_TYPES,
+    pmr: {
+      heat: PMR_HEAT,
+      firstOrderTiming: PMR_ORDER_TIMING,
+      potentialValue: PMR_VALUE,
+      directorAction: PMR_DIRECTOR_ACTION,
+      accountStatus: PMR_ACCOUNT_STATUS
+    }
+  });
+}
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -165,6 +252,15 @@ function readDb() {
   ensureDb();
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8").replace(/^\uFEFF/, ""));
   db.pmrs = Array.isArray(db.pmrs) ? db.pmrs : [];
+  db.integration_logs = Array.isArray(db.integration_logs) ? db.integration_logs : [];
+  db.agent_query_log = Array.isArray(db.agent_query_log) ? db.agent_query_log : [];
+  db.ai_action_log = Array.isArray(db.ai_action_log) ? db.ai_action_log : [];
+  db.attention_flags = Array.isArray(db.attention_flags) ? db.attention_flags : [];
+  db.notifications = Array.isArray(db.notifications) ? db.notifications : [];
+  db.market_intelligence = Array.isArray(db.market_intelligence) ? db.market_intelligence : [];
+  db.market_intelligence_archive = Array.isArray(db.market_intelligence_archive) ? db.market_intelligence_archive : [];
+  db.configuration = normalizeConfiguration(db.configuration || {}, defaultCrmConfiguration());
+  db.configuration_audit_log = Array.isArray(db.configuration_audit_log) ? db.configuration_audit_log : [];
   if (ensureAdminAccount(db)) writeDb(db);
   return db;
 }
@@ -271,12 +367,12 @@ function sendDownload(res, contentType, filename, body) {
   res.end(buffer);
 }
 
-function readBody(req) {
+function readBody(req, maxBytes = 6_000_000) {
   return new Promise((resolve, reject) => {
     let body = "";
     req.on("data", chunk => {
       body += chunk;
-      if (body.length > 1_000_000) {
+      if (body.length > maxBytes) {
         reject(new Error("Request body too large"));
         req.destroy();
       }
@@ -617,10 +713,34 @@ async function transcribeAudio(req, res) {
   });
 }
 
+function normalizeNextActionPlan(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "To Call";
+  if (NEXT_ACTION_OPTIONS.includes(raw)) return raw;
+  const upper = raw.toUpperCase();
+  if (/(EMAIL|MAIL|QUOTE|QUOTATION|SUBMIT)/.test(upper)) return "To Send Email";
+  if (/(VISIT|MEET|MEETING|SITE)/.test(upper)) return "To Visit";
+  return "To Call";
+}
+
+function normalizeActivityPurpose(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Company Introductory";
+  if (ACTIVITY_PURPOSE_OPTIONS.includes(raw)) return raw;
+  const upper = raw.toUpperCase();
+  if (/(FOLLOW[\s-]?UP)/.test(upper) && /QUOTATION|QUOTE/.test(upper)) return "Quotation Follow-Up";
+  if (/QUOTATION|QUOTE/.test(upper)) return "Quotation Submission";
+  if (/REQUIREMENT/.test(upper)) return "New Requirements";
+  if (/MEET|MEETING|VISIT|SITE/.test(upper)) return "Meeting";
+  return "Company Introductory";
+}
+
 function normalizeLead(input) {
   const now = new Date().toISOString().slice(0, 10);
   const status = normalizeStageValue(input.stage || input.status || input.lead_status, "PROSPECT");
   const tier = COMPANY_TIERS.includes(String(input.tier || "")) ? String(input.tier) : "2";
+  const list = value => Array.isArray(value) ? value.map(String).map(item => item.trim()).filter(Boolean) : String(value || "").split(/\n|,/).map(item => item.trim()).filter(Boolean);
+  const personnel = Array.isArray(input.key_personnel) ? input.key_personnel : [];
   return {
     id: input.id || `lead-${Date.now()}`,
     company_name: String(input.company_name || "New ARG Lead").trim(),
@@ -645,19 +765,32 @@ function normalizeLead(input) {
     google_maps_url: String(input.google_maps_url || "").trim(),
     google_rating: Number(input.google_rating || 0),
     google_review_count: Number(input.google_review_count || 0),
+    latitude: input.latitude == null || input.latitude === "" ? null : Number(input.latitude),
+    longitude: input.longitude == null || input.longitude === "" ? null : Number(input.longitude),
     business_category: String(input.business_category || input.industry || "").trim(),
     opening_hours: Array.isArray(input.opening_hours) ? input.opening_hours : String(input.opening_hours || "").split(/\n|,/).map(item => item.trim()).filter(Boolean),
     products_services_remarks: String(input.products_services_remarks || "").trim(),
+    steel_products_likely_needed: list(input.steel_products_likely_needed),
+    competitors_likely_using: list(input.competitors_likely_using),
+    certifications: list(input.certifications),
+    estimated_scale: String(input.estimated_scale || "").trim(),
+    estimated_annual_revenue: String(input.estimated_annual_revenue || "").trim(),
+    key_personnel: personnel.map(person => ({
+      name: String(person.name || "").trim(),
+      title: String(person.title || "").trim()
+    })).filter(person => person.name || person.title),
+    recent_projects: list(input.recent_projects),
     enrichment_source: String(input.enrichment_source || "").trim(),
     enrichment_status: String(input.enrichment_status || "pending").trim(),
     enriched_at: input.enriched_at || null,
-    territory: String(input.territory || "Dubai").trim(),
+    territory: canonicalTerritory(input.territory || input.country_emirate || input.location || "UAE-North"),
     assigned_salesman: String(input.assigned_salesman || "Unassigned").trim(),
     stage: status,
     priority: String(input.priority || "New").trim(),
     estimated_value: Number(input.estimated_value || 0),
     product_interest: String(input.product_interest || "").trim(),
-    next_action: String(input.next_action || "Qualify lead").trim(),
+    activity_purpose: normalizeActivityPurpose(input.activity_purpose),
+    next_action: normalizeNextActionPlan(input.next_action),
     next_action_date: String(input.next_action_date || now).trim(),
     last_activity: String(input.last_activity || now).trim(),
     source: String(input.source || "Manual entry").trim(),
@@ -671,6 +804,9 @@ function normalizeLead(input) {
     lost_competitor: String(input.lost_competitor || "").trim(),
     lost_at: input.lost_at || null,
     lost_by: String(input.lost_by || "").trim(),
+    imported_at: input.imported_at || null,
+    imported_by: String(input.imported_by || "").trim(),
+    auto_enrichment: input.auto_enrichment && typeof input.auto_enrichment === "object" ? input.auto_enrichment : null,
     activities: Array.isArray(input.activities) ? input.activities : []
   };
 }
@@ -771,43 +907,49 @@ function normalizeReminderActivity(input, lead, user) {
   };
 }
 
-function editActivity(existing, input, lead, user) {
-  const next = { ...existing };
-  const at = String(input.at || next.at || new Date().toISOString().slice(0, 10)).trim();
-  const type = String(input.type || next.type || "Note").trim();
-  const text = String(input.text || next.text || "").trim();
-  next.at = at;
-  next.type = type;
-  next.text = text || "Activity updated";
-  next.edited_at = new Date().toISOString();
+function activitySummary(activity = {}) {
+  return `${activity.at || ""} ${activity.type || "Activity"} - ${activity.text || ""}`.trim();
+}
 
-  if (isReminderActivity(next) || type.toLowerCase() === "reminder" || input.reminder) {
-    next.reminder = true;
-    next.type = "Reminder";
-    next.reminder_type = REMINDER_TYPES.includes(String(input.reminder_type || next.reminder_type || ""))
-      ? String(input.reminder_type || next.reminder_type)
-      : "General follow-up";
-    next.activity_required = String(input.activity_required || text || next.activity_required || next.text || "Follow up with customer").trim();
-    next.due_date = String(input.due_date || next.due_date || at).trim();
-    next.due_time = String(input.due_time || next.due_time || "09:00").trim();
-    next.reminder_status = String(input.reminder_status || next.reminder_status || "scheduled").trim();
-    next.text = `${next.reminder_type}: ${next.activity_required}`;
-    next.google_calendar_url = googleCalendarUrl({
-      title: `${next.reminder_type}: ${lead.company_name}`,
-      details: [
-        next.activity_required,
-        lead.phone ? `Phone: ${lead.phone}` : "",
-        lead.email ? `Email: ${lead.email}` : "",
-        `Salesman: ${user?.name || lead.assigned_salesman || "Assigned salesman"}`,
-        "Updated from ARG Leads Tracker."
-      ].filter(Boolean).join("\n"),
-      location: lead.address || lead.location || lead.territory,
-      due_date: next.due_date,
-      due_time: next.due_time
-    });
+function activityCorrection(existing, input, lead, user) {
+  if (!existing || existing.delete_request) {
+    const error = new Error("This activity cannot be corrected through this flow.");
+    error.status = 400;
+    throw error;
   }
-
-  return next;
+  const text = String(input.text || input.activity_required || "").trim();
+  if (!text) {
+    const error = new Error("Add a correction note. Existing activity entries are append-only.");
+    error.status = 400;
+    throw error;
+  }
+  const correction = {
+    id: newRecordId("act"),
+    at: new Date().toISOString().slice(0, 10),
+    type: "Correction",
+    text: `Correction for ${activitySummary(existing)}: ${text}`,
+    correction: true,
+    immutable_append: true,
+    target_activity_id: existing.id || "",
+    target_activity_summary: activitySummary(existing),
+    corrected_by: user.id,
+    corrected_by_name: user.name || user.email || "User",
+    corrected_at: new Date().toISOString(),
+    proposed_activity_date: String(input.at || "").trim(),
+    proposed_activity_type: String(input.type || "").trim()
+  };
+  if (input.quotation_ref !== undefined) correction.quotation_ref = String(input.quotation_ref || "").trim();
+  if (input.quotation_status !== undefined) correction.quotation_status = String(input.quotation_status || "").trim();
+  if (String(input.type || "").toLowerCase() === "reminder" || input.reminder) {
+    correction.reminder_correction = {
+      reminder_type: String(input.reminder_type || "").trim(),
+      due_date: String(input.due_date || "").trim(),
+      due_time: String(input.due_time || "").trim(),
+      activity_required: String(input.activity_required || "").trim()
+    };
+    correction.text += " Reminder details were recorded as a correction only; the original reminder entry was not changed.";
+  }
+  return correction;
 }
 
 function normalizePlainActivity(input) {
@@ -839,8 +981,8 @@ function normalizeDeleteRequest(input, lead, user, activities) {
   const request = {
     id: newRecordId("delreq"),
     at: new Date().toISOString().slice(0, 10),
-    type: "Delete Request",
-    text: `Delete ${targetType} requested: ${reason}`,
+    type: targetType === "activity" ? "Activity Review Request" : "Delete Request",
+    text: targetType === "activity" ? `Activity review requested: ${reason}` : `Delete lead requested: ${reason}`,
     delete_request: true,
     request_status: "pending",
     target_type: targetType,
@@ -887,35 +1029,85 @@ function withAutomaticReminder(lead, user) {
 }
 
 function normalizeCompanyName(value) {
+  return normalise(value);
+}
+
+function normalizeWebsite(value) {
   return String(value || "")
+    .trim()
     .toLowerCase()
-    .replace(/\b(llc|l\.l\.c|fze|fzco|ltd|limited|co|company|est|establishment|trading|contracting)\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+    .replace(/^https?:\/\/(www\.)?/i, "")
+    .replace(/\/+$/, "")
+    .replace(/^www\./i, "");
 }
 
-function tokenSet(value) {
-  return new Set(normalizeCompanyName(value).split(/\s+/).filter(Boolean));
+function normalizePhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 7 ? digits : "";
 }
 
-function duplicateScore(a, b) {
-  const left = normalizeCompanyName(a);
-  const right = normalizeCompanyName(b);
-  if (!left || !right) return 0;
-  if (left === right) return 1;
-  if (left.includes(right) || right.includes(left)) return 0.92;
-  const aTokens = tokenSet(left);
-  const bTokens = tokenSet(right);
-  const intersection = [...aTokens].filter(token => bTokens.has(token)).length;
-  const union = new Set([...aTokens, ...bTokens]).size || 1;
-  return intersection / union;
+function isDuplicateOwnerSelf(lead, user) {
+  if (!lead || !user) return false;
+  const leadOwnerId = String(lead.assigned_to || "").trim();
+  const userId = String(user.id || "").trim();
+  if (leadOwnerId && userId && leadOwnerId === userId) return true;
+  const names = userLeadNames(user);
+  const leadSalesman = String(lead.assigned_salesman || "").trim().toLowerCase();
+  if (leadSalesman && names.includes(leadSalesman)) return true;
+  const createdBy = String(lead.created_by || "").trim();
+  if (userId && createdBy && createdBy === userId) return true;
+  return false;
+}
+
+function duplicateOwnerType(lead, user) {
+  if (!lead) return "other_salesman";
+  if (isDirectorOrAdmin(user)) return "admin_view";
+  return isDuplicateOwnerSelf(lead, user) ? "self" : "other_salesman";
+}
+
+function findDuplicateLeadByIdentity(leads, input) {
+  const website = normalizeWebsite(input.website || "");
+  const phone = normalizePhone(input.phone || input.contact_phone || input.companyPhone || "");
+  const placeId = String(input.google_place_id || "").trim();
+  if (!website && !phone && !placeId) return null;
+  const matched = (leads || []).find(lead => {
+    const leadPlaceId = String(lead.google_place_id || "").trim();
+    if (placeId && leadPlaceId && leadPlaceId === placeId) return true;
+    const leadWebsite = normalizeWebsite(lead.website || lead.site || "");
+    if (website && leadWebsite && leadWebsite === website) return true;
+    const leadPhone = normalizePhone(lead.phone || lead.contact_phone || lead.company_phone || "");
+    if (phone && leadPhone && leadPhone === phone) return true;
+    return false;
+  });
+  if (!matched) return null;
+  return {
+    lead: matched,
+    score: 1,
+    isDuplicate: true,
+    matchType: "identity"
+  };
+}
+
+function duplicateLeadMatches(leads, companyName) {
+  return findDuplicates(companyName, (leads || []).map(lead => ({
+    id: lead.id,
+    name: lead.company_name,
+    company_name: lead.company_name,
+    assigned_salesman: lead.assigned_salesman,
+    assigned_to: lead.assigned_to,
+    territory: lead.territory,
+    stage: lead.stage || lead.lead_status
+  })));
 }
 
 function findDuplicateLead(leads, companyName) {
-  return (leads || [])
-    .map(lead => ({ lead, score: duplicateScore(lead.company_name, companyName) }))
-    .filter(match => match.score >= 0.72)
-    .sort((a, b) => b.score - a.score)[0] || null;
+  const match = duplicateLeadMatches(leads, companyName)[0];
+  if (!match) return null;
+  return {
+    lead: (leads || []).find(lead => lead.id === match.id) || match,
+    score: match.score,
+    isDuplicate: match.isDuplicate
+  };
 }
 
 function daysSince(dateValue) {
@@ -925,10 +1117,7 @@ function daysSince(dateValue) {
 }
 
 function expectedFrequencyDays(lead) {
-  if (lead.stage === "ACTIVE") return 30;
-  if (lead.stage === "OUTREACH") return 21;
-  if (["ENGAGED", "SAMPLING"].includes(lead.stage)) return 14;
-  return lead.tier === "1" ? 14 : lead.tier === "2" ? 21 : 30;
+  return contactRules.effectiveThreshold(lead.stage, lead.tier);
 }
 
 function relationshipHealth(lead) {
@@ -948,6 +1137,26 @@ function leadWithDerivedFields(lead) {
 
 function isAdmin(user) {
   return String(user?.role || "").toLowerCase() === "admin";
+}
+
+function isDirectorOrAdmin(user) {
+  return ["admin", "director", "manager"].includes(String(user?.role || "").toLowerCase());
+}
+
+function canonicalTerritory(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  const exact = GCC_TERRITORIES.find(item => item.toLowerCase() === lower);
+  if (exact) return exact;
+  if (["dubai", "sharjah", "ajman", "ras al khaimah", "rak", "fujairah", "umm al quwain", "uaq", "uae", "uae north"].includes(lower)) return "UAE-North";
+  if (["abu dhabi", "al ain", "uae south"].includes(lower)) return "UAE-South";
+  if (lower.includes("saudi")) return "Saudi";
+  if (lower.includes("kuwait")) return "Kuwait";
+  if (lower.includes("bahrain")) return "Bahrain";
+  if (lower.includes("oman")) return "Oman";
+  if (lower.includes("mixed")) return "Mixed";
+  return raw;
 }
 
 async function verifyAdminPassword(user, password, supabaseEnabled) {
@@ -974,16 +1183,16 @@ function userLeadNames(user) {
 }
 
 function leadBelongsToUser(lead, user) {
-  if (isAdmin(user)) return true;
+  if (isDirectorOrAdmin(user)) return true;
   if (!lead || !user) return false;
-  if (lead.created_by && String(lead.created_by) === String(user.id)) return true;
-  if (lead.assigned_to && String(lead.assigned_to) === String(user.id)) return true;
-  const assigned = String(lead.assigned_salesman || "").trim().toLowerCase();
-  return Boolean(assigned && userLeadNames(user).includes(assigned));
+  const assignedById = lead.assigned_to && String(lead.assigned_to) === String(user.id);
+  const assignedByName = Boolean(String(lead.assigned_salesman || "").trim().toLowerCase() && userLeadNames(user).includes(String(lead.assigned_salesman || "").trim().toLowerCase()));
+  const createdById = lead.created_by && String(lead.created_by) === String(user.id);
+  return Boolean(assignedById || assignedByName || createdById);
 }
 
 function visibleLeadsForUser(leads, user) {
-  return isAdmin(user) ? leads : (leads || []).filter(lead => leadBelongsToUser(lead, user));
+  return isDirectorOrAdmin(user) ? leads : (leads || []).filter(lead => leadBelongsToUser(lead, user));
 }
 
 function activityDateValue(activity) {
@@ -1039,6 +1248,8 @@ function flattenedActivitiesForUser(leads, user, filters = {}) {
       reminder_due_date: activity.reminder_due_date || activity.due_date || "",
       reminder_status: activity.reminder_status || (activity.followup_completed ? "completed" : ""),
       stage: activity.stage || lead.stage || lead.lead_status || "",
+      quotation_ref: activity.quotation_ref || "",
+      quotation_status: activity.quotation_status || "",
       delete_request: Boolean(activity.delete_request),
       request_status: activity.request_status || "",
       edited_at: activity.edited_at || "",
@@ -1085,6 +1296,7 @@ const LEAD_EXPORT_COLUMNS = [
   ["google_review_count", "Google Review Count"],
   ["estimated_value", "Estimated Value"],
   ["product_interest", "Product Interest"],
+  ["activity_purpose", "Activity Purpose"],
   ["next_action", "Next Action"],
   ["next_action_date", "Next Action Date"],
   ["last_activity", "Last Activity Date"],
@@ -1259,9 +1471,14 @@ async function exportableLeadsForUser(user, supabaseEnabled, db) {
 
 function prepareLeadPayloadForUser(payload, user, existing = null) {
   const next = { ...(payload || {}) };
-  if (isAdmin(user)) return next;
+  if (isDirectorOrAdmin(user)) {
+    if (next.territory) next.territory = canonicalTerritory(next.territory);
+    return next;
+  }
   delete next.assigned_to;
   delete next.created_by;
+  next.territory = existing?.territory ? canonicalTerritory(existing.territory) : canonicalTerritory(user.territory);
+  if (!next.territory || next.territory === "Mixed") next.territory = canonicalTerritory(user.territory);
   if (existing?.assigned_salesman) {
     next.assigned_salesman = existing.assigned_salesman;
   } else {
@@ -1276,7 +1493,7 @@ function normalizePmr(input, lead, user) {
   return {
     id: input.id || `pmr-${Date.now()}`,
     company_id: lead.id,
-    activity_id: input.activity_id || "",
+    activity_id: String(input.activity_id || "").trim(),
     meeting_date: String(input.meeting_date || now.slice(0, 10)).trim(),
     filed_by: user.name || user.email || "Unknown",
     products_discussed: String(input.products_discussed || "").trim(),
@@ -1297,6 +1514,56 @@ function normalizePmr(input, lead, user) {
     voice_note_mime_type: voiceNote?.mime_type || "",
     voice_note_size_bytes: voiceNote?.size_bytes || 0,
     created_at: now
+  };
+}
+
+function resolvePmrActivityLink(input, lead) {
+  const activities = ensureActivityIds(lead.activities);
+  const selectedActivityId = String(input.activity_id || "").trim();
+  if (selectedActivityId) {
+    const existingActivity = activities.find(activity => String(activity.id || "") === selectedActivityId);
+    if (!existingActivity) {
+      const error = new Error("Linked meeting activity was not found on this lead. Refresh and choose the activity again.");
+      error.status = 400;
+      throw error;
+    }
+    return {
+      activityId: selectedActivityId,
+      activities,
+      existingActivity
+    };
+  }
+  return {
+    activityId: newRecordId("act"),
+    activities,
+    existingActivity: null
+  };
+}
+
+function pmrTimelineActivity({ activityId, pmr, payload, existingActivity }) {
+  const hasVoiceNote = Boolean(pmr.voice_note_url || pmr.voice_note_id);
+  const hasTranscript = Boolean(pmr.voice_note_transcript);
+  const selectedExisting = Boolean(existingActivity);
+  const baseText = `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.${hasVoiceNote ? " Voice note attached." : ""}${hasTranscript ? " AI transcript saved." : ""}`;
+  return {
+    id: selectedExisting ? newRecordId("act") : activityId,
+    at: pmr.meeting_date || new Date().toISOString().slice(0, 10),
+    type: selectedExisting ? "PMR Filed" : "In-Person Meeting",
+    text: selectedExisting ? `${baseText} Linked to meeting activity: ${activitySummary(existingActivity)}.` : `${baseText} Meeting activity created from PMR.`,
+    pmr_linked: true,
+    pmr_id: pmr.id,
+    activity_id: activityId,
+    meeting_activity_id: activityId,
+    target_activity_id: selectedExisting ? activityId : "",
+    target_activity_summary: selectedExisting ? activitySummary(existingActivity) : "",
+    voice_note: pmr.voice_note,
+    voice_note_id: pmr.voice_note_id,
+    voice_note_url: pmr.voice_note_url,
+    voice_note_path: pmr.voice_note_path,
+    voice_note_mime_type: pmr.voice_note_mime_type,
+    voice_note_size_bytes: pmr.voice_note_size_bytes,
+    voice_note_transcript: pmr.voice_note_transcript,
+    quotation_ref: String(payload.quotation_ref || "").trim()
   };
 }
 
@@ -1364,9 +1631,18 @@ function toSupabaseLead(input, user) {
     google_maps_url: lead.google_maps_url,
     google_rating: Number(lead.google_rating || 0) || null,
     google_review_count: Number(lead.google_review_count || 0),
+    latitude: lead.latitude,
+    longitude: lead.longitude,
     business_category: lead.business_category,
     opening_hours: lead.opening_hours,
     products_services_remarks: lead.products_services_remarks,
+    steel_products_likely_needed: lead.steel_products_likely_needed,
+    competitors_likely_using: lead.competitors_likely_using,
+    certifications: lead.certifications,
+    estimated_scale: lead.estimated_scale,
+    estimated_annual_revenue: lead.estimated_annual_revenue,
+    key_personnel: lead.key_personnel,
+    recent_projects: lead.recent_projects,
     contact_name: lead.contact_person,
     primary_contact_title: lead.primary_contact_title,
     contact_email: lead.email,
@@ -1382,6 +1658,7 @@ function toSupabaseLead(input, user) {
     priority: lead.priority,
     estimated_value: lead.estimated_value,
     product_interest: lead.product_interest,
+    activity_purpose: lead.activity_purpose || "",
     next_action: lead.next_action,
     next_action_date: lead.next_action_date,
     last_activity: lead.last_activity,
@@ -1396,6 +1673,9 @@ function toSupabaseLead(input, user) {
     lost_competitor: lead.lost_competitor || null,
     lost_at: lead.lost_at || null,
     lost_by: lead.lost_by || null,
+    imported_at: input.imported_at || lead.imported_at || null,
+    imported_by: input.imported_by || lead.imported_by || null,
+    auto_enrichment: lead.auto_enrichment,
     enrichment_status: lead.enrichment_status,
     enrichment_source: lead.enrichment_source,
     enriched_at: lead.enriched_at,
@@ -1476,11 +1756,274 @@ async function latestSupabasePmr(token, leadId) {
   return pmrs[0] ? fromSupabasePmr(pmrs[0]) : null;
 }
 
+async function recentSupabasePmrs(token, leadId, limit = 3) {
+  const pmrs = await rest(`pmrs?lead_id=eq.${encodeURIComponent(leadId)}&select=*&order=created_at.desc&limit=${limit}`, supabaseDataOptions(token)).catch(() => []);
+  return pmrs.map(fromSupabasePmr);
+}
+
 async function getSupabaseLead(token, id, user = null) {
   const leads = await rest(`leads?id=eq.${encodeURIComponent(id)}&select=*`, supabaseDataOptions(token));
   const lead = leads[0] ? fromSupabaseLead(leads[0]) : null;
   if (!lead || !user) return lead;
   return leadBelongsToUser(lead, user) ? lead : null;
+}
+
+function companySnapshot(lead) {
+  return {
+    id: lead.id,
+    company_name: lead.company_name,
+    legal_name: lead.legal_name,
+    stage: lead.stage || lead.lead_status,
+    priority: lead.priority,
+    tier: lead.tier,
+    sector: lead.sector || lead.industry,
+    territory: lead.territory,
+    assigned_salesman: lead.assigned_salesman,
+    contact_person: lead.contact_person || lead.contact_name,
+    phone: lead.phone,
+    email: lead.email || lead.contact_email,
+    next_action: lead.next_action,
+    next_action_date: lead.next_action_date,
+    health: lead.health,
+    notes: lead.notes
+  };
+}
+
+async function buildCompanyAiBundle({ db, user, lead, supabaseEnabled }) {
+  let pmrs = [];
+  let intel = [];
+  let handoffs = [];
+  if (supabaseEnabled) {
+    pmrs = await recentSupabasePmrs(user.token, lead.id, 3);
+    intel = await rest("market_intelligence?select=*&order=published_at.desc&limit=100", supabaseDataOptions(user.token))
+      .then(items => leadIntelItems(lead, matchIntelligenceToLeads(items, [lead])).slice(0, 5))
+      .catch(() => []);
+    handoffs = await rest(`handoff_logs?lead_id=eq.${encodeURIComponent(lead.id)}&select=*&order=timestamp.desc&limit=5`, supabaseDataOptions(user.token))
+      .catch(() => []);
+  } else {
+    pmrs = (db.pmrs || [])
+      .filter(pmr => pmr.company_id === lead.id || pmr.lead_id === lead.id)
+      .sort((a, b) => String(b.created_at || b.meeting_date || "").localeCompare(String(a.created_at || a.meeting_date || "")))
+      .slice(0, 3);
+    intel = leadIntelItems(lead, matchIntelligenceToLeads(db.market_intelligence || [], [lead])).slice(0, 5);
+    handoffs = [...(lead.handoff_log || [])]
+      .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))
+      .slice(0, 5);
+  }
+  return { lead, pmrs, intel, handoffs };
+}
+
+async function aiActionRateLimited(db, user, supabaseEnabled) {
+  const since = new Date(Date.now() - 10 * 60_000).toISOString();
+  if (supabaseEnabled) {
+    try {
+      const rows = await rest(`ai_action_log?user_uid=eq.${encodeURIComponent(user.id)}&timestamp=gte.${encodeURIComponent(since)}&select=id`, supabaseDataOptions(user.token));
+      return rows.length >= 20;
+    } catch {
+      return false;
+    }
+  }
+  return (db.ai_action_log || []).filter(item =>
+    String(item.user_uid) === String(user.id)
+    && String(item.timestamp || "") >= since
+  ).length >= 20;
+}
+
+async function recordAiActionLog(db, user, { leadId = null, action, status, durationMs, error = "", scope = "company_record" }, supabaseEnabled) {
+  const entry = {
+    id: newRecordId("ai"),
+    timestamp: new Date().toISOString(),
+    user_uid: user.id,
+    user_role: user.role,
+    scope,
+    company_id: leadId,
+    action,
+    duration_ms: Math.max(0, Number(durationMs || 0)),
+    status,
+    error: String(error || "").slice(0, 500)
+  };
+  try {
+    if (supabaseEnabled) {
+      await rest("ai_action_log", {
+        method: "POST",
+        ...supabaseDataOptions(user.token),
+        body: {
+          user_uid: entry.user_uid,
+          user_role: entry.user_role,
+          scope: entry.scope,
+          company_id: entry.company_id,
+          action: entry.action,
+          duration_ms: entry.duration_ms,
+          status: entry.status,
+          error: entry.error
+        }
+      });
+      return entry;
+    }
+  } catch {
+    // AI logging should not block the salesperson.
+  }
+  if (db) {
+    db.ai_action_log.unshift(entry);
+    db.ai_action_log = db.ai_action_log.slice(0, 1000);
+    writeDb(db);
+  }
+  return entry;
+}
+
+async function createDirectorNotifications({ db, user, lead, flag, supabaseEnabled }) {
+  if (supabaseEnabled) {
+    try {
+      const directors = await rest("profiles?role=in.(admin,director,manager)&status=eq.active&select=id,full_name", { service: true });
+      const rows = directors.map(profile => ({
+        recipient_uid: profile.id,
+        lead_id: lead.id,
+        type: "attention_flag",
+        title: `${lead.company_name} needs attention`,
+        message: `${flag.flagged_by_name} flagged ${lead.company_name}${flag.reason ? `: ${flag.reason}` : "."}`,
+        status: "pending",
+        payload: flag
+      }));
+      if (rows.length) {
+        await rest("notifications", { method: "POST", service: true, body: rows });
+      }
+    } catch {
+      // Notifications are secondary; the flag itself is the source of truth.
+    }
+    return;
+  }
+  const directors = (db.users || []).filter(item => isDirectorOrAdmin(item));
+  directors.forEach(person => {
+    db.notifications.unshift({
+      id: newRecordId("note"),
+      recipient_uid: person.id,
+      lead_id: lead.id,
+      type: "attention_flag",
+      title: `${lead.company_name} needs attention`,
+      message: `${flag.flagged_by_name} flagged ${lead.company_name}${flag.reason ? `: ${flag.reason}` : "."}`,
+      status: "pending",
+      payload: flag,
+      created_at: new Date().toISOString()
+    });
+  });
+}
+
+function monthBounds(now = new Date()) {
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return { monthStart, prevMonthStart };
+}
+
+function portfolioCompany(lead, latestPmr = null, intel = []) {
+  const lastActivityDate = String(lead.last_activity || "").slice(0, 10);
+  const daysSinceActivity = lastActivityDate ? daysSince(lastActivityDate) : null;
+  const expected = contactRules.effectiveThreshold(lead.stage, lead.tier);
+  const nextDue = String(lead.next_action_date || "").slice(0, 10);
+  const nextOverdue = Boolean(nextDue) && nextDue < new Date().toISOString().slice(0, 10);
+  return {
+    id: lead.id,
+    name: lead.company_name,
+    status: lead.stage || lead.lead_status || "PROSPECT",
+    tier: String(lead.tier || "2"),
+    sector: lead.sector || lead.industry || "",
+    territory: lead.territory || "",
+    emirate: lead.country_emirate || lead.location || "",
+    country: lead.country_emirate || "",
+    est_monthly_volume: lead.estimated_monthly_volume || "",
+    next_action: lead.next_action || "",
+    next_action_due: nextDue,
+    next_action_overdue: nextOverdue,
+    days_overdue: nextOverdue ? Math.max(0, daysSince(nextDue)) : 0,
+    last_activity_date: lastActivityDate,
+    days_since_activity: daysSinceActivity,
+    expected_contact_days: expected,
+    contact_overdue: daysSinceActivity == null ? true : daysSinceActivity > expected,
+    contact_overdue_by: daysSinceActivity == null ? null : Math.max(0, daysSinceActivity - expected),
+    products_of_interest: lead.product_interest || "",
+    tags: lead.tags || "",
+    latest_pmr: latestPmr,
+    has_recent_intel: intel.some(item => (item.matched_company_ids || []).includes(lead.id))
+  };
+}
+
+function computePipelineMetricsForPortfolio(companies, leads, activities) {
+  const byStatus = COMPANY_STATUSES.reduce((acc, status) => ({ ...acc, [status]: 0 }), {});
+  companies.forEach(company => {
+    const status = String(company.status || "PROSPECT").toUpperCase();
+    byStatus[status] = (byStatus[status] || 0) + 1;
+  });
+  const { monthStart, prevMonthStart } = monthBounds();
+  let activitiesThisMonth = 0;
+  let activitiesLastMonth = 0;
+  activities.forEach(activity => {
+    const raw = activityDateValue(activity);
+    const parsed = new Date(raw || activity.at || "");
+    if (Number.isNaN(parsed.getTime()) || parsed < prevMonthStart) return;
+    if (parsed >= monthStart) activitiesThisMonth += 1;
+    else activitiesLastMonth += 1;
+  });
+  return {
+    total_companies: companies.length,
+    by_status: byStatus,
+    overdue_next_actions: companies.filter(company => company.next_action_overdue).length,
+    overdue_action_companies: companies
+      .filter(company => company.next_action_overdue)
+      .sort((a, b) => Number(b.days_overdue || 0) - Number(a.days_overdue || 0))
+      .slice(0, 10)
+      .map(company => ({
+        id: company.id,
+        name: company.name,
+        status: company.status,
+        action: company.next_action || "Follow up with customer",
+        days_overdue: company.days_overdue
+      })),
+    contact_overdue_count: companies.filter(company => company.contact_overdue).length,
+    activities_this_month: activitiesThisMonth,
+    activities_last_month: activitiesLastMonth,
+    activity_trend: activitiesLastMonth > 0 ? Math.round(((activitiesThisMonth - activitiesLastMonth) / activitiesLastMonth) * 100) : null
+  };
+}
+
+async function buildSalespersonPortfolioBundle({ db, user, supabaseEnabled }) {
+  let leads;
+  let pmrs = [];
+  let intel = [];
+  if (supabaseEnabled) {
+    const leadRows = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
+    leads = visibleLeadsForUser(leadRows.map(fromSupabaseLead), user);
+    const leadIds = new Set(leads.map(lead => String(lead.id)));
+    const pmrRows = await rest("pmrs?select=*&order=created_at.desc&limit=500", supabaseDataOptions(user.token)).catch(() => []);
+    pmrs = pmrRows.map(fromSupabasePmr).filter(pmr => leadIds.has(String(pmr.lead_id || pmr.company_id)));
+    const rawIntel = await rest("market_intelligence?select=*&order=published_at.desc&limit=100", supabaseDataOptions(user.token)).catch(() => []);
+    intel = visibleIntelItems(leads, matchIntelligenceToLeads(rawIntel, leads)).slice(0, 30);
+  } else {
+    leads = visibleLeadsForUser(db.leads.map(leadWithDerivedFields), user);
+    const leadIds = new Set(leads.map(lead => String(lead.id)));
+    pmrs = (db.pmrs || []).filter(pmr => leadIds.has(String(pmr.lead_id || pmr.company_id)));
+    intel = visibleIntelItems(leads, matchIntelligenceToLeads(db.market_intelligence || [], leads)).slice(0, 30);
+  }
+  const latestPmrByLead = new Map();
+  pmrs
+    .sort((a, b) => String(b.created_at || b.meeting_date || "").localeCompare(String(a.created_at || a.meeting_date || "")))
+    .forEach(pmr => {
+      const id = String(pmr.lead_id || pmr.company_id || "");
+      if (id && !latestPmrByLead.has(id)) latestPmrByLead.set(id, pmr);
+    });
+  const companies = leads.map(lead => portfolioCompany(lead, latestPmrByLead.get(String(lead.id)), intel));
+  const activities = leads.flatMap(lead => ensureActivityIds(lead.activities || []).map(activity => ({ ...activity, lead_id: lead.id })));
+  return {
+    bundle: {
+      caller: {
+        id: user.id,
+        name: user.name || user.email || "Salesperson",
+        role: user.role || "",
+        territory: user.territory || ""
+      },
+      companies,
+      intel
+    },
+    metrics: computePipelineMetricsForPortfolio(companies, leads, activities)
+  };
 }
 
 async function recordSearch(token, userId, keyword, location, provider, resultCount, status = "completed", errorMessage = "") {
@@ -1534,6 +2077,252 @@ async function googleEnrichPayload(input, req, { overwrite = false } = {}) {
   }
 }
 
+function integrationLogEntry(service, action, status, startedAt, error = "") {
+  return {
+    id: `ilog-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    timestamp: new Date().toISOString(),
+    service,
+    action,
+    status,
+    duration_ms: Math.max(0, Date.now() - startedAt),
+    error: String(error || "").slice(0, 500)
+  };
+}
+
+async function recordIntegrationLog(db, user, service, action, status, startedAt, error = "", supabaseEnabled = false) {
+  const entry = integrationLogEntry(service, action, status, startedAt, error);
+  try {
+    if (supabaseEnabled) {
+      await rest("integration_logs", {
+        method: "POST",
+        ...supabaseDataOptions(user.token),
+        body: {
+          timestamp: entry.timestamp,
+          service: entry.service,
+          action: entry.action,
+          status: entry.status,
+          duration_ms: entry.duration_ms,
+          error: entry.error,
+          created_by: user.id
+        }
+      });
+      return entry;
+    }
+  } catch {
+    // Optional integration logs must never block CRM workflows.
+  }
+  if (!db) return entry;
+  db.integration_logs.unshift(entry);
+  db.integration_logs = db.integration_logs.slice(0, 500);
+  writeDb(db);
+  return entry;
+}
+
+async function recordAgentQueryLog(db, user, prompt, result, supabaseEnabled = false) {
+  const entry = {
+    id: newRecordId("agent"),
+    timestamp: new Date().toISOString(),
+    user_uid: user.id,
+    user_role: user.role,
+    user_territory: user.territory || "",
+    prompt: String(prompt || "").slice(0, 1000),
+    answer: String(result.answer || "").slice(0, 4000),
+    tools_used: result.tools_used || [],
+    rounds: Number(result.rounds || 0),
+    visible_records: Number(result.visible_records || 0)
+  };
+  try {
+    if (supabaseEnabled) {
+      await rest("agent_query_log", {
+        method: "POST",
+        ...supabaseDataOptions(user.token),
+        body: {
+          user_uid: entry.user_uid,
+          user_role: entry.user_role,
+          user_territory: entry.user_territory,
+          prompt: entry.prompt,
+          answer: entry.answer,
+          tools_used: entry.tools_used,
+          rounds: entry.rounds,
+          visible_records: entry.visible_records
+        }
+      });
+      return entry;
+    }
+  } catch {
+    // Agent logging must not block answers.
+  }
+  if (db) {
+    db.agent_query_log.unshift(entry);
+    db.agent_query_log = db.agent_query_log.slice(0, 500);
+    writeDb(db);
+  }
+  return entry;
+}
+
+async function currentCrmConfiguration(db, user, supabaseEnabled = false) {
+  const defaults = defaultCrmConfiguration();
+  if (supabaseEnabled) {
+    try {
+      const rows = await rest("app_config?key=eq.crm_settings&select=value&limit=1", supabaseDataOptions(user.token));
+      return normalizeConfiguration(rows[0]?.value || {}, defaults);
+    } catch {
+      return defaults;
+    }
+  }
+  return normalizeConfiguration(db?.configuration || {}, defaults);
+}
+
+async function saveCrmConfiguration(db, user, configuration, supabaseEnabled = false) {
+  const next = normalizeConfiguration(configuration, defaultCrmConfiguration());
+  if (supabaseEnabled) {
+    await rest("app_config?on_conflict=key", {
+      method: "POST",
+      ...supabaseDataOptions(user.token),
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: {
+        key: "crm_settings",
+        value: next,
+        updated_by: user.id,
+        updated_at: new Date().toISOString()
+      }
+    });
+    return next;
+  }
+  db.configuration = next;
+  writeDb(db);
+  return next;
+}
+
+async function recordConfigurationAudit(db, user, action, beforeConfig, afterConfig, details = {}, supabaseEnabled = false) {
+  const before = normalizeConfiguration(beforeConfig || {}, defaultCrmConfiguration());
+  const after = normalizeConfiguration(afterConfig || {}, before);
+  const entry = {
+    id: newRecordId("cfg"),
+    timestamp: new Date().toISOString(),
+    actor_uid: user.id,
+    actor_name: user.name || user.email || user.id,
+    action,
+    before_config: before,
+    after_config: after,
+    diff: configurationDiff(before, after),
+    details
+  };
+  if (supabaseEnabled) {
+    await rest("configuration_audit_log", {
+      method: "POST",
+      ...supabaseDataOptions(user.token),
+      body: entry
+    });
+    return entry;
+  }
+  db.configuration_audit_log.unshift(entry);
+  db.configuration_audit_log = db.configuration_audit_log.slice(0, 500);
+  writeDb(db);
+  return entry;
+}
+
+async function configurationAuditLog(db, user, supabaseEnabled = false) {
+  if (supabaseEnabled) {
+    const rows = await rest("configuration_audit_log?select=*&order=timestamp.desc&limit=50", supabaseDataOptions(user.token));
+    return rows;
+  }
+  return (db.configuration_audit_log || []).slice(0, 50);
+}
+
+function enrichmentPatchFromLead(lead) {
+  return {
+    legal_name: lead.legal_name,
+    year_established: lead.year_established,
+    website: lead.website,
+    phone: lead.phone,
+    email: lead.email,
+    address: lead.address,
+    google_place_id: lead.google_place_id || null,
+    google_maps_url: lead.google_maps_url,
+    google_rating: Number(lead.google_rating || 0) || null,
+    google_review_count: Number(lead.google_review_count || 0),
+    latitude: lead.latitude,
+    longitude: lead.longitude,
+    business_category: lead.business_category,
+    opening_hours: lead.opening_hours,
+    products_services_remarks: lead.products_services_remarks,
+    steel_products_likely_needed: lead.steel_products_likely_needed,
+    competitors_likely_using: lead.competitors_likely_using,
+    certifications: lead.certifications,
+    estimated_scale: lead.estimated_scale,
+    estimated_annual_revenue: lead.estimated_annual_revenue,
+    key_personnel: lead.key_personnel,
+    recent_projects: lead.recent_projects,
+    enrichment_source: lead.enrichment_source,
+    enrichment_status: lead.enrichment_status,
+    enriched_at: lead.enriched_at,
+    auto_enrichment: lead.auto_enrichment
+  };
+}
+
+function toSupabasePatchPayload(patch) {
+  const next = { ...patch };
+  if (Object.hasOwn(next, "email")) {
+    next.contact_email = next.email;
+    delete next.email;
+  }
+  if (Object.hasOwn(next, "contact_person")) {
+    next.contact_name = next.contact_person;
+    delete next.contact_person;
+  }
+  if (Object.hasOwn(next, "stage")) {
+    next.lead_status = next.stage;
+    delete next.stage;
+  }
+  return next;
+}
+
+async function persistLeadPatch(db, user, leadId, patch, supabaseEnabled) {
+  if (supabaseEnabled) {
+    const leads = await patchSupabaseLeadWithOptionalFallback(user.token, leadId, toSupabasePatchPayload(patch));
+    return leads[0] ? fromSupabaseLead(leads[0]) : null;
+  }
+  const lead = db.leads.find(item => item.id === leadId);
+  if (!lead) return null;
+  Object.assign(lead, patch);
+  writeDb(db);
+  return leadWithDerivedFields(lead);
+}
+
+function scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled }) {
+  setTimeout(async () => {
+    const startedAt = Date.now();
+    try {
+      const result = await runCompanyAutoEnrichment({
+        lead,
+        country: lead.country_emirate || lead.location || "United Arab Emirates",
+        rateKey: clientIp(req)
+      });
+      await persistLeadPatch(db, user, lead.id, enrichmentPatchFromLead(result.lead), supabaseEnabled);
+      await recordIntegrationLog(db, user, "auto_enrichment", "post_save", "success", startedAt, "", supabaseEnabled);
+      for (const item of result.logs || []) {
+        await recordIntegrationLog(db, user, item.source, "enrich_company", item.status, startedAt, item.error_message || "", supabaseEnabled);
+      }
+    } catch (error) {
+      await recordIntegrationLog(db, user, "auto_enrichment", "post_save", "failed", startedAt, error.message, supabaseEnabled);
+    }
+  }, 0);
+}
+
+function leadIntelItems(lead, items) {
+  return (items || [])
+    .filter(item => (item.matched_company_ids || []).includes(lead.id))
+    .sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || "")));
+}
+
+function visibleIntelItems(leads, items) {
+  const visibleIds = new Set((leads || []).map(lead => lead.id));
+  return (items || [])
+    .filter(item => !(item.matched_company_ids || []).length || item.matched_company_ids.some(id => visibleIds.has(id)))
+    .sort((a, b) => Number(b.relevance_score || 0) - Number(a.relevance_score || 0));
+}
+
 async function findCompany(token, lead) {
   if (lead.google_place_id) {
     const matches = await rest(`companies?google_place_id=eq.${encodeURIComponent(lead.google_place_id)}&select=*`, supabaseDataOptions(token));
@@ -1550,11 +2339,89 @@ async function resolveSalesmanId(token, assignedSalesman) {
   const name = String(assignedSalesman || "").trim();
   if (!name) return null;
   try {
-    const profiles = await rest(`profiles?role=eq.salesman&full_name=eq.${encodeURIComponent(name)}&select=id&limit=1`, supabaseDataOptions(token));
+    let profiles = await rest(`profiles?role=eq.salesman&full_name=eq.${encodeURIComponent(name)}&select=id&limit=1`, supabaseDataOptions(token));
+    if (!profiles[0] && name.includes("@")) {
+      profiles = await rest(`profiles?role=eq.salesman&email=eq.${encodeURIComponent(name)}&select=id&limit=1`, supabaseDataOptions(token));
+    }
+    if (!profiles[0] && name.length >= 3) {
+      profiles = await rest(`profiles?role=eq.salesman&full_name=ilike.*${encodeURIComponent(name)}*&select=id&limit=1`, supabaseDataOptions(token));
+    }
     return profiles[0]?.id || null;
   } catch {
     return null;
   }
+}
+
+async function resolveSalesmanProfile(token, assignedSalesman) {
+  const name = String(assignedSalesman || "").trim();
+  if (!name) return null;
+  try {
+    let profiles = await rest(`profiles?role=eq.salesman&full_name=eq.${encodeURIComponent(name)}&select=id,full_name,territory&limit=1`, supabaseDataOptions(token));
+    if (!profiles[0] && name.includes("@")) {
+      profiles = await rest(`profiles?role=eq.salesman&email=eq.${encodeURIComponent(name)}&select=id,full_name,territory&limit=1`, supabaseDataOptions(token));
+    }
+    if (!profiles[0] && name.length >= 3) {
+      profiles = await rest(`profiles?role=eq.salesman&full_name=ilike.*${encodeURIComponent(name)}*&select=id,full_name,territory&limit=1`, supabaseDataOptions(token));
+    }
+    return profiles[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+function localSalesmanProfile(db, assignedSalesman) {
+  const name = String(assignedSalesman || "").trim().toLowerCase();
+  if (!name) return null;
+  const user = (db.users || db.salesmen || []).find(person =>
+    String(person.name || person.full_name || "").trim().toLowerCase() === name
+    || String(person.email || "").trim().toLowerCase() === name
+  );
+  return user ? { id: user.id, full_name: user.name || user.full_name || user.email, territory: user.territory } : null;
+}
+
+function handoffActivity(event) {
+  return {
+    id: newRecordId("act"),
+    at: new Date().toISOString().slice(0, 10),
+    type: "Handoff",
+    text: `Reassigned from ${event.previous_owner_name || "Unassigned"} to ${event.new_owner_name || "Unassigned"}. Note: ${event.handoff_note}`,
+    handoff_id: event.handoff_id,
+    logged_by: event.initiated_by_name
+  };
+}
+
+function buildHandoffEvent({ lead, newOwner, newTerritory, note, user }) {
+  return {
+    handoff_id: newRecordId("handoff"),
+    timestamp: new Date().toISOString(),
+    previous_owner_uid: lead.assigned_to || "",
+    previous_owner_name: lead.assigned_salesman || "Unassigned",
+    new_owner_uid: newOwner?.id || "",
+    new_owner_name: newOwner?.full_name || newOwner?.name || "",
+    previous_territory: lead.territory || "",
+    new_territory: canonicalTerritory(newTerritory || newOwner?.territory || lead.territory),
+    handoff_note: String(note || "").trim(),
+    initiated_by_uid: user.id || "",
+    initiated_by_name: user.name || user.email || "",
+    initiated_by_role: user.role || ""
+  };
+}
+
+async function recordHandoffNotification(token, lead, handoffEvent) {
+  if (!handoffEvent?.new_owner_uid) return;
+  await rest("notifications", {
+    method: "POST",
+    ...supabaseDataOptions(token),
+    body: {
+      recipient_uid: handoffEvent.new_owner_uid,
+      lead_id: lead.id,
+      type: "handoff",
+      title: `${lead.company_name || "A lead"} has been assigned to you`,
+      message: `${lead.company_name || "A lead"} has been assigned to you. Note from ${handoffEvent.initiated_by_name || "management"}: ${handoffEvent.handoff_note}`,
+      status: "pending",
+      payload: handoffEvent
+    }
+  }).catch(() => null);
 }
 
 async function saveSupabaseLead(token, user, input) {
@@ -1602,13 +2469,163 @@ async function saveSupabaseLead(token, user, input) {
     company = companies[0];
   }
   lead.company_id = company?.id || null;
-  const leads = await rest("leads?select=*", {
-    method: "POST",
-    ...supabaseDataOptions(token),
-    headers: { Prefer: "return=representation" },
-    body: lead
-  });
+  const leads = await postSupabaseLeadWithOptionalFallback(token, lead);
   return fromSupabaseLead(leads[0]);
+}
+
+function importMode(value) {
+  return ["skip", "update", "import_all"].includes(String(value || "")) ? String(value) : "skip";
+}
+
+function importedLeadPayload(row, user, importedAt) {
+  return {
+    ...(row || {}),
+    imported_at: importedAt,
+    imported_by: user.id,
+    source: row?.source || "CSV import",
+    activity_purpose: row?.activity_purpose || "Company Introductory",
+    stage: normalizeStageValue(row?.stage || row?.lead_status, "PROSPECT"),
+    priority: row?.priority || "New",
+    estimated_value: Number(row?.estimated_value || 0) || 0
+  };
+}
+
+function stripOptionalSupabaseLeadColumns(payload) {
+  const next = { ...payload };
+  OPTIONAL_SUPABASE_LEAD_COLUMNS.forEach(column => delete next[column]);
+  return next;
+}
+
+function optionalLeadColumnMissing(error) {
+  const message = String(error?.message || "");
+  return OPTIONAL_SUPABASE_LEAD_COLUMNS.some(column => message.includes(`'${column}'`) || message.includes(`"${column}"`))
+    || /schema cache|column .* does not exist/i.test(message);
+}
+
+async function postSupabaseLeadWithOptionalFallback(token, body) {
+  try {
+    return await rest("leads?select=*", {
+      method: "POST",
+      ...supabaseDataOptions(token),
+      headers: { Prefer: "return=representation" },
+      body
+    });
+  } catch (error) {
+    if (!optionalLeadColumnMissing(error)) throw error;
+    return rest("leads?select=*", {
+      method: "POST",
+      ...supabaseDataOptions(token),
+      headers: { Prefer: "return=representation" },
+      body: stripOptionalSupabaseLeadColumns(body)
+    });
+  }
+}
+
+async function patchSupabaseLeadWithOptionalFallback(token, id, body) {
+  try {
+    return await rest(`leads?id=eq.${encodeURIComponent(id)}&select=*`, {
+      method: "PATCH",
+      ...supabaseDataOptions(token),
+      headers: { Prefer: "return=representation" },
+      body
+    });
+  } catch (error) {
+    if (!optionalLeadColumnMissing(error)) throw error;
+    return rest(`leads?id=eq.${encodeURIComponent(id)}&select=*`, {
+      method: "PATCH",
+      ...supabaseDataOptions(token),
+      headers: { Prefer: "return=representation" },
+      body: stripOptionalSupabaseLeadColumns(body)
+    });
+  }
+}
+
+async function importSupabaseLeadRows(token, user, rows, mode, importedAt) {
+  const existing = (await rest("leads?select=*", supabaseDataOptions(token))).map(fromSupabaseLead);
+  const imported = [];
+  const failedRows = [];
+  let updated = 0;
+  let skipped = 0;
+
+  for (const item of rows) {
+    const rowNumber = item.row_number;
+    const data = importedLeadPayload(item.data, user, importedAt);
+    if (!String(data.company_name || "").trim()) {
+      failedRows.push({ row_number: rowNumber, data, reason: "Company name is required." });
+      continue;
+    }
+    const duplicate = findDuplicateLead(existing, data.company_name);
+    if (duplicate && mode === "skip") {
+      skipped += 1;
+      continue;
+    }
+    try {
+      if (duplicate && mode === "update") {
+        const lead = toSupabaseLead({ ...duplicate.lead, ...data }, user);
+        delete lead.created_by;
+        if (isAdmin(user) && !lead.assigned_to) {
+          lead.assigned_to = await resolveSalesmanId(token, lead.assigned_salesman);
+        }
+        const patched = await patchSupabaseLeadWithOptionalFallback(token, duplicate.lead.id, lead);
+        if (patched[0]) {
+          updated += 1;
+          imported.push(fromSupabaseLead(patched[0]));
+          const index = existing.findIndex(leadItem => leadItem.id === duplicate.lead.id);
+          if (index >= 0) existing[index] = fromSupabaseLead(patched[0]);
+        }
+      } else {
+        const lead = toSupabaseLead(data, user);
+        if (isAdmin(user) && !lead.assigned_to) {
+          lead.assigned_to = await resolveSalesmanId(token, lead.assigned_salesman);
+        }
+        const inserted = await postSupabaseLeadWithOptionalFallback(token, lead);
+        if (inserted[0]) {
+          imported.push(fromSupabaseLead(inserted[0]));
+          existing.unshift(fromSupabaseLead(inserted[0]));
+        }
+      }
+    } catch (error) {
+      failedRows.push({ row_number: rowNumber, data, reason: error.message });
+    }
+  }
+
+  return { imported: imported.length - updated, updated, skipped, failed: failedRows.length, failed_rows: failedRows, leads: imported };
+}
+
+function importLocalLeadRows(db, user, rows, mode, importedAt) {
+  const imported = [];
+  const failedRows = [];
+  let updated = 0;
+  let skipped = 0;
+
+  rows.forEach(item => {
+    const rowNumber = item.row_number;
+    const data = importedLeadPayload(item.data, user, importedAt);
+    if (!String(data.company_name || "").trim()) {
+      failedRows.push({ row_number: rowNumber, data, reason: "Company name is required." });
+      return;
+    }
+    const duplicate = findDuplicateLead(db.leads, data.company_name);
+    if (duplicate && mode === "skip") {
+      skipped += 1;
+      return;
+    }
+    if (duplicate && mode === "update") {
+      Object.assign(duplicate.lead, normalizeLead({ ...duplicate.lead, ...data }));
+      duplicate.lead.imported_at = importedAt;
+      duplicate.lead.imported_by = user.id;
+      updated += 1;
+      imported.push(leadWithDerivedFields(duplicate.lead));
+      return;
+    }
+    const lead = withAutomaticReminder(normalizeLead(data), user);
+    lead.id = `lead-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    db.leads.unshift(lead);
+    imported.push(leadWithDerivedFields(lead));
+  });
+
+  writeDb(db);
+  return { imported: imported.length - updated, updated, skipped, failed: failedRows.length, failed_rows: failedRows, leads: imported };
 }
 
 async function handleApi(req, res, url) {
@@ -1631,6 +2648,50 @@ async function handleApi(req, res, url) {
       },
       date: new Date().toISOString()
     });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/cron/fetch-market-intelligence") {
+    const cronSecret = String(process.env.CRON_SECRET || "").trim();
+    if (cronSecret && url.searchParams.get("secret") !== cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
+      return sendJson(res, 401, { error: "Invalid cron secret." });
+    }
+    const startedAt = Date.now();
+    if (supabaseEnabled) {
+      const leadRows = await rest("leads?select=*&order=created_at.desc", { service: true });
+      const fetched = await fetchMarketIntelligence();
+      const matched = matchIntelligenceToLeads(fetched.items, leadRows.map(fromSupabaseLead));
+      if (matched.length) {
+        await rest("market_intelligence?on_conflict=url", {
+          method: "POST",
+          service: true,
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: matched
+        }).catch(() => null);
+      }
+      await rest("integration_logs", {
+        method: "POST",
+        service: true,
+        body: {
+          timestamp: new Date().toISOString(),
+          service: "market_intelligence",
+          action: "weekly_cron",
+          status: fetched.disabled ? "disabled" : "success",
+          duration_ms: Date.now() - startedAt,
+          error: fetched.reason || ""
+        }
+      }).catch(() => null);
+      return sendJson(res, 200, { imported: matched.length, disabled: fetched.disabled, reason: fetched.reason || "" });
+    }
+    const localDb = readDb();
+    const fetched = await fetchMarketIntelligence();
+    const matched = matchIntelligenceToLeads(fetched.items, localDb.leads.map(leadWithDerivedFields));
+    const byUrl = new Map((localDb.market_intelligence || []).map(item => [item.url || item.id, item]));
+    matched.forEach(item => byUrl.set(item.url || item.id, item));
+    localDb.market_intelligence = [...byUrl.values()].sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || ""))).slice(0, 300);
+    localDb.integration_logs.unshift(integrationLogEntry("market_intelligence", "weekly_cron", fetched.disabled ? "disabled" : "success", startedAt, fetched.reason || ""));
+    localDb.integration_logs = localDb.integration_logs.slice(0, 500);
+    writeDb(localDb);
+    return sendJson(res, 200, { imported: matched.length, disabled: fetched.disabled, reason: fetched.reason || "" });
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
@@ -1676,6 +2737,263 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/pmr-voice-notes") {
     return saveVoiceNote(req, res, { supabaseEnabled, user });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/integrations/status") {
+    return sendJson(res, 200, {
+      google_places: integrations.googlePlaces,
+      claude_enrichment: integrations.claudeEnrichment,
+      market_intel: integrations.marketIntel,
+      erp: integrations.erp,
+      linkedin: integrations.linkedin,
+      ai_agent: integrations.aiAgent,
+      keys: integrations.keys,
+      linkedin_titles: titleOptions(),
+      agent_examples: AGENT_EXAMPLE_PROMPTS,
+      configuration_agent_examples: CONFIGURATION_AGENT_EXAMPLES
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/agent/query") {
+    const body = await readBody(req);
+    let leads;
+    let pmrs = [];
+    if (supabaseEnabled) {
+      const leadRows = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
+      leads = visibleLeadsForUser(leadRows.map(fromSupabaseLead), user);
+      const visibleIds = new Set(leads.map(lead => String(lead.id)));
+      const pmrRows = await rest("pmrs?select=*&order=created_at.desc&limit=500", supabaseDataOptions(user.token)).catch(() => []);
+      pmrs = pmrRows.map(fromSupabasePmr).filter(pmr => visibleIds.has(String(pmr.lead_id || pmr.company_id)));
+    } else {
+      leads = visibleLeadsForUser(db.leads.map(leadWithDerivedFields), user);
+      const visibleIds = new Set(leads.map(lead => String(lead.id)));
+      pmrs = (db.pmrs || []).filter(pmr => visibleIds.has(String(pmr.lead_id || pmr.company_id)));
+    }
+    try {
+      const result = await runAgentQuery({ prompt: body.prompt, user, leads, pmrs });
+      await recordAgentQueryLog(db, user, body.prompt, result, supabaseEnabled);
+      return sendJson(res, 200, result);
+    } catch (error) {
+      await recordIntegrationLog(db, user, "ai_agent", "query", "failed", Date.now(), error.message, supabaseEnabled);
+      throw error;
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/configuration-agent/state") {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const configuration = await currentCrmConfiguration(db, user, supabaseEnabled);
+    const audit = await configurationAuditLog(db, user, supabaseEnabled).catch(() => []);
+    return sendJson(res, 200, {
+      configuration,
+      audit,
+      examples: CONFIGURATION_AGENT_EXAMPLES
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/configuration-agent/propose") {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const body = await readBody(req);
+    const configuration = await currentCrmConfiguration(db, user, supabaseEnabled);
+    const proposal = proposeConfigurationChange({
+      prompt: body.prompt,
+      changes: body.changes,
+      current: configuration,
+      user
+    });
+    await recordConfigurationAudit(db, user, "configuration_proposed", configuration, proposal.changes, {
+      prompt: proposal.prompt,
+      warnings: proposal.warnings,
+      proposal_id: proposal.id
+    }, supabaseEnabled).catch(() => null);
+    return sendJson(res, 200, proposal);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/configuration-agent/apply") {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const body = await readBody(req);
+    if (!await verifyAdminPassword(user, body.admin_password, supabaseEnabled)) {
+      return sendJson(res, 403, { error: "Admin password confirmation is required." });
+    }
+    const before = await currentCrmConfiguration(db, user, supabaseEnabled);
+    const after = sanitizeConfigPatch(body.changes, before);
+    const diff = configurationDiff(before, after);
+    if (!diff.length) return sendJson(res, 400, { error: "No configuration changes detected." });
+    const saved = await saveCrmConfiguration(db, user, after, supabaseEnabled);
+    const audit = await recordConfigurationAudit(db, user, "configuration_applied", before, saved, {
+      reason: String(body.reason || "").trim(),
+      proposal_id: String(body.proposal_id || "").trim()
+    }, supabaseEnabled);
+    return sendJson(res, 200, { configuration: saved, diff, audit });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/configuration-agent/audit") {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const audit = await configurationAuditLog(db, user, supabaseEnabled);
+    return sendJson(res, 200, audit);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/salesperson-ai-actions") {
+    const body = await readBody(req);
+    const action = String(body.action || "").trim();
+    if (!SALESPERSON_AI_ACTIONS[action]) return sendJson(res, 400, { error: "Unknown salesperson AI action." });
+    if (action !== "pipeline_health" && await aiActionRateLimited(db, user, supabaseEnabled)) {
+      return sendJson(res, 429, { error: "AI action rate limit reached. Please wait a few minutes." });
+    }
+    const startedAt = Date.now();
+    try {
+      const { bundle, metrics } = await buildSalespersonPortfolioBundle({ db, user, supabaseEnabled });
+      const result = await runSalespersonAiAction({ action, bundle, metrics });
+      await recordAiActionLog(db, user, {
+        action,
+        status: "success",
+        durationMs: Date.now() - startedAt,
+        scope: "salesperson_home"
+      }, supabaseEnabled);
+      return sendJson(res, 200, result);
+    } catch (error) {
+      await recordAiActionLog(db, user, {
+        action,
+        status: "failed",
+        durationMs: Date.now() - startedAt,
+        error: error.message,
+        scope: "salesperson_home"
+      }, supabaseEnabled);
+      throw error;
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/attention-flags") {
+    const status = String(url.searchParams.get("status") || "open").trim();
+    if (supabaseEnabled) {
+      const rows = await rest(`attention_flags?select=*&order=flagged_at.desc${status && status !== "all" ? `&status=eq.${encodeURIComponent(status)}` : ""}`, supabaseDataOptions(user.token)).catch(() => []);
+      const visibleRows = isDirectorOrAdmin(user)
+        ? rows
+        : rows.filter(flag => String(flag.flagged_by_uid || "") === String(user.id));
+      return sendJson(res, 200, visibleRows);
+    }
+    const flags = (db.attention_flags || [])
+      .filter(flag => status === "all" || String(flag.status || "open") === status)
+      .filter(flag => isDirectorOrAdmin(user) || String(flag.flagged_by_uid || "") === String(user.id))
+      .sort((a, b) => String(b.flagged_at || "").localeCompare(String(a.flagged_at || "")));
+    return sendJson(res, 200, flags);
+  }
+
+  const attentionFlagUpdateMatch = url.pathname.match(/^\/api\/attention-flags\/([^/]+)$/);
+  if (attentionFlagUpdateMatch && req.method === "PATCH") {
+    if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Director or admin access required." });
+    const payload = await readBody(req);
+    const action = String(payload.action || "").trim();
+    if (!["acknowledge", "resolve"].includes(action)) return sendJson(res, 400, { error: "Choose acknowledge or resolve." });
+    const now = new Date().toISOString();
+    const patch = action === "acknowledge"
+      ? {
+        status: "acknowledged",
+        acknowledged_by: user.name || user.email || user.id,
+        acknowledged_at: now
+      }
+      : {
+        status: "resolved",
+        resolution_note: String(payload.resolution_note || "").trim(),
+        resolved_by: user.name || user.email || user.id,
+        resolved_at: now
+      };
+    if (action === "resolve" && patch.resolution_note.length < 3) {
+      return sendJson(res, 400, { error: "Add a short resolution note." });
+    }
+    if (supabaseEnabled) {
+      const updated = await rest(`attention_flags?id=eq.${encodeURIComponent(attentionFlagUpdateMatch[1])}&select=*`, {
+        method: "PATCH",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "return=representation" },
+        body: patch
+      });
+      if (!updated[0]) return sendJson(res, 404, { error: "Attention flag not found." });
+      return sendJson(res, 200, updated[0]);
+    }
+    const flag = (db.attention_flags || []).find(item => item.id === attentionFlagUpdateMatch[1] || item.flag_id === attentionFlagUpdateMatch[1]);
+    if (!flag) return sendJson(res, 404, { error: "Attention flag not found." });
+    Object.assign(flag, patch);
+    writeDb(db);
+    return sendJson(res, 200, flag);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/erp/validate-quotation") {
+    const startedAt = Date.now();
+    const payload = await readBody(req);
+    const ref = String(payload.ref || "").trim();
+    const result = await validateQuotationRef(ref);
+    await recordIntegrationLog(db, user, "erp", "validate_quotation_ref", result.valid ? "success" : "failed", startedAt, result.error || "", supabaseEnabled);
+    return sendJson(res, 200, result);
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/linkedin/search-url") {
+    const company = url.searchParams.get("company") || "";
+    const title = url.searchParams.get("title") || "";
+    return sendJson(res, 200, {
+      url: linkedInPeopleSearchUrl(company, title),
+      titles: titleOptions()
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/market-intelligence") {
+    let leads;
+    let items = [];
+    if (supabaseEnabled) {
+      const leadRows = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
+      leads = visibleLeadsForUser(leadRows.map(fromSupabaseLead), user);
+      try {
+        items = await rest("market_intelligence?select=*&order=published_at.desc&limit=100", supabaseDataOptions(user.token));
+      } catch {
+        items = [];
+      }
+    } else {
+      leads = visibleLeadsForUser(db.leads.map(leadWithDerivedFields), user);
+      items = db.market_intelligence || [];
+    }
+    const matched = matchIntelligenceToLeads(items, leads);
+    return sendJson(res, 200, {
+      items: visibleIntelItems(leads, matched),
+      heat_map: heatMapFromIntel(matched),
+      disabled: !integrations.marketIntel
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/market-intelligence/fetch") {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const startedAt = Date.now();
+    let leads;
+    if (supabaseEnabled) {
+      const leadRows = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
+      leads = leadRows.map(fromSupabaseLead);
+    } else {
+      leads = db.leads.map(leadWithDerivedFields);
+    }
+    const fetched = await fetchMarketIntelligence();
+    const matched = matchIntelligenceToLeads(fetched.items, leads);
+    if (supabaseEnabled && matched.length) {
+      try {
+        await rest("market_intelligence?on_conflict=url", {
+          method: "POST",
+          ...supabaseDataOptions(user.token),
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: matched
+        });
+      } catch {
+        // Optional feed persistence can be enabled after the migration is applied.
+      }
+    } else if (!supabaseEnabled) {
+      const byUrl = new Map((db.market_intelligence || []).map(item => [item.url || item.id, item]));
+      matched.forEach(item => byUrl.set(item.url || item.id, item));
+      db.market_intelligence = [...byUrl.values()].sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || ""))).slice(0, 300);
+      writeDb(db);
+    }
+    await recordIntegrationLog(db, user, "market_intelligence", "fetch", fetched.disabled ? "disabled" : "success", startedAt, fetched.reason || "", supabaseEnabled);
+    return sendJson(res, 200, {
+      imported: matched.length,
+      disabled: fetched.disabled,
+      reason: fetched.reason || "",
+      items: matched
+    });
   }
 
   if (req.method === "GET" && url.pathname === "/api/exports/leads.xls") {
@@ -1764,8 +3082,9 @@ async function handleApi(req, res, url) {
         if (!name || !email || password.length < 8) {
           return sendJson(res, 400, { error: "Name, email, and a password of at least 8 characters are required." });
         }
-        const account = await createAuthUser({ email, password, name, territory: String(payload.territory || "Dubai").trim() });
-        return sendJson(res, 201, { id: account.id, email: account.email, name, role: "salesman", territory: payload.territory || "Dubai", status: "active" });
+        const territory = canonicalTerritory(payload.territory || "UAE-North");
+        const account = await createAuthUser({ email, password, name, territory });
+        return sendJson(res, 201, { id: account.id, email: account.email, name, role: "salesman", territory, status: "active" });
       }
     }
     if (req.method === "GET") return sendJson(res, 200, db.users.map(publicUser));
@@ -1785,7 +3104,7 @@ async function handleApi(req, res, url) {
         name,
         email,
         role: "salesman",
-        territory: String(payload.territory || "Dubai").trim(),
+        territory: canonicalTerritory(payload.territory || "UAE-North"),
         status: "active",
         password_hash: hashPassword(password),
         created_at: new Date().toISOString()
@@ -1800,31 +3119,32 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/settings") {
+    const configuration = await currentCrmConfiguration(db, user, supabaseEnabled);
     if (supabaseEnabled) {
-      const profilePath = isAdmin(user)
+      const profilePath = isDirectorOrAdmin(user)
         ? "profiles?role=eq.salesman&status=eq.active&select=*&order=full_name.asc"
         : `profiles?id=eq.${encodeURIComponent(user.id)}&select=*`;
       const profiles = await rest(profilePath, { token: user.token });
       return sendJson(res, 200, {
         stages: COMPANY_STATUSES,
-        priorities: ["New", "Warm", "Hot", "At Risk"],
-        sectors: COMPANY_SECTORS,
+        priorities: configuration.priorities,
+        sectors: configuration.sectors,
         tiers: COMPANY_TIERS,
-        territories: GCC_TERRITORIES,
-        activityTypes: ACTIVITY_TYPES,
-        pmr: { heat: PMR_HEAT, firstOrderTiming: PMR_ORDER_TIMING, potentialValue: PMR_VALUE, directorAction: PMR_DIRECTOR_ACTION, accountStatus: PMR_ACCOUNT_STATUS },
+        territories: configuration.territories,
+        activityTypes: configuration.activityTypes,
+        pmr: configuration.pmr,
         salesmen: profiles.map(profile => ({ ...profile, name: profile.full_name }))
       });
     }
     const salesmen = isAdmin(user) ? db.salesmen : [publicUser(user)];
     return sendJson(res, 200, {
       stages: COMPANY_STATUSES,
-      priorities: ["New", "Warm", "Hot", "At Risk"],
-      sectors: COMPANY_SECTORS,
+      priorities: configuration.priorities,
+      sectors: configuration.sectors,
       tiers: COMPANY_TIERS,
-      territories: GCC_TERRITORIES,
-      activityTypes: ACTIVITY_TYPES,
-      pmr: { heat: PMR_HEAT, firstOrderTiming: PMR_ORDER_TIMING, potentialValue: PMR_VALUE, directorAction: PMR_DIRECTOR_ACTION, accountStatus: PMR_ACCOUNT_STATUS },
+      territories: configuration.territories,
+      activityTypes: configuration.activityTypes,
+      pmr: configuration.pmr,
       salesmen
     });
   }
@@ -1835,6 +3155,26 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, visibleLeadsForUser(leads.map(fromSupabaseLead), user));
     }
     return sendJson(res, 200, visibleLeadsForUser(db.leads, user).map(leadWithDerivedFields));
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/leads/duplicates") {
+    const name = String(url.searchParams.get("name") || "").trim();
+    if (name.length < 4) return sendJson(res, 200, { matches: [] });
+    const leads = supabaseEnabled
+      ? (await rest("leads?select=id,company_name,assigned_salesman,assigned_to,website,google_place_id,phone,territory,lead_status", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+      : db.leads;
+    const matches = duplicateLeadMatches(leads, name).map(match => ({
+      id: match.id,
+      company_name: match.company_name || match.name,
+      assigned_salesman: match.assigned_salesman || "Unassigned",
+      territory: match.territory || "",
+      stage: match.stage || "",
+      score: Number(match.score.toFixed(3)),
+      isDuplicate: Boolean(match.isDuplicate),
+      owner_type: duplicateOwnerType(match, user),
+      owner_name: match.assigned_salesman || "Unassigned"
+    }));
+    return sendJson(res, 200, { matches });
   }
 
   if (req.method === "GET" && url.pathname === "/api/activities") {
@@ -1855,27 +3195,139 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/leads") {
     const rawPayload = prepareLeadPayloadForUser(await readBody(req), user);
     const payload = await googleEnrichPayload(rawPayload, req);
-    if (supabaseEnabled) return sendJson(res, 201, await saveSupabaseLead(user.token, user, payload));
     if (!payload.allow_duplicate) {
-      const duplicate = findDuplicateLead(visibleLeadsForUser(db.leads, user), payload.company_name);
-      if (duplicate) {
+      const duplicateSource = supabaseEnabled
+        ? (await rest("leads?select=id,company_name,assigned_salesman,assigned_to,website,google_place_id,phone,territory,lead_status", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+        : db.leads;
+      const directDuplicate = findDuplicateLeadByIdentity(duplicateSource, {
+        google_place_id: payload.google_place_id,
+        website: payload.website,
+        phone: payload.phone
+      }) || null;
+      const duplicate = directDuplicate || findDuplicateLead(duplicateSource, payload.company_name);
+      if (duplicate?.isDuplicate) {
+        const owner_type = duplicateOwnerType(duplicate.lead, user);
         return sendJson(res, 409, {
-          error: "Possible duplicate company found.",
+          error: owner_type === "other_salesman" ? "This lead appears to already be registered by another salesman." : "Probable duplicate company found.",
           duplicate: {
             id: duplicate.lead.id,
             company_name: duplicate.lead.company_name,
             assigned_salesman: duplicate.lead.assigned_salesman,
             territory: duplicate.lead.territory,
-            score: Number(duplicate.score.toFixed(2))
+            stage: duplicate.lead.stage || duplicate.lead.lead_status,
+            score: Number(duplicate.score.toFixed(2)),
+            owner_type,
+            owner_name: duplicate.lead.assigned_salesman || "Unassigned"
           }
         });
       }
+    }
+    if (supabaseEnabled) {
+      const lead = await saveSupabaseLead(user.token, user, payload);
+      scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
+      return sendJson(res, 201, lead);
     }
     const lead = withAutomaticReminder(normalizeLead(payload), user);
     if (!isAdmin(user)) lead.assigned_salesman = user.name || user.email || lead.assigned_salesman;
     db.leads.unshift(lead);
     writeDb(db);
+    scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
     return sendJson(res, 201, leadWithDerivedFields(lead));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/leads/import") {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const payload = await readBody(req);
+    const rows = Array.isArray(payload.rows) ? payload.rows.slice(0, 500) : [];
+    if (!rows.length) return sendJson(res, 400, { error: "Add at least one valid CSV row to import." });
+    if (Array.isArray(payload.rows) && payload.rows.length > 500) {
+      return sendJson(res, 400, { error: "Import 500 leads or fewer at a time." });
+    }
+    const mode = importMode(payload.duplicate_mode);
+    const importedAt = payload.session_start && !Number.isNaN(Date.parse(payload.session_start))
+      ? new Date(payload.session_start).toISOString()
+      : new Date().toISOString();
+    const result = supabaseEnabled
+      ? await importSupabaseLeadRows(user.token, user, rows, mode, importedAt)
+      : importLocalLeadRows(db, user, rows, mode, importedAt);
+    return sendJson(res, 200, result);
+  }
+
+  const leadIntelMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intel$/);
+  if (req.method === "GET" && leadIntelMatch) {
+    const lead = supabaseEnabled
+      ? await getSupabaseLead(user.token, leadIntelMatch[1], user)
+      : db.leads.find(item => item.id === leadIntelMatch[1] && leadBelongsToUser(item, user));
+    if (!lead) return leadNotFound(res);
+    let items = [];
+    if (supabaseEnabled) {
+      try {
+        items = await rest("market_intelligence?select=*&order=published_at.desc&limit=100", supabaseDataOptions(user.token));
+      } catch {
+        items = [];
+      }
+    } else {
+      items = db.market_intelligence || [];
+    }
+    return sendJson(res, 200, leadIntelItems(lead, matchIntelligenceToLeads(items, [lead])));
+  }
+
+  const leadHandoffMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/handoffs$/);
+  if (req.method === "GET" && leadHandoffMatch) {
+    const lead = supabaseEnabled
+      ? await getSupabaseLead(user.token, leadHandoffMatch[1], user)
+      : db.leads.find(item => item.id === leadHandoffMatch[1] && leadBelongsToUser(item, user));
+    if (!lead) return leadNotFound(res);
+    if (supabaseEnabled) {
+      const rows = await rest(`handoff_logs?lead_id=eq.${encodeURIComponent(lead.id)}&select=*&order=timestamp.desc`, supabaseDataOptions(user.token)).catch(() => []);
+      return sendJson(res, 200, rows);
+    }
+    return sendJson(res, 200, [...(lead.handoff_log || [])].sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || ""))));
+  }
+
+  const autoEnrichConfirmMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/auto-enrichment\/confirm$/);
+  if (req.method === "POST" && autoEnrichConfirmMatch) {
+    const body = await readBody(req);
+    const lead = supabaseEnabled
+      ? await getSupabaseLead(user.token, autoEnrichConfirmMatch[1], user)
+      : db.leads.find(item => item.id === autoEnrichConfirmMatch[1] && leadBelongsToUser(item, user));
+    if (!lead) return leadNotFound(res);
+    const verified = mergeVerifiedAutoEnrichment(lead, body.fields || null);
+    const verifiedPatch = {
+      sector: verified.sector,
+      estimated_scale: verified.estimated_scale,
+      estimated_annual_revenue: verified.estimated_annual_revenue,
+      primary_contact_title: verified.primary_contact_title,
+      key_personnel: verified.key_personnel,
+      recent_projects: verified.recent_projects,
+      certifications: verified.certifications,
+      steel_products_likely_needed: verified.steel_products_likely_needed,
+      competitors_likely_using: verified.competitors_likely_using,
+      tags: verified.tags,
+      products_services_remarks: verified.products_services_remarks,
+      auto_enrichment: verified.auto_enrichment
+    };
+    if (supabaseEnabled) verifiedPatch.contact_name = verified.contact_person;
+    else verifiedPatch.contact_person = verified.contact_person;
+    const updated = await persistLeadPatch(db, user, lead.id, verifiedPatch, supabaseEnabled);
+    return sendJson(res, 200, updated || verified);
+  }
+
+  const autoEnrichRetryMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/auto-enrichment\/retry$/);
+  if (req.method === "POST" && autoEnrichRetryMatch) {
+    const lead = supabaseEnabled
+      ? await getSupabaseLead(user.token, autoEnrichRetryMatch[1], user)
+      : db.leads.find(item => item.id === autoEnrichRetryMatch[1] && leadBelongsToUser(item, user));
+    if (!lead) return leadNotFound(res);
+    const startedAt = Date.now();
+    const result = await runCompanyAutoEnrichment({
+      lead,
+      country: lead.country_emirate || lead.location || "United Arab Emirates",
+      rateKey: clientIp(req)
+    });
+    const updated = await persistLeadPatch(db, user, lead.id, enrichmentPatchFromLead(result.lead), supabaseEnabled);
+    await recordIntegrationLog(db, user, "auto_enrichment", "manual_reenrich", "success", startedAt, "", supabaseEnabled);
+    return sendJson(res, 200, updated || result.lead);
   }
 
   const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
@@ -1901,23 +3353,52 @@ async function handleApi(req, res, url) {
       if (payload.company_name && String(payload.company_name).trim() !== String(existing.company_name || "").trim()) {
         payload = await googleEnrichPayload({ ...existing, ...payload, google_place_id: "" }, req);
       }
+      let handoffEvent = null;
+      if (
+        isDirectorOrAdmin(user)
+        && payload.assigned_salesman
+        && String(payload.assigned_salesman).trim() !== String(existing.assigned_salesman || "").trim()
+      ) {
+        const note = String(payload.handoff_note || "").trim();
+        if (note.length < 20) return sendJson(res, 400, { error: "A handoff note is required (minimum 20 characters)." });
+        const newOwner = await resolveSalesmanProfile(user.token, payload.assigned_salesman);
+        handoffEvent = buildHandoffEvent({
+          lead: existing,
+          newOwner: newOwner || { full_name: payload.assigned_salesman, territory: payload.territory },
+          newTerritory: payload.territory || newOwner?.territory,
+          note,
+          user
+        });
+        payload.assigned_to = newOwner?.id || null;
+        payload.territory = handoffEvent.new_territory;
+        payload.activities = [handoffActivity(handoffEvent), ...(existing.activities || [])];
+      }
+      delete payload.handoff_note;
       const allowed = [
         "company_name", "industry", "location", "address", "phone", "website", "google_place_id",
         "google_maps_url", "google_rating", "google_review_count", "contact_name", "contact_email",
         "hunter_confidence_score", "lead_status", "notes", "territory", "assigned_salesman", "priority",
-        "estimated_value", "product_interest", "next_action", "next_action_date", "source",
+        "estimated_value", "product_interest", "activity_purpose", "next_action", "next_action_date", "source",
         "legal_name", "year_established", "business_category", "opening_hours",
+        "steel_products_likely_needed", "competitors_likely_using", "certifications",
+        "estimated_scale", "estimated_annual_revenue", "key_personnel", "recent_projects",
         "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at",
-        "lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by"
-      ].filter(field => isAdmin(user) || !["assigned_salesman", "assigned_to", "created_by"].includes(field));
+        "lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by",
+        "auto_enrichment", "latitude", "longitude", "assigned_to", "activities"
+      ].filter(field => isDirectorOrAdmin(user) || !["assigned_salesman", "assigned_to", "created_by", "territory"].includes(field));
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
-      const leads = await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}&select=*`, {
-        method: "PATCH",
-        ...supabaseDataOptions(user.token),
-        headers: { Prefer: "return=representation" },
-        body: updates
-      });
+      const leads = await patchSupabaseLeadWithOptionalFallback(user.token, leadMatch[1], updates);
       if (!leads[0]) return sendJson(res, 404, { error: "Lead not found" });
+      if (handoffEvent) {
+        await rest("handoff_logs", {
+          method: "POST",
+          ...supabaseDataOptions(user.token),
+          body: { ...handoffEvent, lead_id: leadMatch[1] }
+        }).catch(error => {
+          throw Object.assign(new Error(`Lead reassigned, but handoff log could not be saved: ${error.message}`), { status: 500 });
+        });
+        await recordHandoffNotification(user.token, existing, handoffEvent);
+      }
       return sendJson(res, 200, fromSupabaseLead(leads[0]));
     }
     const lead = db.leads.find(item => item.id === leadMatch[1]);
@@ -1927,6 +3408,27 @@ async function handleApi(req, res, url) {
     if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
       payload = await googleEnrichPayload({ ...lead, ...payload, google_place_id: "" }, req);
     }
+    if (
+      isDirectorOrAdmin(user)
+      && payload.assigned_salesman
+      && String(payload.assigned_salesman).trim() !== String(lead.assigned_salesman || "").trim()
+    ) {
+      const note = String(payload.handoff_note || "").trim();
+      if (note.length < 20) return sendJson(res, 400, { error: "A handoff note is required (minimum 20 characters)." });
+      const newOwner = localSalesmanProfile(db, payload.assigned_salesman) || { full_name: payload.assigned_salesman, territory: payload.territory };
+      const handoffEvent = buildHandoffEvent({
+        lead,
+        newOwner,
+        newTerritory: payload.territory || newOwner.territory,
+        note,
+        user
+      });
+      payload.assigned_to = newOwner.id || "";
+      payload.territory = handoffEvent.new_territory;
+      lead.handoff_log = [handoffEvent, ...(lead.handoff_log || [])];
+      payload.activities = [handoffActivity(handoffEvent), ...(lead.activities || [])];
+    }
+    delete payload.handoff_note;
     if (payload.stage || payload.lead_status) {
       payload.stage = normalizeStageValue(payload.stage || payload.lead_status, lead.stage);
       if (isLostStage(payload.stage)) {
@@ -2022,7 +3524,7 @@ async function handleApi(req, res, url) {
         await rest(`leads?id=eq.${encodeURIComponent(leadId)}`, { method: "DELETE", ...supabaseDataOptions(user.token) });
         return sendJson(res, 200, { ok: true, deleted: true });
       }
-      activities[requestIndex] = {
+      const reviewedRequest = {
         ...requestActivity,
         request_status: action === "approve" ? "approved" : "rejected",
         reviewed_by: user.id,
@@ -2030,16 +3532,28 @@ async function handleApi(req, res, url) {
         reviewed_at: new Date().toISOString(),
         review_note: String(payload.note || "").trim()
       };
-      const nextActivities = action === "approve" && requestActivity.target_type === "activity"
-        ? activities.filter(activity => activity.id !== requestActivity.target_activity_id)
-        : activities;
+      activities[requestIndex] = reviewedRequest;
+      const reviewActivity = requestActivity.target_type === "activity" ? {
+        id: newRecordId("act"),
+        at: new Date().toISOString().slice(0, 10),
+        type: "Activity Review",
+        text: `Activity review ${action === "approve" ? "approved" : "rejected"} by ${user.name || user.email || "Admin"}. Original activity preserved by append-only policy.${payload.note ? ` Note: ${String(payload.note).trim()}` : ""}`,
+        immutable_append: true,
+        review_request_id: requestActivity.id,
+        target_activity_id: requestActivity.target_activity_id || "",
+        target_activity_summary: requestActivity.target_activity_summary || "",
+        reviewed_by: user.id,
+        reviewed_by_name: user.name || user.email || "Admin",
+        reviewed_at: new Date().toISOString()
+      } : null;
+      const nextActivities = reviewActivity ? [reviewActivity, ...activities] : activities;
       const leads = await rest(`leads?id=eq.${encodeURIComponent(leadId)}&select=*`, {
         method: "PATCH",
         ...supabaseDataOptions(user.token),
         headers: { Prefer: "return=representation" },
         body: { activities: nextActivities, last_activity: nextActivities[0]?.at || lead.last_activity }
       });
-      return sendJson(res, 200, { lead: fromSupabaseLead(leads[0]), request: activities[requestIndex] });
+      return sendJson(res, 200, { lead: fromSupabaseLead(leads[0]), request: reviewedRequest, review: reviewActivity });
     }
     const lead = db.leads.find(item => item.id === leadId);
     if (!lead) return leadNotFound(res);
@@ -2053,7 +3567,7 @@ async function handleApi(req, res, url) {
       writeDb(db);
       return sendJson(res, 200, { ok: true, deleted: true });
     }
-    lead.activities[requestIndex] = {
+    const reviewedRequest = {
       ...requestActivity,
       request_status: action === "approve" ? "approved" : "rejected",
       reviewed_by: user.id,
@@ -2061,12 +3575,25 @@ async function handleApi(req, res, url) {
       reviewed_at: new Date().toISOString(),
       review_note: String(payload.note || "").trim()
     };
-    if (action === "approve" && requestActivity.target_type === "activity") {
-      lead.activities = lead.activities.filter(activity => activity.id !== requestActivity.target_activity_id);
+    lead.activities[requestIndex] = reviewedRequest;
+    if (requestActivity.target_type === "activity") {
+      lead.activities.unshift({
+        id: newRecordId("act"),
+        at: new Date().toISOString().slice(0, 10),
+        type: "Activity Review",
+        text: `Activity review ${action === "approve" ? "approved" : "rejected"} by ${user.name || user.email || "Admin"}. Original activity preserved by append-only policy.${payload.note ? ` Note: ${String(payload.note).trim()}` : ""}`,
+        immutable_append: true,
+        review_request_id: requestActivity.id,
+        target_activity_id: requestActivity.target_activity_id || "",
+        target_activity_summary: requestActivity.target_activity_summary || "",
+        reviewed_by: user.id,
+        reviewed_by_name: user.name || user.email || "Admin",
+        reviewed_at: new Date().toISOString()
+      });
     }
     lead.last_activity = lead.activities[0]?.at || lead.last_activity;
     writeDb(db);
-    return sendJson(res, 200, { lead: leadWithDerivedFields(lead), request: lead.activities[requestIndex] });
+    return sendJson(res, 200, { lead: leadWithDerivedFields(lead), request: reviewedRequest });
   }
 
   const stageMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/stage$/);
@@ -2148,61 +3675,30 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const lead = await getSupabaseLead(user.token, activityEditMatch[1], user);
       if (!lead) return leadNotFound(res);
-      const activities = Array.isArray(lead.activities) ? [...lead.activities] : [];
-      if (!activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
-      activities[activityIndex] = editActivity(activities[activityIndex], payload, lead, user);
-      const leads = await rest(`leads?id=eq.${encodeURIComponent(activityEditMatch[1])}&select=*`, {
-        method: "PATCH",
-        ...supabaseDataOptions(user.token),
-        headers: { Prefer: "return=representation" },
-        body: { activities, last_activity: activities[0]?.at || lead.last_activity }
-      });
-      return sendJson(res, 200, { lead: fromSupabaseLead(leads[0]), activity: activities[activityIndex] });
-    }
-    const lead = db.leads.find(item => item.id === activityEditMatch[1]);
-    if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
-    lead.activities = Array.isArray(lead.activities) ? lead.activities : [];
-    if (!lead.activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
-    lead.activities[activityIndex] = editActivity(lead.activities[activityIndex], payload, lead, user);
-    lead.last_activity = lead.activities[0]?.at || lead.last_activity;
-    writeDb(db);
-    return sendJson(res, 200, { lead, activity: lead.activities[activityIndex] });
-  }
-
-  if (req.method === "DELETE" && activityEditMatch) {
-    if (!isAdmin(user)) {
-      return sendJson(res, 403, { error: "Salesman activity deletions require admin approval. Use Request Delete instead." });
-    }
-    const payload = await readBody(req);
-    if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
-      return sendJson(res, 403, { error: "Admin password confirmation is required to delete an activity." });
-    }
-    const activityIndex = Number(activityEditMatch[2]);
-    if (!Number.isInteger(activityIndex) || activityIndex < 0) return sendJson(res, 400, { error: "Invalid activity index." });
-    if (supabaseEnabled) {
-      const lead = await getSupabaseLead(user.token, activityEditMatch[1], user);
-      if (!lead) return leadNotFound(res);
       const activities = ensureActivityIds(lead.activities);
       if (!activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
-      if (activities[activityIndex].delete_request) return sendJson(res, 400, { error: "Delete request audit entries cannot be removed." });
-      activities.splice(activityIndex, 1);
+      const correction = activityCorrection(activities[activityIndex], payload, lead, user);
       const leads = await rest(`leads?id=eq.${encodeURIComponent(activityEditMatch[1])}&select=*`, {
         method: "PATCH",
         ...supabaseDataOptions(user.token),
         headers: { Prefer: "return=representation" },
-        body: { activities, last_activity: activities[0]?.at || lead.last_activity }
+        body: { activities: [correction, ...activities], last_activity: correction.at }
       });
-      return sendJson(res, 200, { lead: fromSupabaseLead(leads[0]), ok: true });
+      return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), activity: correction, corrected_activity: activities[activityIndex] });
     }
     const lead = db.leads.find(item => item.id === activityEditMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
     lead.activities = ensureActivityIds(lead.activities);
     if (!lead.activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
-    if (lead.activities[activityIndex].delete_request) return sendJson(res, 400, { error: "Delete request audit entries cannot be removed." });
-    lead.activities.splice(activityIndex, 1);
-    lead.last_activity = lead.activities[0]?.at || lead.last_activity;
+    const correction = activityCorrection(lead.activities[activityIndex], payload, lead, user);
+    lead.activities.unshift(correction);
+    lead.last_activity = correction.at;
     writeDb(db);
-    return sendJson(res, 200, { lead, ok: true });
+    return sendJson(res, 201, { lead, activity: correction, corrected_activity: lead.activities[activityIndex + 1] });
+  }
+
+  if (req.method === "DELETE" && activityEditMatch) {
+    return sendJson(res, 405, { error: "Activity entries are append-only and cannot be deleted. Add a review request or correction instead." });
   }
 
   const activityMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activities$/);
@@ -2246,7 +3742,8 @@ async function handleApi(req, res, url) {
       }
       if (req.method === "POST") {
         const payload = await readBody(req);
-        const pmrBody = toSupabasePmr(payload, lead, user);
+        const link = resolvePmrActivityLink(payload, lead);
+        const pmrBody = toSupabasePmr({ ...payload, activity_id: link.activityId }, lead, user);
         const pmrs = await rest("pmrs?select=*", {
           method: "POST",
           ...supabaseDataOptions(user.token),
@@ -2254,31 +3751,19 @@ async function handleApi(req, res, url) {
           body: pmrBody
         });
         const pmr = fromSupabasePmr(pmrs[0]);
-        const hasVoiceNote = Boolean(pmr.voice_note_url || pmr.voice_note_id);
-        const hasTranscript = Boolean(pmr.voice_note_transcript);
-        const activity = {
-          id: newRecordId("act"),
-          at: new Date().toISOString().slice(0, 10),
-          type: "In-Person Meeting",
-          text: `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.${hasVoiceNote ? " Voice note attached." : ""}${hasTranscript ? " AI transcript saved." : ""}`,
-          pmr_linked: true,
-          pmr_id: pmr.id,
-          voice_note: pmr.voice_note,
-          voice_note_id: pmr.voice_note_id,
-          voice_note_url: pmr.voice_note_url,
-          voice_note_path: pmr.voice_note_path,
-          voice_note_mime_type: pmr.voice_note_mime_type,
-          voice_note_size_bytes: pmr.voice_note_size_bytes,
-          voice_note_transcript: pmr.voice_note_transcript,
-          quotation_ref: String(payload.quotation_ref || "").trim()
-        };
+        const activity = pmrTimelineActivity({
+          activityId: link.activityId,
+          pmr,
+          payload,
+          existingActivity: link.existingActivity
+        });
         const updated = await rest(`leads?id=eq.${encodeURIComponent(lead.id)}&select=*`, {
           method: "PATCH",
           ...supabaseDataOptions(user.token),
           headers: { Prefer: "return=representation" },
           body: {
             last_activity: activity.at,
-            activities: [activity, ...(lead.activities || [])],
+            activities: [activity, ...link.activities],
             tags: [lead.tags, pmr.compliance_requirements, pmr.competitors_mentioned].filter(Boolean).join(", ")
           }
         });
@@ -2292,24 +3777,15 @@ async function handleApi(req, res, url) {
     }
     if (req.method === "POST") {
       const payload = await readBody(req);
-      const pmr = normalizePmr(payload, lead, publicUser(user));
-      const hasVoiceNote = Boolean(pmr.voice_note_url);
-      const hasTranscript = Boolean(pmr.voice_note_transcript);
-      const activity = {
-        id: newRecordId("act"),
-        at: new Date().toISOString().slice(0, 10),
-        type: "In-Person Meeting",
-        text: `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.${hasVoiceNote ? " Voice note attached." : ""}${hasTranscript ? " AI transcript saved." : ""}`,
-        pmr_linked: true,
-        pmr_id: pmr.id,
-        voice_note: pmr.voice_note,
-        voice_note_id: pmr.voice_note_id,
-        voice_note_url: pmr.voice_note_url,
-        voice_note_mime_type: pmr.voice_note_mime_type,
-        voice_note_size_bytes: pmr.voice_note_size_bytes,
-        voice_note_transcript: pmr.voice_note_transcript,
-        quotation_ref: String(payload.quotation_ref || "").trim()
-      };
+      const link = resolvePmrActivityLink(payload, lead);
+      lead.activities = link.activities;
+      const pmr = normalizePmr({ ...payload, activity_id: link.activityId }, lead, publicUser(user));
+      const activity = pmrTimelineActivity({
+        activityId: link.activityId,
+        pmr,
+        payload,
+        existingActivity: link.existingActivity
+      });
       db.pmrs.unshift(pmr);
       lead.activities.unshift(activity);
       lead.last_activity = activity.at;
@@ -2322,24 +3798,121 @@ async function handleApi(req, res, url) {
   const actionMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/ai-actions$/);
   if (req.method === "POST" && actionMatch) {
     const payload = await readBody(req);
+    const action = normalizeAiAction(payload.action);
+    if (action === "flag" || payload.action === "flag") {
+      return sendJson(res, 400, { error: "Use the attention flag endpoint for director alerts." });
+    }
+    if (await aiActionRateLimited(db, user, supabaseEnabled)) {
+      return sendJson(res, 429, { error: "AI action rate limit reached. Please wait a few minutes." });
+    }
+    const startedAt = Date.now();
     if (supabaseEnabled) {
       const lead = await getSupabaseLead(user.token, actionMatch[1], user);
       if (!lead) return sendJson(res, 404, { error: "Company not found" });
-      const action = String(payload.action || "").trim();
-      return sendJson(res, 200, {
-        action,
-        output: actionResponse(action, lead, await latestSupabasePmr(user.token, lead.id)),
-        source: "Company record, activity log, and latest PMR"
-      });
+      try {
+        const result = await runCompanyAiAction({
+          action,
+          bundle: await buildCompanyAiBundle({ db, user, lead, supabaseEnabled })
+        });
+        await recordAiActionLog(db, user, { leadId: lead.id, action: result.action, status: "success", durationMs: Date.now() - startedAt }, supabaseEnabled);
+        return sendJson(res, 200, { ...result, source: "Company record, activity log, PMRs, market intelligence, and handoffs" });
+      } catch (error) {
+        await recordAiActionLog(db, user, { leadId: lead.id, action, status: "failed", durationMs: Date.now() - startedAt, error: error.message }, supabaseEnabled);
+        throw error;
+      }
     }
     const lead = db.leads.find(item => item.id === actionMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return sendJson(res, 404, { error: "Company not found" });
-    const action = String(payload.action || "").trim();
-    return sendJson(res, 200, {
-      action,
-      output: actionResponse(action, lead, latestPmr(db, lead.id)),
-      source: "Company record, activity log, and latest PMR"
+    try {
+      const result = await runCompanyAiAction({
+        action,
+        bundle: await buildCompanyAiBundle({ db, user, lead, supabaseEnabled })
+      });
+      await recordAiActionLog(db, user, { leadId: lead.id, action: result.action, status: "success", durationMs: Date.now() - startedAt }, supabaseEnabled);
+      return sendJson(res, 200, { ...result, source: "Company record, activity log, PMRs, market intelligence, and handoffs" });
+    } catch (error) {
+      await recordAiActionLog(db, user, { leadId: lead.id, action, status: "failed", durationMs: Date.now() - startedAt, error: error.message }, supabaseEnabled);
+      throw error;
+    }
+  }
+
+  const attentionFlagMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/attention-flags$/);
+  if (req.method === "POST" && attentionFlagMatch) {
+    const payload = await readBody(req);
+    const reason = String(payload.reason || "").trim().slice(0, 1000);
+    if (supabaseEnabled) {
+      const lead = await getSupabaseLead(user.token, attentionFlagMatch[1], user);
+      if (!lead) return sendJson(res, 404, { error: "Company not found" });
+      const latest = await latestSupabasePmr(user.token, lead.id).catch(() => null);
+      const flagBody = {
+        company_id: lead.id,
+        company_name: lead.company_name,
+        flagged_by_uid: user.id,
+        flagged_by_name: user.name || user.email || "Unknown",
+        reason,
+        latest_pmr_id: latest?.id || null,
+        latest_pmr_snapshot: latest || {},
+        company_snapshot: companySnapshot(lead),
+        status: "open"
+      };
+      const created = await rest("attention_flags?select=*", {
+        method: "POST",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "return=representation" },
+        body: flagBody
+      });
+      const flag = created[0];
+      const activity = {
+        id: newRecordId("act"),
+        at: new Date().toISOString().slice(0, 10),
+        type: "Flagged for Attention",
+        text: reason || "Flagged for director attention.",
+        logged_by: user.name || user.email || "User",
+        attention_flag_id: flag?.id
+      };
+      await rest(`leads?id=eq.${encodeURIComponent(lead.id)}&select=*`, {
+        method: "PATCH",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "return=representation" },
+        body: { last_activity: activity.at, activities: [activity, ...(lead.activities || [])] }
+      });
+      await createDirectorNotifications({ db, user, lead, flag: flag || flagBody, supabaseEnabled });
+      return sendJson(res, 201, flag || flagBody);
+    }
+    const lead = db.leads.find(item => item.id === attentionFlagMatch[1]);
+    if (!lead || !leadBelongsToUser(lead, user)) return sendJson(res, 404, { error: "Company not found" });
+    const latest = latestPmr(db, lead.id);
+    const flag = {
+      id: newRecordId("flag"),
+      flag_id: newRecordId("flag"),
+      company_id: lead.id,
+      company_name: lead.company_name,
+      flagged_by_uid: user.id,
+      flagged_by_name: user.name || user.email || "Unknown",
+      flagged_at: new Date().toISOString(),
+      reason,
+      latest_pmr_id: latest?.id || "",
+      latest_pmr_snapshot: latest || {},
+      company_snapshot: companySnapshot(lead),
+      status: "open",
+      acknowledged_by: "",
+      acknowledged_at: null,
+      resolution_note: ""
+    };
+    lead.activities = ensureActivityIds(lead.activities);
+    lead.activities.unshift({
+      id: newRecordId("act"),
+      at: new Date().toISOString().slice(0, 10),
+      type: "Flagged for Attention",
+      text: reason || "Flagged for director attention.",
+      logged_by: user.name || user.email || "User",
+      attention_flag_id: flag.id
     });
+    lead.last_activity = new Date().toISOString().slice(0, 10);
+    db.attention_flags.unshift(flag);
+    await createDirectorNotifications({ db, user, lead, flag, supabaseEnabled });
+    writeDb(db);
+    return sendJson(res, 201, flag);
   }
 
   const enrichmentMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/enrich$/);

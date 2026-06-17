@@ -29,16 +29,21 @@ On another phone connected to the same network, use the computer's local IP addr
 - Structured Post-Meeting Report filing linked to company activity
 - PMR voice-note attachment with browser recording, preview, delete, re-record, and activity playback
 - One-click relationship intelligence actions grounded in the company record, activity log, and latest PMR
+- Salesman home-screen Daily AI briefing for focus priorities, neglected accounts, pipeline health, and new market intelligence
 - CRM reminders for quotation follow-ups, planned visits, important dates, payment follow-ups, sample approvals, and general follow-ups
 - Google Calendar add-to-calendar links for each reminder
 - Mobile voice-note recording with OpenAI Whisper translation into English text
 - Required email and password sign-in
 - Administrator-only salesman account creation
+- Administrator-only CSV bulk import with column mapping, duplicate handling, validation preview, template download, and error report
+- Administrator-only Configuration Agent with proposal review, password-confirmed applies, and audit trail
 - Supabase Auth and durable Postgres persistence when configured
 - Local JSON fallback in `data/db.json` for offline development
 - Seed salesmen and sample leads
 - Automatic Google Places business enrichment when a company name is entered
 - Google Places business discovery and Hunter domain email enrichment
+- Installable mobile PWA shell with service-worker app caching, iOS home-screen metadata, mobile bottom navigation, and Quick Log activity capture
+- Device-local outbox for quick activity logs when connectivity drops, with pending sync status and retry visibility
 
 ## Supabase setup
 
@@ -60,6 +65,15 @@ $env:NEXT_PUBLIC_SUPABASE_ANON_KEY="your_publishable_or_anon_key"
 $env:SUPABASE_SERVICE_ROLE_KEY="your_service_role_key"
 $env:GOOGLE_PLACES_API_KEY="your_google_places_key"
 $env:HUNTER_API_KEY="your_hunter_key"
+$env:ANTHROPIC_API_KEY="your_anthropic_key"
+$env:ANTHROPIC_MODEL="claude-sonnet-4-6"
+$env:ENABLE_CLAUDE_ENRICHMENT="true"
+$env:ENABLE_ANTHROPIC_WEB_SEARCH="true"
+$env:ENABLE_AI_AGENT="true"
+$env:ZAWYA_API_KEY="optional_zawya_key"
+$env:ZAWYA_API_URL="optional_zawya_feed_url"
+$env:ERP_API_BASE_URL=""
+$env:ERP_API_KEY=""
 ```
 
 Get the Supabase URL from `Project Settings > API > Project URL`. Get the publishable or legacy anon key from `Project Settings > API Keys`. For `SUPABASE_SERVICE_ROLE_KEY`, use the JWT-format legacy `service_role` key for this project (it starts with `eyJ...` and has three dot-separated parts). Store it only in Vercel environment variables or your private local `.env`; do not use the short `sb_secret_...` key with this Node server.
@@ -71,6 +85,82 @@ Google Places enrichment uses Text Search (New) to find the best company match, 
 Automatic enrichment runs when a company name is typed in the Add Lead form and again server-side when a new lead is saved. The browser debounces requests and caches duplicate company/location lookups. Existing manually edited fields are not overwritten unless the user confirms. Enrichment statuses are `pending`, `enriched`, `partial`, `failed`, and `not_found`.
 
 Hunter enrichment uses Hunter's Domain Search endpoint and requires a Hunter API key.
+
+## Mobile PWA setup
+
+The CRM includes an installable PWA layer for field use:
+
+- [manifest.json](manifest.json) defines the app name, portrait standalone display, icons, and shortcuts for `Log activity` and `Today's focus`.
+- [sw.js](sw.js) precaches the app shell and icons, caches Google Maps assets with stale-while-revalidate, and deliberately leaves `/api/*` calls as network-only.
+- The mobile bottom navigation uses five tabs: Home, Leads, Log, Map, and Alerts. `Log` opens the Quick Log bottom sheet directly.
+- The Quick Log sheet supports recent-company chips, assigned-lead search, optional GPS nearby-company assist, activity type selection, quick phrases, quotation/order fields, and optional next-action date.
+- If the browser is offline or a network write fails, Quick Log saves the activity into an IndexedDB outbox. The sync pill shows offline/pending/syncing/failed states, and the Alerts tab opens the pending changes sheet.
+- AI actions are disabled while offline because AI/API calls are never cached or queued.
+
+Push notification delivery is scaffolded with [firebase-messaging-sw.js](firebase-messaging-sw.js), but full Firebase Cloud Messaging requires Firebase project config, a VAPID key, and server-side senders. The current production app remains Supabase/Node-based, so this phase implements the PWA shell and in-app pending alert surface without silently introducing a separate Firebase backend.
+
+## Multi-user architecture
+
+Run [supabase/migrations/20260612120000_multi_user_architecture.sql](supabase/migrations/20260612120000_multi_user_architecture.sql) after the earlier migrations. It enforces territory visibility at the database level, adds immutable `handoff_logs`, creates pending handoff `notifications`, and updates RLS policies for leads, PMRs, profiles, and handoff history.
+
+Territory values are `UAE-North`, `UAE-South`, `Saudi`, `Kuwait`, `Bahrain`, `Oman`, and `Mixed`. Salesmen see non-empty leads in their own territory. `Mixed` leads are visible to leadership and to the specifically assigned salesman. Leads with a blank territory are leadership-only.
+
+When an admin, director, or manager changes a lead's assigned salesman, the app requires a handoff note of at least 20 characters before saving. The server writes the lead reassignment, an activity entry, an immutable handoff log, and a pending notification for the new owner when an owner user ID is available.
+
+Duplicate detection uses Jaro-Winkler matching in [src/utils/fuzzyMatch.js](src/utils/fuzzyMatch.js). The Add Lead form checks after four characters with a 500ms debounce, and CSV import preview flags similar/probable duplicates before import.
+
+## Phase 5 external integrations
+
+Run [supabase/migrations/20260612100000_phase5_external_integrations.sql](supabase/migrations/20260612100000_phase5_external_integrations.sql) to add `auto_enrichment`, coordinates, `integration_logs`, `market_intelligence`, and archive storage.
+
+Phase 5 integrations are independent services. If Google Places, Claude, market intel, or ERP lookup is unavailable, the CRM still saves leads and logs activities. Integration failures are written to `integration_logs` when the table exists.
+
+- Company auto-enrichment: lead creation still uses server-side Google Places. After save, the server attempts Claude business intelligence with `ANTHROPIC_API_KEY` and stores draft data in `auto_enrichment` with status `pending_review`. Salesmen/admins can confirm or re-enrich from the lead detail view. Claude keys are never exposed to browser code.
+- Enrichment review: pending Claude intelligence is shown in a review table. Users can apply individual fields or apply all trusted fields. Confirmed data can populate sector, scale, revenue band, key personnel, recent projects, certifications, likely steel products, likely competitors, and remarks.
+- LinkedIn contact search: the lead detail view builds a normal LinkedIn people search URL for eight GCC steel industry titles. It does not use or automate the LinkedIn API.
+- AI database agent: the dashboard includes a collapsed `Ask the database` panel. It uses Claude tool-use through `/api/agent/query`, is read-only, logs queries to `agent_query_log`, and only receives records visible to the signed-in user.
+- Configuration Agent: admins can request safe CRM option changes, such as adding territories, lead priorities, sectors, or activity types. The agent generates a proposal first; applying the change requires the admin password and writes to `configuration_audit_log`. Run [supabase/migrations/20260616120000_configuration_agent_audit.sql](supabase/migrations/20260616120000_configuration_agent_audit.sql) before using it with Supabase.
+- Market intelligence: admins can refresh the feed from the dashboard when `ZAWYA_API_KEY` and `ZAWYA_API_URL` are configured. Items are matched to companies by sector, geography, and company mention. Salesmen see items matching their visible portfolio.
+- ERP quotation lookup: activity logging supports an optional quotation reference. The current ERP service is a read-only stub and validates any non-empty reference until Al Ras confirms ERP API details.
+
+Run [supabase/migrations/20260612130000_external_integrations_agent.sql](supabase/migrations/20260612130000_external_integrations_agent.sql) to add the confirmed enrichment columns and `agent_query_log` table.
+
+## One-click AI company actions
+
+Run [supabase/migrations/20260612140000_one_click_ai_actions.sql](supabase/migrations/20260612140000_one_click_ai_actions.sql) to add `ai_action_log`, `ai_action_log.scope`, and `attention_flags`.
+
+The company detail page includes five one-click actions:
+
+- `Prepare Me For This Meeting`
+- `What Should I Do Next?`
+- `Draft Follow-Up Email`
+- `Summarise Relationship`
+- `Flag Needs Attention`
+
+The first four actions call `/api/leads/:id/ai-actions` from the server only. The server assembles a grounded context bundle from the company record, last 20 activities, latest PMRs, matched market intelligence, and handoff history, then uses `ANTHROPIC_API_KEY` when configured. If Claude is disabled locally, the app returns a safe CRM-data fallback so the UI can still be tested. Every AI action is logged and rate limited to 20 actions per user per 10 minutes.
+
+`Flag Needs Attention` is not an AI call. It writes an `attention_flags` record with a company snapshot and latest PMR snapshot, adds a `Flagged for Attention` activity to the lead, and shows open alerts in the admin dashboard. Admins/directors/managers can acknowledge or resolve flags; salesmen can only create and view their own flags through RLS.
+
+## One-click AI salesman home actions
+
+Salesman dashboards include a Daily AI briefing bar with four portfolio-level actions:
+
+- `What should I focus on today?`
+- `Who have I neglected?`
+- `My pipeline health`
+- `New intel`
+
+These actions call `POST /api/salesperson-ai-actions`. The browser sends only the action name; the server derives the caller from the authenticated session and builds a portfolio bundle from records visible to that user. Salesmen cannot request another salesman's portfolio from the client.
+
+The `pipeline_health` action returns a native metrics panel with stage counts, overdue next actions, contact-overdue count, and this-month activity trend. It auto-runs once per day per browser as a collapsed summary and is exempt from the AI rate limit. The other actions return grounded markdown from Claude when `ANTHROPIC_API_KEY` and `ENABLE_CLAUDE_ENRICHMENT=true` are configured, or safe CRM-data fallbacks during local/offline testing. Company names in the AI result are tappable and open the matching lead record.
+
+Expected contact frequency is centralized in [src/config/contactRules.js](src/config/contactRules.js): Tier 1 accounts use tighter thresholds, Tier 3 accounts use relaxed thresholds, and the same rules feed relationship health and neglected-account AI logic.
+
+## CSV lead import
+
+Admins can use `Import Leads` in the top bar to upload an Excel-exported `.csv` file. The wizard validates file type and size, auto-maps common column headers, previews the first rows, warns about invalid email/phone/date/value fields, detects duplicate company names, and imports up to 500 rows per batch. Salesmen and managers cannot see or use this importer.
+
+Run `supabase/migrations/20260610143000_add_lead_import_audit_columns.sql` in Supabase to store `imported_at` and `imported_by` on imported leads. The combined `RUN_ALL_IN_SUPABASE_SQL_EDITOR.sql` file also includes this migration at the end.
 
 ## Authentication setup
 
@@ -182,6 +272,10 @@ Run [supabase/migrations/20260610130000_add_lost_reason_fields.sql](supabase/mig
 - `GET /api/leads/:id/pmrs`
 - `POST /api/leads/:id/pmrs`
 - `POST /api/leads/:id/ai-actions`
+- `POST /api/salesperson-ai-actions`
+- `GET /api/attention-flags`
+- `PATCH /api/attention-flags/:id`
+- `POST /api/leads/:id/attention-flags`
 - `POST /api/pmr-voice-notes`
 - `GET /api/pmr-voice-notes/:id`
 - `POST /api/transcriptions`
@@ -200,4 +294,4 @@ Use Supabase in production. The JSON fallback is for offline development only be
 
 The current implementation now covers the practical Phase 1 foundation from `alras_lead_tracker_brief_v2`: company-centric records, exact status values, assignment, duplicate prevention, append-style activity logging, PMR structure, relationship health, and one-click relationship intelligence outputs.
 
-Items intentionally left for later integration are true Claude tool-use, market intelligence feeds such as MEED/Zawya, map pins, push notifications, offline IndexedDB sync, route optimisation, WhatsApp integration, quotation module, and inventory visibility. The brief explicitly says not to build WhatsApp, quotation, inventory, native mobile apps, gamification, complex approvals, or route optimisation inside this app.
+Items intentionally left for later integration are live paid market intelligence feeds such as MEED/Zawya, map pins, push notifications, offline IndexedDB sync, route optimisation, WhatsApp integration, quotation module, and inventory visibility. The brief explicitly says not to build WhatsApp, quotation, inventory, native mobile apps, gamification, complex approvals, or route optimisation inside this app.

@@ -1,38 +1,60 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d1b2a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="ARG Leads">
     <title>ARG Leads Tracker CRM</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
-      <form class="auth-card" id="loginForm">
-        <div class="brand-mark">ARG</div>
-        <div>
-          <h1>ARG Leads Tracker</h1>
-          <p>Sign in to access the shared sales workspace.</p>
+      <section class="auth-shell" aria-label="Al Ras Steel sign in">
+        <div class="auth-hero">
+          <div class="auth-brand">
+            <div class="brand-mark">AR</div>
+            <div>
+              <strong>AL RAS STEEL</strong>
+              <span>INTELLIGENCE</span>
+            </div>
+          </div>
+          <div>
+            <h1>Relationship intelligence in your pocket.</h1>
+            <p>Track GCC accounts. Capture meeting intel. Never let a relationship go cold.</p>
+          </div>
         </div>
-        <label>Email<input name="email" type="email" autocomplete="username" required></label>
-        <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
-        <button class="primary-button" type="submit">Sign In</button>
-        <span class="form-message" id="loginMessage" aria-live="polite"></span>
-      </form>
+        <form class="auth-card" id="loginForm">
+          <div>
+            <h2>Sign in</h2>
+            <p>Access your accounts and pipeline.</p>
+          </div>
+          <label>Email<input name="email" type="email" autocomplete="username" required></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+          <button class="primary-button" type="submit">Sign in &rsaquo;</button>
+          <button class="text-button reset-link" type="button">Reset password</button>
+          <span class="form-message" id="loginMessage" aria-live="polite"></span>
+        </form>
+      </section>
     </main>
 
     <div class="app-shell hidden" id="appShell">
       <button class="menu-backdrop hidden" id="menuBackdrop" type="button" aria-label="Close navigation menu"></button>
       <aside class="sidebar" id="mobileSidebar">
         <div class="brand">
-          <div class="brand-mark">ARG</div>
+          <div class="brand-mark">AR</div>
           <div>
-            <strong>ARG Leads Tracker</strong>
-            <span>Shared CRM platform</span>
+            <strong>AL RAS STEEL</strong>
+            <span>INTELLIGENCE</span>
           </div>
         </div>
         <nav class="nav-list" aria-label="Main navigation">
@@ -51,16 +73,14 @@
         <header class="topbar">
           <div class="topbar-title">
             <button class="mobile-menu-button" id="mobileMenuToggle" type="button" aria-expanded="false" aria-controls="mobileSidebar">Menu</button>
-            <div>
-              <h1>ARG CRM Command Center</h1>
-              <p>Track leads, assign salesmen, update pipeline stages, and keep mobile follow-ups synced.</p>
-            </div>
           </div>
           <div class="topbar-actions">
             <span class="signed-in-user" id="signedInUser"></span>
+            <button class="sync-status-pill hidden" id="syncStatusPill" type="button">All synced</button>
             <button class="ghost-button hidden" id="openSalesmanForm">Create Salesman Account</button>
             <button class="ghost-button hidden" id="exportLeadsExcel">Export Excel</button>
             <button class="ghost-button hidden" id="exportLeadsPdf">Export PDF</button>
+            <button class="ghost-button hidden" id="openImportLeads">Import Leads</button>
             <button class="ghost-button" id="logoutButton">Sign Out</button>
             <button class="ghost-button" id="openPlacesSearch">Search Google Places</button>
             <button class="primary-button" id="openLeadForm">Add Lead</button>
@@ -70,25 +90,49 @@
         <section class="overdue-banner hidden" id="overdueBanner" aria-live="polite"></section>
 
         <section class="metrics" id="metricsPanel" aria-label="CRM metrics">
-          <article>
-            <span>Total Leads</span>
-            <strong id="metricTotal">0</strong>
-          </article>
-          <article>
-            <span>Open Value</span>
+          <article class="metric-open">
+            <span>Open Pipeline</span>
             <strong id="metricValue">AED 0</strong>
           </article>
-          <article>
-            <span>Hot Leads</span>
-            <strong id="metricHot">0</strong>
+          <article class="metric-active">
+            <span>Active Customers</span>
+            <strong id="metricTotal">0</strong>
+            <small id="metricTotalSub">of 0</small>
           </article>
-          <article>
-            <span>Due Follow-ups</span>
+          <article class="metric-risk">
+            <span>At Risk</span>
+            <strong id="metricHot">0</strong>
+            <small>needs attention</small>
+          </article>
+          <article class="metric-due">
+            <span>Tasks Due</span>
             <strong id="metricDue">0</strong>
+            <small id="metricDueSub">0 overdue</small>
           </article>
         </section>
 
+        <section class="quick-actions-card" aria-label="Quick actions">
+          <button type="button" data-quick-view="activity"><span>!</span><strong>Tasks</strong><em id="quickTaskBadge">0</em></button>
+          <button type="button" data-quick-view="pipeline"><span>^</span><strong>Pipeline</strong></button>
+          <button type="button" data-quick-view="pipeline"><span>Q</span><strong>Quotes</strong></button>
+          <button type="button" data-quick-view="pipeline"><span>A</span><strong>Accounts</strong></button>
+        </section>
+
         <section class="dashboard-view" id="dashboardView">
+          <div class="panel daily-ai-panel hidden" id="dailyAiPanel">
+            <div class="daily-ai-copy">
+              <span id="dailyAiGreeting">Good morning</span>
+              <h2>Daily AI briefing</h2>
+              <p>One-tap guidance from your assigned leads, follow-ups, PMRs, and market signals.</p>
+            </div>
+            <div class="daily-ai-actions">
+              <button class="primary-button" type="button" data-salesperson-ai-action="focus_today">What should I focus on today?</button>
+              <button class="ghost-button" type="button" data-salesperson-ai-action="neglected">Who have I neglected?</button>
+              <button class="ghost-button" type="button" data-salesperson-ai-action="pipeline_health">My pipeline health</button>
+              <button class="ghost-button" type="button" data-salesperson-ai-action="new_intel">New intel</button>
+            </div>
+            <button class="daily-ai-summary hidden" id="dailyAiSummary" type="button"></button>
+          </div>
           <div class="panel salesman-followup-panel hidden" id="salesmanFollowupPanel">
             <div class="panel-header">
               <div>
@@ -125,6 +169,26 @@
             </div>
             <div class="portfolio-insights" id="portfolioInsights"></div>
           </div>
+          <div class="panel market-intel-panel" id="marketIntelPanel">
+            <div class="panel-header">
+              <div>
+                <span id="marketIntelKicker">Market Intel</span>
+                <h2 id="marketIntelTitle">Relevant project signals</h2>
+              </div>
+              <button class="ghost-button hidden" type="button" id="refreshMarketIntel">Refresh Intel</button>
+            </div>
+            <div class="market-intel-feed" id="marketIntelFeed"></div>
+          </div>
+          <div class="panel needs-attention-panel hidden" id="needsAttentionPanel">
+            <div class="panel-header">
+              <div>
+                <span>Director Alerts</span>
+                <h2>Needs Attention</h2>
+              </div>
+              <strong class="attention-count" id="needsAttentionCount">0 open</strong>
+            </div>
+            <div class="needs-attention-list" id="needsAttentionList"></div>
+          </div>
           <div class="panel performance-panel hidden" id="performancePanel">
             <div class="panel-header performance-header">
               <div>
@@ -138,36 +202,88 @@
                 </select>
               </label>
             </div>
-            <div class="performance-kpis">
-              <article><span>Most Active Salesman</span><strong id="kpiMostActive">-</strong></article>
-              <article><span>Highest Lead Volume</span><strong id="kpiHighestVolume">-</strong></article>
-              <article><span>Most Follow-ups Completed</span><strong id="kpiMostFollowups">-</strong></article>
-              <article><span>Least Active Salesman</span><strong id="kpiLeastActive">-</strong></article>
+            <div class="sp-wrap">
+              <p class="sp-section-label">Team leaderboard</p>
+              <div class="sp-leader-grid" id="performanceLeaderboard"></div>
+
+              <div class="sp-card sp-chart-card">
+                <p class="sp-section-label">Team activity comparison</p>
+                <div class="sp-legend" aria-label="Chart legend">
+                  <span class="sp-legend-item"><i style="background:#378ADD"></i>Assigned</span>
+                  <span class="sp-legend-item"><i style="background:#7F77DD"></i>Activities</span>
+                  <span class="sp-legend-item"><i style="background:#BA7517"></i>Follow-ups</span>
+                  <span class="sp-legend-item"><i style="background:#1D9E75"></i>Stage leads</span>
+                </div>
+                <div class="sp-chart-scroll">
+                  <div class="sp-chart-frame">
+                    <canvas id="performanceChart" role="img" aria-label="Grouped bar chart comparing assigned leads, activities, follow-ups, and stage leads per salesman."></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sp-two-col">
+                <div class="sp-card">
+                  <p class="sp-section-label">Performance heatmap</p>
+                  <table class="sp-hm-table">
+                    <thead>
+                      <tr>
+                        <th>Salesman</th>
+                        <th>Leads</th>
+                        <th>Act.</th>
+                        <th>F-ups</th>
+                        <th>Score</th>
+                      </tr>
+                    </thead>
+                    <tbody id="performanceTable"></tbody>
+                  </table>
+                </div>
+
+                <div class="sp-card">
+                  <p class="sp-section-label">Recent activity</p>
+                  <div class="sp-feed" id="performanceFeed"></div>
+                </div>
+              </div>
             </div>
-            <div class="performance-legend" aria-label="Chart legend">
-              <span><i class="legend-assigned"></i>Assigned</span>
-              <span><i class="legend-generated"></i>Generated</span>
-              <span><i class="legend-activities"></i>Activities</span>
-              <span><i class="legend-followups"></i>Follow-ups</span>
-              <span><i class="legend-stage"></i>Filtered stage</span>
+          </div>
+          <div class="panel market-snapshot-panel hidden" id="marketSnapshotPanel">
+            <div class="panel-header market-snapshot-header">
+              <div>
+                <h2>Pipeline Market Snapshot</h2>
+                <span>Visual view of potential customers by location and sector type</span>
+              </div>
+              <label class="market-snapshot-filter">
+                <span>Salesman</span>
+                <select id="marketSnapshotSalesmanFilter">
+                  <option value="all">All salesmen</option>
+                </select>
+              </label>
             </div>
-            <div class="performance-chart" id="performanceChart" aria-label="Salesman performance chart"></div>
-            <div class="performance-table-wrap">
-              <table class="performance-table">
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Salesman Name</th>
-                    <th>Leads Assigned</th>
-                    <th>Leads in Current Filtered Stage</th>
-                    <th>Activities Logged</th>
-                    <th>Upcoming Follow-ups</th>
-                    <th>Last Activity Date</th>
-                  </tr>
-                </thead>
-                <tbody id="performanceTable"></tbody>
-              </table>
+            <div class="market-snapshot-grid">
+              <article class="snapshot-card">
+                <p class="sp-section-label">Leads by Location</p>
+                <div class="snapshot-visual">
+                  <div class="portfolio-pie" id="marketLocationPie" role="img" aria-label="Lead distribution by location"></div>
+                  <div class="snapshot-legend" id="marketLocationLegend"></div>
+                </div>
+              </article>
+              <article class="snapshot-card">
+                <p class="sp-section-label">Leads by Sector Type</p>
+                <div class="snapshot-visual">
+                  <div class="portfolio-pie" id="marketSectorPie" role="img" aria-label="Lead distribution by sector type"></div>
+                  <div class="snapshot-legend" id="marketSectorLegend"></div>
+                </div>
+              </article>
             </div>
+          </div>
+          <div class="panel action-plan-panel hidden" id="actionPlanPanel">
+            <div class="panel-header">
+              <div>
+                <h2>Lead Action Plans</h2>
+                <span>Management view of every salesman lead and next planned step</span>
+              </div>
+              <strong class="attention-count" id="actionPlanSummary">0 leads tracked</strong>
+            </div>
+            <div class="action-plan-grid" id="actionPlanList"></div>
           </div>
           <div class="panel loss-reasons-panel hidden" id="lossReasonsPanel">
             <div class="panel-header">
@@ -180,10 +296,19 @@
           </div>
           <div class="panel" id="relationshipFocusPanel">
             <div class="panel-header">
-              <h2>Today’s Relationship Focus</h2>
+              <h2>Todayâ€™s Relationship Focus</h2>
               <span>Priority accounts</span>
             </div>
-            <div class="insight-list" id="dashboardFocus"></div>
+            <div class="dashboard-activity-feed dashboard-focus-list" id="dashboardFocus"></div>
+          </div>
+          <div class="panel" id="dashboardActivityPanel">
+            <div class="panel-header">
+              <div>
+                <span>Activity Feed</span>
+                <h2>Latest interactions</h2>
+              </div>
+            </div>
+            <div class="dashboard-activity-feed" id="dashboardActivityFeed"></div>
           </div>
           <div class="panel" id="pipelineHealthPanel">
             <div class="panel-header">
@@ -191,6 +316,54 @@
               <span>By status</span>
             </div>
             <div class="status-grid" id="dashboardStatus"></div>
+          </div>
+          <div class="panel agent-panel" id="agentPanel">
+            <div class="agent-collapsed">
+              <button class="ghost-button" type="button" id="agentToggle">Ask the database</button>
+              <span>Read-only CRM questions, grounded in visible records.</span>
+            </div>
+            <div class="agent-body hidden" id="agentBody">
+              <div class="panel-header">
+                <div>
+                  <span>Read-only AI Agent</span>
+                  <h2>Ask the database</h2>
+                </div>
+              </div>
+              <div class="agent-input-row">
+                <input id="agentPrompt" type="text" placeholder="Ask about pipeline, accounts, PMRs, or activity...">
+                <button class="primary-button" type="button" id="agentAsk">Ask</button>
+              </div>
+              <div class="agent-examples" id="agentExamples"></div>
+              <pre class="agent-answer hidden" id="agentAnswer"></pre>
+              <span class="form-message" id="agentMessage" aria-live="polite">Read-only - this agent cannot create or modify records.</span>
+            </div>
+          </div>
+          <div class="panel config-agent-panel hidden" id="configAgentPanel">
+            <div class="panel-header">
+              <div>
+                <span>Admin Configuration</span>
+                <h2>Configuration Agent</h2>
+              </div>
+              <strong class="panel-icon">CFG</strong>
+            </div>
+            <p class="panel-copy">Safely propose CRM dropdown and PMR option changes. Applying changes requires admin password confirmation and writes an audit trail.</p>
+            <div class="config-agent-grid">
+              <label>
+                <span>Configuration request</span>
+                <textarea id="configAgentPrompt" rows="3" placeholder="Example: Add Qatar to territories"></textarea>
+              </label>
+              <div class="config-agent-actions">
+                <button class="primary-button" type="button" id="configAgentPropose">Generate Proposal</button>
+                <button class="ghost-button" type="button" id="configAgentApply" disabled>Apply with Admin Password</button>
+              </div>
+            </div>
+            <div class="agent-examples" id="configAgentExamples"></div>
+            <div class="config-agent-result" id="configAgentResult"></div>
+            <div>
+              <span class="meta-label">Audit trail</span>
+              <div class="config-audit-list" id="configAgentAudit"></div>
+            </div>
+            <span class="form-message" id="configAgentMessage" aria-live="polite"></span>
           </div>
         </section>
 
@@ -281,9 +454,18 @@
         <section class="view-panel hidden" id="activityView">
           <div class="panel">
             <div class="panel-header">
-              <h2>Activity Timeline</h2>
-              <span id="activitySummary">0 activities</span>
+              <div>
+                <h2>Activity log</h2>
+                <span>A timeline of your team's latest moves.</span>
+              </div>
+              <label class="activity-view-mode">
+                <span class="sr-only">Activity view</span>
+                <select id="activityCalendarMode">
+                  <option value="weekly">Weekly</option>
+                </select>
+              </label>
             </div>
+            <span class="activity-count-pill" id="activitySummary">0 activities</span>
             <div class="activity-filter-shell">
               <button class="ghost-button activity-filter-toggle" type="button" id="activityFilterToggle">Filters</button>
               <div class="activity-filter-bar" id="activityFilterBar">
@@ -317,17 +499,36 @@
               <div class="activity-results-summary" id="activityResultsSummary">Showing activity from the last 30 days</div>
             </div>
             <div class="activity-loading hidden" id="activityLoading">Loading activities...</div>
+            <div class="activity-weekly-log" id="activityWeeklyLog"></div>
             <div class="activity-feed" id="activityFeed"></div>
           </div>
         </section>
       </main>
     </div>
 
+    <aside class="install-banner hidden" id="installBanner" aria-live="polite">
+      <div>
+        <strong id="installBannerTitle">Install ARG Leads</strong>
+        <span id="installBannerText">One-tap access and offline activity logging for site visits.</span>
+      </div>
+      <button class="primary-button" type="button" id="installAppButton">Install</button>
+      <button class="ghost-button" type="button" id="dismissInstallBanner">Not now</button>
+    </aside>
+
+    <aside class="install-banner update-banner hidden" id="updateBanner" aria-live="polite">
+      <div>
+        <strong>Update available</strong>
+        <span>A fresh CRM version is ready. Refresh when you are not mid-task.</span>
+      </div>
+      <button class="primary-button" type="button" id="refreshAppButton">Refresh</button>
+    </aside>
+
     <div class="mobile-tabs" aria-label="Mobile navigation">
-      <button class="nav-item active" data-view="dashboard">Home</button>
-      <button class="nav-item" data-view="pipeline">Pipeline</button>
-      <button class="nav-item" data-view="salesmen">Team</button>
-      <button class="nav-item" data-view="activity">Activity</button>
+      <button class="nav-item active" data-view="dashboard"><span>Home</span>Home</button>
+      <button class="nav-item" data-view="pipeline"><span>Leads</span>Leads</button>
+      <button class="nav-item mobile-log-tab" data-mobile-action="quick-log"><span>+</span>Log</button>
+      <button class="nav-item" data-mobile-action="map"><span>Map</span>Map</button>
+      <button class="nav-item" data-mobile-action="alerts"><span>!</span>Alerts<em id="mobileAlertsBadge" class="mobile-alert-badge hidden">0</em></button>
     </div>
 
     <div class="lead-drawer-shell hidden" id="leadDrawerShell" aria-hidden="true">
@@ -348,6 +549,7 @@
         </div>
         <div class="form-grid">
           <label class="company-field">Company name<input name="company_name" id="leadCompanyName" required></label>
+          <div class="wide duplicate-warning hidden" id="duplicateWarning" aria-live="polite"></div>
           <div class="wide enrichment-strip">
             <span class="enrichment-status" id="leadEnrichmentStatus" aria-live="polite">Type a company name to fetch Google business info.</span>
           </div>
@@ -370,22 +572,35 @@
           <label>Website<input name="website" type="url" placeholder="https://example.com"></label>
           <label>Google Maps URL<input name="google_maps_url" type="url"></label>
           <label>Business category<input name="business_category"></label>
-          <label>Territory<input name="territory" value="Dubai"></label>
+          <label>Territory<select name="territory" id="formTerritory"></select></label>
           <label>Assigned salesman<select name="assigned_salesman" id="formSalesman"></select></label>
           <label>Stage<select name="stage" id="formStage"></select></label>
           <label>Priority<select name="priority" id="formPriority"></select></label>
           <label>Estimated value<input name="estimated_value" type="number" min="0" value="0"></label>
+          <label>Next action plan<select name="next_action" id="formNextAction">
+            <option value="To Call">To Call</option>
+            <option value="To Send Email">To Send Email</option>
+            <option value="To Visit">To Visit</option>
+          </select></label>
           <label>Next action date<input name="next_action_date" type="date"></label>
+          <label>Type / Purpose of Activity<select name="activity_purpose" id="formActivityPurpose">
+            <option value="Company Introductory">Company Introductory</option>
+            <option value="New Requirements">New Requirements</option>
+            <option value="Quotation Submission">Quotation Submission</option>
+            <option value="Quotation Follow-Up">Quotation Follow-Up</option>
+            <option value="Meeting">Meeting</option>
+          </select></label>
           <label>First order date<input name="first_order_date" type="date"></label>
           <label>Est. monthly volume<input name="estimated_monthly_volume" placeholder="MT/month"></label>
           <label class="wide">Product interest<input name="product_interest"></label>
           <label class="wide">Tags<input name="tags" placeholder="ICV-required, BAPCO-approved"></label>
           <label class="wide">Quotation ref<input name="quotation_ref" placeholder="ERP reference only"></label>
           <label class="wide">Products/services remarks<textarea name="products_services_remarks" rows="3" placeholder="Google Places limitations or sales notes"></textarea></label>
-          <label class="wide">Next action<input name="next_action" value="Qualify lead"></label>
           <input name="google_place_id" type="hidden">
           <input name="google_rating" type="hidden">
           <input name="google_review_count" type="hidden">
+          <input name="latitude" type="hidden">
+          <input name="longitude" type="hidden">
           <input name="opening_hours" type="hidden">
           <input name="enrichment_source" type="hidden">
           <input name="enrichment_status" type="hidden">
@@ -398,6 +613,22 @@
         </div>
         <button class="primary-button" type="submit">Save Lead</button>
       </form>
+    </dialog>
+
+    <dialog id="importLeadsDialog" class="import-dialog">
+      <div class="lead-form import-form">
+        <div class="dialog-header">
+          <div>
+            <h2 id="importLeadsTitle">Import Leads from CSV</h2>
+            <p id="importLeadsSubtitle">Upload an Excel-exported CSV, map columns, preview, then import.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeImportLeads">Close</button>
+        </div>
+        <div class="import-stepper" id="importStepper" aria-label="Import progress"></div>
+        <div id="importLeadsBody"></div>
+        <span class="form-message" id="importLeadsMessage" aria-live="polite"></span>
+        <div class="import-actions" id="importLeadsActions"></div>
+      </div>
     </dialog>
 
     <dialog id="pmrDialog">
@@ -413,6 +644,7 @@
           <input name="company_id" type="hidden">
           <label>Meeting date<input name="meeting_date" type="date" required></label>
           <label>Relationship heat<select name="relationship_heat_score" id="pmrHeat"></select></label>
+          <label class="wide">Linked meeting activity<select name="activity_id" id="pmrActivityLink"></select><small>Choose an existing visit/call, or let the app create a meeting activity for this PMR.</small></label>
           <label>First order timing<select name="first_order_timing" id="pmrOrderTiming"></select></label>
           <label>Potential annual value<select name="potential_annual_value" id="pmrPotentialValue"></select></label>
           <label>Director action<select name="director_action_required" id="pmrDirectorAction"></select></label>
@@ -446,16 +678,16 @@
       <form method="dialog" class="lead-form" id="activityEditForm">
         <div class="dialog-header">
           <div>
-            <h2>Edit Activity</h2>
-            <p>Revise the logged note without removing linked PMR or voice-note details.</p>
+            <h2>Add Activity Correction</h2>
+            <p>Activity history is append-only. This creates a new correction entry and keeps the original record unchanged.</p>
           </div>
           <button type="button" class="ghost-button" id="closeActivityEditForm">Close</button>
         </div>
         <div class="form-grid">
           <input name="lead_id" type="hidden">
           <input name="activity_index" type="hidden">
-          <label>Activity date<input name="at" type="date" required></label>
-          <label>Type
+          <label>Corrected activity date<input name="at" type="date" required></label>
+          <label>Corrected type
             <select name="type">
               <option>Note</option>
               <option>Phone Call</option>
@@ -469,7 +701,7 @@
               <option>Stage</option>
             </select>
           </label>
-          <label class="wide">Activity note<textarea name="text" rows="4" required></textarea></label>
+          <label class="wide">Correction note<textarea name="text" rows="4" required placeholder="Describe what should be corrected. The original activity will remain unchanged."></textarea></label>
           <div class="wide form-grid hidden" id="activityEditReminderFields">
             <label>Reminder type
               <select name="reminder_type">
@@ -487,7 +719,7 @@
           </div>
         </div>
         <span class="form-message" id="activityEditMessage" aria-live="polite"></span>
-        <button class="primary-button" type="submit">Save Activity Changes</button>
+        <button class="primary-button" type="submit">Append Correction</button>
       </form>
     </dialog>
 
@@ -563,7 +795,7 @@
         <div class="form-grid">
           <label>Name<input name="name" required></label>
           <label>Email<input name="email" type="email" required></label>
-          <label>Territory<input name="territory" value="Dubai" required></label>
+          <label>Territory<select name="territory" id="salesmanTerritory" required></select></label>
           <label>Password<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
         </div>
         <span class="form-message" id="salesmanMessage" aria-live="polite"></span>
@@ -571,8 +803,139 @@
       </form>
     </dialog>
 
+    <dialog id="handoffDialog">
+      <form method="dialog" class="lead-form" id="handoffForm">
+        <div class="dialog-header">
+          <div>
+            <h2 id="handoffTitle">Reassign Lead</h2>
+            <p id="handoffSubtitle">Confirm owner handoff before saving.</p>
+          </div>
+          <button type="button" class="ghost-button" id="cancelHandoff">Cancel</button>
+        </div>
+        <div class="handoff-summary" id="handoffSummary"></div>
+        <label class="wide">Handoff note<textarea name="handoff_note" rows="4" minlength="20" required placeholder="Explain current status, commitments, and next action for the new owner."></textarea></label>
+        <span class="form-message" id="handoffMessage">A handoff note is required (minimum 20 characters).</span>
+        <button class="primary-button" id="confirmHandoff" type="submit" disabled>Confirm Reassignment</button>
+      </form>
+    </dialog>
+
+    <dialog id="aiActionDialog" class="ai-action-dialog">
+      <div class="ai-action-sheet">
+        <div class="dialog-header">
+          <div>
+            <h2 id="aiActionTitle">AI Action</h2>
+            <p id="aiActionSubtitle">Generated from CRM data.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeAiActionDialog">Close</button>
+        </div>
+        <div class="ai-loading hidden" id="aiActionLoading">
+          <i></i><i></i><i></i>
+          <span id="aiActionLoadingText">Reading activity history...</span>
+        </div>
+        <div class="ai-result hidden" id="aiActionResult"></div>
+        <span class="form-message" id="aiActionMessage" aria-live="polite"></span>
+        <div class="ai-action-footer" id="aiActionFooter"></div>
+      </div>
+    </dialog>
+
+    <dialog id="flagAttentionDialog">
+      <form method="dialog" class="lead-form flag-attention-form" id="flagAttentionForm">
+        <div class="dialog-header">
+          <div>
+            <h2 id="flagAttentionTitle">Flag for director attention</h2>
+            <p>Directors will see this alert with the company record and latest PMR snapshot.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeFlagAttention">Cancel</button>
+        </div>
+        <input name="company_id" type="hidden">
+        <label class="wide">Reason (optional, recommended)<textarea name="reason" rows="4" placeholder="Example: Quotation follow-up overdue, competitor pressure, or director visit required."></textarea></label>
+        <span class="form-message" id="flagAttentionMessage" aria-live="polite"></span>
+        <div class="lost-reason-actions">
+          <button class="text-button" id="cancelFlagAttention" type="button">Cancel</button>
+          <button class="danger-button" type="submit">Flag for Director</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="quickLogDialog" class="quick-log-dialog">
+      <form method="dialog" class="quick-log-sheet" id="quickLogForm">
+        <div class="sheet-handle"></div>
+        <div class="dialog-header">
+          <div>
+            <h2>Quick Log Activity</h2>
+            <p>Capture the visit, call, email, quotation, or order in under 30 seconds.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeQuickLog">Close</button>
+        </div>
+        <div class="sync-inline-status" id="quickLogSyncStatus">Online and ready.</div>
+        <section class="quick-log-step">
+          <label>Company search<input id="quickLogCompanySearch" autocomplete="off" placeholder="Search assigned companies"></label>
+          <div class="quick-log-near hidden" id="quickLogNear"></div>
+          <div class="quick-chip-row" id="quickLogRecent"></div>
+          <select id="quickLogLeadSelect" required></select>
+        </section>
+        <section class="quick-log-step">
+          <span class="meta-label">Activity type</span>
+          <div class="quick-type-grid" id="quickLogTypes"></div>
+        </section>
+        <section class="quick-log-step">
+          <textarea id="quickLogNote" rows="4" placeholder="Short note, voice transcript, or quick phrase"></textarea>
+          <div class="quick-chip-row" id="quickPhraseChips"></div>
+          <div class="conditional-field hidden" id="quickQuoteField">
+            <label>Quotation reference<input id="quickQuotationRef" placeholder="Q-2026-0142"></label>
+          </div>
+          <div class="conditional-field hidden" id="quickOrderField">
+            <label>Order volume (MT)<input id="quickOrderVolume" inputmode="decimal" placeholder="25 MT"></label>
+          </div>
+        </section>
+        <section class="quick-log-step">
+          <span class="meta-label">Optional next action</span>
+          <input id="quickNextAction" placeholder="Follow up quotation / send catalogue">
+          <div class="quick-chip-row">
+            <button type="button" data-quick-date="1">Tomorrow</button>
+            <button type="button" data-quick-date="3">3 days</button>
+            <button type="button" data-quick-date="7">Next week</button>
+          </div>
+          <input id="quickNextDate" type="date">
+        </section>
+        <button class="primary-button sheet-save" type="submit">Save Activity</button>
+        <span class="form-message" id="quickLogMessage" aria-live="polite"></span>
+      </form>
+    </dialog>
+
+    <dialog id="pendingChangesDialog" class="quick-log-dialog">
+      <div class="quick-log-sheet">
+        <div class="sheet-handle"></div>
+        <div class="dialog-header">
+          <div>
+            <h2>Pending Changes</h2>
+            <p>Items saved on this device that still need to sync.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closePendingChanges">Close</button>
+        </div>
+        <div class="pending-list" id="pendingChangesList"></div>
+        <button class="primary-button" type="button" id="syncNowButton">Sync now</button>
+      </div>
+    </dialog>
+
+    <dialog id="mobileMapDialog" class="quick-log-dialog">
+      <div class="quick-log-sheet mobile-map-sheet">
+        <div class="sheet-handle"></div>
+        <div class="dialog-header">
+          <div>
+            <h2>Nearby Map Links</h2>
+            <p>Use saved Google Maps links or coordinates for field navigation.</p>
+          </div>
+          <button type="button" class="ghost-button" id="closeMobileMap">Close</button>
+        </div>
+        <div class="pending-list" id="mobileMapList"></div>
+      </div>
+    </dialog>
+
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
     <script src="client.js"></script>
   </body>
 </html>
+

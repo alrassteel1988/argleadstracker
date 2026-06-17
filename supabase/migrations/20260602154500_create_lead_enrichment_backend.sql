@@ -73,7 +73,8 @@ create table if not exists public.leads (
   priority text not null default 'New',
   estimated_value numeric(14, 2) not null default 0,
   product_interest text not null default '',
-  next_action text not null default 'Qualify lead',
+  activity_purpose text not null default 'Company Introductory',
+  next_action text not null default 'To Call',
   next_action_date date not null default current_date,
   last_activity date not null default current_date,
   source text not null default 'Manual entry',
@@ -102,7 +103,8 @@ alter table public.leads add column if not exists assigned_salesman text not nul
 alter table public.leads add column if not exists priority text not null default 'New';
 alter table public.leads add column if not exists estimated_value numeric(14, 2) not null default 0;
 alter table public.leads add column if not exists product_interest text not null default '';
-alter table public.leads add column if not exists next_action text not null default 'Qualify lead';
+alter table public.leads add column if not exists activity_purpose text not null default 'Company Introductory';
+alter table public.leads add column if not exists next_action text not null default 'To Call';
 alter table public.leads add column if not exists next_action_date date not null default current_date;
 alter table public.leads add column if not exists last_activity date not null default current_date;
 alter table public.leads add column if not exists source text not null default 'Manual entry';
