@@ -1173,8 +1173,9 @@ textarea {
   font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.1em;
-  text-align: right;
+  text-align: center;
   text-transform: uppercase;
+  vertical-align: middle;
 }
 
 .sp-hm-table th:first-child {
@@ -1195,7 +1196,8 @@ textarea {
   color: var(--ink);
   font-size: 12px;
   font-weight: 500;
-  text-align: right;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .sp-hm-table td:first-child {
@@ -4031,14 +4033,19 @@ textarea {
 }
 
 .salesman-plan-table-wrap {
+  --salesman-plan-visible-rows: 10;
+  --salesman-plan-header-height: 3rem;
+  --salesman-plan-row-height: 3.25rem;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: 42rem;
+  max-height: calc(var(--salesman-plan-header-height) + (var(--salesman-plan-row-height) * var(--salesman-plan-visible-rows)));
   border: 1px solid rgba(136, 135, 128, 0.18);
   border-radius: 10px;
   background: #ffffff;
   scrollbar-width: thin;
   scrollbar-color: rgba(55, 138, 221, 0.35) transparent;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .salesman-plan-table-wrap::-webkit-scrollbar {
