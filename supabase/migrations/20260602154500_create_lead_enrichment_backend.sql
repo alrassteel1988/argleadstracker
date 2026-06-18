@@ -29,6 +29,20 @@ create table if not exists public.companies (
   updated_at timestamptz not null default now()
 );
 
+alter table public.companies add column if not exists industry text not null default '';
+alter table public.companies add column if not exists location text not null default '';
+alter table public.companies add column if not exists address text not null default '';
+alter table public.companies add column if not exists phone text not null default '';
+alter table public.companies add column if not exists website text not null default '';
+alter table public.companies add column if not exists google_place_id text;
+alter table public.companies add column if not exists google_maps_url text not null default '';
+alter table public.companies add column if not exists google_rating numeric(3, 2);
+alter table public.companies add column if not exists google_review_count integer not null default 0;
+alter table public.companies add column if not exists enrichment_status text not null default 'pending';
+alter table public.companies add column if not exists enrichment_updated_at timestamptz;
+alter table public.companies add column if not exists created_by uuid references auth.users(id);
+alter table public.companies add column if not exists updated_at timestamptz not null default now();
+
 create unique index if not exists companies_google_place_id_key
   on public.companies (google_place_id)
   where google_place_id is not null and google_place_id <> '';
@@ -59,7 +73,8 @@ create table if not exists public.leads (
   priority text not null default 'New',
   estimated_value numeric(14, 2) not null default 0,
   product_interest text not null default '',
-  next_action text not null default 'Qualify lead',
+  activity_purpose text not null default 'Company Introductory',
+  next_action text not null default 'To Call',
   next_action_date date not null default current_date,
   last_activity date not null default current_date,
   source text not null default 'Manual entry',
@@ -88,13 +103,15 @@ alter table public.leads add column if not exists assigned_salesman text not nul
 alter table public.leads add column if not exists priority text not null default 'New';
 alter table public.leads add column if not exists estimated_value numeric(14, 2) not null default 0;
 alter table public.leads add column if not exists product_interest text not null default '';
-alter table public.leads add column if not exists next_action text not null default 'Qualify lead';
+alter table public.leads add column if not exists activity_purpose text not null default 'Company Introductory';
+alter table public.leads add column if not exists next_action text not null default 'To Call';
 alter table public.leads add column if not exists next_action_date date not null default current_date;
 alter table public.leads add column if not exists last_activity date not null default current_date;
 alter table public.leads add column if not exists source text not null default 'Manual entry';
 alter table public.leads add column if not exists activities jsonb not null default '[]'::jsonb;
 alter table public.leads add column if not exists enrichment_status text not null default 'pending';
 alter table public.leads add column if not exists enrichment_updated_at timestamptz;
+alter table public.leads add column if not exists created_by uuid default auth.uid() references auth.users(id);
 alter table public.leads add column if not exists assigned_to uuid references auth.users(id);
 alter table public.leads add column if not exists updated_at timestamptz not null default now();
 
@@ -118,6 +135,17 @@ create table if not exists public.contacts (
   unique (lead_id, contact_email)
 );
 
+alter table public.contacts add column if not exists company_id uuid references public.companies(id) on delete cascade;
+alter table public.contacts add column if not exists lead_id uuid references public.leads(id) on delete cascade;
+alter table public.contacts add column if not exists contact_name text not null default '';
+alter table public.contacts add column if not exists contact_email text not null default '';
+alter table public.contacts add column if not exists phone text not null default '';
+alter table public.contacts add column if not exists contact_type text not null default '';
+alter table public.contacts add column if not exists hunter_confidence_score integer;
+alter table public.contacts add column if not exists source_data jsonb not null default '[]'::jsonb;
+alter table public.contacts add column if not exists created_by uuid default auth.uid() references auth.users(id);
+alter table public.contacts add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists public.search_history (
   id uuid primary key default gen_random_uuid(),
   created_by uuid not null default auth.uid() references auth.users(id),
@@ -129,6 +157,14 @@ create table if not exists public.search_history (
   error_message text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table public.search_history add column if not exists created_by uuid default auth.uid() references auth.users(id);
+alter table public.search_history add column if not exists keyword text not null default '';
+alter table public.search_history add column if not exists location text not null default '';
+alter table public.search_history add column if not exists provider text not null default 'google_places';
+alter table public.search_history add column if not exists result_count integer not null default 0;
+alter table public.search_history add column if not exists status text not null default 'completed';
+alter table public.search_history add column if not exists error_message text not null default '';
 
 create table if not exists public.enrichment_status (
   id uuid primary key default gen_random_uuid(),
@@ -142,6 +178,14 @@ create table if not exists public.enrichment_status (
   updated_at timestamptz not null default now(),
   unique (lead_id, provider)
 );
+
+alter table public.enrichment_status add column if not exists lead_id uuid references public.leads(id) on delete cascade;
+alter table public.enrichment_status add column if not exists provider text not null default 'google_places';
+alter table public.enrichment_status add column if not exists status text not null default 'pending';
+alter table public.enrichment_status add column if not exists details jsonb not null default '{}'::jsonb;
+alter table public.enrichment_status add column if not exists error_message text not null default '';
+alter table public.enrichment_status add column if not exists created_by uuid default auth.uid() references auth.users(id);
+alter table public.enrichment_status add column if not exists updated_at timestamptz not null default now();
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -209,6 +253,25 @@ alter table public.leads enable row level security;
 alter table public.contacts enable row level security;
 alter table public.search_history enable row level security;
 alter table public.enrichment_status enable row level security;
+
+drop policy if exists "Authenticated users can read profiles" on public.profiles;
+drop policy if exists "Authenticated users can read companies" on public.companies;
+drop policy if exists "Authenticated users can create companies" on public.companies;
+drop policy if exists "Authenticated users can update companies" on public.companies;
+drop policy if exists "Authenticated users can delete companies" on public.companies;
+drop policy if exists "Authenticated users can read leads" on public.leads;
+drop policy if exists "Authenticated users can create leads" on public.leads;
+drop policy if exists "Authenticated users can update leads" on public.leads;
+drop policy if exists "Authenticated users can delete leads" on public.leads;
+drop policy if exists "Authenticated users can read contacts" on public.contacts;
+drop policy if exists "Authenticated users can create contacts" on public.contacts;
+drop policy if exists "Authenticated users can update contacts" on public.contacts;
+drop policy if exists "Authenticated users can delete contacts" on public.contacts;
+drop policy if exists "Users can read own searches" on public.search_history;
+drop policy if exists "Users can create own searches" on public.search_history;
+drop policy if exists "Authenticated users can read enrichment status" on public.enrichment_status;
+drop policy if exists "Authenticated users can create enrichment status" on public.enrichment_status;
+drop policy if exists "Authenticated users can update enrichment status" on public.enrichment_status;
 
 create policy "Authenticated users can read profiles" on public.profiles
   for select to authenticated using (true);
