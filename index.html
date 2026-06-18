@@ -88,11 +88,9 @@
               <span class="sidebar-user-chevron" aria-hidden="true">▾</span>
             </summary>
             <div class="sidebar-user-dropdown">
-              <button class="user-menu-action hidden" id="openSalesmanForm" type="button">Create Salesman Account</button>
               <button class="user-menu-action hidden" id="exportLeadsExcel" type="button">Export Excel</button>
               <button class="user-menu-action hidden" id="exportLeadsPdf" type="button">Export PDF</button>
               <button class="user-menu-action hidden" id="openImportLeads" type="button">Import Leads</button>
-              <button class="user-menu-action danger" id="logoutButton" type="button">Sign Out</button>
             </div>
           </details>
         </div>
@@ -109,6 +107,8 @@
           </div>
           <div class="topbar-actions">
             <button class="sync-status-pill hidden" id="syncStatusPill" type="button">All synced</button>
+            <button class="ghost-button hidden" id="openSalesmanForm">Create Salesman Account</button>
+            <button class="ghost-button" id="logoutButton">Sign Out</button>
             <button class="ghost-button" id="openPlacesSearch">Search places</button>
             <button class="primary-button" id="openLeadForm">Add lead</button>
           </div>
@@ -470,6 +470,22 @@
             <div class="salesmen-grid" id="salesmenGrid"></div>
           </div>
         </section>
+
+        <dialog id="salesmanLeadsDialog">
+          <form method="dialog" class="salesman-leads-dialog" id="salesmanLeadsForm">
+            <div class="dialog-header">
+              <div>
+                <h2 id="salesmanLeadsTitle">Salesman leads</h2>
+                <p id="salesmanLeadsSubtitle">Most recent leads</p>
+              </div>
+              <button type="button" class="ghost-button" id="closeSalesmanLeads">Close</button>
+            </div>
+            <div class="salesman-leads-summary" id="salesmanLeadsSummary"></div>
+            <div class="salesman-leads-list-wrap">
+              <div class="salesman-leads-list" id="salesmanLeadsList"></div>
+            </div>
+          </form>
+        </dialog>
 
         <section class="view-panel hidden" id="activityView">
           <div class="activity-dashboard">

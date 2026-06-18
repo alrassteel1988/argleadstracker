@@ -42,6 +42,7 @@ const state = {
   overduePipelineOnly: false,
   performanceStage: "all",
   marketSnapshotSalesman: "all",
+  salesmanLeadsViewer: null,
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
   pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
   kanbanStage: localStorage.getItem("arg_kanban_stage") || "PROSPECT",
@@ -227,6 +228,12 @@ const els = {
   salesmenView: document.querySelector("#salesmenView"),
   salesmenGrid: document.querySelector("#salesmenGrid"),
   salesmenSummary: document.querySelector("#salesmenSummary"),
+  salesmanLeadsDialog: document.querySelector("#salesmanLeadsDialog"),
+  salesmanLeadsTitle: document.querySelector("#salesmanLeadsTitle"),
+  salesmanLeadsSubtitle: document.querySelector("#salesmanLeadsSubtitle"),
+  salesmanLeadsSummary: document.querySelector("#salesmanLeadsSummary"),
+  salesmanLeadsList: document.querySelector("#salesmanLeadsList"),
+  closeSalesmanLeads: document.querySelector("#closeSalesmanLeads"),
   activityView: document.querySelector("#activityView"),
   activityFeed: document.querySelector("#activityFeed"),
   activityWeeklyLog: document.querySelector("#activityWeeklyLog"),
@@ -5340,15 +5347,19 @@ function renderSalesmenView() {
   els.salesmenSummary.textContent = `${salesmen.length} ${salesmen.length === 1 ? "salesman" : "salespeople"}`;
   els.salesmenGrid.innerHTML = salesmen.map(person => {
     const name = typeof person === "string" ? person : person.name;
-    const owned = state.leads.filter(lead => leadMatchesSalesman(lead, person)).sort(compareLeadPlans);
+    const owned = state.leads.filter(lead => leadMatchesSalesman(lead, person)).sort(compareLeadRecentFirst);
     const value = owned.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
     const overdue = owned.filter(isOverdue).length;
     const hot = owned.filter(lead => lead.priority === "Hot").length;
+    const territory = (typeof person === "string" ? "" : person.territory) || "Territory not set";
     return `
       <article class="salesman-card">
-        <div>
+        <div class="salesman-card-head">
+          <div>
           <h2>${escapeHtml(name)}</h2>
-          <p>${escapeHtml((typeof person === "string" ? "" : person.territory) || "Territory not set")}</p>
+            <p>${escapeHtml(territory)}</p>
+          </div>
+          <button class="ghost-button salesman-open-button" type="button" data-open-salesman-leads="${escapeHtml(name)}">View Leads</button>
         </div>
         <div class="mini-metrics">
           <span><strong>${owned.length}</strong> Companies</span>
@@ -5356,32 +5367,79 @@ function renderSalesmenView() {
           <span><strong>${hot}</strong> Hot</span>
           <span><strong>${overdue}</strong> Overdue</span>
         </div>
-        <div class="salesman-plan-list compact">
-          ${owned.map(lead => {
-            const plan = leadActionPlanState(lead);
-            return `
-              <button class="salesman-plan-item" type="button" data-salesman-plan-lead="${escapeHtml(lead.id)}">
-                <div class="salesman-plan-copy">
-                  <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
-                  <p>${escapeHtml(plan.action)}</p>
-                </div>
-                <div class="salesman-plan-meta">
-                  <span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span>
-                </div>
-              </button>
-            `;
-          }).join("") || `<p class="empty-copy">No registered leads yet.</p>`}
-        </div>
       </article>
     `;
   }).join("") || `<p class="empty-copy">No salesman accounts found.</p>`;
-  els.salesmenGrid.querySelectorAll("[data-salesman-plan-lead]").forEach(button => {
+  els.salesmenGrid.querySelectorAll("[data-open-salesman-leads]").forEach(button => {
     button.addEventListener("click", () => {
-      state.selectedId = button.dataset.salesmanPlanLead;
-      openLeadDrawer(button.dataset.salesmanPlanLead);
+      openSalesmanLeadsViewer(button.dataset.openSalesmanLeads);
+    });
+  });
+}
+
+function salesmanByViewerName(name) {
+  return analyticsSalesmen().find(person => salesmanName(person) === name) || null;
+}
+
+function renderSalesmanLeadsViewer() {
+  if (!els.salesmanLeadsList || !els.salesmanLeadsTitle || !els.salesmanLeadsSummary || !els.salesmanLeadsSubtitle) return;
+  const viewer = state.salesmanLeadsViewer;
+  if (!viewer) {
+    els.salesmanLeadsTitle.textContent = "Salesman leads";
+    els.salesmanLeadsSubtitle.textContent = "Most recent leads";
+    els.salesmanLeadsSummary.innerHTML = "";
+    els.salesmanLeadsList.innerHTML = `<p class="empty-copy">No salesman selected.</p>`;
+    return;
+  }
+  const person = salesmanByViewerName(viewer.name) || viewer.person;
+  const leads = state.leads.filter(lead => leadMatchesSalesman(lead, person)).sort(compareLeadRecentFirst);
+  const value = leads.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
+  const overdue = leads.filter(isOverdue).length;
+  const hot = leads.filter(lead => lead.priority === "Hot").length;
+  els.salesmanLeadsTitle.textContent = viewer.name;
+  els.salesmanLeadsSubtitle.textContent = `${leads.length} ${leads.length === 1 ? "lead" : "leads"} - most recent first`;
+  els.salesmanLeadsSummary.innerHTML = `
+    <span><strong>${leads.length}</strong> companies</span>
+    <span><strong>${money.format(value)}</strong> open value</span>
+    <span><strong>${hot}</strong> hot</span>
+    <span><strong>${overdue}</strong> overdue</span>
+  `;
+  els.salesmanLeadsList.innerHTML = leads.map(lead => {
+    const plan = leadActionPlanState(lead);
+    const recent = leadRecentTimestamp(lead);
+    const recentLabel = recent ? formatDisplayDate(String(recent).slice(0, 10)) : "No recent activity";
+    return `
+      <button class="salesman-lead-row" type="button" data-salesman-view-lead="${escapeHtml(lead.id)}">
+        <div class="salesman-lead-copy">
+          <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+          <p>${escapeHtml(plan.action || lead.stage || "No task set")}</p>
+          <small>${escapeHtml(recentLabel)}</small>
+        </div>
+        <div class="salesman-lead-meta">
+          <span class="chip ${priorityClass(lead.stage)}">${escapeHtml(lead.stage || "Prospect")}</span>
+          <span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span>
+        </div>
+      </button>
+    `;
+  }).join("") || `<div class="timeline-empty"><strong>No leads found for this salesman.</strong><span>There are no assigned or generated leads to review yet.</span></div>`;
+  els.salesmanLeadsList.querySelectorAll("[data-salesman-view-lead]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedId = button.dataset.salesmanViewLead;
+      closeSalesmanLeadsViewer();
+      openLeadDrawer(button.dataset.salesmanViewLead);
       render();
     });
   });
+}
+
+function openSalesmanLeadsViewer(name) {
+  state.salesmanLeadsViewer = { name, person: salesmanByViewerName(name) };
+  renderSalesmanLeadsViewer();
+  els.salesmanLeadsDialog?.showModal();
+}
+
+function closeSalesmanLeadsViewer() {
+  els.salesmanLeadsDialog?.close();
 }
 
 function renderActionPlanPanel() {
@@ -5672,6 +5730,22 @@ function compareNewestLeadFirst(a, b) {
   return String(bDate).localeCompare(String(aDate))
     || String(b.created_at || b.imported_at || "").localeCompare(String(a.created_at || a.imported_at || ""))
     || String(a.company_name || "").localeCompare(String(b.company_name || ""));
+}
+
+function leadRecentTimestamp(lead) {
+  return String(
+    lead?.updated_at
+    || lead?.stage_updated_at
+    || lead?.last_activity
+    || lead?.created_at
+    || lead?.imported_at
+    || ""
+  );
+}
+
+function compareLeadRecentFirst(a, b) {
+  return leadRecentTimestamp(b).localeCompare(leadRecentTimestamp(a))
+    || compareNewestLeadFirst(a, b);
 }
 
 function leadActionPlanState(lead) {
@@ -6436,6 +6510,7 @@ function render() {
   renderDetail();
   renderLeadDrawer();
   renderSalesmenView();
+  renderSalesmanLeadsViewer();
   renderActivityView();
   renderPipelineFilterNotice();
   loadActivityAudioSources();
@@ -6764,6 +6839,10 @@ els.activitySearchClear?.addEventListener("click", () => {
 });
 
 els.activityResetFilters?.addEventListener("click", resetActivityFilters);
+els.closeSalesmanLeads?.addEventListener("click", closeSalesmanLeadsViewer);
+els.salesmanLeadsDialog?.addEventListener("close", () => {
+  state.salesmanLeadsViewer = null;
+});
 els.activityTypeShortcutChips?.addEventListener("click", event => {
   const button = event.target.closest("[data-activity-shortcut]");
   if (!button) return;
