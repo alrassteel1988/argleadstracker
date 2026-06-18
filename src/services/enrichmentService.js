@@ -48,6 +48,8 @@ function normalizeClaudeData(data = {}) {
   const list = value => Array.isArray(value) ? value.map(String).map(item => item.trim()).filter(Boolean) : [];
   return {
     sector_classification: String(data.sector_classification || "Other").trim(),
+    sector_sources: list(data.sector_sources),
+    sector_reasoning: String(data.sector_reasoning || "").trim(),
     estimated_scale: String(data.estimated_scale || "Unknown").trim(),
     key_personnel: personnel.map(person => ({
       name: String(person.name || "").trim(),
@@ -75,6 +77,8 @@ function claudeBusinessPrompt({ companyName, country, emirate, sector, website }
     "Schema:",
     JSON.stringify({
       sector_classification: "Fabricator | Contractor | Trader | Marine | Piling | Oil & Gas | Trailer | PEB | Other",
+      sector_sources: ["Company website", "Google Places business category", "LinkedIn company page", "Public project or news signals"],
+      sector_reasoning: "Short explanation of why the sector was chosen using only supported public evidence.",
       estimated_scale: "Small (<50 employees) | Medium (50-500) | Large (500+) | Unknown",
       key_personnel: [{ name: "", title: "" }],
       recent_projects: [""],
@@ -177,8 +181,13 @@ function mergeVerifiedAutoEnrichment(lead, selectedFields = null) {
   const projects = Array.isArray(data.recent_projects) ? data.recent_projects.join("; ") : "";
   const products = Array.isArray(data.steel_products_likely_needed) ? data.steel_products_likely_needed : [];
   const competitors = Array.isArray(data.competitors_likely_using) ? data.competitors_likely_using : [];
+  const sectorSources = Array.isArray(data.sector_sources) ? data.sector_sources : [];
   const remarks = [
     lead.products_services_remarks,
+    shouldApply("sector_classification") && data.sector_classification ? `Suggested sector: ${data.sector_classification}` : "",
+    shouldApply("sector_classification") && sectorSources.length ? `Sector sources: ${sectorSources.join(", ")}` : "",
+    shouldApply("sector_classification") && data.confidence ? `Sector confidence: ${data.confidence}${data.confidence_reason ? ` - ${data.confidence_reason}` : ""}` : "",
+    shouldApply("sector_classification") && data.sector_reasoning ? `Sector reasoning: ${data.sector_reasoning}` : "",
     shouldApply("recent_projects") && projects ? `Recent public project signals: ${projects}` : "",
     shouldApply("estimated_scale") && data.estimated_scale ? `Estimated scale: ${data.estimated_scale}` : "",
     shouldApply("estimated_annual_revenue") && data.estimated_annual_revenue ? `Estimated revenue: ${data.estimated_annual_revenue}` : "",

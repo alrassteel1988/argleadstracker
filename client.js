@@ -51,6 +51,7 @@ const state = {
   activityLoading: false,
   activityFiltersOpen: false,
   activityFilters: loadActivityFilters(),
+  activityWeekAnchor: today(),
   leadDrawerOpen: false,
   leadDrawerTab: "overview",
   leadDrawerLoading: false,
@@ -87,6 +88,12 @@ const els = {
   loginForm: document.querySelector("#loginForm"),
   loginMessage: document.querySelector("#loginMessage"),
   signedInUser: document.querySelector("#signedInUser"),
+  sidebarUserMenu: document.querySelector("#sidebarUserMenu"),
+  sidebarUserName: document.querySelector("#sidebarUserName"),
+  sidebarUserRole: document.querySelector("#sidebarUserRole"),
+  sidebarUserAvatar: document.querySelector("#sidebarUserAvatar"),
+  topbarPageTitle: document.querySelector("#topbarPageTitle"),
+  topbarContext: document.querySelector("#topbarContext"),
   syncStatusPill: document.querySelector("#syncStatusPill"),
   mobileAlertsBadge: document.querySelector("#mobileAlertsBadge"),
   installBanner: document.querySelector("#installBanner"),
@@ -227,7 +234,7 @@ const els = {
   activityFilterToggle: document.querySelector("#activityFilterToggle"),
   activityFilterBar: document.querySelector("#activityFilterBar"),
   activitySalesmanFilter: document.querySelector("#activitySalesmanFilter"),
-  activityTypePills: document.querySelector("#activityTypePills"),
+  activityTypeSelect: document.querySelector("#activityTypeSelect"),
   activityDatePresets: document.querySelector("#activityDatePresets"),
   activityDateFrom: document.querySelector("#activityDateFrom"),
   activityDateTo: document.querySelector("#activityDateTo"),
@@ -236,6 +243,18 @@ const els = {
   activityResetFilters: document.querySelector("#activityResetFilters"),
   activityResultsSummary: document.querySelector("#activityResultsSummary"),
   activityLoading: document.querySelector("#activityLoading"),
+  activityKpiActivities: document.querySelector("#activityKpiActivities"),
+  activityKpiActivitiesMeta: document.querySelector("#activityKpiActivitiesMeta"),
+  activityKpiOverdue: document.querySelector("#activityKpiOverdue"),
+  activityKpiUpcoming: document.querySelector("#activityKpiUpcoming"),
+  activityKpiWeek: document.querySelector("#activityKpiWeek"),
+  activityKpiWeekMeta: document.querySelector("#activityKpiWeekMeta"),
+  activityWeekRange: document.querySelector("#activityWeekRange"),
+  activityPrevWeek: document.querySelector("#activityPrevWeek"),
+  activityNextWeek: document.querySelector("#activityNextWeek"),
+  activityReminders: document.querySelector("#activityReminders"),
+  activityTypeShortcutChips: document.querySelector("#activityTypeShortcutChips"),
+  activityQuickLinks: document.querySelector("#activityQuickLinks"),
   leadDrawerShell: document.querySelector("#leadDrawerShell"),
   leadDrawerBackdrop: document.querySelector("#leadDrawerBackdrop"),
   leadDrawerContent: document.querySelector("#leadDrawerContent"),
@@ -488,8 +507,39 @@ function allActivityTypes() {
   return ["Note", "Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed", "Reminder"];
 }
 
+function selectedActivityType() {
+  const filters = state.activityFilters?.types || [];
+  return filters.length === 1 ? filters[0] : "all";
+}
+
+function setSelectedActivityType(type) {
+  updateActivityFilter("types", type && type !== "all" ? [type] : allActivityTypes());
+}
+
+function activityIconGlyph(type) {
+  const normalized = String(type || "").toLowerCase();
+  if (normalized.includes("phone")) return "☎";
+  if (normalized.includes("email")) return "@";
+  if (normalized.includes("meeting")) return "◌";
+  if (normalized.includes("visit")) return "⌖";
+  if (normalized.includes("video")) return "▣";
+  if (normalized.includes("quotation")) return "Q";
+  if (normalized.includes("order")) return "AED";
+  if (normalized.includes("reminder")) return "!";
+  if (normalized.includes("handoff")) return "↗";
+  return "•";
+}
+
 function isoDateFromDate(date) {
   return date.toISOString().slice(0, 10);
+}
+
+function formatDisplayDate(dateValue) {
+  const value = String(dateValue || "").slice(0, 10);
+  if (!value) return "";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function addDays(date, days) {
@@ -3141,7 +3191,7 @@ function renderOverdueBanner() {
 
   els.overdueBanner.classList.remove("hidden");
   els.overdueBanner.innerHTML = `
-    <div class="overdue-banner-icon" aria-hidden="true">!</div>
+    <div class="overdue-banner-icon" aria-hidden="true"></div>
     <div class="overdue-banner-copy">
       <strong>${escapeHtml(title)}</strong>
       <div>${subtitle}</div>
@@ -4201,6 +4251,60 @@ function renderHeaderSummary() {
   }
 }
 
+function renderSidebarIdentity() {
+  if (!state.currentUser) return;
+  if (els.sidebarUserName) els.sidebarUserName.textContent = state.currentUser.name || state.currentUser.email || "User";
+  if (els.sidebarUserRole) els.sidebarUserRole.textContent = state.currentUser.role || "user";
+  if (els.sidebarUserAvatar) {
+    const initials = String(state.currentUser.name || state.currentUser.email || "AR")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(token => token.charAt(0).toUpperCase())
+      .join("");
+    els.sidebarUserAvatar.textContent = initials || "AR";
+  }
+}
+
+function weekRangeLabel(anchorDate = state.activityWeekAnchor) {
+  const days = weekDays(anchorDate);
+  if (!days.length) return "";
+  const start = formatDisplayDate(days[0].date);
+  const end = formatDisplayDate(days[6].date);
+  return `${start} - ${end}`;
+}
+
+function renderTopbar() {
+  if (!els.topbarPageTitle || !els.topbarContext || !state.currentUser) return;
+  const currentWeekItems = activityWeeklyItems(state.activities || [], state.activityWeekAnchor);
+  const territory = state.currentUser.role === "admin"
+    ? "All territories"
+    : (state.currentUser.territory || "UAE");
+  const config = {
+    dashboard: {
+      title: "Dashboard",
+      context: `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} across ${territory}`
+    },
+    pipeline: {
+      title: "Pipeline",
+      context: `${state.leads.length} live lead${state.leads.length === 1 ? "" : "s"} in active tracking`
+    },
+    salesmen: {
+      title: "Salesmen",
+      context: "Team ownership, activity, and follow-up performance"
+    },
+    activity: {
+      title: "Activity",
+      context: `${weekRangeLabel()} · ${currentWeekItems.length} scheduled move${currentWeekItems.length === 1 ? "" : "s"}`
+    }
+  }[currentView] || {
+    title: "CRM",
+    context: `${state.leads.length} active records`
+  };
+  els.topbarPageTitle.textContent = config.title;
+  els.topbarContext.textContent = config.context;
+}
+
 function leadInitial(lead) {
   return String(lead?.company_name || "?").trim().charAt(0).toUpperCase() || "?";
 }
@@ -4448,10 +4552,14 @@ function autoEnrichmentBanner(lead) {
     ? new Date(lead.auto_enrichment.enriched_at).toLocaleDateString("en-AE", { year: "numeric", month: "short", day: "numeric" })
     : "recently";
   const warning = lead.auto_enrichment.low_confidence ? `<span>Low confidence - verify before saving.</span>` : "";
+  const data = autoEnrichmentData(lead);
+  const sector = String(data.sector_classification || "").trim();
+  const confidence = String(data.confidence || lead.auto_enrichment.confidence || "").trim();
   return `
     <div class="auto-enrichment-banner ${lead.auto_enrichment.low_confidence ? "low" : ""}">
       <div>
         <strong>${status === "failed" ? "Auto-enrichment unavailable" : `Auto-enriched on ${escapeHtml(date)} - please review and confirm.`}</strong>
+        ${sector ? `<span>Suggested sector: ${escapeHtml(sector)}${confidence ? ` (${escapeHtml(confidence)} confidence)` : ""}</span>` : ""}
         ${warning}
       </div>
       <div class="auto-enrichment-actions">
@@ -4474,10 +4582,34 @@ function autoValue(value) {
   return String(value || "").trim();
 }
 
+function sectorAutoReviewSummary(lead) {
+  const data = autoEnrichmentData(lead);
+  const sources = Array.isArray(data.sector_sources) ? data.sector_sources.filter(Boolean) : [];
+  const sector = String(data.sector_classification || "").trim();
+  const confidence = String(data.confidence || lead?.auto_enrichment?.confidence || "").trim();
+  const confidenceReason = String(data.confidence_reason || "").trim();
+  const reasoning = String(data.sector_reasoning || "").trim();
+  if (!sector && !sources.length && !confidence && !reasoning) return "";
+  return `
+    <section class="sector-review-card">
+      <div class="sector-review-head">
+        <div>
+          <strong>Suggested sector: ${escapeHtml(sector || "Not available")}</strong>
+          <span class="meta-label">AI maps only to the approved CRM sector list. Please confirm before applying.</span>
+        </div>
+        ${confidence ? `<span class="chip ${confidence.toLowerCase() === "high" ? "plan-upcoming" : confidence.toLowerCase() === "medium" ? "plan-soon" : "hot"}">${escapeHtml(confidence)} confidence</span>` : ""}
+      </div>
+      ${reasoning ? `<p class="sector-review-copy">${escapeHtml(reasoning)}</p>` : ""}
+      ${confidenceReason ? `<p class="sector-review-copy muted">${escapeHtml(confidenceReason)}</p>` : ""}
+      ${sources.length ? `<div class="chip-row">${sources.map(source => `<span class="chip">${escapeHtml(source)}</span>`).join("")}</div>` : ""}
+    </section>
+  `;
+}
+
 function autoReviewRows(lead) {
   const data = autoEnrichmentData(lead);
   return [
-    { key: "sector_classification", label: "Sector", current: lead.sector || lead.industry, auto: data.sector_classification },
+    { key: "sector_classification", label: "Suggested sector", current: lead.sector || lead.industry, auto: data.sector_classification },
     { key: "estimated_scale", label: "Scale", current: lead.estimated_scale, auto: data.estimated_scale },
     { key: "estimated_annual_revenue", label: "Annual revenue", current: lead.estimated_annual_revenue, auto: data.estimated_annual_revenue },
     { key: "key_personnel", label: "Key personnel", current: lead.key_personnel, auto: data.key_personnel },
@@ -4502,6 +4634,7 @@ function autoEnrichmentReviewPanel(lead) {
         </div>
         <button class="primary-button" type="button" data-confirm-auto-enrichment="${escapeHtml(lead.id)}">Apply All</button>
       </div>
+      ${sectorAutoReviewSummary(lead)}
       <div class="auto-review-table">
         <div class="auto-review-head"><span>Field</span><span>Current</span><span>Auto-Enriched</span><span></span></div>
         ${rows.map(row => `
@@ -5392,11 +5525,17 @@ function renderActivityFilters() {
   els.activitySalesmanFilter?.closest("label")?.classList.toggle("hidden", !admin);
   fillSelect(els.activitySalesmanFilter, state.settings.salesmen || [], "All Salesmen");
   els.activitySalesmanFilter.value = filters.salesmanId || "all";
-  els.activityTypePills.innerHTML = allActivityTypes().map(type => `
-    <button class="type-pill ${filters.types.includes(type) ? "active" : ""}" type="button" data-activity-type="${escapeHtml(type)}">
-      <span>${escapeHtml(ACTIVITY_TYPE_ICONS[type] || "")}</span>${escapeHtml(type)}
-    </button>
-  `).join("");
+  if (els.activityTypeSelect) {
+    els.activityTypeSelect.innerHTML = [`<option value="all">All types</option>`].concat(
+      allActivityTypes().map(type => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`)
+    ).join("");
+    els.activityTypeSelect.value = selectedActivityType();
+  }
+  if (els.activityTypeShortcutChips) {
+    els.activityTypeShortcutChips.innerHTML = allActivityTypes().map(type => `
+      <button class="type-pill ${selectedActivityType() === type ? "active" : ""}" type="button" data-activity-shortcut="${escapeHtml(type)}">${escapeHtml(type)}</button>
+    `).join("");
+  }
   els.activityDatePresets.innerHTML = ACTIVITY_PRESETS.map(preset => `
     <button class="date-preset ${filters.preset === preset ? "active" : ""}" type="button" data-activity-preset="${escapeHtml(preset)}">${escapeHtml(preset)}</button>
   `).join("");
@@ -5675,15 +5814,60 @@ function reminderCard(reminder, { compact = false } = {}) {
   const calendarUrl = googleCalendarUrl(reminder);
   const overdue = reminder.due_date && reminder.due_date < today();
   return `
-    <article class="reminder-card ${overdue ? "overdue" : ""}" data-reminder-lead="${escapeHtml(reminder.lead_id)}" tabindex="0">
+    <article class="reminder-card ${overdue ? "overdue" : "upcoming"}" data-reminder-lead="${escapeHtml(reminder.lead_id)}" tabindex="0">
       <div>
-        <span class="meta-label">${escapeHtml(reminder.reminder_type || "Follow-up")} ${due ? `- ${escapeHtml(due)}` : ""}</span>
-        <strong>${escapeHtml(compact ? (reminder.activity_required || reminder.text) : reminder.company_name)}</strong>
-        ${compact ? "" : `<p>${escapeHtml(reminder.activity_required || reminder.text || "Follow up with customer")}</p>`}
+        <strong>${escapeHtml(compact ? reminder.company_name : reminder.company_name)}</strong>
+        <p>${escapeHtml(compact ? (reminder.activity_required || reminder.text || "Follow up with customer") : (reminder.activity_required || reminder.text || "Follow up with customer"))}</p>
+        <span class="meta-label">${escapeHtml(due ? `${formatDisplayDate(reminder.due_date)}${reminder.due_time ? ` · ${reminder.due_time}` : ""}` : (reminder.reminder_type || "Reminder"))}</span>
       </div>
-      ${calendarUrl ? `<a class="calendar-link" href="${escapeHtml(calendarUrl)}" target="_blank" rel="noopener">Add to Google Calendar</a>` : ""}
+      ${calendarUrl ? `<a class="calendar-link icon-only" href="${escapeHtml(calendarUrl)}" target="_blank" rel="noopener" aria-label="Add reminder to Google Calendar" title="Add reminder to Google Calendar">📅</a>` : ""}
     </article>
   `;
+}
+
+function renderActivityReminders(upcoming, overdue) {
+  if (!els.activityReminders) return;
+  els.activityReminders.innerHTML = `
+    <div class="reminder-stack">
+      <div class="reminder-stack-header">
+        <span>Upcoming</span>
+        <em class="count-chip upcoming">${upcoming.length}</em>
+      </div>
+      <div class="reminder-grid compact">${upcoming.map(reminder => reminderCard(reminder, { compact: true })).join("") || `<p class="empty-copy">No upcoming reminders.</p>`}</div>
+    </div>
+    <div class="reminder-divider"></div>
+    <div class="reminder-stack">
+      <div class="reminder-stack-header">
+        <span>Overdue</span>
+        <em class="count-chip overdue">${overdue.length}</em>
+      </div>
+      <div class="reminder-grid compact">${overdue.map(reminder => reminderCard(reminder, { compact: true })).join("") || `<p class="empty-copy">No overdue reminders.</p>`}</div>
+    </div>
+  `;
+}
+
+function renderActivityQuickLinks() {
+  if (!els.activityQuickLinks) return;
+  const tasks = allReminders().length;
+  const activePipeline = state.leads.filter(lead => !["ACTIVE", "DORMANT"].includes(String(lead.stage || "").toUpperCase())).length;
+  const quotes = state.leads.filter(lead =>
+    Boolean(lead.quotation_ref)
+    || String(lead.activity_purpose || "").toLowerCase().includes("quotation")
+    || String(lead.stage || "").toUpperCase() === "SAMPLING"
+  ).length;
+  const accounts = state.leads.length;
+  const links = [
+    { label: "Tasks", icon: "✓", count: tasks, tone: tasks > 0 ? "danger" : "neutral", view: "activity", text: `${tasks} open` },
+    { label: "Pipeline", icon: "⎇", count: activePipeline, tone: "success", view: "pipeline", text: `${activePipeline} active` },
+    { label: "Quotes", icon: "Q", count: quotes, tone: quotes > 0 ? "warning" : "neutral", view: "pipeline", text: `${quotes} pending` },
+    { label: "Accounts", icon: "A", count: accounts, tone: "neutral", view: "pipeline", text: `${accounts} total` }
+  ];
+  els.activityQuickLinks.innerHTML = links.map(link => `
+    <button class="activity-quick-link" type="button" data-activity-quick-view="${escapeHtml(link.view)}">
+      <span class="activity-quick-link-copy"><i>${escapeHtml(link.icon)}</i><strong>${escapeHtml(link.label)}</strong></span>
+      <span class="count-chip ${escapeHtml(link.tone)}">${escapeHtml(link.text)}</span>
+    </button>
+  `).join("");
 }
 
 function activityDisplayDate(activity) {
@@ -5702,7 +5886,8 @@ function activityDateHeading(date) {
   const diff = Math.round((todayValue - dateValue) / 86_400_000);
   if (diff === 0) return "Today";
   if (diff === 1) return "Yesterday";
-  return dateValue.toLocaleDateString("en-AE", { month: "long", day: "numeric", year: "numeric" });
+  if (diff > 1 && diff <= 7) return `${diff} days ago`;
+  return formatDisplayDate(date);
 }
 
 function groupedActivities() {
@@ -5720,9 +5905,9 @@ function activityTypeClass(type) {
 
 function activitySummaryText(activities) {
   const uniqueSalesmen = new Set(activities.map(activity => activity.salesman_name || activity.assigned_salesman).filter(Boolean));
-  const from = state.activityFilters.dateFrom || "Any date";
-  const to = state.activityFilters.dateTo || "Any date";
-  return `Showing ${activities.length} activit${activities.length === 1 ? "y" : "ies"} - ${uniqueSalesmen.size} ${uniqueSalesmen.size === 1 ? "salesman" : "salespeople"} - ${from} to ${to}`;
+  const from = state.activityFilters.dateFrom ? formatDisplayDate(state.activityFilters.dateFrom) : "Any date";
+  const to = state.activityFilters.dateTo ? formatDisplayDate(state.activityFilters.dateTo) : "Any date";
+  return `Showing ${activities.length} activit${activities.length === 1 ? "y" : "ies"} · ${uniqueSalesmen.size} ${uniqueSalesmen.size === 1 ? "salesman" : "salespeople"} · ${from} to ${to}`;
 }
 
 function activityCardMarkup(activity) {
@@ -5732,23 +5917,34 @@ function activityCardMarkup(activity) {
   const isReminder = String(type).toLowerCase() === "reminder";
   const dueDate = activity.reminder_due_date || activity.due_date || "";
   const reminderOverdue = isReminder && dueDate && dueDate.slice(0, 10) < today() && activity.reminder_status !== "completed";
+  const statusLabel = isReminder
+    ? activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled")
+    : activity.stage || "Prospect";
+  const statusClass = isReminder ? (reminderOverdue ? "hot" : "plan-upcoming") : priorityClass(activity.stage);
+  const actionLabel = isReminder ? `${statusLabel}${dueDate ? ` · ${formatDisplayDate(dueDate)}` : ""}` : formatDisplayDate(activityDisplayDate(activity));
+  const timeLabel = activityDisplayTime(activity);
   return `
     <article class="activity-feed-item timeline-card ${activityTypeClass(type)}" data-activity-lead="${escapeHtml(activity.lead_id)}" tabindex="0">
-      <div class="activity-row">
-        <span class="activity-type-label"><i>${escapeHtml(ACTIVITY_TYPE_ICONS[type] || "ACT")}</i>${escapeHtml(type)}</span>
-        <span class="activity-actions">
+      <div class="activity-feed-head">
+        <span class="activity-type-icon" aria-hidden="true">${escapeHtml(activityIconGlyph(type))}</span>
+        <div class="activity-feed-body">
+          <strong>${escapeHtml(activity.company_name)}</strong>
+          <p class="activity-note clamp" data-expand-note>${escapeHtml(note)}</p>
+          ${admin ? `<span class="meta-label">Salesman: ${escapeHtml(activity.salesman_name || activity.assigned_salesman || "Unassigned")}</span>` : ""}
+        </div>
+      </div>
+      <div class="activity-feed-footer">
+        <div class="chip-row">
+          <span class="chip">${escapeHtml(actionLabel)}</span>
+          ${timeLabel ? `<span class="chip">${escapeHtml(timeLabel)}</span>` : ""}
+          <span class="chip ${statusClass}">${escapeHtml(statusLabel)}</span>
+          <span class="chip">${escapeHtml(type)}</span>
+          ${activity.quotation_ref ? `<button class="quote-ref-pill" type="button" data-quotation-ref="${escapeHtml(activity.quotation_ref)}">Quote ${escapeHtml(activity.quotation_ref)}</button>` : ""}
+        </div>
+        <div class="activity-footer-actions">
           ${activityEditButton(activity.lead_id, activity.activity_index, activity)}
           ${activityDeleteButton(activity.lead_id, activity.activity_index, activity)}
-        </span>
-      </div>
-      <strong>${escapeHtml(activity.company_name)}</strong>
-      ${admin ? `<span class="meta-label">Salesman: ${escapeHtml(activity.salesman_name || activity.assigned_salesman || "Unassigned")}</span>` : ""}
-      <p class="activity-note clamp" data-expand-note>${escapeHtml(note)}</p>
-      ${activity.quotation_ref ? `<button class="quote-ref-pill" type="button" data-quotation-ref="${escapeHtml(activity.quotation_ref)}">Quote ${escapeHtml(activity.quotation_ref)}</button>` : ""}
-      <div class="chip-row">
-        <span class="chip">${escapeHtml([activityDisplayDate(activity), activityDisplayTime(activity)].filter(Boolean).join(" "))}</span>
-        <span class="chip ${priorityClass(activity.stage)}">${escapeHtml(activity.stage || "No stage")}</span>
-        ${isReminder ? `<span class="chip ${reminderOverdue ? "hot" : "warm"}">${escapeHtml(activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled"))}${dueDate ? ` - ${escapeHtml(dueDate.slice(0, 10))}` : ""}</span>` : ""}
+        </div>
       </div>
       ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Review request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
       ${activity.correction ? `<span class="meta-label">Correction for ${escapeHtml(activity.target_activity_summary || "previous activity")}</span>` : ""}
@@ -5767,7 +5963,7 @@ function weekStart(dateValue = today()) {
   return date;
 }
 
-function weekDays(dateValue = today()) {
+function weekDays(dateValue = state.activityWeekAnchor || today()) {
   const start = weekStart(dateValue);
   return Array.from({ length: 7 }, (_, index) => {
     const date = addDays(start, index);
@@ -5785,8 +5981,8 @@ function calendarHourForTime(timeValue, fallbackIndex = 0) {
   return Math.min(17, Math.max(9, hour));
 }
 
-function activityWeeklyItems(activities) {
-  const days = weekDays();
+function activityWeeklyItems(activities, anchorDate = state.activityWeekAnchor || today()) {
+  const days = weekDays(anchorDate);
   const dayIndex = new Map(days.map((day, index) => [day.date, index]));
   const activityItems = activities
     .filter(activity => dayIndex.has(activityDisplayDate(activity)))
@@ -5828,19 +6024,17 @@ function activityWeeklyItems(activities) {
 
 function renderWeeklyActivityLog(activities) {
   if (!els.activityWeeklyLog) return;
-  const days = weekDays();
+  const days = weekDays(state.activityWeekAnchor);
   const hours = Array.from({ length: 9 }, (_, index) => 9 + index);
-  const items = activityWeeklyItems(activities);
-  const weekRange = `${days[0].date.slice(5)} to ${days[6].date.slice(5)}`;
+  const items = activityWeeklyItems(activities, state.activityWeekAnchor);
   els.activityWeeklyLog.innerHTML = `
-    <div class="weekly-log-header">
-      <div>
-        <strong>Weekly priority view</strong>
-        <span>${escapeHtml(weekRange)} - ${items.length} scheduled move${items.length === 1 ? "" : "s"}</span>
-      </div>
+    <div class="calendar-legend">
+      <span><i class="legend-swatch overdue"></i>Overdue</span>
+      <span><i class="legend-swatch upcoming"></i>Upcoming</span>
+      <span><i class="legend-swatch neutral"></i>Neutral</span>
     </div>
     <div class="weekly-calendar" style="--hour-count: ${hours.length}">
-      <div class="calendar-corner" aria-hidden="true">CAL</div>
+      <div class="calendar-corner-spacer" aria-hidden="true"></div>
       ${days.map(day => `
         <div class="calendar-day-head ${day.date === today() ? "today" : ""}">
           <strong>${escapeHtml(day.day)}</strong>
@@ -5865,6 +6059,9 @@ function renderWeeklyActivityLog(activities) {
       ${items.length ? "" : `<p class="calendar-empty">No activity scheduled this week.</p>`}
     </div>
   `;
+  if (els.activityWeekRange) els.activityWeekRange.textContent = weekRangeLabel(state.activityWeekAnchor);
+  if (els.activityKpiWeek) els.activityKpiWeek.textContent = String(items.length);
+  if (els.activityKpiWeekMeta) els.activityKpiWeekMeta.textContent = items.length ? "Items scheduled in this week view" : "No scheduled items in this week view";
   els.activityWeeklyLog.querySelectorAll("[data-calendar-lead]").forEach(button => {
     button.addEventListener("click", () => {
       state.selectedId = button.dataset.calendarLead;
@@ -5879,19 +6076,19 @@ function renderActivityView() {
   renderActivityFilters();
   const upcoming = allReminders().filter(reminder => !reminder.due_date || reminder.due_date >= today()).slice(0, 8);
   const overdue = allReminders().filter(reminder => reminder.due_date && reminder.due_date < today()).slice(0, 6);
-  const reminderHtml = `
-    <section class="reminder-section">
-      <div class="panel-header compact-header">
-        <h2>Upcoming Reminders</h2>
-        <span>${upcoming.length} upcoming</span>
-      </div>
-      <div class="reminder-grid">${upcoming.map(reminder => reminderCard(reminder)).join("") || `<p class="empty-copy">No upcoming reminders yet.</p>`}</div>
-      ${overdue.length ? `<div class="panel-header compact-header"><h2>Overdue</h2><span>${overdue.length} overdue</span></div><div class="reminder-grid">${overdue.map(reminder => reminderCard(reminder)).join("")}</div>` : ""}
-    </section>
-  `;
+  renderActivityReminders(upcoming, overdue);
+  renderActivityQuickLinks();
   els.activityLoading.classList.toggle("hidden", !state.activityLoading);
   els.activityResultsSummary.textContent = activitySummaryText(activities);
   renderWeeklyActivityLog(activities);
+  if (els.activityKpiActivities) els.activityKpiActivities.textContent = String(activities.length);
+  if (els.activityKpiActivitiesMeta) {
+    els.activityKpiActivitiesMeta.textContent = state.activityFilters.preset
+      ? `${state.activityFilters.preset} filter applied`
+      : "Filtered activity count";
+  }
+  if (els.activityKpiOverdue) els.activityKpiOverdue.textContent = String(overdue.length);
+  if (els.activityKpiUpcoming) els.activityKpiUpcoming.textContent = String(upcoming.length);
   const groups = groupedActivities();
   const timelineHtml = Object.keys(groups).sort().reverse().map(date => `
     <section class="timeline-day">
@@ -5906,7 +6103,7 @@ function renderActivityView() {
       <button class="ghost-button" type="button" data-reset-activity-empty>Reset Filters</button>
     </div>
   `;
-  els.activityFeed.innerHTML = reminderHtml + (state.activityLoading ? "" : (timelineHtml || emptyHtml));
+  els.activityFeed.innerHTML = state.activityLoading ? "" : (timelineHtml || emptyHtml);
 
   document.querySelectorAll("[data-activity-lead], [data-reminder-lead]").forEach(item => {
     const openLead = () => {
@@ -5930,6 +6127,9 @@ function renderActivityView() {
     });
   });
   document.querySelector("[data-reset-activity-empty]")?.addEventListener("click", resetActivityFilters);
+  els.activityQuickLinks?.querySelectorAll("[data-activity-quick-view]").forEach(button => {
+    button.addEventListener("click", () => setView(button.dataset.activityQuickView || "dashboard"));
+  });
   bindActivityEditButtons();
   bindDeleteButtons();
 }
@@ -6228,6 +6428,8 @@ function renderDetail() {
 function render() {
   renderMetrics();
   renderOverdueBanner();
+  renderSidebarIdentity();
+  renderTopbar();
   renderDashboardView();
   renderLeadList();
   renderKanbanView();
@@ -6247,6 +6449,7 @@ function applyView() {
   }
   const isDashboard = currentView === "dashboard";
   const isPipeline = currentView === "pipeline";
+  const isActivity = currentView === "activity";
   const isKanban = state.pipelineViewMode === "kanban";
   els.metricsPanel.classList.toggle("hidden", !(isDashboard || isPipeline));
   els.dashboardView.classList.toggle("hidden", !isDashboard);
@@ -6263,6 +6466,8 @@ function applyView() {
   document.querySelectorAll(".nav-item").forEach(item => {
     item.classList.toggle("active", item.dataset.view === currentView && !item.dataset.mobileAction);
   });
+  els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
+  document.body.classList.toggle("activity-mode", isActivity);
 }
 
 function closeMobileMenu() {
@@ -6525,14 +6730,8 @@ els.activitySalesmanFilter?.addEventListener("change", event => {
   updateActivityFilter("salesmanId", event.target.value);
 });
 
-els.activityTypePills?.addEventListener("click", event => {
-  const button = event.target.closest("[data-activity-type]");
-  if (!button) return;
-  const type = button.dataset.activityType;
-  const selected = state.activityFilters.types.includes(type)
-    ? state.activityFilters.types.filter(item => item !== type)
-    : [...state.activityFilters.types, type];
-  updateActivityFilter("types", selected.length ? selected : allActivityTypes());
+els.activityTypeSelect?.addEventListener("change", event => {
+  setSelectedActivityType(event.target.value);
 });
 
 els.activityDatePresets?.addEventListener("click", event => {
@@ -6565,6 +6764,22 @@ els.activitySearchClear?.addEventListener("click", () => {
 });
 
 els.activityResetFilters?.addEventListener("click", resetActivityFilters);
+els.activityTypeShortcutChips?.addEventListener("click", event => {
+  const button = event.target.closest("[data-activity-shortcut]");
+  if (!button) return;
+  const type = button.dataset.activityShortcut;
+  setSelectedActivityType(selectedActivityType() === type ? "all" : type);
+});
+els.activityPrevWeek?.addEventListener("click", () => {
+  state.activityWeekAnchor = isoDateFromDate(addDays(dateOnly(state.activityWeekAnchor), -7));
+  renderActivityView();
+  renderTopbar();
+});
+els.activityNextWeek?.addEventListener("click", () => {
+  state.activityWeekAnchor = isoDateFromDate(addDays(dateOnly(state.activityWeekAnchor), 7));
+  renderActivityView();
+  renderTopbar();
+});
 els.leadDrawerBackdrop?.addEventListener("click", closeLeadDrawer);
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && state.leadDrawerOpen) closeLeadDrawer();
