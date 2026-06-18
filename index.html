@@ -116,26 +116,34 @@
 
         <section class="overdue-banner hidden" id="overdueBanner" aria-live="polite"></section>
 
-        <section class="metrics" id="metricsPanel" aria-label="CRM metrics">
-          <article class="metric-open">
-            <span>Open Pipeline</span>
-            <strong id="metricValue">AED 0</strong>
-          </article>
-          <article class="metric-active">
-            <span>Active Customers</span>
-            <strong id="metricTotal">0</strong>
-            <small id="metricTotalSub">of 0</small>
-          </article>
-          <article class="metric-risk">
-            <span>At Risk</span>
-            <strong id="metricHot">0</strong>
-            <small>needs attention</small>
-          </article>
-          <article class="metric-due">
-            <span>Tasks Due</span>
-            <strong id="metricDue">0</strong>
-            <small id="metricDueSub">0 overdue</small>
-          </article>
+        <section class="panel metrics-shell" id="metricsShell">
+          <div class="panel-header">
+            <div>
+              <h2>Dashboard Overview</h2>
+              <span>Pipeline, customers, risk, and due follow-ups at a glance</span>
+            </div>
+          </div>
+          <section class="metrics" id="metricsPanel" aria-label="CRM metrics">
+            <article class="metric-open">
+              <span>Open Pipeline</span>
+              <strong id="metricValue">AED 0</strong>
+            </article>
+            <article class="metric-active">
+              <span>Active Customers</span>
+              <strong id="metricTotal">0</strong>
+              <small id="metricTotalSub">of 0</small>
+            </article>
+            <article class="metric-risk">
+              <span>At Risk</span>
+              <strong id="metricHot">0</strong>
+              <small>needs attention</small>
+            </article>
+            <article class="metric-due">
+              <span>Tasks Due</span>
+              <strong id="metricDue">0</strong>
+              <small id="metricDueSub">0 overdue</small>
+            </article>
+          </section>
         </section>
 
         <section class="dashboard-view" id="dashboardView">
@@ -265,6 +273,28 @@
               </div>
             </div>
           </div>
+          <div class="panel admin-task-panel hidden" id="adminTaskPanel">
+            <div class="panel-header">
+              <div>
+                <h2>Tasks</h2>
+                <span>Salesman account summary across all user accounts</span>
+              </div>
+              <strong class="attention-count" id="adminTaskSummary">0 accounts</strong>
+            </div>
+            <div class="admin-task-table-wrap">
+              <table class="admin-task-table">
+                <thead>
+                  <tr>
+                    <th>Full Name</th>
+                    <th>User Account Email</th>
+                    <th>Password</th>
+                    <th>Last Login</th>
+                  </tr>
+                </thead>
+                <tbody id="adminTaskTableBody"></tbody>
+              </table>
+            </div>
+          </div>
           <div class="panel market-snapshot-panel hidden" id="marketSnapshotPanel">
             <div class="panel-header market-snapshot-header">
               <div>
@@ -316,8 +346,11 @@
           </div>
           <div class="panel" id="relationshipFocusPanel">
             <div class="panel-header">
-              <h2>Todayâ€™s Relationship Focus</h2>
-              <span>Priority accounts</span>
+              <div>
+                <span>Needs Attention</span>
+                <h2>Cold relationships</h2>
+              </div>
+              <strong class="panel-icon">!</strong>
             </div>
             <div class="dashboard-activity-feed dashboard-focus-list" id="dashboardFocus"></div>
           </div>
@@ -332,8 +365,10 @@
           </div>
           <div class="panel" id="pipelineHealthPanel">
             <div class="panel-header">
-              <h2>Pipeline Health</h2>
-              <span>By status</span>
+              <div>
+                <h2>Pipeline Health</h2>
+                <span>By status</span>
+              </div>
             </div>
             <div class="status-grid" id="dashboardStatus"></div>
           </div>

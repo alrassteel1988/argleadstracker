@@ -129,6 +129,12 @@ async function createAuthUser({ email, password, name, territory, role = "salesm
   });
 }
 
+async function listAuthUsers(page = 1, perPage = 1000) {
+  return request(`/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
+    service: true
+  });
+}
+
 async function rest(path, options = {}) {
   return request(`/rest/v1/${path}`, options);
 }
@@ -166,6 +172,7 @@ module.exports = {
   currentSupabaseUser,
   isSupabaseAdminConfigured,
   isSupabaseConfigured,
+  listAuthUsers,
   rest,
   signIn,
   signOut,

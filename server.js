@@ -25,6 +25,7 @@ const {
   currentSupabaseUser,
   isSupabaseAdminConfigured,
   isSupabaseConfigured,
+  listAuthUsers,
   rest,
   signIn,
   signOut,
@@ -313,6 +314,21 @@ function publicUser(user) {
   if (!user) return null;
   const { password_hash, ...safe } = user;
   return safe;
+}
+
+function salesmanAccountSummary(user, fallback = {}) {
+  const safe = publicUser(user) || {};
+  return {
+    id: safe.id || fallback.id || "",
+    name: safe.name || safe.full_name || fallback.name || fallback.full_name || "",
+    full_name: safe.name || safe.full_name || fallback.name || fallback.full_name || "",
+    email: safe.email || fallback.email || "",
+    role: safe.role || fallback.role || "salesman",
+    territory: safe.territory || fallback.territory || "",
+    status: safe.status || fallback.status || "active",
+    last_login_at: safe.last_login_at || fallback.last_login_at || "",
+    password_display: "Hidden"
+  };
 }
 
 function newRecordId(prefix) {
@@ -2707,6 +2723,9 @@ async function handleApi(req, res, url) {
     if (!user || !passwordMatches(payload.password, user.password_hash)) {
       return sendJson(res, 401, { error: "Invalid email or password." });
     }
+    user.last_login_at = new Date().toISOString();
+    user.updated_at = new Date().toISOString();
+    writeDb(db);
     return sendJson(res, 200, { token: issueToken(user), user: publicUser(user) });
   }
 
@@ -3070,8 +3089,27 @@ async function handleApi(req, res, url) {
     if (user.role !== "admin") return sendJson(res, 403, { error: "Admin access required." });
     if (supabaseEnabled) {
       if (req.method === "GET") {
-        const profiles = await rest("profiles?select=*&order=full_name.asc", { token: user.token });
-        return sendJson(res, 200, profiles.map(profile => ({ ...profile, name: profile.full_name })));
+        const profiles = await rest("profiles?role=eq.salesman&select=*&order=full_name.asc", { token: user.token });
+        let authUsers = [];
+        try {
+          const authResult = await listAuthUsers();
+          authUsers = Array.isArray(authResult?.users) ? authResult.users : Array.isArray(authResult) ? authResult : [];
+        } catch {
+          authUsers = [];
+        }
+        const authById = new Map(authUsers.map(account => [account.id, account]));
+        return sendJson(res, 200, profiles.map(profile => {
+          const authAccount = authById.get(profile.id) || {};
+          return salesmanAccountSummary({
+            id: profile.id,
+            name: profile.full_name,
+            email: authAccount.email || "",
+            role: profile.role,
+            territory: profile.territory,
+            status: profile.status,
+            last_login_at: authAccount.last_sign_in_at || ""
+          });
+        }));
       }
       if (req.method === "POST") {
         if (!isSupabaseAdminConfigured()) return sendJson(res, 503, { error: "SUPABASE_SERVICE_ROLE_KEY is required to create salesman accounts." });
@@ -3087,7 +3125,11 @@ async function handleApi(req, res, url) {
         return sendJson(res, 201, { id: account.id, email: account.email, name, role: "salesman", territory, status: "active" });
       }
     }
-    if (req.method === "GET") return sendJson(res, 200, db.users.map(publicUser));
+    if (req.method === "GET") {
+      return sendJson(res, 200, (db.users || [])
+        .filter(item => String(item.role || "").toLowerCase() === "salesman")
+        .map(item => salesmanAccountSummary(item)));
+    }
     if (req.method === "POST") {
       const payload = await readBody(req);
       const email = String(payload.email || "").trim().toLowerCase();
@@ -3122,7 +3164,7 @@ async function handleApi(req, res, url) {
     const configuration = await currentCrmConfiguration(db, user, supabaseEnabled);
     if (supabaseEnabled) {
       const profilePath = isDirectorOrAdmin(user)
-        ? "profiles?role=eq.salesman&status=eq.active&select=*&order=full_name.asc"
+        ? "profiles?role=eq.salesman&select=*&order=full_name.asc"
         : `profiles?id=eq.${encodeURIComponent(user.id)}&select=*`;
       const profiles = await rest(profilePath, { token: user.token });
       return sendJson(res, 200, {
@@ -3136,7 +3178,11 @@ async function handleApi(req, res, url) {
         salesmen: profiles.map(profile => ({ ...profile, name: profile.full_name }))
       });
     }
-    const salesmen = isAdmin(user) ? db.salesmen : [publicUser(user)];
+    const salesmen = isAdmin(user)
+      ? (db.users || [])
+        .filter(item => String(item.role || "").toLowerCase() === "salesman")
+        .map(publicUser)
+      : [publicUser(user)];
     return sendJson(res, 200, {
       stages: COMPANY_STATUSES,
       priorities: configuration.priorities,

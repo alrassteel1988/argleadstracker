@@ -36,6 +36,7 @@ const LOST_REASON_LABELS = {
 const state = {
   leads: [],
   settings: { stages: [], priorities: [], territories: [], salesmen: [] },
+  userAccounts: [],
   selectedId: null,
   filters: { search: "", stage: "all", salesman: "all", priority: "all", territory: "all" },
   importedAfter: "",
@@ -80,6 +81,24 @@ const state = {
   lostReasonRequest: null,
   currentUser: null
 };
+
+const ADMIN_DASHBOARD_COLLAPSIBLES = [
+  { id: "metricsShell", storageKey: "admin-dashboard-kpi-overview-collapsed" },
+  { id: "marketIntelPanel", storageKey: "admin-dashboard-intel-overview-collapsed", refresh: "marketIntel" },
+  { id: "needsAttentionPanel", storageKey: "admin-dashboard-director-alerts-collapsed", refresh: "needsAttention" },
+  { id: "performancePanel", storageKey: "admin-dashboard-salesman-performance-collapsed", refresh: "performance" },
+  { id: "adminTaskPanel", storageKey: "admin-dashboard-tasks-collapsed", refresh: "tasks" },
+  { id: "marketSnapshotPanel", storageKey: "admin-dashboard-market-snapshot-collapsed", refresh: "marketSnapshot" },
+  { id: "actionPlanPanel", storageKey: "admin-dashboard-lead-action-plans-collapsed", refresh: "actionPlans" },
+  { id: "lossReasonsPanel", storageKey: "admin-dashboard-loss-reasons-collapsed", refresh: "lossReasons" },
+  { id: "relationshipFocusPanel", storageKey: "admin-dashboard-cold-relationships-collapsed" },
+  { id: "dashboardActivityPanel", storageKey: "admin-dashboard-latest-interactions-collapsed" },
+  { id: "pipelineHealthPanel", storageKey: "admin-dashboard-pipeline-health-collapsed" },
+  { id: "configAgentPanel", storageKey: "admin-dashboard-configuration-agent-collapsed" }
+];
+
+const dashboardCollapsibleTimers = new Map();
+let dashboardCollapsiblesReady = false;
 
 const els = {
   authScreen: document.querySelector("#authScreen"),
@@ -143,6 +162,7 @@ const els = {
   greetingLabel: document.querySelector("#greetingLabel"),
   dashboardUserName: document.querySelector("#dashboardUserName"),
   dashboardSubline: document.querySelector("#dashboardSubline"),
+  metricsShell: document.querySelector("#metricsShell"),
   metricsPanel: document.querySelector("#metricsPanel"),
   dashboardView: document.querySelector("#dashboardView"),
   dailyAiPanel: document.querySelector("#dailyAiPanel"),
@@ -173,6 +193,9 @@ const els = {
   needsAttentionList: document.querySelector("#needsAttentionList"),
   needsAttentionCount: document.querySelector("#needsAttentionCount"),
   performancePanel: document.querySelector("#performancePanel"),
+  adminTaskPanel: document.querySelector("#adminTaskPanel"),
+  adminTaskSummary: document.querySelector("#adminTaskSummary"),
+  adminTaskTableBody: document.querySelector("#adminTaskTableBody"),
   performanceStageFilter: document.querySelector("#performanceStageFilter"),
   performanceLeaderboard: document.querySelector("#performanceLeaderboard"),
   performanceChart: document.querySelector("#performanceChart"),
@@ -1439,6 +1462,10 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value || "");
   return date.toLocaleString("en-AE", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function lastLoginLabel(value) {
+  return value ? formatDateTime(value) : "Never logged in";
 }
 
 function daysSince(dateValue) {
@@ -3353,6 +3380,7 @@ function salesmanPerformanceRows() {
   const stage = state.performanceStage || "all";
   return analyticsSalesmen().map(person => {
     const name = salesmanName(person);
+    const accountStatus = String(typeof person === "string" ? "active" : person.status || "active").toLowerCase();
     const assignedLeads = state.leads.filter(lead => leadMatchesSalesman(lead, person));
     const generatedLeads = state.leads.filter(lead => leadGeneratedBySalesman(lead, person));
     const filteredStageLeads = stage === "all" ? assignedLeads : assignedLeads.filter(lead => lead.stage === stage);
@@ -3368,6 +3396,7 @@ function salesmanPerformanceRows() {
     ]);
     const row = {
       name,
+      accountStatus,
       totalAssigned: assignedLeads.length,
       totalGenerated: generatedLeads.length,
       filteredStageCount: filteredStageLeads.length,
@@ -3420,7 +3449,27 @@ function performanceRankColor(index, inactive = false) {
   if (inactive) return "#888780";
   if (index === 0) return "#378ADD";
   if (index === 1) return "#1D9E75";
-  return "#888780";
+  if (index === 2) return "#BA7517";
+  if (index === 3) return "#7F77DD";
+  return "#5E6B7C";
+}
+
+function ordinalLabel(position) {
+  const value = Number(position || 0);
+  const mod100 = value % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
+  if (value % 10 === 1) return `${value}st`;
+  if (value % 10 === 2) return `${value}nd`;
+  if (value % 10 === 3) return `${value}rd`;
+  return `${value}th`;
+}
+
+function performanceStateLabel(row, index) {
+  if (row.accountStatus === "inactive") return "Inactive";
+  if (index === 0) return "Top Performer";
+  if (row.performanceScore >= 70) return "Active";
+  if (row.performanceScore >= 35) return "Building";
+  return "Low Activity";
 }
 
 function lastActiveMarkup(dateValue) {
@@ -3457,18 +3506,33 @@ function scoreHeatmapClass(score) {
 }
 
 function leaderboardCard(row, index) {
-  const color = performanceRankColor(index);
-  const subtitle = index === 0 ? "1st - Most active" : index === 1 ? "2nd - Active" : `${index + 1}th - Active`;
+  const inactive = row.accountStatus === "inactive";
+  const color = performanceRankColor(index, inactive);
+  const rank = ordinalLabel(index + 1);
+  const stateLabel = performanceStateLabel(row, index);
+  const toneClass = inactive ? "is-inactive" : index === 0 ? "is-top" : row.performanceScore >= 70 ? "is-strong" : row.performanceScore >= 35 ? "is-mid" : "is-low";
+  const subtitle = inactive
+    ? `${rank} - Inactive`
+    : index === 0
+      ? "1st - Most active"
+      : index === 1
+        ? "2nd - Active"
+        : `${rank} - Active`;
   return `
-    <article class="sp-leader-card ${index === 0 ? "top" : ""}">
+    <article class="sp-leader-card ${index === 0 ? "top" : ""} ${toneClass}">
       <div class="sp-leader-top">
-        <div class="sp-avatar ${index === 0 ? "sp-av-blue" : index === 1 ? "sp-av-teal" : "sp-av-gray"}">${escapeHtml(salesmanInitials(row.name))}</div>
-        <div>
+        <div class="sp-avatar ${inactive ? "sp-av-gray" : index === 0 ? "sp-av-blue" : index === 1 ? "sp-av-teal" : "sp-av-gray"}">${escapeHtml(salesmanInitials(row.name))}</div>
+        <div class="sp-leader-copy">
           <p class="sp-leader-name">${escapeHtml(row.name)}</p>
           <p class="sp-leader-sub">${escapeHtml(subtitle)}</p>
         </div>
+        <div class="sp-leader-badges">
+          <span class="sp-rank-badge">${escapeHtml(rank)}</span>
+          <span class="sp-state-badge">${escapeHtml(stateLabel)}</span>
+        </div>
       </div>
       <div class="sp-score-row">
+        <span class="sp-score-label">Progress</span>
         <div class="sp-score-bar-bg"><div class="sp-score-bar-fill" style="width:${row.performanceScore}%; background:${color};"></div></div>
         <span class="sp-score-pct">${row.performanceScore}%</span>
       </div>
@@ -3482,39 +3546,9 @@ function leaderboardCard(row, index) {
   `;
 }
 
-function inactiveLeaderboardCard(rows) {
-  const names = rows.map(row => row.name).join(", ");
-  return `
-    <article class="sp-leader-card">
-      <div class="sp-leader-top">
-        <div class="sp-avatar sp-av-gray">+${rows.length}</div>
-        <div>
-          <p class="sp-leader-name">${rows.length} inactive</p>
-          <p class="sp-leader-sub">${escapeHtml(names || "No inactive salesmen")}</p>
-        </div>
-      </div>
-      <div class="sp-score-row">
-        <div class="sp-score-bar-bg"><div class="sp-score-bar-fill" style="width:0%; background:#888780;"></div></div>
-        <span class="sp-score-pct">0%</span>
-      </div>
-      <div class="sp-stats-row">
-        <div class="sp-stat-mini"><span class="sp-stat-mini-val">0</span><span class="sp-stat-mini-lbl">Activities</span></div>
-        <div class="sp-stat-mini"><span class="sp-stat-mini-val">0</span><span class="sp-stat-mini-lbl">Leads</span></div>
-        <div class="sp-stat-mini"><span class="sp-stat-mini-val">0</span><span class="sp-stat-mini-lbl">Follow-ups</span></div>
-      </div>
-      <p class="sp-stale"><span class="sp-stale-red">No activity logged</span></p>
-    </article>
-  `;
-}
-
 function renderPerformanceLeaderboard(rows) {
   if (!els.performanceLeaderboard) return;
-  const active = rows.filter(row => row.activitiesLogged > 0 || row.rawPerformanceScore > 0);
-  const inactive = rows.filter(row => row.activitiesLogged === 0);
-  const cards = active.slice(0, 2).map(leaderboardCard);
-  if (inactive.length) cards.push(inactiveLeaderboardCard(inactive));
-  else if (active[2]) cards.push(leaderboardCard(active[2], 2));
-  els.performanceLeaderboard.innerHTML = cards.join("") || `<p class="empty-copy">No salesman records available.</p>`;
+  els.performanceLeaderboard.innerHTML = rows.map(leaderboardCard).join("") || `<p class="empty-copy">No salesman records available.</p>`;
 }
 
 function chartLabelName(name) {
@@ -3568,8 +3602,8 @@ function renderPerformanceChart(rows) {
           grid: { display: false },
           offset: true,
           ticks: {
-            font: { size: 11 },
-            color: "#888780",
+            font: { size: 13, weight: "600" },
+            color: "#EAF2FF",
             maxRotation: 0,
             minRotation: 0,
             autoSkip: false,
@@ -3578,7 +3612,7 @@ function renderPerformanceChart(rows) {
         },
         y: {
           grid: { color: "rgba(136,135,128,0.15)" },
-          ticks: { font: { size: 11 }, color: "#888780", stepSize: 1, precision: 0 },
+          ticks: { font: { size: 11, weight: "600" }, color: "#C6D5F2", stepSize: 1, precision: 0 },
           beginAtZero: true
         }
       }
@@ -3638,11 +3672,164 @@ function renderPerformanceFeed(rows) {
   `;
 }
 
+function isAdminDashboardCollapseMode() {
+  return state.currentUser?.role === "admin" && currentView === "dashboard";
+}
+
+function directSectionHeader(section) {
+  return [...section.children].find(child =>
+    child.classList?.contains("panel-header") || child.classList?.contains("dashboard-section-header")
+  ) || null;
+}
+
+function ensureCollapsibleBody(section, header) {
+  let body = [...section.children].find(child => child.classList?.contains("dashboard-collapsible-body"));
+  if (body) return body;
+  body = document.createElement("div");
+  body.className = "dashboard-collapsible-body";
+  const inner = document.createElement("div");
+  inner.className = "dashboard-collapsible-body-inner";
+  body.appendChild(inner);
+  [...section.children].forEach(child => {
+    if (child !== header) inner.appendChild(child);
+  });
+  section.appendChild(body);
+  return body;
+}
+
+function ensurePanelHeaderActions(header) {
+  let actions = header.querySelector(".panel-header-actions");
+  if (actions) return actions;
+  actions = document.createElement("div");
+  actions.className = "panel-header-actions";
+  const children = [...header.children];
+  children.slice(1).forEach(child => actions.appendChild(child));
+  header.appendChild(actions);
+  return actions;
+}
+
+function refreshDashboardCollapsibleSection(sectionId) {
+  switch (sectionId) {
+    case "performancePanel":
+      renderPerformanceAnalytics();
+      break;
+    case "marketSnapshotPanel":
+      renderMarketSnapshotPanel();
+      break;
+    case "actionPlanPanel":
+      renderActionPlanPanel();
+      break;
+    case "lossReasonsPanel":
+      renderLossReasonsAnalytics();
+      break;
+    case "marketIntelPanel":
+      renderMarketIntelPanel();
+      break;
+    case "needsAttentionPanel":
+      renderNeedsAttentionPanel();
+      break;
+    case "adminTaskPanel":
+      renderAdminTaskAccountsPanel();
+      break;
+    default:
+      break;
+  }
+}
+
+function queueDashboardCollapsibleRefresh(sectionId) {
+  if (!sectionId) return;
+  clearTimeout(dashboardCollapsibleTimers.get(sectionId));
+  const timer = setTimeout(() => {
+    dashboardCollapsibleTimers.delete(sectionId);
+    refreshDashboardCollapsibleSection(sectionId);
+  }, 220);
+  dashboardCollapsibleTimers.set(sectionId, timer);
+}
+
+function updateDashboardCollapsibleButton(section) {
+  const button = section.querySelector(".panel-collapse-toggle");
+  if (!button) return;
+  const collapsed = section.classList.contains("is-collapsed");
+  button.setAttribute("aria-expanded", String(!collapsed));
+  button.setAttribute("title", collapsed ? "Expand section" : "Collapse section");
+  const label = button.querySelector(".panel-collapse-label");
+  if (label) label.textContent = collapsed ? "Expand section" : "Collapse section";
+}
+
+function setDashboardSectionCollapsed(section, collapsed, options = {}) {
+  if (!section) return;
+  const { persist = true, refresh = true, force = false } = options;
+  const nextCollapsed = Boolean(collapsed) && (force || section.classList.contains("collapsible-enabled"));
+  section.classList.toggle("is-collapsed", nextCollapsed);
+  const body = section.querySelector(".dashboard-collapsible-body");
+  if (body) body.setAttribute("aria-hidden", String(nextCollapsed));
+  updateDashboardCollapsibleButton(section);
+  if (persist && section.dataset.storageKey) {
+    localStorage.setItem(section.dataset.storageKey, String(nextCollapsed));
+  }
+  if (!nextCollapsed && refresh) {
+    queueDashboardCollapsibleRefresh(section.id);
+  }
+}
+
+function setupDashboardCollapsible(definition) {
+  const section = document.getElementById(definition.id);
+  if (!section) return;
+  const header = directSectionHeader(section);
+  if (!header) return;
+  section.dataset.storageKey = definition.storageKey;
+  if (definition.refresh) section.dataset.refreshOnExpand = definition.refresh;
+  ensureCollapsibleBody(section, header);
+  const actions = ensurePanelHeaderActions(header);
+  if (!actions.querySelector(".panel-collapse-toggle")) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "panel-collapse-toggle";
+    button.innerHTML = `
+      <span class="panel-collapse-label">Collapse section</span>
+      <span class="panel-collapse-icon" aria-hidden="true">▾</span>
+    `;
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      setDashboardSectionCollapsed(section, !section.classList.contains("is-collapsed"));
+    });
+    actions.appendChild(button);
+  }
+  updateDashboardCollapsibleButton(section);
+}
+
+function syncDashboardCollapsibles() {
+  const active = isAdminDashboardCollapseMode();
+  ADMIN_DASHBOARD_COLLAPSIBLES.forEach(definition => {
+    const section = document.getElementById(definition.id);
+    if (!section) return;
+    section.classList.toggle("collapsible-enabled", active);
+    const button = section.querySelector(".panel-collapse-toggle");
+    if (button) button.classList.toggle("hidden", !active);
+    if (!active) {
+      setDashboardSectionCollapsed(section, false, { persist: false, refresh: false, force: true });
+      return;
+    }
+    const collapsed = localStorage.getItem(definition.storageKey) === "true";
+    setDashboardSectionCollapsed(section, collapsed, { persist: false, refresh: false, force: true });
+  });
+}
+
+function initDashboardCollapsibles() {
+  if (dashboardCollapsiblesReady) return;
+  ADMIN_DASHBOARD_COLLAPSIBLES.forEach(setupDashboardCollapsible);
+  dashboardCollapsiblesReady = true;
+  syncDashboardCollapsibles();
+}
+
 function renderPerformanceAnalytics() {
   if (!els.performancePanel || state.currentUser?.role !== "admin") return;
   const rows = scoreSalesmanPerformanceRows(salesmanPerformanceRows());
   renderPerformanceLeaderboard(rows);
-  renderPerformanceChart(rows);
+  if (!els.performancePanel.classList.contains("is-collapsed")) {
+    renderPerformanceChart(rows);
+  }
   if (els.performanceTable) {
     els.performanceTable.innerHTML = rows.map(row => `
       <tr>
@@ -3655,6 +3842,39 @@ function renderPerformanceAnalytics() {
     `).join("");
   }
   renderPerformanceFeed(rows);
+}
+
+function renderAdminTaskAccountsPanel() {
+  if (!els.adminTaskPanel || !els.adminTaskTableBody || !els.adminTaskSummary) return;
+  const admin = state.currentUser?.role === "admin";
+  els.adminTaskPanel.classList.toggle("hidden", !admin);
+  if (!admin) return;
+  const rows = [...(state.userAccounts || [])]
+    .filter(account => String(account.role || "salesman").toLowerCase() === "salesman")
+    .sort((a, b) =>
+      String(a.full_name || a.name || "").localeCompare(String(b.full_name || b.name || ""))
+      || String(a.email || "").localeCompare(String(b.email || ""))
+    );
+  els.adminTaskSummary.textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"}`;
+  els.adminTaskTableBody.innerHTML = rows.length
+    ? rows.map(account => {
+      const fullName = account.full_name || account.name || "Unnamed salesman";
+      const status = String(account.status || "active").toLowerCase();
+      return `
+        <tr>
+          <td>
+            <div class="admin-task-name-cell">
+              <strong>${escapeHtml(fullName)}</strong>
+              <span class="chip ${status === "inactive" || status === "disabled" ? "warm" : "green"}">${escapeHtml(status === "disabled" ? "Inactive" : status === "inactive" ? "Inactive" : "Active")}</span>
+            </div>
+          </td>
+          <td>${escapeHtml(account.email || "No email recorded")}</td>
+          <td><span class="meta-label">${escapeHtml(account.password_display || "Hidden")}</span></td>
+          <td>${escapeHtml(lastLoginLabel(account.last_login_at))}</td>
+        </tr>
+      `;
+    }).join("")
+    : `<tr><td colspan="4"><div class="table-empty-state">No salesman accounts exist yet.</div></td></tr>`;
 }
 
 function leadSectorLabel(lead) {
@@ -4010,6 +4230,7 @@ async function applyConfigProposal() {
 function renderDashboardView() {
   renderNeedsAttentionPanel();
   renderPerformanceAnalytics();
+  renderAdminTaskAccountsPanel();
   renderMarketSnapshotPanel();
   renderActionPlanPanel();
   renderLossReasonsAnalytics();
@@ -4018,16 +4239,6 @@ function renderDashboardView() {
   renderAgentPanel();
   renderConfigAgentPanel();
   renderHeaderSummary();
-  const focusHeader = els.relationshipFocusPanel?.querySelector(".panel-header");
-  if (focusHeader) {
-    focusHeader.innerHTML = `
-      <div>
-        <span>Needs Attention</span>
-        <h2>Cold relationships</h2>
-      </div>
-      <strong class="panel-icon">!</strong>
-    `;
-  }
   const focus = [...state.leads]
     .sort((a, b) => {
       const healthRank = { RED: 0, AMBER: 1, GREEN: 2 };
@@ -4528,9 +4739,10 @@ function drawerSkeleton() {
 function detailField(label, value, options = {}) {
   if (!value) value = "Not added";
   const auto = options.auto ? `<span class="auto-tag">Auto</span>` : "";
+  const safeValue = escapeHtml(String(value));
   const content = options.href
-    ? `<a href="${escapeHtml(options.href)}" ${options.external ? 'target="_blank" rel="noopener"' : ""}>${escapeHtml(value)}</a>`
-    : escapeHtml(value);
+    ? `<a class="drawer-field-value" href="${escapeHtml(options.href)}" title="${safeValue}" ${options.external ? 'target="_blank" rel="noopener"' : ""}>${safeValue}</a>`
+    : `<span class="drawer-field-value" title="${safeValue}">${safeValue}</span>`;
   return `<article class="drawer-field ${options.overdue ? "overdue" : ""}"><span>${escapeHtml(label)}${auto}</span><strong>${content}</strong></article>`;
 }
 
@@ -4924,7 +5136,7 @@ function renderLeadDrawer() {
     <header class="drawer-header">
       <div class="drawer-title-row">
         <div class="drawer-avatar ${kanbanPriorityTone(lead.priority)}">${escapeHtml(leadInitial(lead))}</div>
-        <div>
+        <div class="drawer-title-copy">
           <h2 id="leadDrawerTitle">${escapeHtml(lead.company_name || "Lead")}</h2>
           <p>${escapeHtml([lead.sector || lead.industry, inferEmirate(lead), lead.territory].filter(Boolean).join(" - "))}</p>
         </div>
@@ -6515,6 +6727,7 @@ function render() {
   renderPipelineFilterNotice();
   loadActivityAudioSources();
   applyView();
+  syncDashboardCollapsibles();
   renderSyncStatus();
 }
 
@@ -6526,7 +6739,7 @@ function applyView() {
   const isPipeline = currentView === "pipeline";
   const isActivity = currentView === "activity";
   const isKanban = state.pipelineViewMode === "kanban";
-  els.metricsPanel.classList.toggle("hidden", !(isDashboard || isPipeline));
+  els.metricsShell?.classList.toggle("hidden", !(isDashboard || isPipeline));
   els.dashboardView.classList.toggle("hidden", !isDashboard);
   els.pipelineToolbar.classList.toggle("hidden", !isPipeline);
   els.pipelineView.classList.toggle("hidden", !isPipeline);
@@ -6604,8 +6817,19 @@ async function fetchAttentionFlags() {
   }
 }
 
+async function fetchSalesmanAccounts() {
+  try {
+    state.userAccounts = state.currentUser?.role === "admin"
+      ? await api("/api/users")
+      : [];
+  } catch {
+    state.userAccounts = [];
+  }
+}
+
 function showLogin(message = "") {
   state.currentUser = null;
+  state.userAccounts = [];
   state.overduePipelineOnly = false;
   if (overdueRefreshTimer) {
     clearInterval(overdueRefreshTimer);
@@ -6633,6 +6857,7 @@ function configureRoleUi(user) {
   els.exportLeadsPdf?.classList.toggle("hidden", !admin);
   els.openImportLeads?.classList.toggle("hidden", !admin);
   els.performancePanel?.classList.toggle("hidden", !admin);
+  els.adminTaskPanel?.classList.toggle("hidden", !admin);
   els.needsAttentionPanel?.classList.toggle("hidden", !admin);
   els.dailyAiPanel?.classList.toggle("hidden", admin);
   els.salesmanFollowupPanel?.classList.toggle("hidden", admin);
@@ -6670,6 +6895,7 @@ function startOverdueRefresh() {
 async function loadWorkspace() {
   await loadIntegrationStatus();
   state.settings = await api("/api/settings");
+  await fetchSalesmanAccounts();
   fillSelect(els.stageFilter, state.settings.stages, "All stages");
   fillSelect(els.priorityFilter, state.settings.priorities || [], "All priorities");
   fillSelect(els.territoryFilter, [...new Set([...(state.settings.territories || []), "UAE", "Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Ras Al Khaimah", "Fujairah", "Umm Al Quwain"])], "All territories");
@@ -7480,6 +7706,7 @@ document.querySelectorAll(".nav-item").forEach(item => {
 });
 
 initPwaShell();
+initDashboardCollapsibles();
 setInterval(() => {
   if (state.sync.pending) syncOutbox();
 }, 60_000);
