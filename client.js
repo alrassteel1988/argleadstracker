@@ -3708,6 +3708,24 @@ function pipelineFunnelStageMarkup(stage) {
 
 function pipelineFunnelChartMarkup(metrics, { title = "Pipeline Funnel Chart", subtitle = "Visual conversion flow from assigned leads to outcomes" } = {}) {
   const stages = pipelineFunnelStageRows(metrics);
+  const totalAssigned = Math.max(0, Number(metrics.totalAssignedLeads || 0));
+  const contactedOnly = Math.max(0, Number(metrics.contactedLeads || 0) - Number(metrics.openPipelineLeads || 0) - Number(metrics.wonDeals || 0) - Number(metrics.lostDeals || 0));
+  const uncontacted = Math.max(0, totalAssigned - Number(metrics.contactedLeads || 0));
+  const outcomeSlices = [
+    { label: "Uncontacted", count: uncontacted, color: "#cbd5e1" },
+    { label: "Contacted", count: contactedOnly, color: "#3b82f6" },
+    { label: "Active / Open", count: Number(metrics.openPipelineLeads || 0), color: "#f59e0b" },
+    { label: "Won", count: Number(metrics.wonDeals || 0), color: "#10b981" },
+    { label: "Lost", count: Number(metrics.lostDeals || 0), color: "#ef4444" }
+  ].filter(slice => slice.count > 0);
+  const totalSlices = outcomeSlices.reduce((sum, slice) => sum + slice.count, 0);
+  let cursor = 0;
+  const conicStops = (outcomeSlices.length ? outcomeSlices : [{ color: "#e2e8f0", count: 1 }]).map(slice => {
+    const start = cursor;
+    const pct = totalSlices ? (slice.count / totalSlices) * 100 : 100;
+    cursor += pct;
+    return `${slice.color} ${start}% ${cursor}%`;
+  }).join(", ");
   return `
     <section class="pipeline-funnel-chart-card">
       <div class="pipeline-funnel-chart-head">
@@ -3716,31 +3734,42 @@ function pipelineFunnelChartMarkup(metrics, { title = "Pipeline Funnel Chart", s
           <h3>${escapeHtml(subtitle)}</h3>
         </div>
       </div>
-      <div class="pipeline-funnel-chart-stack" role="img" aria-label="Visual pipeline funnel from assigned leads to contacted leads, active pipeline, won deals, and lost deals.">
-        ${stages.map(stage => {
-          const width = Math.max(12, Math.min(100, stage.percentage || 0));
-          const dropoffLabel = stage.dropoff == null ? "Baseline stage" : `Drop-off ${stage.dropoff}% from previous stage`;
-          return `
-            <article class="pipeline-funnel-chart-stage ${stage.tone}">
-              <div class="pipeline-funnel-chart-meta">
-                <div>
-                  <strong>${escapeHtml(stage.label)}</strong>
-                  <span>${escapeHtml(dropoffLabel)}</span>
+      <div class="pipeline-funnel-chart-layout" role="img" aria-label="Pie chart showing visual conversion flow from assigned leads to contacted, open pipeline, won, and lost outcomes.">
+        <div class="pipeline-funnel-chart-visual">
+          <div class="pipeline-funnel-pie" style="background: conic-gradient(${conicStops});">
+            <div class="pipeline-funnel-pie-center">
+              <strong>${escapeHtml(String(totalAssigned))}</strong>
+              <span>Assigned leads</span>
+            </div>
+          </div>
+          <div class="pipeline-funnel-pie-legend">
+            ${(outcomeSlices.length ? outcomeSlices : [{ label: "No active slices", count: 0, color: "#cbd5e1" }]).map(slice => `
+              <span><i style="background:${slice.color}"></i>${escapeHtml(slice.label)} <strong>${escapeHtml(String(slice.count))}</strong></span>
+            `).join("")}
+          </div>
+        </div>
+        <div class="pipeline-funnel-chart-stack">
+          ${stages.map(stage => {
+            const dropoffLabel = stage.dropoff == null ? "Baseline stage" : `Drop-off ${stage.dropoff}% from previous stage`;
+            return `
+              <article class="pipeline-funnel-chart-stage ${stage.tone}">
+                <div class="pipeline-funnel-chart-meta">
+                  <div>
+                    <strong>${escapeHtml(stage.label)}</strong>
+                    <span>${escapeHtml(dropoffLabel)}</span>
+                  </div>
+                  <div class="pipeline-funnel-chart-numbers">
+                    <b>${escapeHtml(String(stage.count))}</b>
+                    <small>${escapeHtml(String(stage.percentage))}% of assigned</small>
+                  </div>
                 </div>
-                <div class="pipeline-funnel-chart-numbers">
-                  <b>${escapeHtml(String(stage.count))}</b>
-                  <small>${escapeHtml(String(stage.percentage))}% of assigned</small>
+                <div class="pipeline-funnel-chart-progress">
+                  <i class="${stage.tone}" style="width:${Math.max(0, Math.min(100, stage.percentage || 0))}%"></i>
                 </div>
-              </div>
-              <div class="pipeline-funnel-chart-shape-wrap">
-                <div class="pipeline-funnel-chart-shape ${stage.tone}" style="width:${width}%">
-                  <span>${escapeHtml(stage.label)}</span>
-                  <strong>${escapeHtml(String(stage.count))}</strong>
-                </div>
-              </div>
-            </article>
-          `;
-        }).join("")}
+              </article>
+            `;
+          }).join("")}
+        </div>
       </div>
     </section>
   `;
