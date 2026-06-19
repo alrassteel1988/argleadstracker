@@ -1033,6 +1033,21 @@ textarea {
   padding: 16px 18px 18px;
 }
 
+#dashboardPipelineFunnelBody.pipelineFunnelGrid {
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr) minmax(380px, 1.1fr);
+  align-items: start;
+}
+
+#dashboardPipelineFunnelBody.pipelineFunnelGrid .pipeline-funnel-layout {
+  display: contents;
+}
+
+#dashboardPipelineFunnelBody.pipelineFunnelGrid .teamConversionCard,
+#dashboardPipelineFunnelBody.pipelineFunnelGrid .salesmanComparisonCard,
+#dashboardPipelineFunnelBody.pipelineFunnelGrid .pipelineFunnelChartCard {
+  align-self: stretch;
+}
+
 .pipeline-funnel-layout {
   display: grid;
   grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
@@ -1046,6 +1061,12 @@ textarea {
 .pipeline-funnel-table-card {
   display: grid;
   gap: 16px;
+  min-width: 0;
+}
+
+.teamConversionCard,
+.salesmanComparisonCard,
+.pipelineFunnelChartCard {
   min-width: 0;
 }
 
@@ -8686,6 +8707,14 @@ body,
 }
 
 @media (max-width: 980px) {
+  #dashboardPipelineFunnelBody.pipelineFunnelGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #dashboardPipelineFunnelBody.pipelineFunnelGrid .pipelineFunnelChartCard {
+    grid-column: 1 / -1;
+  }
+
   .sidebar {
     padding-top: 14px;
   }
@@ -8721,6 +8750,10 @@ body,
   }
 
   .pipeline-funnel-chart-layout {
+    grid-template-columns: 1fr;
+  }
+
+  #dashboardPipelineFunnelBody.pipelineFunnelGrid {
     grid-template-columns: 1fr;
   }
 

@@ -3727,7 +3727,7 @@ function pipelineFunnelChartMarkup(metrics, { title = "Pipeline Funnel Chart", s
     return `${slice.color} ${start}% ${cursor}%`;
   }).join(", ");
   return `
-    <section class="pipeline-funnel-chart-card">
+    <section class="pipeline-funnel-chart-card pipelineFunnelChartCard">
       <div class="pipeline-funnel-chart-head">
         <div>
           <span class="meta-label">${escapeHtml(title)}</span>
@@ -3800,7 +3800,7 @@ function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSale
       badge: `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`,
       html: `
         <div class="pipeline-funnel-detail">
-          <div class="pipeline-funnel-summary-card">
+          <div class="pipeline-funnel-summary-card teamConversionCard">
             <div class="pipeline-funnel-copy">
               <span class="meta-label">Detailed funnel</span>
               <h3>${escapeHtml(resolvedFocusName)}</h3>
@@ -3827,8 +3827,8 @@ function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSale
   return {
     badge: `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`,
     html: `
-      <div class="pipeline-funnel-layout">
-        <section class="pipeline-funnel-summary-card">
+      <div class="pipeline-funnel-layout pipelineFunnelGrid">
+        <section class="pipeline-funnel-summary-card teamConversionCard">
           <div class="pipeline-funnel-copy">
             <span class="meta-label">Team conversion snapshot</span>
             <h3>All salesmen</h3>
@@ -3839,7 +3839,7 @@ function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSale
           </div>
         </section>
         ${includeComparison ? `
-          <section class="pipeline-funnel-table-card">
+          <section class="pipeline-funnel-table-card salesmanComparisonCard">
             <div class="pipeline-funnel-table-head">
               <div>
                 <span class="meta-label">Salesman comparison</span>
@@ -3936,9 +3936,11 @@ function renderDashboardPipelineFunnel() {
     const view = pipelineFunnelMarkup(leads, { selectedSalesman, forceSingleSalesman: false, includeComparison: true });
     const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
     els.dashboardPipelineFunnelBadge.textContent = view.badge.replace("visible", "tracked");
+    els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelGrid");
     els.dashboardPipelineFunnelBody.innerHTML = `${view.html}${chart}`;
   } catch (error) {
     els.dashboardPipelineFunnelBadge.textContent = "Funnel unavailable";
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid");
     els.dashboardPipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load dashboard funnel.</strong>
