@@ -46,6 +46,7 @@ const state = {
   performanceStage: "all",
   marketSnapshotSalesman: "all",
   salesmanLeadsViewer: null,
+  actionPlanCollapsed: {},
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
   pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
   kanbanStage: localStorage.getItem("arg_kanban_stage") || "PROSPECT",
@@ -3811,6 +3812,8 @@ function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSale
               <article><span>Contacted</span><strong>${escapeHtml(String(metrics.contactedLeads))}</strong></article>
               <article><span>Open</span><strong>${escapeHtml(String(metrics.openPipelineLeads))}</strong></article>
               <article><span>Won</span><strong>${escapeHtml(String(metrics.wonDeals))}</strong></article>
+              <article><span>Lost</span><strong>${escapeHtml(String(metrics.lostDeals))}</strong></article>
+              <article><span>Conversion</span><strong>${escapeHtml(String(metrics.conversionRate))}%</strong></article>
             </div>
           </div>
           <div class="pipeline-funnel-stages">
@@ -3886,6 +3889,7 @@ function renderPipelineFunnel() {
   if (!els.pipelineFunnelBody || !els.pipelineFunnelBadge) return;
   if (state.leadsLoading && !state.leadsLoaded) {
     els.pipelineFunnelBadge.textContent = "Loading lead conversion";
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-skeleton">
         <span></span>
@@ -3900,10 +3904,13 @@ function renderPipelineFunnel() {
   try {
     const leads = filteredLeads();
     const view = pipelineFunnelMarkup(leads, { selectedSalesman: state.filters.salesman });
+    const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
     els.pipelineFunnelBadge.textContent = view.badge;
-    els.pipelineFunnelBody.innerHTML = view.html;
+    els.pipelineFunnelBody.classList.add("pipelineFunnelGrid");
+    els.pipelineFunnelBody.innerHTML = `${view.html}${chart}`;
   } catch (error) {
     els.pipelineFunnelBadge.textContent = "Funnel unavailable";
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load pipeline funnel.</strong>
@@ -3915,11 +3922,20 @@ function renderPipelineFunnel() {
 
 function renderDashboardPipelineFunnel() {
   if (!els.dashboardPipelineFunnelPanel || !els.dashboardPipelineFunnelBody || !els.dashboardPipelineFunnelBadge) return;
-  const admin = state.currentUser?.role === "admin";
-  els.dashboardPipelineFunnelPanel.classList.toggle("hidden", !admin);
-  if (!admin) return;
+  const role = String(state.currentUser?.role || "").toLowerCase();
+  const admin = ["admin", "manager", "director"].includes(role);
+  const visible = Boolean(state.currentUser);
+  const subtitle = els.dashboardPipelineFunnelPanel.querySelector(".panel-header > div > span");
+  els.dashboardPipelineFunnelPanel.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  if (subtitle) {
+    subtitle.textContent = admin
+      ? "Track lead conversion progress by salesman"
+      : "Track your lead conversion progress and sales performance";
+  }
   if (state.leadsLoading && !state.leadsLoaded) {
     els.dashboardPipelineFunnelBadge.textContent = "Loading lead conversion";
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
     els.dashboardPipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-skeleton">
         <span></span>
@@ -3931,16 +3947,46 @@ function renderDashboardPipelineFunnel() {
     return;
   }
   try {
-    const selectedSalesman = state.marketSnapshotSalesman || "all";
-    const leads = marketSnapshotLeads();
-    const view = pipelineFunnelMarkup(leads, { selectedSalesman, forceSingleSalesman: false, includeComparison: true });
-    const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
-    els.dashboardPipelineFunnelBadge.textContent = view.badge.replace("visible", "tracked");
-    els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelGrid");
+    if (admin) {
+      const selectedSalesman = state.marketSnapshotSalesman || "all";
+      const leads = marketSnapshotLeads();
+      const view = pipelineFunnelMarkup(leads, { selectedSalesman, forceSingleSalesman: false, includeComparison: true });
+      const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
+      els.dashboardPipelineFunnelBadge.textContent = view.badge.replace("visible", "tracked");
+      els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelSingleView");
+      els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelGrid");
+      els.dashboardPipelineFunnelBody.innerHTML = `${view.html}${chart}`;
+      return;
+    }
+
+    const leads = [...state.leads];
+    if (!leads.length) {
+      els.dashboardPipelineFunnelBadge.textContent = "0 assigned leads";
+      els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid");
+      els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelSingleView");
+      els.dashboardPipelineFunnelBody.innerHTML = `
+        <div class="pipeline-funnel-empty">
+          <strong>No pipeline data yet</strong>
+          <span>You do not have assigned leads in the current filters.</span>
+        </div>
+      `;
+      return;
+    }
+    const metrics = pipelineFunnelMetricsForLeads(leads);
+    const view = pipelineFunnelMarkup(leads, {
+      selectedSalesman: "all",
+      forceSingleSalesman: true,
+      focusName: state.currentUser?.name || "My leads",
+      includeComparison: false
+    });
+    const chart = pipelineFunnelChartMarkup(metrics);
+    els.dashboardPipelineFunnelBadge.textContent = `${leads.length} assigned lead${leads.length === 1 ? "" : "s"}`;
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid");
+    els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelSingleView");
     els.dashboardPipelineFunnelBody.innerHTML = `${view.html}${chart}`;
   } catch (error) {
     els.dashboardPipelineFunnelBadge.textContent = "Funnel unavailable";
-    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid");
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
     els.dashboardPipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load dashboard funnel.</strong>
@@ -6481,6 +6527,29 @@ function closeSalesmanLeadsViewer() {
   els.salesmanLeadsDialog?.close();
 }
 
+function actionPlanGroupKey(name) {
+  return `plan-${String(name || "salesman").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "salesman"}`;
+}
+
+function ensureActionPlanHeaderControls() {
+  if (!els.actionPlanPanel) return null;
+  const header = directSectionHeader(els.actionPlanPanel);
+  if (!header) return null;
+  const actions = ensurePanelHeaderActions(header);
+  let controls = actions.querySelector(".action-plan-bulk-actions");
+  if (!controls) {
+    controls = document.createElement("div");
+    controls.className = "action-plan-bulk-actions";
+    controls.innerHTML = `
+      <button class="small-action action-plan-toolbar-button" type="button" data-action-plan-bulk="expand">Expand All</button>
+      <button class="small-action action-plan-toolbar-button" type="button" data-action-plan-bulk="collapse">Collapse All</button>
+    `;
+    const collapseToggle = actions.querySelector(".panel-collapse-toggle");
+    actions.insertBefore(controls, collapseToggle || null);
+  }
+  return controls;
+}
+
 function renderActionPlanPanel() {
   if (!els.actionPlanPanel || !els.actionPlanList || !els.actionPlanSummary) return;
   const admin = state.currentUser?.role === "admin";
@@ -6493,59 +6562,100 @@ function renderActionPlanPanel() {
       return {
         person,
         name: salesmanName(person),
+        key: actionPlanGroupKey(salesmanName(person)),
         leads,
         overdue: leads.filter(lead => leadActionPlanState(lead).chipClass === "hot").length
       };
     })
     .filter(group => group.leads.length);
+  groups.forEach(group => {
+    if (typeof state.actionPlanCollapsed[group.key] !== "boolean") {
+      state.actionPlanCollapsed[group.key] = true;
+    }
+  });
   const totalLeads = groups.reduce((sum, group) => sum + group.leads.length, 0);
   els.actionPlanSummary.textContent = `${totalLeads} lead${totalLeads === 1 ? "" : "s"} tracked`;
+  const headerControls = ensureActionPlanHeaderControls();
+  if (headerControls) {
+    headerControls.classList.toggle("hidden", !groups.length);
+  }
   els.actionPlanList.innerHTML = groups.map(group => `
-    <article class="salesman-plan-card">
+    <article class="salesman-plan-card ${state.actionPlanCollapsed[group.key] ? "is-collapsed" : ""}" data-action-plan-card="${escapeHtml(group.key)}">
       <div class="salesman-plan-head">
-        <div>
+        <div class="salesman-plan-head-copy">
           <h3>${escapeHtml(group.name)}</h3>
           <p>${escapeHtml((group.person.territory || "").trim() || "Territory not set")} | ${group.leads.length} registered lead${group.leads.length === 1 ? "" : "s"} | ${group.overdue} overdue</p>
         </div>
         <div class="salesman-plan-head-meta">
           ${group.leads.length > 10 ? `<span class="chip plan-soon">Latest 10 visible</span>` : ""}
           <span class="chip ${group.overdue ? "hot" : "plan-upcoming"}">${group.overdue ? `${group.overdue} overdue` : "On track"}</span>
+          <button
+            class="small-action action-plan-toggle"
+            type="button"
+            data-action-plan-toggle="${escapeHtml(group.key)}"
+            aria-expanded="${String(!state.actionPlanCollapsed[group.key])}"
+            aria-controls="action-plan-body-${escapeHtml(group.key)}"
+            aria-label="${escapeHtml(`${state.actionPlanCollapsed[group.key] ? "Expand" : "Collapse"} ${group.name} lead action plan`)}"
+          >
+            <span>${state.actionPlanCollapsed[group.key] ? "Expand" : "Collapse"}</span>
+            <span class="action-plan-toggle-icon" aria-hidden="true">${state.actionPlanCollapsed[group.key] ? "+" : "-"}</span>
+          </button>
         </div>
       </div>
-      <div class="salesman-plan-table-wrap">
-        <table class="salesman-plan-table">
-          <thead>
-            <tr>
-              <th>Lead Registration Date</th>
-              <th>Lead Name</th>
-              <th>Next Action Plan Date</th>
-              <th>Purpose of Activity</th>
-              <th>Action Plan</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${group.leads.map(lead => {
-              const plan = leadActionPlanState(lead);
-              return `
-                <tr class="salesman-plan-row" data-action-plan-lead="${escapeHtml(lead.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
-                  <td data-label="Lead Registration Date">${escapeHtml(formatPlanDate(leadRegistrationDate(lead)) || "Not recorded")}</td>
-                  <td data-label="Lead Name">
-                    <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
-                    <span class="salesman-plan-row-meta">${escapeHtml(stageDisplayLabel(lead.stage))}</span>
-                  </td>
-                  <td data-label="Next Action Plan Date">${escapeHtml(formatPlanDate(lead.next_action_date) || "Not set")}</td>
-                  <td data-label="Purpose of Activity">${escapeHtml(normalizeActivityPurpose(lead.activity_purpose))}</td>
-                  <td data-label="Action Plan">${escapeHtml(plan.action)}</td>
-                  <td data-label="Status"><span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span></td>
-                </tr>
-              `;
-            }).join("")}
-          </tbody>
-        </table>
+      <div class="salesman-plan-table-region" id="action-plan-body-${escapeHtml(group.key)}" ${state.actionPlanCollapsed[group.key] ? "hidden" : ""}>
+        <div class="salesman-plan-table-wrap">
+          <table class="salesman-plan-table">
+            <thead>
+              <tr>
+                <th>Lead Registration Date</th>
+                <th>Lead Name</th>
+                <th>Next Action Plan Date</th>
+                <th>Purpose of Activity</th>
+                <th>Action Plan</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${group.leads.map(lead => {
+                const plan = leadActionPlanState(lead);
+                return `
+                  <tr class="salesman-plan-row" data-action-plan-lead="${escapeHtml(lead.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
+                    <td data-label="Lead Registration Date">${escapeHtml(formatPlanDate(leadRegistrationDate(lead)) || "Not recorded")}</td>
+                    <td data-label="Lead Name">
+                      <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+                      <span class="salesman-plan-row-meta">${escapeHtml(stageDisplayLabel(lead.stage))}</span>
+                    </td>
+                    <td data-label="Next Action Plan Date">${escapeHtml(formatPlanDate(lead.next_action_date) || "Not set")}</td>
+                    <td data-label="Purpose of Activity">${escapeHtml(normalizeActivityPurpose(lead.activity_purpose))}</td>
+                    <td data-label="Action Plan">${escapeHtml(plan.action)}</td>
+                    <td data-label="Status"><span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span></td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
       </div>
     </article>
   `).join("") || `<p class="empty-copy">No registered leads available for action-plan tracking yet.</p>`;
+  els.actionPlanList.querySelectorAll("[data-action-plan-toggle]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const key = button.dataset.actionPlanToggle;
+      state.actionPlanCollapsed[key] = !state.actionPlanCollapsed[key];
+      renderActionPlanPanel();
+    });
+  });
+  headerControls?.querySelectorAll("[data-action-plan-bulk]").forEach(button => {
+    button.onclick = () => {
+      const collapse = button.dataset.actionPlanBulk === "collapse";
+      groups.forEach(group => {
+        state.actionPlanCollapsed[group.key] = collapse;
+      });
+      renderActionPlanPanel();
+    };
+  });
   els.actionPlanList.querySelectorAll("[data-action-plan-lead]").forEach(row => {
     const openLead = () => {
       state.selectedId = row.dataset.actionPlanLead;
@@ -7713,7 +7823,7 @@ function configureRoleUi(user) {
   els.performancePanel?.classList.toggle("hidden", !admin);
   els.adminTaskPanel?.classList.toggle("hidden", !admin);
   els.needsAttentionPanel?.classList.toggle("hidden", !admin);
-  els.dashboardPipelineFunnelPanel?.classList.toggle("hidden", !admin);
+  els.dashboardPipelineFunnelPanel?.classList.toggle("hidden", false);
   els.dailyAiPanel?.classList.toggle("hidden", admin);
   els.salesmanFollowupPanel?.classList.toggle("hidden", admin);
   els.portfolioPanel?.classList.toggle("hidden", admin);
