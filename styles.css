@@ -2497,6 +2497,7 @@ textarea {
   font-weight: var(--weight-semibold);
 }
 
+.daily-ai-panel,
 .market-news-panel,
 .salesman-followup-panel,
 .portfolio-panel {
@@ -6140,10 +6141,17 @@ textarea {
 
 .daily-ai-panel {
   display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
-  gap: 16px;
-  align-items: center;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
+  gap: 18px;
+  align-items: start;
   border-left: 4px solid var(--color-accent-blue);
+  width: 100%;
+  min-width: 0;
+}
+
+.daily-ai-copy,
+.daily-ai-actions {
+  min-width: 0;
 }
 
 .daily-ai-copy span {
@@ -6162,18 +6170,24 @@ textarea {
 .daily-ai-copy p {
   color: var(--muted);
   margin-bottom: 0;
+  max-width: 38ch;
 }
 
 .daily-ai-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  align-self: stretch;
+  width: 100%;
+  overflow: visible;
 }
 
 .daily-ai-actions button {
-  flex: 0 0 auto;
-  white-space: nowrap;
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .daily-ai-summary {
@@ -7354,8 +7368,7 @@ dialog::backdrop {
   }
 
   .daily-ai-actions {
-    margin: 0 -4px;
-    padding-inline: 4px;
+    grid-template-columns: 1fr;
   }
 
   .pipeline-health-row {
