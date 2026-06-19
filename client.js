@@ -4889,14 +4889,14 @@ function marketNewsCardMarkup(item) {
   const source = item.source || "News source";
   const published = item.published_at ? formatDateTime(item.published_at) : "Recently published";
   return `
-    <article class="market-news-card">
+    <article class="market-news-card article-card">
       <div class="market-news-topline">
         <span class="source-badge">${escapeHtml(source)}</span>
         <span class="market-news-time">${escapeHtml(published)}</span>
       </div>
-      <strong>${escapeHtml(title)}</strong>
-      <p>${escapeHtml(description)}</p>
-      ${item.url ? `<a class="market-news-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Open full article</a>` : ""}
+      <strong class="article-title">${escapeHtml(title)}</strong>
+      <p class="article-description">${escapeHtml(description)}</p>
+      ${item.url ? `<a class="market-news-link open-article-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Open full article</a>` : ""}
     </article>
   `;
 }
