@@ -3780,7 +3780,16 @@ function pipelineFunnelChartMarkup(metrics, { title = "Pipeline Funnel Chart", s
   `;
 }
 
-function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSalesman = false, focusName = "", includeComparison = true } = {}) {
+function pipelineFunnelMarkup(
+  leads,
+  {
+    selectedSalesman = "all",
+    forceSingleSalesman = false,
+    focusName = "",
+    includeComparison = true,
+    includeSummary = true
+  } = {}
+) {
   const singleSalesmanView = forceSingleSalesman || !isAdminOrManager() || selectedSalesman !== "all";
   const resolvedFocusName = singleSalesmanView
     ? (focusName || (selectedSalesman !== "all" ? selectedSalesman : state.currentUser?.name || "My leads"))
@@ -3835,16 +3844,18 @@ function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSale
     badge: `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`,
     html: `
       <div class="pipeline-funnel-layout pipelineFunnelGrid">
-        <section class="pipeline-funnel-summary-card teamConversionCard">
-          <div class="pipeline-funnel-copy">
-            <span class="meta-label">Team conversion snapshot</span>
-            <h3>All salesmen</h3>
-            <p>${escapeHtml(String(rows.filter(row => row.totalAssignedLeads > 0).length))} salesmen currently match the active pipeline filters.</p>
-          </div>
-          <div class="pipeline-funnel-stages">
-            ${aggregateStages.map(pipelineFunnelStageMarkup).join("")}
-          </div>
-        </section>
+        ${includeSummary ? `
+          <section class="pipeline-funnel-summary-card teamConversionCard">
+            <div class="pipeline-funnel-copy">
+              <span class="meta-label">Team conversion snapshot</span>
+              <h3>All salesmen</h3>
+              <p>${escapeHtml(String(rows.filter(row => row.totalAssignedLeads > 0).length))} salesmen currently match the active pipeline filters.</p>
+            </div>
+            <div class="pipeline-funnel-stages">
+              ${aggregateStages.map(pipelineFunnelStageMarkup).join("")}
+            </div>
+          </section>
+        ` : ""}
         ${includeComparison ? `
           <section class="pipeline-funnel-table-card salesmanComparisonCard">
             <div class="pipeline-funnel-table-head">
@@ -3894,7 +3905,7 @@ function renderPipelineFunnel() {
   const teamView = isAdminOrManager();
   if (state.leadsLoading && !state.leadsLoaded) {
     els.pipelineFunnelBadge.textContent = "Loading lead conversion";
-    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-skeleton">
         <span></span>
@@ -3908,7 +3919,7 @@ function renderPipelineFunnel() {
     const leads = filteredLeads();
     if (!leads.length) {
       els.pipelineFunnelBadge.textContent = "0 visible leads";
-      els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
+      els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
       els.pipelineFunnelBody.innerHTML = `
         <div class="pipeline-funnel-empty">
           <strong>No funnel data for these filters.</strong>
@@ -3921,7 +3932,7 @@ function renderPipelineFunnel() {
       const view = pipelineFunnelMarkup(leads, { selectedSalesman: state.filters.salesman });
       const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
       els.pipelineFunnelBadge.textContent = view.badge;
-      els.pipelineFunnelBody.classList.remove("pipelineFunnelSingleView");
+      els.pipelineFunnelBody.classList.remove("pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
       els.pipelineFunnelBody.classList.add("pipelineFunnelGrid");
       els.pipelineFunnelBody.innerHTML = `${view.html}${chart}`;
       return;
@@ -3929,11 +3940,11 @@ function renderPipelineFunnel() {
 
     const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
     els.pipelineFunnelBadge.textContent = `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`;
-    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
     els.pipelineFunnelBody.innerHTML = chart;
   } catch (error) {
     els.pipelineFunnelBadge.textContent = "Funnel unavailable";
-    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load pipeline funnel.</strong>
@@ -3958,7 +3969,7 @@ function renderDashboardPipelineFunnel() {
   }
   if (state.leadsLoading && !state.leadsLoaded) {
     els.dashboardPipelineFunnelBadge.textContent = "Loading lead conversion";
-    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
     els.dashboardPipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-skeleton">
         <span></span>
@@ -3973,11 +3984,16 @@ function renderDashboardPipelineFunnel() {
     if (admin) {
       const selectedSalesman = state.marketSnapshotSalesman || "all";
       const leads = marketSnapshotLeads();
-      const view = pipelineFunnelMarkup(leads, { selectedSalesman, forceSingleSalesman: false, includeComparison: true });
+      const view = pipelineFunnelMarkup(leads, {
+        selectedSalesman,
+        forceSingleSalesman: false,
+        includeComparison: true,
+        includeSummary: false
+      });
       const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
       els.dashboardPipelineFunnelBadge.textContent = view.badge.replace("visible", "tracked");
       els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelSingleView");
-      els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelGrid");
+      els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelGrid", "pipelineFunnelAdminTwoUp");
       els.dashboardPipelineFunnelBody.innerHTML = `${view.html}${chart}`;
       return;
     }
@@ -3985,7 +4001,7 @@ function renderDashboardPipelineFunnel() {
     const leads = [...state.leads];
     if (!leads.length) {
       els.dashboardPipelineFunnelBadge.textContent = "0 assigned leads";
-      els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid");
+      els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelAdminTwoUp");
       els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelSingleView");
       els.dashboardPipelineFunnelBody.innerHTML = `
         <div class="pipeline-funnel-empty">
@@ -4004,12 +4020,12 @@ function renderDashboardPipelineFunnel() {
     });
     const chart = pipelineFunnelChartMarkup(metrics);
     els.dashboardPipelineFunnelBadge.textContent = `${leads.length} assigned lead${leads.length === 1 ? "" : "s"}`;
-    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid");
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelAdminTwoUp");
     els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelSingleView");
     els.dashboardPipelineFunnelBody.innerHTML = `${view.html}${chart}`;
   } catch (error) {
     els.dashboardPipelineFunnelBadge.textContent = "Funnel unavailable";
-    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
     els.dashboardPipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load dashboard funnel.</strong>
