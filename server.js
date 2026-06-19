@@ -4238,11 +4238,22 @@ function serveStatic(req, res, url) {
     res.writeHead(403);
     return res.end("Forbidden");
   }
+  const wantsSpaShell = !path.extname(filePath) || url.pathname.startsWith("/leads/");
 
   fs.readFile(filePath, (error, content) => {
     if (error) {
-      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-      return res.end("Not found");
+      if (!wantsSpaShell) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end("Not found");
+      }
+      return fs.readFile(path.join(ROOT, "index.html"), (indexError, indexContent) => {
+        if (indexError) {
+          res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+          return res.end("Not found");
+        }
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(indexContent);
+      });
     }
     const type = MIME_TYPES[path.extname(filePath).toLowerCase()] || "application/octet-stream";
     res.writeHead(200, { "Content-Type": type });

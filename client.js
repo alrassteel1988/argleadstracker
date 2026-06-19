@@ -39,6 +39,7 @@ const state = {
   settings: { stages: [], priorities: [], territories: [], salesmen: [] },
   userAccounts: [],
   selectedId: null,
+  lastNonLeadView: "dashboard",
   filters: { search: "", stage: "all", salesman: "all", priority: "all", territory: "all" },
   importedAfter: "",
   overduePipelineOnly: false,
@@ -263,6 +264,11 @@ const els = {
   kanbanSummary: document.querySelector("#kanbanSummary"),
   kanbanMobileStages: document.querySelector("#kanbanMobileStages"),
   kanbanBoard: document.querySelector("#kanbanBoard"),
+  leadDetailView: document.querySelector("#leadDetailView"),
+  leadAiSummaryPagePanel: document.querySelector("#leadAiSummaryPagePanel"),
+  leadAiSummaryPageContent: document.querySelector("#leadAiSummaryPageContent"),
+  leadDetailPagePanel: document.querySelector("#leadDetailPagePanel"),
+  leadDetailPageContent: document.querySelector("#leadDetailPageContent"),
   salesmenView: document.querySelector("#salesmenView"),
   salesmenGrid: document.querySelector("#salesmenGrid"),
   salesmenSummary: document.querySelector("#salesmenSummary"),
@@ -400,6 +406,80 @@ let quotationValidationTimer = null;
 let duplicateCheckTimer = null;
 let overdueRefreshTimer = null;
 let performanceChartInstance = null;
+
+function isLeadRoutePath(pathname = window.location.pathname) {
+  return /^\/leads\/[^/]+\/?$/.test(pathname);
+}
+
+function parseAppRoute(locationLike = window.location) {
+  const pathname = locationLike.pathname || "/";
+  const search = new URLSearchParams(locationLike.search || "");
+  if (isLeadRoutePath(pathname)) {
+    return {
+      view: "lead",
+      leadId: decodeURIComponent(pathname.replace(/^\/leads\//, "").replace(/\/$/, "")),
+      tab: search.get("tab") || "overview"
+    };
+  }
+  return {
+    view: "dashboard",
+    leadId: "",
+    tab: "overview"
+  };
+}
+
+function leadRouteUrl(leadId, tab = "overview") {
+  const safeLeadId = encodeURIComponent(String(leadId || "").trim());
+  const params = new URLSearchParams();
+  if (tab && tab !== "overview") params.set("tab", tab);
+  return params.toString() ? `/leads/${safeLeadId}?${params}` : `/leads/${safeLeadId}`;
+}
+
+function currentRouteState() {
+  if (currentView === "lead" && state.selectedId) {
+    return {
+      view: "lead",
+      leadId: state.selectedId,
+      tab: state.leadDrawerTab || "overview",
+      returnView: state.lastNonLeadView || "pipeline"
+    };
+  }
+  return {
+    view: currentView,
+    returnView: state.lastNonLeadView || currentView || "dashboard"
+  };
+}
+
+function syncBrowserRoute(options = {}) {
+  const replace = Boolean(options.replace);
+  const routeState = currentRouteState();
+  const nextUrl = routeState.view === "lead" && routeState.leadId
+    ? leadRouteUrl(routeState.leadId, routeState.tab)
+    : "/";
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
+  if (currentUrl === nextUrl && !options.forceState) return;
+  window.history[replace ? "replaceState" : "pushState"](routeState, "", nextUrl);
+}
+
+function applyRouteState(route, options = {}) {
+  const parsed = route?.view ? route : parseAppRoute();
+  const nextView = parsed.view === "lead" ? "lead" : (parsed.view || "dashboard");
+  if (nextView !== "lead") {
+    state.leadDrawerOpen = false;
+    currentView = nextView;
+    if (currentView !== "lead") state.lastNonLeadView = currentView;
+    return;
+  }
+  currentView = "lead";
+  state.selectedId = parsed.leadId || state.selectedId;
+  state.leadDrawerTab = parsed.tab || "overview";
+  state.leadDrawerOpen = true;
+  if (parsed.returnView && parsed.returnView !== "lead") {
+    state.lastNonLeadView = parsed.returnView;
+  } else if (!options.keepReturnView && (!state.lastNonLeadView || state.lastNonLeadView === "lead")) {
+    state.lastNonLeadView = "pipeline";
+  }
+}
 
 loadLeadAiSummaryCache();
 
@@ -821,18 +901,18 @@ function leadAiCard(title, content, options = {}) {
   `;
 }
 
-function renderLeadAiSummaryPanel(lead) {
-  if (!els.leadAiSummaryPanel || !els.leadAiSummaryContent || !els.leadDrawerShell) return;
+function renderLeadAiSummaryPanel(lead, options = {}) {
+  const panel = options.panel || els.leadAiSummaryPagePanel;
+  const content = options.content || els.leadAiSummaryPageContent;
+  if (!panel || !content) return;
   const summaryState = state.leadAiSummary || emptyLeadAiSummaryState();
   const summary = summaryState.data;
   const confidence = summary?.confidence || "Medium";
   const stale = Boolean(summaryState.cached && summaryState.generatedAt && (lead?.last_activity || "") > summaryState.generatedAt.slice(0, 10));
-  els.leadDrawerShell.dataset.mobileTab = summaryState.mobileTab || "details";
-  els.leadDrawerShell.classList.toggle("ai-minimized", Boolean(summaryState.minimized));
-  els.leadAiSummaryPanel.classList.toggle("minimized", Boolean(summaryState.minimized));
+  panel.classList.toggle("minimized", Boolean(summaryState.minimized));
 
   if (summaryState.minimized) {
-    els.leadAiSummaryContent.innerHTML = `
+    content.innerHTML = `
       <button class="lead-ai-restore" type="button" data-toggle-lead-ai-minimize="false">
         <span>AI Summary</span>
         <strong>${escapeHtml(lead.company_name || "Lead")}</strong>
@@ -875,16 +955,18 @@ function renderLeadAiSummaryPanel(lead) {
     body = `<div class="lead-ai-empty-state"><strong>AI summary not generated yet.</strong><p>Open a lead and refresh the summary after activities, reminders, or PMRs are logged.</p></div>`;
   }
 
-  els.leadAiSummaryContent.innerHTML = `
+  content.innerHTML = `
     <header class="lead-ai-header">
-      <div class="lead-ai-title-copy">
+      <div class="lead-ai-header-top">
         <span class="meta-label">AI Leads Overall Summary</span>
+        <div class="lead-ai-header-actions">
+          <button class="ghost-button" type="button" data-refresh-lead-ai-summary="${escapeHtml(lead.id)}">${summaryState.loading ? "Refreshing..." : "Refresh AI Summary"}</button>
+          <button class="ghost-button lead-ai-minimize-button" type="button" data-toggle-lead-ai-minimize="true">Minimize</button>
+        </div>
+      </div>
+      <div class="lead-ai-title-copy">
         <h2>${escapeHtml(lead.company_name || "Lead summary")}</h2>
         <p>Executive snapshot of CRM history, follow-up risk, and market signals.</p>
-      </div>
-      <div class="lead-ai-header-actions">
-        <button class="ghost-button" type="button" data-refresh-lead-ai-summary="${escapeHtml(lead.id)}">${summaryState.loading ? "Refreshing..." : "Refresh AI Summary"}</button>
-        <button class="ghost-button lead-ai-minimize-button" type="button" data-toggle-lead-ai-minimize="true">Minimize</button>
       </div>
     </header>
     <div class="lead-ai-toolbar">
@@ -3259,7 +3341,10 @@ function renderImportCompleteStep() {
   });
   els.importLeadsActions.querySelector("[data-import-view]").addEventListener("click", async () => {
     state.importedAfter = importState.sessionStart;
+    state.lastNonLeadView = "pipeline";
     currentView = "pipeline";
+    state.leadDrawerOpen = false;
+    syncBrowserRoute({ replace: false });
     els.importLeadsDialog.close();
     await loadLeads();
     setToast("Showing leads from the latest import session.", "success");
@@ -3524,7 +3609,10 @@ function openOverduePipeline() {
   state.filters = { ...state.filters, search: "", stage: "all", priority: "all", territory: "all", salesman: "all" };
   state.pipelineViewMode = "list";
   localStorage.setItem("arg_pipeline_view_mode", state.pipelineViewMode);
+  state.lastNonLeadView = "pipeline";
   currentView = "pipeline";
+  state.leadDrawerOpen = false;
+  syncBrowserRoute({ replace: false });
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -3540,7 +3628,10 @@ function openOverdueActivityReport() {
   };
   state.activityFiltersOpen = true;
   saveActivityFilters();
+  state.lastNonLeadView = "activity";
   currentView = "activity";
+  state.leadDrawerOpen = false;
+  syncBrowserRoute({ replace: false });
   render();
   fetchActivities();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -4762,6 +4853,7 @@ function weekRangeLabel(anchorDate = state.activityWeekAnchor) {
 function renderTopbar() {
   if (!els.topbarPageTitle || !els.topbarContext || !state.currentUser) return;
   const currentWeekItems = activityWeeklyItems(state.activities || [], state.activityWeekAnchor);
+  const selectedLead = state.leads.find(item => item.id === state.selectedId);
   const territory = state.currentUser.role === "admin"
     ? "All territories"
     : (state.currentUser.territory || "UAE");
@@ -4781,6 +4873,10 @@ function renderTopbar() {
     activity: {
       title: "Activity",
       context: `${weekRangeLabel()} · ${currentWeekItems.length} scheduled move${currentWeekItems.length === 1 ? "" : "s"}`
+    },
+    lead: {
+      title: selectedLead?.company_name || "Lead Detail",
+      context: [selectedLead?.assigned_salesman, stageDisplayLabel(selectedLead?.stage), selectedLead?.territory].filter(Boolean).join(" · ") || "AI summary, CRM timeline, reminders, and PMRs"
     }
   }[currentView] || {
     title: "CRM",
@@ -4937,18 +5033,15 @@ async function saveStageWithLostPrompt(lead, stage, existingLossData = null) {
   return { updated };
 }
 
-function openLeadDrawer(leadId, tab = "overview") {
+function loadLeadDetailData(leadId) {
   const lead = state.leads.find(item => item.id === leadId);
   if (!lead) return;
-  state.selectedId = leadId;
-  state.leadDrawerOpen = true;
-  state.leadDrawerTab = tab;
   state.leadDrawerLoading = true;
   state.leadDrawerPmrs = [];
   state.leadDrawerIntel = [];
   state.leadDrawerHandoffs = [];
   primeLeadAiSummaryState(lead);
-  renderLeadDrawer();
+  render();
   loadLeadAiSummary(leadId).catch(() => {});
   Promise.allSettled([
     api(`/api/leads/${encodeURIComponent(leadId)}/pmrs`),
@@ -4977,25 +5070,38 @@ function openLeadDrawer(leadId, tab = "overview") {
     .finally(() => {
       if (state.selectedId === leadId) {
         state.leadDrawerLoading = false;
-        renderLeadDrawer();
+        render();
         loadActivityAudioSources();
       }
     });
 }
 
-function closeLeadDrawer() {
+function openLeadDrawer(leadId, tab = "overview", options = {}) {
+  const lead = state.leads.find(item => item.id === leadId);
+  if (!lead) return;
+  if (currentView !== "lead") {
+    state.lastNonLeadView = currentView === "lead" ? (state.lastNonLeadView || "pipeline") : currentView;
+  }
+  state.selectedId = leadId;
+  state.leadDrawerOpen = true;
+  state.leadDrawerTab = tab;
+  currentView = "lead";
+  if (!options.skipHistory) syncBrowserRoute({ replace: Boolean(options.replaceHistory) });
+  closeMobileMenu();
+  loadLeadDetailData(leadId);
+}
+
+function closeLeadDrawer(options = {}) {
   state.leadDrawerOpen = false;
   state.leadDrawerLoading = false;
   resetLeadAiSummaryState();
-  if (els.leadDrawerShell) {
-    els.leadDrawerShell.classList.add("closing");
-    setTimeout(() => {
-      els.leadDrawerShell.classList.add("hidden");
-      els.leadDrawerShell.classList.remove("open", "closing");
-      els.leadDrawerShell.setAttribute("aria-hidden", "true");
-      els.leadDrawerMobileSwitch?.classList.add("hidden");
-    }, 240);
+  currentView = state.lastNonLeadView && state.lastNonLeadView !== "lead" ? state.lastNonLeadView : "pipeline";
+  if (options.useBrowserBack && window.history.state?.view === "lead" && window.history.length > 1) {
+    window.history.back();
+    return;
   }
+  syncBrowserRoute({ replace: Boolean(options.replaceHistory) });
+  render();
 }
 
 function drawerSkeleton() {
@@ -5388,14 +5494,40 @@ function renderDrawerIntel(lead) {
 
 function renderLeadDrawer() {
   const lead = state.leads.find(item => item.id === state.selectedId);
-  if (!state.leadDrawerOpen || !lead || !els.leadDrawerShell) return;
-  els.leadDrawerShell.classList.remove("hidden", "closing");
-  els.leadDrawerMobileSwitch?.classList.remove("hidden");
-  requestAnimationFrame(() => els.leadDrawerShell.classList.add("open"));
-  els.leadDrawerShell.setAttribute("aria-hidden", "false");
   const admin = ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
   const tabs = ["overview", "activities", "pmr", "reminders", "intel", "notes"];
   const tabLabels = { overview: "Overview", activities: "Activities", pmr: "PMR", reminders: "Reminders", intel: "Intel", notes: "Notes" };
+  const isLeadView = currentView === "lead";
+
+  if (els.leadDrawerShell) {
+    els.leadDrawerShell.classList.add("hidden");
+    els.leadDrawerShell.classList.remove("open", "closing");
+    els.leadDrawerShell.setAttribute("aria-hidden", "true");
+  }
+  els.leadDrawerMobileSwitch?.classList.add("hidden");
+
+  if (!els.leadDetailView || !els.leadAiSummaryPagePanel || !els.leadAiSummaryPageContent || !els.leadDetailPageContent) return;
+  if (!isLeadView) {
+    els.leadDetailView.classList.add("hidden");
+    els.leadAiSummaryPageContent.innerHTML = "";
+    els.leadDetailPageContent.innerHTML = "";
+    return;
+  }
+
+  if (!lead) {
+    els.leadDetailView.classList.remove("hidden");
+    els.leadAiSummaryPageContent.innerHTML = "";
+    els.leadDetailPageContent.innerHTML = `
+      <div class="empty-state lead-detail-empty-state">
+        <strong>Lead not found</strong>
+        <span>The requested lead could not be loaded for this account.</span>
+        <button class="ghost-button" type="button" id="leadDetailBack">Back to leads</button>
+      </div>
+    `;
+    bindLeadDrawerEvents();
+    return;
+  }
+
   const body = state.leadDrawerLoading ? drawerSkeleton() : ({
     overview: renderDrawerOverview(lead),
     activities: renderDrawerActivities(lead),
@@ -5404,15 +5536,19 @@ function renderLeadDrawer() {
     intel: renderDrawerIntel(lead),
     notes: renderDrawerNotes(lead)
   }[state.leadDrawerTab] || renderDrawerOverview(lead));
-  els.leadDrawerContent.innerHTML = `
-    <header class="drawer-header">
+
+  els.leadDetailView.classList.remove("hidden");
+  els.leadDetailPageContent.innerHTML = `
+    <div class="lead-detail-page-toolbar">
+      <button class="ghost-button lead-detail-back-button" type="button" id="leadDetailBack">Back to ${escapeHtml(state.lastNonLeadView === "activity" ? "Activity" : state.lastNonLeadView === "salesmen" ? "Salesmen" : state.lastNonLeadView === "dashboard" ? "Dashboard" : "Pipeline")}</button>
+    </div>
+    <header class="drawer-header lead-page-header">
       <div class="drawer-title-row">
         <div class="drawer-avatar ${kanbanPriorityTone(lead.priority)}">${escapeHtml(leadInitial(lead))}</div>
         <div class="drawer-title-copy">
           <h2 id="leadDrawerTitle">${escapeHtml(lead.company_name || "Lead")}</h2>
           <p>${escapeHtml([lead.sector || lead.industry, inferEmirate(lead), lead.territory].filter(Boolean).join(" - "))}</p>
         </div>
-        <button class="drawer-close" type="button" id="leadDrawerClose" aria-label="Close lead drawer">&times;</button>
       </div>
       <div class="drawer-badges">
         ${admin ? `<select class="drawer-stage-select ${drawerStageClass(lead.stage)}" id="drawerStageSelect">${(state.settings.stages || []).map(stage => `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(drawerStageLabel(stage))}</option>`).join("")}</select>` : `<span class="drawer-stage-pill ${drawerStageClass(lead.stage)}">${escapeHtml(drawerStageLabel(lead.stage))}</span>`}
@@ -5420,30 +5556,21 @@ function renderLeadDrawer() {
         <span class="chip">${escapeHtml(formatAED(lead.estimated_value))}</span>
       </div>
     </header>
-    <nav class="drawer-tabs">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}">${tabLabels[tab]}</button>`).join("")}</nav>
-    <div class="drawer-body">${body}</div>
+    <nav class="drawer-tabs lead-detail-tabs">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}">${tabLabels[tab]}</button>`).join("")}</nav>
+    <div class="drawer-body lead-detail-page-body">${body}</div>
   `;
-  if (els.leadDrawerMobileSwitch) {
-    els.leadDrawerMobileSwitch.querySelectorAll("[data-lead-drawer-mobile-tab]").forEach(button => {
-      button.classList.toggle("active", button.dataset.leadDrawerMobileTab === state.leadAiSummary.mobileTab);
-    });
-  }
-  renderLeadAiSummaryPanel(lead);
+  renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });
   bindLeadDrawerEvents();
 }
 
 function bindLeadDrawerEvents() {
-  document.querySelector("#leadDrawerClose")?.addEventListener("click", closeLeadDrawer);
-  document.querySelectorAll("[data-lead-drawer-mobile-tab]").forEach(button => {
-    button.addEventListener("click", () => {
-      state.leadAiSummary.mobileTab = button.dataset.leadDrawerMobileTab || "details";
-      renderLeadDrawer();
-    });
+  document.querySelector("#leadDetailBack")?.addEventListener("click", () => {
+    closeLeadDrawer({ useBrowserBack: true });
   });
   document.querySelectorAll("[data-toggle-lead-ai-minimize]").forEach(button => {
     button.addEventListener("click", () => {
       state.leadAiSummary.minimized = button.dataset.toggleLeadAiMinimize === "true";
-      renderLeadDrawer();
+      render();
     });
   });
   document.querySelectorAll("[data-refresh-lead-ai-summary]").forEach(button => {
@@ -5456,7 +5583,8 @@ function bindLeadDrawerEvents() {
   document.querySelectorAll("[data-drawer-tab]").forEach(button => {
     button.addEventListener("click", () => {
       state.leadDrawerTab = button.dataset.drawerTab;
-      renderLeadDrawer();
+      if (currentView === "lead") syncBrowserRoute({ replace: true });
+      render();
       loadActivityAudioSources();
     });
   });
@@ -5470,7 +5598,7 @@ function bindLeadDrawerEvents() {
       const result = await saveStageWithLostPrompt(lead, stage);
       if (result.cancelled) {
         event.target.value = previous;
-        renderLeadDrawer();
+        render();
         return;
       }
       Object.assign(lead, result.updated);
@@ -5479,7 +5607,7 @@ function bindLeadDrawerEvents() {
     } catch (error) {
       lead.stage = previous;
       setToast(error.message, "error");
-      renderLeadDrawer();
+      render();
     }
   });
   document.querySelectorAll("[data-drawer-log-activity]").forEach(button => {
@@ -5576,8 +5704,7 @@ function bindLeadDrawerEvents() {
       const updated = await api(`/api/leads/${lead.id}`, { method: "PATCH", body: JSON.stringify({ notes }) });
       Object.assign(lead, updated);
       setToast("Notes updated.", "success");
-      renderLeadDrawer();
-      renderDetail();
+      render();
     } catch (error) {
       setToast(error.message, "error");
     }
@@ -5787,16 +5914,12 @@ function bindKanbanEvents() {
 
   document.querySelectorAll("[data-kanban-lead]").forEach(card => {
     card.addEventListener("click", () => {
-      state.selectedId = card.dataset.kanbanLead;
       openLeadDrawer(card.dataset.kanbanLead);
-      renderDetail();
     });
     card.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        state.selectedId = card.dataset.kanbanLead;
         openLeadDrawer(card.dataset.kanbanLead);
-        renderDetail();
       }
     });
     card.addEventListener("dragstart", event => {
@@ -7035,14 +7158,18 @@ function applyView() {
   const isDashboard = currentView === "dashboard";
   const isPipeline = currentView === "pipeline";
   const isActivity = currentView === "activity";
+  const isLead = currentView === "lead";
   const isKanban = state.pipelineViewMode === "kanban";
   els.metricsShell?.classList.toggle("hidden", !(isDashboard || isPipeline));
   els.dashboardView.classList.toggle("hidden", !isDashboard);
   els.pipelineToolbar.classList.toggle("hidden", !isPipeline);
   els.pipelineView.classList.toggle("hidden", !isPipeline);
   els.pipelineView?.classList.toggle("kanban-mode", isPipeline && isKanban);
+  els.pipelineView?.classList.toggle("detail-routed", isPipeline);
   els.pipelineListPanel?.classList.toggle("hidden", isKanban);
   els.kanbanPanel?.classList.toggle("hidden", !isKanban);
+  els.detailPanel?.classList.toggle("hidden", true);
+  els.leadDetailView?.classList.toggle("hidden", !isLead);
   els.salesmenView.classList.toggle("hidden", currentView !== "salesmen");
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll("[data-pipeline-mode]").forEach(button => {
@@ -7070,22 +7197,34 @@ function toggleMobileMenu() {
 
 function setView(view) {
   if (state.currentUser?.role !== "admin" && view === "salesmen") view = "dashboard";
+  if (view !== "lead") state.lastNonLeadView = view;
   currentView = view;
-  applyView();
-  if (view === "pipeline") renderDetail();
+  state.leadDrawerOpen = view === "lead";
+  syncBrowserRoute({ replace: false });
   closeMobileMenu();
+  render();
 }
 
 async function loadLeads() {
   state.leads = await api("/api/leads");
   await mergePendingActivitiesIntoState();
   if (!state.leads.some(lead => lead.id === state.selectedId)) {
+    if (currentView === "lead") {
+      state.selectedId = null;
+    } else {
+      state.selectedId = state.leads[0]?.id || null;
+    }
+  }
+  if (currentView !== "lead" && !state.selectedId) {
     state.selectedId = state.leads[0]?.id || null;
   }
   await fetchActivities();
   await fetchAttentionFlags();
   await fetchMarketIntel();
   render();
+  if (currentView === "lead" && state.selectedId) {
+    loadLeadDetailData(state.selectedId);
+  }
 }
 
 async function loadIntegrationStatus() {
@@ -7172,6 +7311,7 @@ function configureRoleUi(user) {
 
 function showApp(user) {
   state.currentUser = user;
+  applyRouteState(window.history.state || parseAppRoute(), { keepReturnView: true });
   els.signedInUser.textContent = `${user.name} · ${user.role}`;
   configureRoleUi(user);
   els.authScreen.classList.add("hidden");
@@ -7245,6 +7385,14 @@ async function init() {
     showLogin("Please sign in to continue.");
   }
 }
+
+window.addEventListener("popstate", event => {
+  applyRouteState(event.state || parseAppRoute(), { keepReturnView: true });
+  render();
+  if (currentView === "lead" && state.selectedId) {
+    loadLeadDetailData(state.selectedId);
+  }
+});
 
 els.searchInput.addEventListener("input", event => {
   state.importedAfter = "";
