@@ -91,6 +91,7 @@ const state = {
   quickLog: { leadId: "", type: "In-Person Meeting", nearbyLeadId: "" },
   sync: { online: navigator.onLine, syncing: false, pending: 0, failed: 0 },
   marketIntel: { items: [], heat_map: [], disabled: false },
+  marketNews: { items: [], disabled: false, loading: false, error: "", reason: "", fetched_at: "" },
   editingLeadId: "",
   editingOriginalStage: "",
   editingLostData: null,
@@ -188,6 +189,9 @@ const els = {
   dailyAiPanel: document.querySelector("#dailyAiPanel"),
   dailyAiGreeting: document.querySelector("#dailyAiGreeting"),
   dailyAiSummary: document.querySelector("#dailyAiSummary"),
+  marketNewsPanel: document.querySelector("#marketNewsPanel"),
+  marketNewsMeta: document.querySelector("#marketNewsMeta"),
+  marketNewsFeed: document.querySelector("#marketNewsFeed"),
   salesmanFollowupPanel: document.querySelector("#salesmanFollowupPanel"),
   salesmanFollowupGroups: document.querySelector("#salesmanFollowupGroups"),
   portfolioPanel: document.querySelector("#portfolioPanel"),
@@ -3887,13 +3891,12 @@ function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSale
 
 function renderPipelineFunnel() {
   if (!els.pipelineFunnelBody || !els.pipelineFunnelBadge) return;
+  const teamView = isAdminOrManager();
   if (state.leadsLoading && !state.leadsLoaded) {
     els.pipelineFunnelBadge.textContent = "Loading lead conversion";
-    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid");
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-skeleton">
-        <span></span>
-        <span></span>
         <span></span>
         <span></span>
       </div>
@@ -3903,14 +3906,34 @@ function renderPipelineFunnel() {
 
   try {
     const leads = filteredLeads();
-    const view = pipelineFunnelMarkup(leads, { selectedSalesman: state.filters.salesman });
+    if (!leads.length) {
+      els.pipelineFunnelBadge.textContent = "0 visible leads";
+      els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
+      els.pipelineFunnelBody.innerHTML = `
+        <div class="pipeline-funnel-empty">
+          <strong>No funnel data for these filters.</strong>
+          <span>Try another salesman, stage, priority, territory, or search term.</span>
+        </div>
+      `;
+      return;
+    }
+    if (teamView) {
+      const view = pipelineFunnelMarkup(leads, { selectedSalesman: state.filters.salesman });
+      const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
+      els.pipelineFunnelBadge.textContent = view.badge;
+      els.pipelineFunnelBody.classList.remove("pipelineFunnelSingleView");
+      els.pipelineFunnelBody.classList.add("pipelineFunnelGrid");
+      els.pipelineFunnelBody.innerHTML = `${view.html}${chart}`;
+      return;
+    }
+
     const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
-    els.pipelineFunnelBadge.textContent = view.badge;
-    els.pipelineFunnelBody.classList.add("pipelineFunnelGrid");
-    els.pipelineFunnelBody.innerHTML = `${view.html}${chart}`;
+    els.pipelineFunnelBadge.textContent = `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`;
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
+    els.pipelineFunnelBody.innerHTML = chart;
   } catch (error) {
     els.pipelineFunnelBadge.textContent = "Funnel unavailable";
-    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid");
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load pipeline funnel.</strong>
@@ -4831,6 +4854,7 @@ function renderPortfolioAnalytics() {
 
 function renderSalesmanDashboard() {
   renderDailyAiPanel();
+  renderMarketNewsPanel();
   renderSalesmanFollowups();
   renderPortfolioAnalytics();
 }
@@ -4857,6 +4881,60 @@ function renderDailyAiPanel() {
     <span>${Number(metrics.overdue_next_actions || 0)} overdue</span>
     <span>${trend == null ? "trend baseline pending" : `${trend >= 0 ? "Up" : "Down"} ${Math.abs(trend)}% activity`}</span>
   `;
+}
+
+function marketNewsCardMarkup(item) {
+  const title = item.title || "Untitled article";
+  const description = item.description || "No summary available for this article yet.";
+  const source = item.source || "News source";
+  const published = item.published_at ? formatDateTime(item.published_at) : "Recently published";
+  return `
+    <article class="market-news-card">
+      <div class="market-news-topline">
+        <span class="source-badge">${escapeHtml(source)}</span>
+        <span class="market-news-time">${escapeHtml(published)}</span>
+      </div>
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(description)}</p>
+      ${item.url ? `<a class="market-news-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Open full article</a>` : ""}
+    </article>
+  `;
+}
+
+function renderMarketNewsPanel() {
+  if (!els.marketNewsPanel || !els.marketNewsFeed) return;
+  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  els.marketNewsPanel.classList.toggle("hidden", !salesman);
+  if (!salesman) return;
+  if (els.marketNewsMeta) {
+    els.marketNewsMeta.textContent = state.marketNews.loading
+      ? "Refreshing..."
+      : state.marketNews.fetched_at
+        ? `Updated ${formatDateTime(state.marketNews.fetched_at)}`
+        : "";
+  }
+  if (state.marketNews.loading) {
+    els.marketNewsFeed.innerHTML = `
+      <div class="market-news-skeleton" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    `;
+    return;
+  }
+  if (state.marketNews.error) {
+    els.marketNewsFeed.innerHTML = `<p class="empty-copy">Market news is temporarily unavailable. ${escapeHtml(state.marketNews.error)}</p>`;
+    return;
+  }
+  if (state.marketNews.disabled) {
+    els.marketNewsFeed.innerHTML = `<p class="empty-copy">${escapeHtml(state.marketNews.reason || "Market news is disabled until NEWS_API_KEY is configured on the server.")}</p>`;
+    return;
+  }
+  const items = (state.marketNews.items || []).slice(0, 5);
+  els.marketNewsFeed.innerHTML = items.length
+    ? items.map(marketNewsCardMarkup).join("")
+    : `<p class="empty-copy">No market news articles are available right now. Fresh steel and construction headlines will appear here when NewsAPI returns results.</p>`;
 }
 
 function maybeAutoRunDailyPipeline() {
@@ -7769,6 +7847,36 @@ async function fetchMarketIntel() {
   }
 }
 
+async function fetchMarketNews() {
+  state.marketNews = {
+    ...state.marketNews,
+    loading: true,
+    error: ""
+  };
+  if (currentView === "dashboard") renderSalesmanDashboard();
+  try {
+    const payload = await api("/api/market-news");
+    state.marketNews = {
+      items: payload.items || [],
+      disabled: Boolean(payload.disabled),
+      loading: false,
+      error: "",
+      reason: payload.reason || "",
+      fetched_at: payload.fetched_at || ""
+    };
+  } catch (error) {
+    state.marketNews = {
+      items: [],
+      disabled: false,
+      loading: false,
+      error: error.message || "Unable to load market news.",
+      reason: "",
+      fetched_at: ""
+    };
+  }
+  if (currentView === "dashboard") renderSalesmanDashboard();
+}
+
 async function fetchAttentionFlags() {
   try {
     state.attentionFlags = state.currentUser?.role === "admin"
@@ -7792,6 +7900,7 @@ async function fetchSalesmanAccounts() {
 function showLogin(message = "") {
   state.currentUser = null;
   state.userAccounts = [];
+  state.marketNews = { items: [], disabled: false, loading: false, error: "", reason: "", fetched_at: "" };
   state.leadsLoaded = false;
   state.leadsLoading = false;
   state.overduePipelineOnly = false;
@@ -7825,6 +7934,7 @@ function configureRoleUi(user) {
   els.needsAttentionPanel?.classList.toggle("hidden", !admin);
   els.dashboardPipelineFunnelPanel?.classList.toggle("hidden", false);
   els.dailyAiPanel?.classList.toggle("hidden", admin);
+  els.marketNewsPanel?.classList.toggle("hidden", admin);
   els.salesmanFollowupPanel?.classList.toggle("hidden", admin);
   els.portfolioPanel?.classList.toggle("hidden", admin);
   els.relationshipFocusPanel?.classList.toggle("hidden", !admin);
@@ -7862,6 +7972,9 @@ async function loadWorkspace() {
   await loadIntegrationStatus();
   state.settings = await api("/api/settings");
   await fetchSalesmanAccounts();
+  const marketNewsPromise = state.currentUser?.role === "admin"
+    ? Promise.resolve()
+    : fetchMarketNews();
   fillSelect(els.stageFilter, state.settings.stages, "All stages");
   fillSelect(els.priorityFilter, state.settings.priorities || [], "All priorities");
   fillSelect(els.territoryFilter, [...new Set([...(state.settings.territories || []), "UAE", "Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Ras Al Khaimah", "Fujairah", "Umm Al Quwain"])], "All territories");
@@ -7896,6 +8009,7 @@ async function loadWorkspace() {
   els.leadForm.elements.next_action_date.value = today();
   await loadConfigurationAgentState();
   await loadLeads();
+  await marketNewsPromise;
   maybeAutoRunDailyPipeline();
 }
 

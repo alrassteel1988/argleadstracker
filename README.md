@@ -30,6 +30,7 @@ On another phone connected to the same network, use the computer's local IP addr
 - PMR voice-note attachment with browser recording, preview, delete, re-record, and activity playback
 - One-click relationship intelligence actions grounded in the company record, activity log, and latest PMR
 - Salesman home-screen Daily AI briefing for focus priorities, neglected accounts, pipeline health, and new market intelligence
+- Salesman home-screen Market News card with server-side NewsAPI headlines for steel, rebar, UAE construction, Dubai infrastructure, and metal price updates
 - CRM reminders for quotation follow-ups, planned visits, important dates, payment follow-ups, sample approvals, and general follow-ups
 - Google Calendar add-to-calendar links for each reminder
 - Mobile voice-note recording with OpenAI Whisper translation into English text
@@ -72,6 +73,8 @@ $env:ENABLE_ANTHROPIC_WEB_SEARCH="true"
 $env:ENABLE_AI_AGENT="true"
 $env:ZAWYA_API_KEY="optional_zawya_key"
 $env:ZAWYA_API_URL="optional_zawya_feed_url"
+$env:NEWS_API_KEY="your_newsapi_key"
+$env:ENABLE_MARKET_NEWS="true"
 $env:ERP_API_BASE_URL=""
 $env:ERP_API_KEY=""
 ```
@@ -154,6 +157,8 @@ Salesman dashboards include a Daily AI briefing bar with four portfolio-level ac
 These actions call `POST /api/salesperson-ai-actions`. The browser sends only the action name; the server derives the caller from the authenticated session and builds a portfolio bundle from records visible to that user. Salesmen cannot request another salesman's portfolio from the client.
 
 The `pipeline_health` action returns a native metrics panel with stage counts, overdue next actions, contact-overdue count, and this-month activity trend. It auto-runs once per day per browser as a collapsed summary and is exempt from the AI rate limit. The other actions return grounded markdown from Claude when `ANTHROPIC_API_KEY` and `ENABLE_CLAUDE_ENRICHMENT=true` are configured, or safe CRM-data fallbacks during local/offline testing. Company names in the AI result are tappable and open the matching lead record.
+
+The same salesman dashboard top area now includes a `Market News` card powered by a server-only `GET /api/market-news` route. The server reads `NEWS_API_KEY`, queries NewsAPI for steel/construction/UAE market headlines, caches the response for 15 minutes, and returns only normalized article fields to the browser. The client never receives the raw API key.
 
 Expected contact frequency is centralized in [src/config/contactRules.js](src/config/contactRules.js): Tier 1 accounts use tighter thresholds, Tier 3 accounts use relaxed thresholds, and the same rules feed relationship health and neglected-account AI logic.
 

@@ -48,6 +48,7 @@ const {
   heatMapFromIntel,
   matchIntelligenceToLeads
 } = require("./src/services/marketIntelService");
+const { fetchMarketNews } = require("./src/services/marketNewsService");
 const {
   mergeVerifiedAutoEnrichment,
   runCompanyAutoEnrichment
@@ -2929,6 +2930,7 @@ async function handleApi(req, res, url) {
       google_places: integrations.googlePlaces,
       claude_enrichment: integrations.claudeEnrichment,
       market_intel: integrations.marketIntel,
+      market_news: integrations.marketNews,
       erp: integrations.erp,
       linkedin: integrations.linkedin,
       ai_agent: integrations.aiAgent,
@@ -3141,6 +3143,11 @@ async function handleApi(req, res, url) {
       heat_map: heatMapFromIntel(matched),
       disabled: !integrations.marketIntel
     });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/market-news") {
+    const payload = await fetchMarketNews();
+    return sendJson(res, 200, payload);
   }
 
   if (req.method === "POST" && url.pathname === "/api/market-intelligence/fetch") {
