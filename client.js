@@ -106,6 +106,7 @@ const ADMIN_DASHBOARD_COLLAPSIBLES = [
   { id: "performancePanel", storageKey: "admin-dashboard-salesman-performance-collapsed", refresh: "performance" },
   { id: "adminTaskPanel", storageKey: "admin-dashboard-tasks-collapsed", refresh: "tasks" },
   { id: "marketSnapshotPanel", storageKey: "admin-dashboard-market-snapshot-collapsed", refresh: "marketSnapshot" },
+  { id: "dashboardPipelineFunnelPanel", storageKey: "admin-dashboard-pipeline-funnel-collapsed", refresh: "dashboardPipelineFunnel" },
   { id: "actionPlanPanel", storageKey: "admin-dashboard-lead-action-plans-collapsed", refresh: "actionPlans" },
   { id: "lossReasonsPanel", storageKey: "admin-dashboard-loss-reasons-collapsed", refresh: "lossReasons" },
   { id: "relationshipFocusPanel", storageKey: "admin-dashboard-cold-relationships-collapsed" },
@@ -225,6 +226,9 @@ const els = {
   marketLocationLegend: document.querySelector("#marketLocationLegend"),
   marketSectorPie: document.querySelector("#marketSectorPie"),
   marketSectorLegend: document.querySelector("#marketSectorLegend"),
+  dashboardPipelineFunnelPanel: document.querySelector("#dashboardPipelineFunnelPanel"),
+  dashboardPipelineFunnelBadge: document.querySelector("#dashboardPipelineFunnelBadge"),
+  dashboardPipelineFunnelBody: document.querySelector("#dashboardPipelineFunnelBody"),
   actionPlanPanel: document.querySelector("#actionPlanPanel"),
   actionPlanSummary: document.querySelector("#actionPlanSummary"),
   actionPlanList: document.querySelector("#actionPlanList"),
@@ -3702,6 +3706,113 @@ function pipelineFunnelStageMarkup(stage) {
   `;
 }
 
+function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSalesman = false, focusName = "", includeComparison = true } = {}) {
+  const singleSalesmanView = forceSingleSalesman || !isAdminOrManager() || selectedSalesman !== "all";
+  const resolvedFocusName = singleSalesmanView
+    ? (focusName || (selectedSalesman !== "all" ? selectedSalesman : state.currentUser?.name || "My leads"))
+    : "All salesmen";
+
+  if (!leads.length) {
+    return {
+      badge: "0 visible leads",
+      html: `
+        <div class="pipeline-funnel-empty">
+          <strong>No funnel data for these filters.</strong>
+          <span>Try another salesman, stage, priority, territory, or search term.</span>
+        </div>
+      `
+    };
+  }
+
+  if (singleSalesmanView) {
+    const metrics = pipelineFunnelMetricsForLeads(leads);
+    const stages = pipelineFunnelStageRows(metrics);
+    return {
+      badge: `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`,
+      html: `
+        <div class="pipeline-funnel-detail">
+          <div class="pipeline-funnel-summary-card">
+            <div class="pipeline-funnel-copy">
+              <span class="meta-label">Detailed funnel</span>
+              <h3>${escapeHtml(resolvedFocusName)}</h3>
+              <p>Conversion rate is <strong>${escapeHtml(String(metrics.conversionRate))}%</strong> from assigned leads to won deals within the current pipeline filters.</p>
+            </div>
+            <div class="pipeline-funnel-micro-kpis">
+              <article><span>Assigned</span><strong>${escapeHtml(String(metrics.totalAssignedLeads))}</strong></article>
+              <article><span>Contacted</span><strong>${escapeHtml(String(metrics.contactedLeads))}</strong></article>
+              <article><span>Open</span><strong>${escapeHtml(String(metrics.openPipelineLeads))}</strong></article>
+              <article><span>Won</span><strong>${escapeHtml(String(metrics.wonDeals))}</strong></article>
+            </div>
+          </div>
+          <div class="pipeline-funnel-stages">
+            ${stages.map(pipelineFunnelStageMarkup).join("")}
+          </div>
+        </div>
+      `
+    };
+  }
+
+  const aggregate = pipelineFunnelMetricsForLeads(leads);
+  const aggregateStages = pipelineFunnelStageRows(aggregate);
+  const rows = pipelineFunnelComparisonRows(leads);
+  return {
+    badge: `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`,
+    html: `
+      <div class="pipeline-funnel-layout">
+        <section class="pipeline-funnel-summary-card">
+          <div class="pipeline-funnel-copy">
+            <span class="meta-label">Team conversion snapshot</span>
+            <h3>All salesmen</h3>
+            <p>${escapeHtml(String(rows.filter(row => row.totalAssignedLeads > 0).length))} salesmen currently match the active pipeline filters.</p>
+          </div>
+          <div class="pipeline-funnel-stages">
+            ${aggregateStages.map(pipelineFunnelStageMarkup).join("")}
+          </div>
+        </section>
+        ${includeComparison ? `
+          <section class="pipeline-funnel-table-card">
+            <div class="pipeline-funnel-table-head">
+              <div>
+                <span class="meta-label">Salesman comparison</span>
+                <h3>Conversion by owner</h3>
+              </div>
+              <span class="chip">${escapeHtml(String(rows.length))} salesmen</span>
+            </div>
+            <div class="pipeline-funnel-table-wrap">
+              <table class="pipeline-funnel-table">
+                <thead>
+                  <tr>
+                    <th>Salesman</th>
+                    <th>Assigned Leads</th>
+                    <th>Contacted</th>
+                    <th>Open Pipeline</th>
+                    <th>Won</th>
+                    <th>Lost</th>
+                    <th>Conversion Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows.map(row => `
+                    <tr>
+                      <td data-label="Salesman">${escapeHtml(row.salesmanName)}</td>
+                      <td data-label="Assigned Leads">${escapeHtml(String(row.totalAssignedLeads))}</td>
+                      <td data-label="Contacted">${escapeHtml(String(row.contactedLeads))}</td>
+                      <td data-label="Open Pipeline">${escapeHtml(String(row.openPipelineLeads))}</td>
+                      <td data-label="Won">${escapeHtml(String(row.wonDeals))}</td>
+                      <td data-label="Lost">${escapeHtml(String(row.lostDeals))}</td>
+                      <td data-label="Conversion Rate"><span class="chip ${row.conversionRate >= 35 ? "green" : row.conversionRate >= 15 ? "warm" : ""}">${escapeHtml(String(row.conversionRate))}%</span></td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ` : ""}
+      </div>
+    `
+  };
+}
+
 function renderPipelineFunnel() {
   if (!els.pipelineFunnelBody || !els.pipelineFunnelBadge) return;
   if (state.leadsLoading && !state.leadsLoaded) {
@@ -3719,109 +3830,46 @@ function renderPipelineFunnel() {
 
   try {
     const leads = filteredLeads();
-    const selectedSalesman = state.filters.salesman;
-    const singleSalesmanView = !isAdminOrManager() || selectedSalesman !== "all";
-    const focusName = singleSalesmanView
-      ? (selectedSalesman !== "all" ? selectedSalesman : state.currentUser?.name || "My leads")
-      : "All salesmen";
-
-    els.pipelineFunnelBadge.textContent = `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`;
-
-    if (!leads.length) {
-      els.pipelineFunnelBody.innerHTML = `
-        <div class="pipeline-funnel-empty">
-          <strong>No funnel data for these filters.</strong>
-          <span>Try another salesman, stage, priority, territory, or search term.</span>
-        </div>
-      `;
-      return;
-    }
-
-    if (singleSalesmanView) {
-      const metrics = pipelineFunnelMetricsForLeads(leads);
-      const stages = pipelineFunnelStageRows(metrics);
-      els.pipelineFunnelBody.innerHTML = `
-        <div class="pipeline-funnel-detail">
-          <div class="pipeline-funnel-summary-card">
-            <div class="pipeline-funnel-copy">
-              <span class="meta-label">Detailed funnel</span>
-              <h3>${escapeHtml(focusName)}</h3>
-              <p>Conversion rate is <strong>${escapeHtml(String(metrics.conversionRate))}%</strong> from assigned leads to won deals within the current pipeline filters.</p>
-            </div>
-            <div class="pipeline-funnel-micro-kpis">
-              <article><span>Assigned</span><strong>${escapeHtml(String(metrics.totalAssignedLeads))}</strong></article>
-              <article><span>Contacted</span><strong>${escapeHtml(String(metrics.contactedLeads))}</strong></article>
-              <article><span>Open</span><strong>${escapeHtml(String(metrics.openPipelineLeads))}</strong></article>
-              <article><span>Won</span><strong>${escapeHtml(String(metrics.wonDeals))}</strong></article>
-            </div>
-          </div>
-          <div class="pipeline-funnel-stages">
-            ${stages.map(pipelineFunnelStageMarkup).join("")}
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    const aggregate = pipelineFunnelMetricsForLeads(leads);
-    const aggregateStages = pipelineFunnelStageRows(aggregate);
-    const rows = pipelineFunnelComparisonRows(leads);
-    els.pipelineFunnelBody.innerHTML = `
-      <div class="pipeline-funnel-layout">
-        <section class="pipeline-funnel-summary-card">
-          <div class="pipeline-funnel-copy">
-            <span class="meta-label">Team conversion snapshot</span>
-            <h3>All salesmen</h3>
-            <p>${escapeHtml(String(rows.filter(row => row.totalAssignedLeads > 0).length))} salesmen currently match the active pipeline filters.</p>
-          </div>
-          <div class="pipeline-funnel-stages">
-            ${aggregateStages.map(pipelineFunnelStageMarkup).join("")}
-          </div>
-        </section>
-        <section class="pipeline-funnel-table-card">
-          <div class="pipeline-funnel-table-head">
-            <div>
-              <span class="meta-label">Salesman comparison</span>
-              <h3>Conversion by owner</h3>
-            </div>
-            <span class="chip">${escapeHtml(String(rows.length))} salesmen</span>
-          </div>
-          <div class="pipeline-funnel-table-wrap">
-            <table class="pipeline-funnel-table">
-              <thead>
-                <tr>
-                  <th>Salesman</th>
-                  <th>Assigned Leads</th>
-                  <th>Contacted</th>
-                  <th>Open Pipeline</th>
-                  <th>Won</th>
-                  <th>Lost</th>
-                  <th>Conversion Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows.map(row => `
-                  <tr>
-                    <td data-label="Salesman">${escapeHtml(row.salesmanName)}</td>
-                    <td data-label="Assigned Leads">${escapeHtml(String(row.totalAssignedLeads))}</td>
-                    <td data-label="Contacted">${escapeHtml(String(row.contactedLeads))}</td>
-                    <td data-label="Open Pipeline">${escapeHtml(String(row.openPipelineLeads))}</td>
-                    <td data-label="Won">${escapeHtml(String(row.wonDeals))}</td>
-                    <td data-label="Lost">${escapeHtml(String(row.lostDeals))}</td>
-                    <td data-label="Conversion Rate"><span class="chip ${row.conversionRate >= 35 ? "green" : row.conversionRate >= 15 ? "warm" : ""}">${escapeHtml(String(row.conversionRate))}%</span></td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-    `;
+    const view = pipelineFunnelMarkup(leads, { selectedSalesman: state.filters.salesman });
+    els.pipelineFunnelBadge.textContent = view.badge;
+    els.pipelineFunnelBody.innerHTML = view.html;
   } catch (error) {
     els.pipelineFunnelBadge.textContent = "Funnel unavailable";
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load pipeline funnel.</strong>
+        <span>${escapeHtml(error.message || "Unexpected funnel rendering error.")}</span>
+      </div>
+    `;
+  }
+}
+
+function renderDashboardPipelineFunnel() {
+  if (!els.dashboardPipelineFunnelPanel || !els.dashboardPipelineFunnelBody || !els.dashboardPipelineFunnelBadge) return;
+  const admin = state.currentUser?.role === "admin";
+  els.dashboardPipelineFunnelPanel.classList.toggle("hidden", !admin);
+  if (!admin) return;
+  if (state.leadsLoading && !state.leadsLoaded) {
+    els.dashboardPipelineFunnelBadge.textContent = "Loading lead conversion";
+    els.dashboardPipelineFunnelBody.innerHTML = `
+      <div class="pipeline-funnel-skeleton">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    `;
+    return;
+  }
+  try {
+    const view = pipelineFunnelMarkup(state.leads, { selectedSalesman: "all", forceSingleSalesman: false, includeComparison: true });
+    els.dashboardPipelineFunnelBadge.textContent = view.badge.replace("visible", "tracked");
+    els.dashboardPipelineFunnelBody.innerHTML = view.html;
+  } catch (error) {
+    els.dashboardPipelineFunnelBadge.textContent = "Funnel unavailable";
+    els.dashboardPipelineFunnelBody.innerHTML = `
+      <div class="pipeline-funnel-empty error">
+        <strong>Could not load dashboard funnel.</strong>
         <span>${escapeHtml(error.message || "Unexpected funnel rendering error.")}</span>
       </div>
     `;
@@ -4355,6 +4403,9 @@ function refreshDashboardCollapsibleSection(sectionId) {
     case "marketSnapshotPanel":
       renderMarketSnapshotPanel();
       break;
+    case "dashboardPipelineFunnelPanel":
+      renderDashboardPipelineFunnel();
+      break;
     case "actionPlanPanel":
       renderActionPlanPanel();
       break;
@@ -4871,6 +4922,7 @@ function renderDashboardView() {
   renderPerformanceAnalytics();
   renderAdminTaskAccountsPanel();
   renderMarketSnapshotPanel();
+  renderDashboardPipelineFunnel();
   renderActionPlanPanel();
   renderLossReasonsAnalytics();
   renderSalesmanDashboard();
@@ -7587,6 +7639,7 @@ function configureRoleUi(user) {
   els.performancePanel?.classList.toggle("hidden", !admin);
   els.adminTaskPanel?.classList.toggle("hidden", !admin);
   els.needsAttentionPanel?.classList.toggle("hidden", !admin);
+  els.dashboardPipelineFunnelPanel?.classList.toggle("hidden", !admin);
   els.dailyAiPanel?.classList.toggle("hidden", admin);
   els.salesmanFollowupPanel?.classList.toggle("hidden", admin);
   els.portfolioPanel?.classList.toggle("hidden", admin);
