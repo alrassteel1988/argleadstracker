@@ -94,7 +94,9 @@ const state = {
   editingOriginalStage: "",
   editingLostData: null,
   lostReasonRequest: null,
-  currentUser: null
+  currentUser: null,
+  leadsLoaded: false,
+  leadsLoading: false
 };
 
 const ADMIN_DASHBOARD_COLLAPSIBLES = [
@@ -253,6 +255,9 @@ const els = {
   configAgentResult: document.querySelector("#configAgentResult"),
   configAgentAudit: document.querySelector("#configAgentAudit"),
   configAgentMessage: document.querySelector("#configAgentMessage"),
+  pipelineFunnelPanel: document.querySelector("#pipelineFunnelPanel"),
+  pipelineFunnelBadge: document.querySelector("#pipelineFunnelBadge"),
+  pipelineFunnelBody: document.querySelector("#pipelineFunnelBody"),
   pipelineToolbar: document.querySelector("#pipelineToolbar"),
   overdueBanner: document.querySelector("#overdueBanner"),
   overduePipelineFilter: document.querySelector("#overduePipelineFilter"),
@@ -3544,6 +3549,282 @@ function renderMetrics() {
   if (els.quickTaskBadge) {
     els.quickTaskBadge.textContent = due;
     els.quickTaskBadge.classList.toggle("hidden", due === 0);
+  }
+}
+
+function hasLeadContactedActivity(lead) {
+  const activities = Array.isArray(lead?.activities) ? lead.activities.filter(activity => !activity?.delete_request && !isReminderActivity(activity)) : [];
+  return activities.length > 0 || Boolean(String(lead?.last_activity || "").trim());
+}
+
+function isOpenPipelineStage(stage) {
+  return ["OUTREACH", "SAMPLING", "ENGAGED"].includes(kanbanStageForLead({ stage }));
+}
+
+function percentOf(value, total) {
+  if (!total) return 0;
+  return Math.round((Number(value || 0) / total) * 100);
+}
+
+function dropOffPercent(previous, current) {
+  if (!previous) return 0;
+  return Math.max(0, Math.round(((previous - current) / previous) * 100));
+}
+
+function pipelineFunnelMetricsForLeads(leads) {
+  const totalAssignedLeads = leads.length;
+  const contactedLeads = leads.filter(hasLeadContactedActivity).length;
+  const openPipelineLeads = leads.filter(lead => isOpenPipelineStage(lead.stage)).length;
+  const wonDeals = leads.filter(lead => kanbanStageForLead(lead) === "ACTIVE").length;
+  const lostDeals = leads.filter(lead => kanbanStageForLead(lead) === "DORMANT").length;
+  return {
+    totalAssignedLeads,
+    contactedLeads,
+    openPipelineLeads,
+    wonDeals,
+    lostDeals,
+    conversionRate: percentOf(wonDeals, totalAssignedLeads),
+    stageDropOffs: {
+      assignedToContacted: dropOffPercent(totalAssignedLeads, contactedLeads),
+      contactedToOpenPipeline: dropOffPercent(contactedLeads, openPipelineLeads),
+      openPipelineToWon: dropOffPercent(openPipelineLeads, wonDeals),
+      openPipelineToLost: dropOffPercent(openPipelineLeads, lostDeals)
+    }
+  };
+}
+
+function pipelineFunnelStageRows(metrics) {
+  const total = metrics.totalAssignedLeads || 0;
+  return [
+    {
+      key: "assigned",
+      label: "Total Assigned Leads",
+      count: metrics.totalAssignedLeads,
+      percentage: total ? 100 : 0,
+      dropoff: null,
+      tone: "assigned"
+    },
+    {
+      key: "contacted",
+      label: "Contacted Leads",
+      count: metrics.contactedLeads,
+      percentage: percentOf(metrics.contactedLeads, total),
+      dropoff: metrics.stageDropOffs.assignedToContacted,
+      tone: "contacted"
+    },
+    {
+      key: "open",
+      label: "Active / Open Pipeline Leads",
+      count: metrics.openPipelineLeads,
+      percentage: percentOf(metrics.openPipelineLeads, total),
+      dropoff: metrics.stageDropOffs.contactedToOpenPipeline,
+      tone: "open"
+    },
+    {
+      key: "won",
+      label: "Won Deals / Active Customers",
+      count: metrics.wonDeals,
+      percentage: percentOf(metrics.wonDeals, total),
+      dropoff: metrics.stageDropOffs.openPipelineToWon,
+      tone: "won"
+    },
+    {
+      key: "lost",
+      label: "Lost Deals",
+      count: metrics.lostDeals,
+      percentage: percentOf(metrics.lostDeals, total),
+      dropoff: metrics.stageDropOffs.openPipelineToLost,
+      tone: "lost"
+    }
+  ];
+}
+
+function pipelineFunnelPeople() {
+  const merged = [];
+  const known = new Set();
+  const add = person => {
+    const name = salesmanName(person).trim();
+    if (!name || name.toLowerCase() === "unassigned") return;
+    const key = name.toLowerCase();
+    if (known.has(key)) return;
+    known.add(key);
+    merged.push(person);
+  };
+  if (isAdminOrManager()) {
+    (state.userAccounts || [])
+      .filter(account => !["admin", "manager", "director"].includes(String(account.role || "").toLowerCase()))
+      .forEach(add);
+  }
+  analyticsSalesmen().forEach(add);
+  return merged;
+}
+
+function pipelineFunnelComparisonRows(leads) {
+  return pipelineFunnelPeople()
+    .map(person => {
+      const salesmanLeads = leads.filter(lead => leadMatchesSalesman(lead, person));
+      const metrics = pipelineFunnelMetricsForLeads(salesmanLeads);
+      return {
+        salesmanId: person.id || salesmanName(person),
+        salesmanName: salesmanName(person),
+        ...metrics
+      };
+    })
+    .sort((a, b) =>
+      b.totalAssignedLeads - a.totalAssignedLeads
+      || b.conversionRate - a.conversionRate
+      || a.salesmanName.localeCompare(b.salesmanName)
+    );
+}
+
+function pipelineFunnelStageMarkup(stage) {
+  const width = Math.max(0, Math.min(100, stage.percentage));
+  const fillWidth = stage.count > 0 ? Math.max(width, 10) : 0;
+  const dropoffMarkup = stage.dropoff == null
+    ? `<span class="pipeline-funnel-meta">Baseline</span>`
+    : `<span class="pipeline-funnel-meta">Drop-off ${stage.dropoff}% from previous stage</span>`;
+  return `
+    <article class="pipeline-funnel-stage ${stage.tone}">
+      <div class="pipeline-funnel-stage-head">
+        <div>
+          <strong>${escapeHtml(stage.label)}</strong>
+          ${dropoffMarkup}
+        </div>
+        <div class="pipeline-funnel-stage-stats">
+          <span>${escapeHtml(String(stage.count))}</span>
+          <small>${escapeHtml(String(stage.percentage))}% of assigned</small>
+        </div>
+      </div>
+      <div class="pipeline-funnel-track" aria-hidden="true">
+        <div class="pipeline-funnel-fill ${stage.tone}" style="width:${fillWidth}%"></div>
+      </div>
+    </article>
+  `;
+}
+
+function renderPipelineFunnel() {
+  if (!els.pipelineFunnelBody || !els.pipelineFunnelBadge) return;
+  if (state.leadsLoading && !state.leadsLoaded) {
+    els.pipelineFunnelBadge.textContent = "Loading lead conversion";
+    els.pipelineFunnelBody.innerHTML = `
+      <div class="pipeline-funnel-skeleton">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    `;
+    return;
+  }
+
+  try {
+    const leads = filteredLeads();
+    const selectedSalesman = state.filters.salesman;
+    const singleSalesmanView = !isAdminOrManager() || selectedSalesman !== "all";
+    const focusName = singleSalesmanView
+      ? (selectedSalesman !== "all" ? selectedSalesman : state.currentUser?.name || "My leads")
+      : "All salesmen";
+
+    els.pipelineFunnelBadge.textContent = `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`;
+
+    if (!leads.length) {
+      els.pipelineFunnelBody.innerHTML = `
+        <div class="pipeline-funnel-empty">
+          <strong>No funnel data for these filters.</strong>
+          <span>Try another salesman, stage, priority, territory, or search term.</span>
+        </div>
+      `;
+      return;
+    }
+
+    if (singleSalesmanView) {
+      const metrics = pipelineFunnelMetricsForLeads(leads);
+      const stages = pipelineFunnelStageRows(metrics);
+      els.pipelineFunnelBody.innerHTML = `
+        <div class="pipeline-funnel-detail">
+          <div class="pipeline-funnel-summary-card">
+            <div class="pipeline-funnel-copy">
+              <span class="meta-label">Detailed funnel</span>
+              <h3>${escapeHtml(focusName)}</h3>
+              <p>Conversion rate is <strong>${escapeHtml(String(metrics.conversionRate))}%</strong> from assigned leads to won deals within the current pipeline filters.</p>
+            </div>
+            <div class="pipeline-funnel-micro-kpis">
+              <article><span>Assigned</span><strong>${escapeHtml(String(metrics.totalAssignedLeads))}</strong></article>
+              <article><span>Contacted</span><strong>${escapeHtml(String(metrics.contactedLeads))}</strong></article>
+              <article><span>Open</span><strong>${escapeHtml(String(metrics.openPipelineLeads))}</strong></article>
+              <article><span>Won</span><strong>${escapeHtml(String(metrics.wonDeals))}</strong></article>
+            </div>
+          </div>
+          <div class="pipeline-funnel-stages">
+            ${stages.map(pipelineFunnelStageMarkup).join("")}
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const aggregate = pipelineFunnelMetricsForLeads(leads);
+    const aggregateStages = pipelineFunnelStageRows(aggregate);
+    const rows = pipelineFunnelComparisonRows(leads);
+    els.pipelineFunnelBody.innerHTML = `
+      <div class="pipeline-funnel-layout">
+        <section class="pipeline-funnel-summary-card">
+          <div class="pipeline-funnel-copy">
+            <span class="meta-label">Team conversion snapshot</span>
+            <h3>All salesmen</h3>
+            <p>${escapeHtml(String(rows.filter(row => row.totalAssignedLeads > 0).length))} salesmen currently match the active pipeline filters.</p>
+          </div>
+          <div class="pipeline-funnel-stages">
+            ${aggregateStages.map(pipelineFunnelStageMarkup).join("")}
+          </div>
+        </section>
+        <section class="pipeline-funnel-table-card">
+          <div class="pipeline-funnel-table-head">
+            <div>
+              <span class="meta-label">Salesman comparison</span>
+              <h3>Conversion by owner</h3>
+            </div>
+            <span class="chip">${escapeHtml(String(rows.length))} salesmen</span>
+          </div>
+          <div class="pipeline-funnel-table-wrap">
+            <table class="pipeline-funnel-table">
+              <thead>
+                <tr>
+                  <th>Salesman</th>
+                  <th>Assigned Leads</th>
+                  <th>Contacted</th>
+                  <th>Open Pipeline</th>
+                  <th>Won</th>
+                  <th>Lost</th>
+                  <th>Conversion Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(row => `
+                  <tr>
+                    <td data-label="Salesman">${escapeHtml(row.salesmanName)}</td>
+                    <td data-label="Assigned Leads">${escapeHtml(String(row.totalAssignedLeads))}</td>
+                    <td data-label="Contacted">${escapeHtml(String(row.contactedLeads))}</td>
+                    <td data-label="Open Pipeline">${escapeHtml(String(row.openPipelineLeads))}</td>
+                    <td data-label="Won">${escapeHtml(String(row.wonDeals))}</td>
+                    <td data-label="Lost">${escapeHtml(String(row.lostDeals))}</td>
+                    <td data-label="Conversion Rate"><span class="chip ${row.conversionRate >= 35 ? "green" : row.conversionRate >= 15 ? "warm" : ""}">${escapeHtml(String(row.conversionRate))}%</span></td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    `;
+  } catch (error) {
+    els.pipelineFunnelBadge.textContent = "Funnel unavailable";
+    els.pipelineFunnelBody.innerHTML = `
+      <div class="pipeline-funnel-empty error">
+        <strong>Could not load pipeline funnel.</strong>
+        <span>${escapeHtml(error.message || "Unexpected funnel rendering error.")}</span>
+      </div>
+    `;
   }
 }
 
@@ -7134,6 +7415,7 @@ function renderDetail() {
 function render() {
   renderMetrics();
   renderOverdueBanner();
+  renderPipelineFunnel();
   renderSidebarIdentity();
   renderTopbar();
   renderDashboardView();
@@ -7162,6 +7444,7 @@ function applyView() {
   const isKanban = state.pipelineViewMode === "kanban";
   els.metricsShell?.classList.toggle("hidden", !(isDashboard || isPipeline));
   els.dashboardView.classList.toggle("hidden", !isDashboard);
+  els.pipelineFunnelPanel?.classList.toggle("hidden", !isPipeline);
   els.pipelineToolbar.classList.toggle("hidden", !isPipeline);
   els.pipelineView.classList.toggle("hidden", !isPipeline);
   els.pipelineView?.classList.toggle("kanban-mode", isPipeline && isKanban);
@@ -7206,24 +7489,31 @@ function setView(view) {
 }
 
 async function loadLeads() {
-  state.leads = await api("/api/leads");
-  await mergePendingActivitiesIntoState();
-  if (!state.leads.some(lead => lead.id === state.selectedId)) {
-    if (currentView === "lead") {
-      state.selectedId = null;
-    } else {
+  state.leadsLoading = true;
+  if (currentView === "pipeline") renderPipelineFunnel();
+  try {
+    state.leads = await api("/api/leads");
+    state.leadsLoaded = true;
+    await mergePendingActivitiesIntoState();
+    if (!state.leads.some(lead => lead.id === state.selectedId)) {
+      if (currentView === "lead") {
+        state.selectedId = null;
+      } else {
+        state.selectedId = state.leads[0]?.id || null;
+      }
+    }
+    if (currentView !== "lead" && !state.selectedId) {
       state.selectedId = state.leads[0]?.id || null;
     }
-  }
-  if (currentView !== "lead" && !state.selectedId) {
-    state.selectedId = state.leads[0]?.id || null;
-  }
-  await fetchActivities();
-  await fetchAttentionFlags();
-  await fetchMarketIntel();
-  render();
-  if (currentView === "lead" && state.selectedId) {
-    loadLeadDetailData(state.selectedId);
+    await fetchActivities();
+    await fetchAttentionFlags();
+    await fetchMarketIntel();
+    render();
+    if (currentView === "lead" && state.selectedId) {
+      loadLeadDetailData(state.selectedId);
+    }
+  } finally {
+    state.leadsLoading = false;
   }
 }
 
@@ -7266,6 +7556,8 @@ async function fetchSalesmanAccounts() {
 function showLogin(message = "") {
   state.currentUser = null;
   state.userAccounts = [];
+  state.leadsLoaded = false;
+  state.leadsLoading = false;
   state.overduePipelineOnly = false;
   if (overdueRefreshTimer) {
     clearInterval(overdueRefreshTimer);
