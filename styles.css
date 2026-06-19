@@ -1268,6 +1268,156 @@ textarea {
   line-height: 1.4;
 }
 
+.pipeline-funnel-chart-card {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.06), transparent 26%),
+    linear-gradient(180deg, #fbfdff, #f8fbff);
+  min-width: 0;
+}
+
+.pipeline-funnel-chart-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.pipeline-funnel-chart-head h3 {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: var(--weight-bold);
+  line-height: 1.2;
+}
+
+.pipeline-funnel-chart-stack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.pipeline-funnel-chart-stage {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pipeline-funnel-chart-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+.pipeline-funnel-chart-meta > div:first-child {
+  min-width: 0;
+}
+
+.pipeline-funnel-chart-meta strong {
+  display: block;
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-heading);
+}
+
+.pipeline-funnel-chart-meta span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-label);
+}
+
+.pipeline-funnel-chart-numbers {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+.pipeline-funnel-chart-numbers b {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.pipeline-funnel-chart-numbers small {
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-label);
+}
+
+.pipeline-funnel-chart-shape-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.pipeline-funnel-chart-shape {
+  position: relative;
+  min-width: 140px;
+  max-width: 100%;
+  min-height: 54px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%);
+}
+
+.pipeline-funnel-chart-shape span,
+.pipeline-funnel-chart-shape strong {
+  color: inherit;
+  margin: 0;
+}
+
+.pipeline-funnel-chart-shape span {
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.25;
+}
+
+.pipeline-funnel-chart-shape strong {
+  font-size: 24px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.pipeline-funnel-chart-shape.assigned {
+  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+}
+
+.pipeline-funnel-chart-shape.contacted {
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+}
+
+.pipeline-funnel-chart-shape.open {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.pipeline-funnel-chart-shape.won {
+  background: linear-gradient(90deg, #059669, #34d399);
+}
+
+.pipeline-funnel-chart-shape.lost {
+  background: linear-gradient(90deg, #dc2626, #fb7185);
+}
+
 .pipeline-funnel-empty {
   display: grid;
   gap: 8px;
@@ -8452,6 +8602,10 @@ body,
   .pipeline-funnel-micro-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .pipeline-funnel-chart-shape {
+    min-width: 0;
+  }
 }
 
 @media (max-width: 760px) {
@@ -8499,12 +8653,15 @@ body,
   }
 
   .pipeline-funnel-stage-head,
-  .pipeline-funnel-table-head {
+  .pipeline-funnel-table-head,
+  .pipeline-funnel-chart-head,
+  .pipeline-funnel-chart-meta {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .pipeline-funnel-stage-stats {
+  .pipeline-funnel-stage-stats,
+  .pipeline-funnel-chart-numbers {
     justify-items: start;
     text-align: left;
   }
@@ -8668,17 +8825,28 @@ body,
 
   .pipeline-funnel-summary-card,
   .pipeline-funnel-table-card,
-  .pipeline-funnel-stage {
+  .pipeline-funnel-stage,
+  .pipeline-funnel-chart-card {
     padding: 12px;
   }
 
   .pipeline-funnel-copy h3,
-  .pipeline-funnel-table-head h3 {
+  .pipeline-funnel-table-head h3,
+  .pipeline-funnel-chart-head h3 {
     font-size: 22px;
   }
 
   .pipeline-funnel-table {
     min-width: 640px;
+  }
+
+  .pipeline-funnel-chart-shape {
+    min-height: 48px;
+    padding: 12px 14px;
+  }
+
+  .pipeline-funnel-chart-shape strong {
+    font-size: 20px;
   }
 
   .lead-detail-view {

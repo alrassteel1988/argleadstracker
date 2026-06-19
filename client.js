@@ -3706,6 +3706,46 @@ function pipelineFunnelStageMarkup(stage) {
   `;
 }
 
+function pipelineFunnelChartMarkup(metrics, { title = "Pipeline Funnel Chart", subtitle = "Visual conversion flow from assigned leads to outcomes" } = {}) {
+  const stages = pipelineFunnelStageRows(metrics);
+  return `
+    <section class="pipeline-funnel-chart-card">
+      <div class="pipeline-funnel-chart-head">
+        <div>
+          <span class="meta-label">${escapeHtml(title)}</span>
+          <h3>${escapeHtml(subtitle)}</h3>
+        </div>
+      </div>
+      <div class="pipeline-funnel-chart-stack" role="img" aria-label="Visual pipeline funnel from assigned leads to contacted leads, active pipeline, won deals, and lost deals.">
+        ${stages.map(stage => {
+          const width = Math.max(12, Math.min(100, stage.percentage || 0));
+          const dropoffLabel = stage.dropoff == null ? "Baseline stage" : `Drop-off ${stage.dropoff}% from previous stage`;
+          return `
+            <article class="pipeline-funnel-chart-stage ${stage.tone}">
+              <div class="pipeline-funnel-chart-meta">
+                <div>
+                  <strong>${escapeHtml(stage.label)}</strong>
+                  <span>${escapeHtml(dropoffLabel)}</span>
+                </div>
+                <div class="pipeline-funnel-chart-numbers">
+                  <b>${escapeHtml(String(stage.count))}</b>
+                  <small>${escapeHtml(String(stage.percentage))}% of assigned</small>
+                </div>
+              </div>
+              <div class="pipeline-funnel-chart-shape-wrap">
+                <div class="pipeline-funnel-chart-shape ${stage.tone}" style="width:${width}%">
+                  <span>${escapeHtml(stage.label)}</span>
+                  <strong>${escapeHtml(String(stage.count))}</strong>
+                </div>
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function pipelineFunnelMarkup(leads, { selectedSalesman = "all", forceSingleSalesman = false, focusName = "", includeComparison = true } = {}) {
   const singleSalesmanView = forceSingleSalesman || !isAdminOrManager() || selectedSalesman !== "all";
   const resolvedFocusName = singleSalesmanView
@@ -3862,9 +3902,12 @@ function renderDashboardPipelineFunnel() {
     return;
   }
   try {
-    const view = pipelineFunnelMarkup(state.leads, { selectedSalesman: "all", forceSingleSalesman: false, includeComparison: true });
+    const selectedSalesman = state.marketSnapshotSalesman || "all";
+    const leads = marketSnapshotLeads();
+    const view = pipelineFunnelMarkup(leads, { selectedSalesman, forceSingleSalesman: false, includeComparison: true });
+    const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
     els.dashboardPipelineFunnelBadge.textContent = view.badge.replace("visible", "tracked");
-    els.dashboardPipelineFunnelBody.innerHTML = view.html;
+    els.dashboardPipelineFunnelBody.innerHTML = `${view.html}${chart}`;
   } catch (error) {
     els.dashboardPipelineFunnelBadge.textContent = "Funnel unavailable";
     els.dashboardPipelineFunnelBody.innerHTML = `
