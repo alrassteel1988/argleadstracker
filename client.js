@@ -4919,9 +4919,9 @@ function marketNewsCardMarkup(item) {
 
 function renderMarketNewsPanel() {
   if (!els.marketNewsPanel || !els.marketNewsFeed) return;
-  const salesman = state.currentUser && state.currentUser.role !== "admin";
-  els.marketNewsPanel.classList.toggle("hidden", !salesman);
-  if (!salesman) return;
+  const salesmanDashboard = state.currentUser && state.currentUser.role !== "admin" && currentView === "dashboard";
+  els.marketNewsPanel.classList.toggle("hidden", !salesmanDashboard);
+  if (!salesmanDashboard) return;
   if (els.marketNewsMeta) {
     els.marketNewsMeta.textContent = state.marketNews.loading
       ? "Refreshing..."
@@ -7793,6 +7793,7 @@ function applyView() {
   });
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
   document.body.classList.toggle("activity-mode", isActivity);
+  document.body.classList.toggle("salesman-dashboard-mode", Boolean(isDashboard && state.currentUser?.role !== "admin"));
 }
 
 function closeMobileMenu() {

@@ -6386,6 +6386,141 @@ textarea {
   color: #D6E4F0;
 }
 
+body.salesman-dashboard-mode .topbar-copy h1 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+body.salesman-dashboard-mode .topbar-copy p {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+body.salesman-dashboard-mode .topbar .ghost-button,
+body.salesman-dashboard-mode .topbar .primary-button {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+body.salesman-dashboard-mode .metrics span,
+body.salesman-dashboard-mode .panel-header span,
+body.salesman-dashboard-mode .meta-label,
+body.salesman-dashboard-mode .daily-ai-copy span,
+body.salesman-dashboard-mode .market-news-time,
+body.salesman-dashboard-mode .market-news-meta {
+  font-size: 12px;
+}
+
+body.salesman-dashboard-mode .metrics strong {
+  font-size: 20px;
+}
+
+body.salesman-dashboard-mode .daily-ai-copy h2,
+body.salesman-dashboard-mode .market-news-panel .panel-header h2,
+body.salesman-dashboard-mode .salesman-followup-panel .panel-header h2,
+body.salesman-dashboard-mode .portfolio-panel .panel-header h2,
+body.salesman-dashboard-mode .market-intel-panel .panel-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+body.salesman-dashboard-mode .daily-ai-copy p,
+body.salesman-dashboard-mode .market-news-card p,
+body.salesman-dashboard-mode .market-news-panel .empty-copy {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+body.salesman-dashboard-mode .daily-ai-actions {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+body.salesman-dashboard-mode .daily-ai-actions button {
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 64px;
+  padding: 12px 14px;
+}
+
+body.salesman-dashboard-mode .daily-ai-summary {
+  padding: 8px 12px;
+}
+
+body.salesman-dashboard-mode .daily-ai-summary strong {
+  font-size: 15px;
+}
+
+body.salesman-dashboard-mode .daily-ai-summary span {
+  font-size: 12px;
+}
+
+body.salesman-dashboard-mode .market-news-panel {
+  margin-bottom: 12px;
+}
+
+body.salesman-dashboard-mode .market-news-panel .panel-header {
+  padding: 16px 18px 12px;
+}
+
+body.salesman-dashboard-mode .market-news-feed {
+  display: grid;
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 248px);
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 18px 16px;
+  scroll-snap-type: x proximity;
+}
+
+body.salesman-dashboard-mode .market-news-feed > * {
+  scroll-snap-align: start;
+}
+
+body.salesman-dashboard-mode .market-news-skeleton {
+  display: grid;
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 248px);
+  gap: 10px;
+}
+
+body.salesman-dashboard-mode .market-news-skeleton span {
+  min-height: 136px;
+}
+
+body.salesman-dashboard-mode .market-news-card {
+  grid-template-rows: auto auto 1fr auto;
+  gap: 10px;
+  min-height: 0;
+  padding: 16px;
+}
+
+body.salesman-dashboard-mode .market-news-card strong,
+body.salesman-dashboard-mode .article-title {
+  font-size: 15px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+body.salesman-dashboard-mode .market-news-card p,
+body.salesman-dashboard-mode .article-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+
+body.salesman-dashboard-mode .market-news-link,
+body.salesman-dashboard-mode .open-article-link {
+  font-size: 13px;
+}
+
 .attention-count,
 .flag-status {
   display: inline-flex;
@@ -7450,6 +7585,19 @@ dialog::backdrop {
   .market-news-skeleton {
     grid-template-columns: 1fr;
     padding-inline: 16px;
+  }
+
+  body.salesman-dashboard-mode .market-news-feed {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+  }
+
+  body.salesman-dashboard-mode .market-news-skeleton {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: 1fr;
   }
 
   .daily-ai-actions {
