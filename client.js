@@ -4938,6 +4938,9 @@ function renderMarketNewsPanel() {
         <span></span>
         <span></span>
         <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
       </div>
     `;
     return;
@@ -4950,10 +4953,10 @@ function renderMarketNewsPanel() {
     els.marketNewsFeed.innerHTML = `<p class="empty-copy">${escapeHtml(state.marketNews.reason || "Market news is disabled until NEWS_API_KEY is configured on the server.")}</p>`;
     return;
   }
-  const items = (state.marketNews.items || []).slice(0, 5);
+  const items = (state.marketNews.items || []).slice(0, 6);
   els.marketNewsFeed.innerHTML = items.length
     ? items.map(marketNewsCardMarkup).join("")
-    : `<p class="empty-copy">No market news articles are available right now. Fresh steel and construction headlines will appear here when NewsAPI returns results.</p>`;
+    : `<p class="empty-copy">No market news articles are available right now. Fresh construction, oil and gas, marine engineering, metal, and fabrication headlines will appear here when NewsAPI returns results.</p>`;
 }
 
 function maybeAutoRunDailyPipeline() {

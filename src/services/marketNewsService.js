@@ -3,12 +3,35 @@ const integrations = require("../config/integrations");
 const NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 const MARKET_NEWS_QUERY = [
   "\"steel market\"",
-  "rebar",
   "\"construction materials\"",
+  "\"construction industry\"",
+  "\"oil and gas\"",
+  "\"marine engineering\"",
+  "\"metal fabrication\"",
+  "\"metal industries\"",
+  "fabrication",
+  "metal",
+  "steel",
   "\"UAE construction\"",
   "\"Dubai infrastructure\"",
-  "\"metal prices\""
+  "\"industrial projects\""
 ].join(" OR ");
+const MARKET_NEWS_KEYWORDS = [
+  { term: "construction", weight: 3 },
+  { term: "construction materials", weight: 4 },
+  { term: "oil and gas", weight: 5 },
+  { term: "marine engineering", weight: 5 },
+  { term: "marine", weight: 2 },
+  { term: "shipyard", weight: 3 },
+  { term: "offshore", weight: 3 },
+  { term: "metal", weight: 2 },
+  { term: "metal industries", weight: 4 },
+  { term: "steel", weight: 3 },
+  { term: "fabrication", weight: 4 },
+  { term: "fabricator", weight: 3 },
+  { term: "rebar", weight: 3 },
+  { term: "industrial", weight: 2 }
+];
 
 let cache = {
   expiresAt: 0,
@@ -30,6 +53,13 @@ function normalizeArticle(article) {
   };
 }
 
+function articleRelevanceScore(article) {
+  const haystack = `${article?.title || ""} ${article?.description || ""}`.toLowerCase();
+  return MARKET_NEWS_KEYWORDS.reduce((score, keyword) => (
+    haystack.includes(keyword.term) ? score + keyword.weight : score
+  ), 0);
+}
+
 async function fetchMarketNews({ force = false } = {}) {
   if (!integrations.marketNews || !integrations.env.newsApiKey) {
     return {
@@ -48,7 +78,7 @@ async function fetchMarketNews({ force = false } = {}) {
     q: MARKET_NEWS_QUERY,
     language: "en",
     sortBy: "publishedAt",
-    pageSize: "5",
+    pageSize: "12",
     searchIn: "title,description",
     from: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
   });
@@ -67,7 +97,16 @@ async function fetchMarketNews({ force = false } = {}) {
 
   const items = (Array.isArray(data.articles) ? data.articles : [])
     .map(normalizeArticle)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(article => ({ ...article, _score: articleRelevanceScore(article) }))
+    .filter(article => article._score > 0)
+    .sort((a, b) => {
+      const dateDifference = new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
+      if (dateDifference !== 0) return dateDifference;
+      return b._score - a._score;
+    })
+    .slice(0, 6)
+    .map(({ _score, ...article }) => article);
 
   const payload = {
     items,
