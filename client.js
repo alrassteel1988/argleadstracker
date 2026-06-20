@@ -148,6 +148,8 @@ const els = {
   openSalesmanForm: document.querySelector("#openSalesmanForm"),
   exportLeadsExcel: document.querySelector("#exportLeadsExcel"),
   exportLeadsPdf: document.querySelector("#exportLeadsPdf"),
+  exportLeadsExcelTop: document.querySelector("#exportLeadsExcelTop"),
+  exportLeadsPdfTop: document.querySelector("#exportLeadsPdfTop"),
   openImportLeads: document.querySelector("#openImportLeads"),
   importLeadsDialog: document.querySelector("#importLeadsDialog"),
   closeImportLeads: document.querySelector("#closeImportLeads"),
@@ -7951,6 +7953,8 @@ function configureRoleUi(user) {
   els.openSalesmanForm.classList.toggle("hidden", !admin);
   els.exportLeadsExcel?.classList.toggle("hidden", !admin);
   els.exportLeadsPdf?.classList.toggle("hidden", !admin);
+  els.exportLeadsExcelTop?.classList.toggle("hidden", !admin);
+  els.exportLeadsPdfTop?.classList.toggle("hidden", !admin);
   els.openImportLeads?.classList.toggle("hidden", !admin);
   els.performancePanel?.classList.toggle("hidden", !admin);
   els.adminTaskPanel?.classList.toggle("hidden", !admin);
@@ -8400,20 +8404,25 @@ window.addEventListener("resize", () => {
   if (window.innerWidth > 980) closeMobileMenu();
 });
 
-els.exportLeadsExcel?.addEventListener("click", async () => {
+async function exportLeadsBackup(format) {
+  const endpoint = format === "pdf" ? "/api/exports/leads.pdf" : "/api/exports/leads.xls";
+  const filename = format === "pdf"
+    ? `arg-leads-backup-${today()}.pdf`
+    : `arg-leads-backup-${today()}.xls`;
   try {
-    await downloadExport("/api/exports/leads.xls", `arg-leads-backup-${today()}.xls`);
+    await downloadExport(endpoint, filename);
+    setToast(`Lead backup exported as ${format.toUpperCase()}.`, "success");
   } catch (error) {
     window.alert(error.message);
   }
+}
+
+[els.exportLeadsExcel, els.exportLeadsExcelTop].forEach(button => {
+  button?.addEventListener("click", () => exportLeadsBackup("xls"));
 });
 
-els.exportLeadsPdf?.addEventListener("click", async () => {
-  try {
-    await downloadExport("/api/exports/leads.pdf", `arg-leads-backup-${today()}.pdf`);
-  } catch (error) {
-    window.alert(error.message);
-  }
+[els.exportLeadsPdf, els.exportLeadsPdfTop].forEach(button => {
+  button?.addEventListener("click", () => exportLeadsBackup("pdf"));
 });
 
 els.refreshMarketIntel?.addEventListener("click", async () => {
