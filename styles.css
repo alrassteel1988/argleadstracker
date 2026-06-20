@@ -1047,6 +1047,11 @@ textarea {
   align-items: start;
 }
 
+.pipeline-funnel-body.pipelineFunnelDetailWide {
+  grid-template-columns: minmax(300px, 0.72fr) minmax(540px, 1.48fr);
+  align-items: stretch;
+}
+
 .pipeline-funnel-body.pipelineFunnelSingleView {
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.95fr);
   align-items: start;
@@ -1064,6 +1069,12 @@ textarea {
 
 .pipeline-funnel-body.pipelineFunnelAdminTwoUp .salesmanComparisonCard,
 .pipeline-funnel-body.pipelineFunnelAdminTwoUp .pipelineFunnelChartCard {
+  align-self: stretch;
+}
+
+.pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-detail,
+.pipeline-funnel-body.pipelineFunnelDetailWide .pipelineFunnelChartCard {
+  min-width: 0;
   align-self: stretch;
 }
 
@@ -1350,6 +1361,12 @@ textarea {
   min-width: 0;
 }
 
+.pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-chart-layout {
+  grid-template-columns: minmax(280px, 0.82fr) minmax(380px, 1.18fr);
+  gap: 26px;
+  align-items: center;
+}
+
 .pipeline-funnel-body:not(.pipelineFunnelGrid):not(.pipelineFunnelSingleView) .pipeline-funnel-chart-layout {
   grid-template-columns: minmax(300px, 0.75fr) minmax(0, 1.25fr);
   gap: 24px;
@@ -1363,6 +1380,10 @@ textarea {
   min-width: 0;
 }
 
+.pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-chart-visual {
+  align-content: center;
+}
+
 .pipeline-funnel-pie {
   position: relative;
   width: min(280px, 100%);
@@ -1371,6 +1392,10 @@ textarea {
   display: grid;
   place-items: center;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+.pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-pie {
+  width: min(320px, 100%);
 }
 
 .pipeline-funnel-pie::after {
@@ -1440,6 +1465,10 @@ textarea {
   display: grid;
   gap: 14px;
   min-width: 0;
+}
+
+.pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-chart-stack {
+  align-content: center;
 }
 
 .pipeline-funnel-chart-stage {
@@ -9127,6 +9156,10 @@ body,
     grid-template-columns: 1fr;
   }
 
+  .pipeline-funnel-body.pipelineFunnelDetailWide {
+    grid-template-columns: 1fr;
+  }
+
   .pipeline-funnel-body.pipelineFunnelSingleView {
     grid-template-columns: 1fr;
   }
@@ -9184,6 +9217,10 @@ body,
   }
 
   .pipeline-funnel-body.pipelineFunnelAdminTwoUp {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-funnel-body.pipelineFunnelDetailWide {
     grid-template-columns: 1fr;
   }
 

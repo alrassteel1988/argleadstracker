@@ -3798,6 +3798,7 @@ function pipelineFunnelMarkup(
   if (!leads.length) {
     return {
       badge: "0 visible leads",
+      singleSalesmanView,
       html: `
         <div class="pipeline-funnel-empty">
           <strong>No funnel data for these filters.</strong>
@@ -3812,6 +3813,7 @@ function pipelineFunnelMarkup(
     const stages = pipelineFunnelStageRows(metrics);
     return {
       badge: `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`,
+      singleSalesmanView,
       html: `
         <div class="pipeline-funnel-detail">
           <div class="pipeline-funnel-summary-card teamConversionCard">
@@ -3842,6 +3844,7 @@ function pipelineFunnelMarkup(
   const rows = pipelineFunnelComparisonRows(leads);
   return {
     badge: `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`,
+    singleSalesmanView,
     html: `
       <div class="pipeline-funnel-layout pipelineFunnelGrid">
         ${includeSummary ? `
@@ -3905,7 +3908,7 @@ function renderPipelineFunnel() {
   const teamView = isAdminOrManager();
   if (state.leadsLoading && !state.leadsLoaded) {
     els.pipelineFunnelBadge.textContent = "Loading lead conversion";
-    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-skeleton">
         <span></span>
@@ -3919,7 +3922,7 @@ function renderPipelineFunnel() {
     const leads = filteredLeads();
     if (!leads.length) {
       els.pipelineFunnelBadge.textContent = "0 visible leads";
-      els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
+      els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
       els.pipelineFunnelBody.innerHTML = `
         <div class="pipeline-funnel-empty">
           <strong>No funnel data for these filters.</strong>
@@ -3932,19 +3935,19 @@ function renderPipelineFunnel() {
       const view = pipelineFunnelMarkup(leads, { selectedSalesman: state.filters.salesman });
       const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
       els.pipelineFunnelBadge.textContent = view.badge;
-      els.pipelineFunnelBody.classList.remove("pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
-      els.pipelineFunnelBody.classList.add("pipelineFunnelGrid");
+      els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
+      els.pipelineFunnelBody.classList.add(view.singleSalesmanView ? "pipelineFunnelDetailWide" : "pipelineFunnelGrid");
       els.pipelineFunnelBody.innerHTML = `${view.html}${chart}`;
       return;
     }
 
     const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
     els.pipelineFunnelBadge.textContent = `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`;
-    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
     els.pipelineFunnelBody.innerHTML = chart;
   } catch (error) {
     els.pipelineFunnelBadge.textContent = "Funnel unavailable";
-    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load pipeline funnel.</strong>
