@@ -8516,16 +8516,19 @@ body,
 }
 
 .activity-kpi-card {
-  border: 0.5px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  padding: 10px 12px;
+  border: 1px solid rgba(180, 215, 235, 0.55);
+  border-radius: 14px;
+  background: rgba(232, 246, 255, 0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(30, 80, 120, 0.08);
+  padding: 12px 14px;
 }
 
 .activity-kpi-card span,
 .activity-kpi-card small {
   display: block;
-  color: var(--color-text-tertiary);
+  color: #64748b;
   font-size: 10px;
   line-height: 1.35;
   text-transform: none;
@@ -8534,9 +8537,9 @@ body,
 .activity-kpi-card strong {
   display: block;
   margin: 5px 0 4px;
-  color: var(--color-text-primary);
+  color: #0f172a;
   font-size: 20px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.1;
 }
 
@@ -8550,28 +8553,32 @@ body,
 
 .activity-card,
 .activity-side-panel {
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface);
-  box-shadow: none;
+  border: 1px solid #dce3ea;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
 }
 
 .activity-card-header {
   align-items: center;
   padding: 12px 14px;
-  border-bottom: 0.5px solid var(--color-border);
+  border-bottom: 1px solid #dce3ea;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.9));
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
   margin-bottom: 0;
 }
 
 .activity-card-header h2,
 .activity-side-panel h2 {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  color: #0f172a;
 }
 
 .activity-card-header span,
 .activity-side-panel .compact-header span {
-  color: var(--color-text-tertiary);
+  color: #64748b;
   font-size: 10px;
   line-height: 1.35;
   text-transform: none;
@@ -8579,10 +8586,10 @@ body,
 
 .activity-count-pill {
   margin: 0;
-  background: #f3f5f7;
-  color: var(--color-text-secondary);
+  background: #f3f8fc;
+  color: #475569;
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   padding: 4px 8px;
 }
 
@@ -8595,21 +8602,22 @@ body,
 .calendar-nav-button {
   width: 28px;
   height: 28px;
-  border: 0.5px solid var(--color-border);
+  border: 1px solid rgba(203, 213, 225, 0.9);
   border-radius: 8px;
-  background: #fff;
-  color: var(--color-text-secondary);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 249, 255, 0.92));
+  color: #475569;
   font-size: 16px;
   line-height: 1;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 .calendar-range-pill {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
-  border: 0.5px solid var(--color-border);
+  border: 1px solid rgba(203, 213, 225, 0.9);
   border-radius: 999px;
-  background: #f8fafb;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 249, 255, 0.88));
   color: #6b7280;
   font-size: 10px;
   font-weight: 600;
@@ -8620,7 +8628,7 @@ body,
   gap: 10px;
   padding: 12px 14px 14px;
   border-bottom: 0;
-  background: #fff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(249, 252, 255, 0.92));
 }
 
 .weekly-log-header {
@@ -8661,17 +8669,22 @@ body,
   grid-template-columns: 36px repeat(7, minmax(90px, 1fr));
   grid-auto-rows: 42px;
   min-width: 720px;
-  border: 0.5px solid var(--color-border);
-  border-radius: 10px;
+  border: 1px solid #dce3ea;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
 }
 
 .calendar-corner-spacer {
-  border-right: 0.5px solid #edf1f4;
+  border-right: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, rgba(248, 252, 255, 0.95), rgba(240, 247, 252, 0.85));
 }
 
 .calendar-day-head {
   gap: 2px;
-  border-left: 0.5px solid #edf1f4;
+  border-left: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, rgba(240, 249, 255, 0.85), rgba(229, 244, 255, 0.55));
 }
 
 .calendar-day-head strong {
@@ -8691,7 +8704,7 @@ body,
 }
 
 .calendar-day-head.today {
-  background: rgba(29, 158, 117, 0.04);
+  background: linear-gradient(180deg, rgba(225, 246, 241, 0.95), rgba(212, 241, 236, 0.72));
 }
 
 .calendar-day-head.today strong,
@@ -8707,8 +8720,8 @@ body,
 }
 
 .calendar-slot {
-  border-left: 0.5px solid #edf1f4;
-  border-top: 0.5px solid #f1f5f7;
+  border-left: 1px solid #cbd5e1;
+  border-top: 1px solid #e2e8f0;
 }
 
 .calendar-event {
@@ -8993,7 +9006,12 @@ body,
 }
 
 .activity-side-panel .compact-header {
-  margin-bottom: 8px;
+  margin: -12px -12px 10px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid #dce3ea;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.9));
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
 }
 
 .reminder-stack {
