@@ -7192,23 +7192,23 @@ dialog::backdrop {
 
 .lead-wizard-shell {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .lead-stepper {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .lead-step {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #fbfdff, #f4f8fc);
   text-align: left;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
@@ -7260,20 +7260,32 @@ dialog::backdrop {
 
 .lead-step-copy strong {
   color: var(--ink);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.25;
 }
 
 .lead-step-copy small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.35;
+}
+
+.lead-wizard-note {
+  margin: -2px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .lead-step-panel {
   display: none;
   gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
+  padding: 16px;
 }
 
 .lead-step-panel.active {
@@ -7298,7 +7310,7 @@ dialog::backdrop {
 
 .lead-step-header h3 {
   margin: 6px 0 4px;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -7311,6 +7323,7 @@ dialog::backdrop {
 
 .lead-details-toggle {
   flex-shrink: 0;
+  min-width: 126px;
 }
 
 .lead-section-card {
@@ -7343,6 +7356,7 @@ dialog::backdrop {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-top: 4px;
 }
 
 .lead-step-actions-right {

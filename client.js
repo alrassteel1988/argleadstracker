@@ -2613,6 +2613,42 @@ function resetLeadWizardState() {
   state.leadFormDetailsOpen = { company: false, contact: false, followup: false };
 }
 
+function setLeadFormMode(mode = "create") {
+  const title = document.querySelector("#leadFormTitle");
+  const subtitle = document.querySelector("#leadFormSubtitle");
+  if (title) {
+    title.textContent = mode === "edit" ? "Edit Lead" : "Add New Lead";
+  }
+  if (subtitle) {
+    subtitle.textContent = mode === "edit"
+      ? "Review the essentials first, then expand only the extra details you want to refine."
+      : "Create once, then guide the team through contact capture and follow-up without the clutter.";
+  }
+  if (els.leadSubmitButton) {
+    els.leadSubmitButton.textContent = mode === "edit" ? "Save Changes" : "Save Lead";
+  }
+}
+
+function syncLeadWizardDetailsFromValues() {
+  if (!els.leadForm) return;
+  const groups = {
+    company: ["tier", "country_emirate", "location", "legal_name", "year_established", "industry", "business_category", "address", "website", "google_maps_url"],
+    contact: ["primary_contact_title", "estimated_value", "product_interest", "secondary_contact_name", "secondary_contact_title", "secondary_contact_mobile", "secondary_contact_email", "tags", "quotation_ref"],
+    followup: ["estimated_monthly_volume", "first_order_date", "products_services_remarks"]
+  };
+  Object.entries(groups).forEach(([key, fields]) => {
+    state.leadFormDetailsOpen[key] = fields.some(name => {
+      const field = els.leadForm.elements[name];
+      if (!field) return false;
+      const value = String(field.value || "").trim();
+      if (!value) return false;
+      if (name === "estimated_value") return Number(value) > 0;
+      if (name === "country_emirate") return value.toLowerCase() !== "dubai, uae";
+      return true;
+    });
+  });
+}
+
 function renderLeadFormWizard() {
   if (!els.leadForm) return;
   const step = Number(state.leadFormStep || 0);
@@ -2636,20 +2672,24 @@ function renderLeadFormWizard() {
       node.classList.toggle("hidden", !open);
     });
     els.leadForm.querySelectorAll(`[data-lead-details-toggle="${key}"]`).forEach(button => {
-      button.textContent = open ? "Hide Details" : "Add Details";
+      button.textContent = open ? "Hide Details" : "Show Details";
       button.setAttribute("aria-expanded", open ? "true" : "false");
     });
   });
   els.leadStepBack?.classList.toggle("hidden", step === 0);
   els.leadStepNext?.classList.toggle("hidden", step >= panels.length - 1);
   els.leadSubmitButton?.classList.toggle("hidden", step < panels.length - 1);
+  if (els.leadStepNext) {
+    const labels = ["Continue to Contact", "Continue to Next Step", "Next"];
+    els.leadStepNext.textContent = labels[step] || "Next";
+  }
 }
 
 function leadStepFieldNames(step = state.leadFormStep) {
   const map = [
-    ["company_name", "territory", "assigned_salesman", "sector", "tier", "country_emirate", "location"],
-    ["contact_person", "primary_contact_title", "phone", "email", "stage", "priority", "estimated_value", "product_interest"],
-    ["next_action", "next_action_date", "activity_purpose", "estimated_monthly_volume", "first_order_date", "notes"]
+    ["company_name", "assigned_salesman", "territory", "sector"],
+    ["contact_person", "phone", "email", "stage", "priority"],
+    ["next_action", "next_action_date", "activity_purpose", "notes"]
   ];
   return map[step] || [];
 }
@@ -2677,6 +2717,7 @@ function resetLeadFormForNewLead() {
   state.editingLeadId = "";
   state.editingOriginalStage = "";
   state.editingLostData = null;
+  setLeadFormMode("create");
   resetLeadWizardState();
   els.leadForm.reset();
   leadFormTouched.clear();
@@ -6603,6 +6644,7 @@ function openLeadEdit(leadId) {
   state.editingLeadId = leadId;
   state.editingOriginalStage = lead.stage || "";
   state.editingLostData = null;
+  setLeadFormMode("edit");
   resetLeadWizardState();
   leadFormTouched.clear();
   resetLeadEnrichmentSession();
@@ -6614,6 +6656,7 @@ function openLeadEdit(leadId) {
   });
   ensureLeadFormSelectValue("next_action", normalizeNextActionPlan(lead.next_action), NEXT_ACTION_PLAN_OPTIONS[0]);
   ensureLeadFormSelectValue("activity_purpose", normalizeActivityPurpose(lead.activity_purpose), ACTIVITY_PURPOSE_OPTIONS[0]);
+  syncLeadWizardDetailsFromValues();
   leadCompanyInputKey = leadCompanyOnlyKey(lead.company_name);
   setEnrichmentStatus("Editing existing lead. Review changes before saving.", "success");
   renderLeadFormWizard();

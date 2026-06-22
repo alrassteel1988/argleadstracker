@@ -772,8 +772,8 @@
       <form method="dialog" class="lead-form" id="leadForm">
         <div class="dialog-header">
           <div>
-            <h2>Add New Lead</h2>
-            <p>Create once, then guide the team through contact capture and follow-up without the clutter.</p>
+            <h2 id="leadFormTitle">Add New Lead</h2>
+            <p id="leadFormSubtitle">Create once, then guide the team through contact capture and follow-up without the clutter.</p>
           </div>
           <button type="button" class="ghost-button" id="closeLeadForm">Close</button>
         </div>
@@ -782,34 +782,35 @@
             <button class="lead-step active" type="button" data-lead-step="0" aria-current="step">
               <span class="lead-step-index">1</span>
               <span class="lead-step-copy">
-                <strong>Company Info</strong>
-                <small>Name, territory, sector</small>
+                <strong>Essentials</strong>
+                <small>Company, owner, territory</small>
               </span>
             </button>
             <button class="lead-step" type="button" data-lead-step="1">
               <span class="lead-step-index">2</span>
               <span class="lead-step-copy">
-                <strong>Contact &amp; Engagement</strong>
-                <small>People, value, stage</small>
+                <strong>Contact</strong>
+                <small>Person, stage, priority</small>
               </span>
             </button>
             <button class="lead-step" type="button" data-lead-step="2">
               <span class="lead-step-index">3</span>
               <span class="lead-step-copy">
-                <strong>Follow-Up &amp; Notes</strong>
-                <small>Next action, PMR context</small>
+                <strong>Next Step</strong>
+                <small>Action, timing, notes</small>
               </span>
             </button>
           </div>
+          <p class="lead-wizard-note">Start with the core fields only. Open extra details only when the opportunity needs them.</p>
 
           <section class="lead-step-panel active" data-lead-step-panel="0">
             <div class="lead-step-header">
               <div>
                 <span class="lead-step-kicker">Step 1 of 3</span>
-                <h3>Company Info</h3>
-                <p>Start with the account basics and let enrichment do the heavy lifting where possible.</p>
+                <h3>Lead Essentials</h3>
+                <p>Capture the account basics first, then expand the company profile only if you need more structure.</p>
               </div>
-              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="company">Add Details</button>
+              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="company">Show Details</button>
             </div>
             <div class="form-grid">
               <label class="company-field wide">Company name<input name="company_name" id="leadCompanyName" required></label>
@@ -817,19 +818,19 @@
               <div class="wide enrichment-strip">
                 <span class="enrichment-status" id="leadEnrichmentStatus" aria-live="polite">Type a company name to fetch Google business info.</span>
               </div>
-              <label>Territory<select name="territory" id="formTerritory"></select></label>
               <label>Assigned salesman<select name="assigned_salesman" id="formSalesman"></select></label>
+              <label>Territory<select name="territory" id="formTerritory"></select></label>
               <label>Sector<select name="sector" id="formSector"></select></label>
-              <label>Tier<select name="tier" id="formTier"></select></label>
-              <label>Country / Emirate<input name="country_emirate" value="Dubai, UAE"></label>
-              <label>Location<input name="location" placeholder="Dubai, UAE"></label>
               <div class="wide lead-optional-group hidden" data-lead-details-group="company">
                 <div class="lead-section-card">
                   <div class="lead-section-header">
                     <strong>Additional company details</strong>
-                    <span>Show richer profile data only when needed.</span>
+                    <span>Use this when legal, location, or enrichment details matter for the handoff.</span>
                   </div>
                   <div class="form-grid">
+                    <label>Tier<select name="tier" id="formTier"></select></label>
+                    <label>Country / Emirate<input name="country_emirate" value="Dubai, UAE"></label>
+                    <label>Location<input name="location" placeholder="Dubai, UAE"></label>
                     <label>Legal name<input name="legal_name" placeholder="Not available from Google Places API"></label>
                     <label>Year established<input name="year_established" placeholder="Not available from Google Places API"></label>
                     <label>Industry<input name="industry"></label>
@@ -847,27 +848,27 @@
             <div class="lead-step-header">
               <div>
                 <span class="lead-step-kicker">Step 2 of 3</span>
-                <h3>Contact &amp; Engagement</h3>
-                <p>Capture the main contact, pipeline stage, and commercial context without overwhelming the user.</p>
+                <h3>Contact &amp; Pipeline</h3>
+                <p>Keep the main relationship visible first, then reveal the commercial extras only when they are known.</p>
               </div>
-              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="contact">Add Details</button>
+              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="contact">Show Details</button>
             </div>
             <div class="form-grid">
               <label>Contact person<input name="contact_person"></label>
-              <label>Primary title<input name="primary_contact_title"></label>
               <label>Phone<input name="phone"></label>
               <label>Email<input name="email" type="email"></label>
               <label>Stage<select name="stage" id="formStage"></select></label>
               <label>Priority<select name="priority" id="formPriority"></select></label>
-              <label>Estimated value<input name="estimated_value" type="number" min="0" value="0"></label>
-              <label class="wide">Product interest<input name="product_interest"></label>
               <div class="wide lead-optional-group hidden" data-lead-details-group="contact">
                 <div class="lead-section-card">
                   <div class="lead-section-header">
                     <strong>Additional engagement details</strong>
-                    <span>Use this only if there is a second contact or extra commercial context to capture.</span>
+                    <span>Open this when there is a deeper commercial picture or more than one point of contact.</span>
                   </div>
                   <div class="form-grid">
+                    <label>Primary title<input name="primary_contact_title"></label>
+                    <label>Estimated value<input name="estimated_value" type="number" min="0" value="0"></label>
+                    <label class="wide">Product interest<input name="product_interest"></label>
                     <label>Secondary contact<input name="secondary_contact_name"></label>
                     <label>Secondary title<input name="secondary_contact_title"></label>
                     <label>Secondary mobile<input name="secondary_contact_mobile"></label>
@@ -884,10 +885,10 @@
             <div class="lead-step-header">
               <div>
                 <span class="lead-step-kicker">Step 3 of 3</span>
-                <h3>Follow-Up &amp; Notes</h3>
-                <p>Set the next action clearly, then save sales notes or a voice capture for the team.</p>
+                <h3>Next Step &amp; Notes</h3>
+                <p>Lock the next action, then save only the notes or extra follow-up detail that will help the team move cleanly.</p>
               </div>
-              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="followup">Add Details</button>
+              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="followup">Show Details</button>
             </div>
             <div class="form-grid">
               <label>Next action plan<select name="next_action" id="formNextAction">
@@ -903,8 +904,6 @@
                 <option value="Quotation Follow-Up">Quotation Follow-Up</option>
                 <option value="Meeting">Meeting</option>
               </select></label>
-              <label>Est. monthly volume<input name="estimated_monthly_volume" placeholder="MT/month"></label>
-              <label>First order date<input name="first_order_date" type="date"></label>
               <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Type notes or record a voice note"></textarea></label>
               <div class="wide voice-control">
                 <button class="voice-button" id="recordLeadVoice" type="button">Record Voice Note</button>
@@ -917,6 +916,8 @@
                     <span>Use these when the opportunity already has richer sales context.</span>
                   </div>
                   <div class="form-grid">
+                    <label>Est. monthly volume<input name="estimated_monthly_volume" placeholder="MT/month"></label>
+                    <label>First order date<input name="first_order_date" type="date"></label>
                     <label class="wide">Products/services remarks<textarea name="products_services_remarks" rows="3" placeholder="Google Places limitations or sales notes"></textarea></label>
                   </div>
                 </div>
