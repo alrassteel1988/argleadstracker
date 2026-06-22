@@ -6,6 +6,7 @@ const PWA_INSTALL_DISMISSED_KEY = "arg_pwa_install_dismissed_until";
 const LEAD_AI_SUMMARY_CACHE_KEY = "arg_lead_ai_summary_cache_v1";
 const OUTBOX_DB_NAME = "arg_leads_pwa_outbox";
 const OUTBOX_STORE = "outbox";
+const SMART_SEARCH_DEBOUNCE_MS = 220;
 const ACTIVITY_PRESETS = ["Today", "This Week", "This Month", "Last 30 Days", "Last 90 Days"];
 const QUICK_LOG_TYPES = ["Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed"];
 const QUICK_PHRASES = ["Discussed pricing", "Requested quotation", "Sample feedback", "Follow-up agreed", "Met procurement"];
@@ -96,6 +97,7 @@ const state = {
   marketIntel: { items: [], heat_map: [], disabled: false },
   marketNews: { items: [], disabled: false, loading: false, error: "", reason: "", fetched_at: "" },
   dashboardMarketNewsOpen: localStorage.getItem(DASHBOARD_MARKET_NEWS_KEY) === "true",
+  smartSearch: { query: "", results: [], open: false, expanded: false, searching: false },
   editingLeadId: "",
   editingOriginalStage: "",
   editingLostData: null,
@@ -123,6 +125,7 @@ const ADMIN_DASHBOARD_COLLAPSIBLES = [
 
 const dashboardCollapsibleTimers = new Map();
 let dashboardCollapsiblesReady = false;
+let smartSearchTimer = null;
 
 const els = {
   authScreen: document.querySelector("#authScreen"),
@@ -142,6 +145,9 @@ const els = {
   topbarPageTitle: document.querySelector("#topbarPageTitle"),
   topbarContext: document.querySelector("#topbarContext"),
   syncStatusPill: document.querySelector("#syncStatusPill"),
+  smartSearchShell: document.querySelector("#smartSearchShell"),
+  smartSearchInput: document.querySelector("#smartSearchInput"),
+  smartSearchPanel: document.querySelector("#smartSearchPanel"),
   mobileAlertsBadge: document.querySelector("#mobileAlertsBadge"),
   installBanner: document.querySelector("#installBanner"),
   installBannerTitle: document.querySelector("#installBannerTitle"),
@@ -3552,6 +3558,248 @@ function filteredLeads() {
     const matchesImported = !state.importedAfter || (Number.isFinite(importedAt) && importedAt >= importedAfter);
     return matchesQuery && matchesStage && matchesSalesman && matchesPriority && matchesTerritory && matchesOverdue && matchesImported;
   });
+}
+
+function smartSearchText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function smartSearchHasPhrase(query, phrases) {
+  return phrases.some(phrase => query.includes(phrase));
+}
+
+function smartSearchMetaLine(lead) {
+  return [
+    stageDisplayLabel(lead.stage || "PROSPECT"),
+    lead.priority || "No priority",
+    lead.assigned_salesman || "Unassigned"
+  ].filter(Boolean).join(" · ");
+}
+
+function smartSearchFollowupLine(lead, overdueCount = 0) {
+  if (lead.next_action_date) {
+    return `${overdueCount ? `${overdueCount} overdue · ` : ""}Next follow-up ${lead.next_action_date}`;
+  }
+  if (lead.last_activity) return `Last activity ${daysAgoLabel(lead.last_activity)}`;
+  return overdueCount ? `${overdueCount} overdue follow-up item${overdueCount === 1 ? "" : "s"}` : "No follow-up scheduled";
+}
+
+function smartSearchLeadResult(lead, query, tokens) {
+  const stageUpper = String(lead.stage || "").trim().toUpperCase();
+  const reminders = remindersForLead(lead);
+  const overdueCount = overdueReminderItemsForLead(lead).length + (leadHasOverdueNextAction(lead) ? 1 : 0);
+  const noFollowup = !lead.next_action_date;
+  const staleDays = daysSince(lead.last_activity || lead.updated_at || lead.created_at);
+  const dormant = stageUpper === "DORMANT" || staleDays >= 60;
+  const inactive = stageUpper === "DORMANT" || staleDays >= 75 || (!lead.last_activity && !lead.next_action_date);
+  const openPipeline = !["WON", "LOST", "ACTIVE", "DORMANT"].includes(stageUpper);
+  const lostLead = isLostStageValue(lead.stage) || Boolean(lead.lost_reason);
+  const activeCustomer = stageUpper === "ACTIVE";
+  const quotationRelated = Boolean(lead.quotation_ref)
+    || /quotation|quote|proposal/i.test([
+      lead.notes,
+      lead.product_interest,
+      lead.products_services_remarks,
+      ...(lead.activities || []).map(activity => `${activity.type || ""} ${activity.text || activity.note || ""}`)
+    ].join(" "));
+  const noReply = /no reply|no response|unanswered|silent/i.test([
+    lead.notes,
+    lead.products_services_remarks,
+    lead.lost_reason,
+    ...(lead.activities || []).map(activity => `${activity.type || ""} ${activity.text || activity.note || ""}`)
+  ].join(" "));
+  const haystack = [
+    lead.company_name,
+    lead.legal_name,
+    lead.contact_person,
+    lead.primary_contact_title,
+    lead.email,
+    lead.phone,
+    lead.stage,
+    lead.priority,
+    lead.product_interest,
+    lead.notes,
+    lead.products_services_remarks,
+    lead.quotation_ref,
+    lead.tags,
+    lead.industry,
+    lead.business_category,
+    lead.sector,
+    lead.territory,
+    lead.location,
+    lead.country_emirate,
+    lead.address,
+    lead.assigned_salesman,
+    lead.next_action,
+    lead.activity_purpose,
+    ...(lead.activities || []).map(activity => `${activity.type || ""} ${activity.text || activity.note || ""}`)
+  ].filter(Boolean).join(" ").toLowerCase();
+  const companyName = smartSearchText(lead.company_name);
+  const reasons = [];
+  if (companyName && companyName === query) reasons.push({ score: 360, label: "Matched company name exactly" });
+  else if (companyName && companyName.includes(query)) reasons.push({ score: 280, label: "Matched company name" });
+  if (smartSearchHasPhrase(query, ["inactive"]) && inactive) reasons.push({ score: 250, label: "Matched inactive account signal" });
+  if (smartSearchHasPhrase(query, ["dormant"]) && dormant) reasons.push({ score: 250, label: "Matched dormant status" });
+  if (smartSearchHasPhrase(query, ["overdue"]) && overdueCount) reasons.push({ score: 255, label: "Matched overdue follow-up" });
+  if (smartSearchHasPhrase(query, ["no follow-up", "no followup"]) && noFollowup) reasons.push({ score: 245, label: "Matched no follow-up scheduled" });
+  if (smartSearchHasPhrase(query, ["quotation", "quote", "proposal"]) && quotationRelated) reasons.push({ score: 240, label: "Matched quotation activity" });
+  if (smartSearchHasPhrase(query, ["lost lead", "lost"]) && lostLead) reasons.push({ score: 235, label: "Matched lost lead status" });
+  if (smartSearchHasPhrase(query, ["pipeline"]) && openPipeline) reasons.push({ score: 225, label: "Matched active pipeline stage" });
+  if (smartSearchHasPhrase(query, ["active"]) && activeCustomer && !smartSearchHasPhrase(query, ["inactive"])) reasons.push({ score: 220, label: "Matched active customer status" });
+  if (smartSearchHasPhrase(query, ["at risk", "risk"]) && (String(lead.priority || "").toLowerCase() === "hot" || overdueCount)) reasons.push({ score: 215, label: "Matched at-risk condition" });
+  if (smartSearchHasPhrase(query, ["task", "follow-up", "follow up"]) && (lead.next_action_date || reminders.length)) reasons.push({ score: 200, label: "Matched task or follow-up" });
+  if (smartSearchHasPhrase(query, ["no reply", "no response", "unanswered"]) && noReply) reasons.push({ score: 230, label: "Matched no-reply activity" });
+  if (!reasons.length && tokens.length && tokens.every(token => haystack.includes(token))) {
+    reasons.push({ score: 180, label: "Matched company, status, notes, or activity text" });
+  }
+  if (!reasons.length) return null;
+  const best = reasons.sort((a, b) => b.score - a.score)[0];
+  return {
+    kind: "lead",
+    id: lead.id,
+    company_name: lead.company_name || "Unnamed company",
+    stage: stageDisplayLabel(lead.stage || "PROSPECT"),
+    rawStage: lead.stage || "PROSPECT",
+    meta: smartSearchMetaLine(lead),
+    reason: best.label,
+    supporting: smartSearchFollowupLine(lead, overdueCount),
+    actionLabel: "Open Lead",
+    score: best.score + Math.max(0, 40 - staleDays)
+  };
+}
+
+function smartSearchArticleResult(item, query, tokens, kind = "intel") {
+  const haystack = `${item.title || ""} ${item.description || item.summary || ""} ${item.source || ""} ${(item.sector_tags || []).join(" ")} ${(item.geography_tags || []).join(" ")}`.toLowerCase();
+  if (!tokens.length || !tokens.every(token => haystack.includes(token))) return null;
+  return {
+    kind,
+    url: item.url || "",
+    company_name: item.title || "Market insight",
+    stage: item.source || (kind === "news" ? "News" : "Intel"),
+    meta: kind === "news" ? "Matched market news topic" : "Matched market intelligence topic",
+    reason: kind === "news" ? "Matched dashboard market news" : "Matched market intelligence",
+    supporting: item.published_at ? `Published ${formatDateTime(item.published_at)}` : "Recently published",
+    actionLabel: item.url ? "Open Article" : "View Intel",
+    score: kind === "news" ? 120 : 130
+  };
+}
+
+function computeSmartSearchResults(query) {
+  const normalized = smartSearchText(query);
+  if (!normalized) return [];
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  const leadResults = state.leads
+    .map(lead => smartSearchLeadResult(lead, normalized, tokens))
+    .filter(Boolean);
+  const intelResults = (state.marketIntel.items || [])
+    .slice(0, 8)
+    .map(item => smartSearchArticleResult(item, normalized, tokens, "intel"))
+    .filter(Boolean);
+  const newsResults = (state.marketNews.items || [])
+    .slice(0, 8)
+    .map(item => smartSearchArticleResult(item, normalized, tokens, "news"))
+    .filter(Boolean);
+  return [...leadResults, ...intelResults, ...newsResults]
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 24);
+}
+
+function closeSmartSearch() {
+  state.smartSearch.open = false;
+  state.smartSearch.expanded = false;
+  renderSmartSearch();
+}
+
+function queueSmartSearch(query) {
+  clearTimeout(smartSearchTimer);
+  const normalized = String(query || "");
+  state.smartSearch.query = normalized;
+  state.smartSearch.expanded = false;
+  if (!normalized.trim()) {
+    state.smartSearch.results = [];
+    state.smartSearch.searching = false;
+    state.smartSearch.open = false;
+    renderSmartSearch();
+    return;
+  }
+  state.smartSearch.searching = true;
+  state.smartSearch.open = true;
+  renderSmartSearch();
+  smartSearchTimer = setTimeout(() => {
+    state.smartSearch.results = computeSmartSearchResults(normalized);
+    state.smartSearch.searching = false;
+    renderSmartSearch();
+  }, SMART_SEARCH_DEBOUNCE_MS);
+}
+
+function openSmartSearchFullResults() {
+  if (!state.smartSearch.query.trim()) return;
+  state.smartSearch.open = true;
+  state.smartSearch.expanded = true;
+  if (!state.smartSearch.results.length && !state.smartSearch.searching) {
+    state.smartSearch.results = computeSmartSearchResults(state.smartSearch.query);
+  }
+  renderSmartSearch();
+}
+
+function smartSearchResultMarkup(result) {
+  const stageTone = result.kind === "lead"
+    ? `stage-pill ${drawerStageClass(result.rawStage || result.stage)}`
+    : "chip";
+  return `
+    <button class="smart-search-result" type="button" data-smart-search-kind="${escapeHtml(result.kind)}" data-smart-search-lead="${escapeHtml(result.id || "")}" data-smart-search-url="${escapeHtml(result.url || "")}">
+      <div class="smart-search-result-copy">
+        <div class="smart-search-result-top">
+          <strong>${escapeHtml(result.company_name)}</strong>
+          <span class="${escapeHtml(stageTone)}">${escapeHtml(result.stage)}</span>
+        </div>
+        <span class="smart-search-result-reason">${escapeHtml(result.reason)}</span>
+        <small>${escapeHtml(result.meta)}</small>
+        <p>${escapeHtml(result.supporting)}</p>
+      </div>
+      <span class="smart-search-result-action">${escapeHtml(result.actionLabel)}</span>
+    </button>
+  `;
+}
+
+function renderSmartSearch() {
+  if (!els.smartSearchShell || !els.smartSearchInput || !els.smartSearchPanel) return;
+  const visible = Boolean(state.currentUser);
+  els.smartSearchShell.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  if (document.activeElement !== els.smartSearchInput) {
+    els.smartSearchInput.value = state.smartSearch.query || "";
+  }
+  const query = smartSearchText(state.smartSearch.query);
+  if (query && !state.smartSearch.searching) {
+    state.smartSearch.results = computeSmartSearchResults(query);
+  }
+  const results = state.smartSearch.expanded
+    ? state.smartSearch.results
+    : state.smartSearch.results.slice(0, 6);
+  const showPanel = state.smartSearch.open && Boolean(query);
+  els.smartSearchShell.classList.toggle("is-open", showPanel);
+  els.smartSearchPanel.classList.toggle("hidden", !showPanel);
+  if (!showPanel) return;
+  if (state.smartSearch.searching) {
+    els.smartSearchPanel.innerHTML = `<div class="smart-search-state">Searching CRM records…</div>`;
+    return;
+  }
+  const total = state.smartSearch.results.length;
+  const leadCount = state.smartSearch.results.filter(item => item.kind === "lead").length;
+  const hasMore = !state.smartSearch.expanded && total > results.length;
+  els.smartSearchPanel.innerHTML = `
+    <div class="smart-search-panel-header">
+      <div>
+        <strong>${total ? `${total} match${total === 1 ? "" : "es"}` : "No matching CRM records found."}</strong>
+        <small>${total ? `${leadCount} CRM record${leadCount === 1 ? "" : "s"} matched "${query}"` : `Try a company name, status, overdue task, note topic, or pipeline term.`}</small>
+      </div>
+      <div class="smart-search-panel-actions">
+        ${hasMore ? `<button class="small-action" type="button" data-smart-search-expand="true">Show all</button>` : ""}
+      </div>
+    </div>
+    ${results.length ? `<div class="smart-search-results">${results.map(smartSearchResultMarkup).join("")}</div>` : `<div class="smart-search-state">No matching CRM records found.</div>`}
+  `;
 }
 
 function priorityClass(priority) {
@@ -8048,6 +8296,7 @@ function render() {
   renderPipelineFunnel();
   renderSidebarIdentity();
   renderTopbar();
+  renderSmartSearch();
   renderDashboardView();
   renderLeadList();
   renderKanbanView();
@@ -8362,6 +8611,57 @@ els.searchInput.addEventListener("input", event => {
   state.importedAfter = "";
   state.filters.search = event.target.value;
   render();
+});
+
+els.smartSearchInput?.addEventListener("focus", () => {
+  if (state.smartSearch.query.trim()) {
+    state.smartSearch.open = true;
+    renderSmartSearch();
+  }
+});
+
+els.smartSearchInput?.addEventListener("input", event => {
+  queueSmartSearch(event.target.value);
+});
+
+els.smartSearchInput?.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    openSmartSearchFullResults();
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSmartSearch();
+    els.smartSearchInput.blur();
+  }
+});
+
+els.smartSearchPanel?.addEventListener("click", event => {
+  const expand = event.target.closest("[data-smart-search-expand]");
+  if (expand) {
+    openSmartSearchFullResults();
+    return;
+  }
+  const trigger = event.target.closest("[data-smart-search-kind]");
+  if (!trigger) return;
+  const kind = trigger.dataset.smartSearchKind;
+  if (kind === "lead" && trigger.dataset.smartSearchLead) {
+    closeSmartSearch();
+    state.selectedId = trigger.dataset.smartSearchLead;
+    openLeadDrawer(trigger.dataset.smartSearchLead, "overview");
+    return;
+  }
+  const url = trigger.dataset.smartSearchUrl;
+  if (url) {
+    window.open(url, "_blank", "noopener");
+    closeSmartSearch();
+  }
+});
+
+document.addEventListener("click", event => {
+  if (!els.smartSearchShell || !state.smartSearch.open) return;
+  if (els.smartSearchShell.contains(event.target)) return;
+  closeSmartSearch();
 });
 
 els.stageFilter.addEventListener("change", event => {

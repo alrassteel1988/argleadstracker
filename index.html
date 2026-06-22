@@ -114,6 +114,13 @@
           </div>
           <div class="topbar-actions">
             <button class="sync-status-pill hidden" id="syncStatusPill" type="button">All synced</button>
+            <div class="smart-search-shell" id="smartSearchShell">
+              <label class="smart-search-field" for="smartSearchInput">
+                <span class="smart-search-icon" aria-hidden="true">⌕</span>
+                <input id="smartSearchInput" type="search" autocomplete="off" placeholder="Search companies, status, tasks, notes, or pipeline…" aria-label="Smart CRM search">
+              </label>
+              <div class="smart-search-panel hidden" id="smartSearchPanel" aria-live="polite"></div>
+            </div>
             <button class="ghost-button hidden" id="openSalesmanForm">Create Salesman Account</button>
             <button class="ghost-button" id="logoutButton">Sign Out</button>
             <button class="ghost-button" id="openPlacesSearch">Search places</button>
