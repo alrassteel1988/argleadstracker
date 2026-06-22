@@ -4098,9 +4098,18 @@ textarea {
   grid-row: 3;
   align-self: center;
   justify-self: center;
-  color: var(--muted);
+  color: #9ca3af;
   font-size: var(--text-label);
   font-weight: var(--weight-semibold);
+}
+
+.activity-weekly-card .panel-header h2 {
+  color: #111827;
+}
+
+.activity-weekly-card .activity-weekly-subheading {
+  color: #6b7280;
+  font-weight: 500;
 }
 
 .request-status {
@@ -8601,9 +8610,9 @@ body,
   border: 0.5px solid var(--color-border);
   border-radius: 999px;
   background: #f8fafb;
-  color: var(--color-text-secondary);
+  color: #6b7280;
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   padding: 0 10px;
 }
 
@@ -8622,8 +8631,9 @@ body,
   display: inline-flex;
   flex-wrap: wrap;
   gap: 12px;
-  color: var(--color-text-tertiary);
+  color: #6b7280;
   font-size: 10px;
+  font-weight: 500;
 }
 
 .calendar-legend span {
@@ -8665,9 +8675,9 @@ body,
 }
 
 .calendar-day-head strong {
-  color: var(--color-text-secondary);
+  color: #4b5563;
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .calendar-day-head span {
@@ -8675,9 +8685,9 @@ body,
   height: auto;
   border: 0;
   border-radius: 0;
-  color: var(--color-text-primary);
+  color: #1f2937;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .calendar-day-head.today {
@@ -8691,8 +8701,9 @@ body,
 
 .calendar-time {
   padding-left: 8px;
-  color: var(--color-text-tertiary);
+  color: #6b7280;
   font-size: 10px;
+  font-weight: 500;
 }
 
 .calendar-slot {
@@ -8708,19 +8719,19 @@ body,
   border-radius: 0;
   background: #f3f4f6;
   box-shadow: none;
-  color: var(--color-text-secondary);
+  color: #374151;
   padding: 2px 5px;
 }
 
 .calendar-event span {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .calendar-event.activity-reminder {
   border-left-color: var(--color-danger-border);
   background: var(--color-danger-bg);
-  color: var(--color-danger-text);
+  color: #991b1b;
 }
 
 .calendar-event.activity-phone-call,
@@ -8732,7 +8743,7 @@ body,
 .calendar-event.activity-order-placed {
   border-left-color: var(--color-success-border);
   background: var(--color-success-bg);
-  color: var(--color-success-text);
+  color: #047857;
 }
 
 .activity-filter-shell {
