@@ -1,5 +1,6 @@
 const ACTIVITY_FILTER_KEY = "arg_activity_filters";
 const OVERDUE_BANNER_KEY = "arg_overdue_banner_dismissed";
+const DASHBOARD_MARKET_NEWS_KEY = "arg_dashboard_market_news_open";
 const PWA_VISIT_KEY = "arg_pwa_visit_count";
 const PWA_INSTALL_DISMISSED_KEY = "arg_pwa_install_dismissed_until";
 const LEAD_AI_SUMMARY_CACHE_KEY = "arg_lead_ai_summary_cache_v1";
@@ -57,6 +58,8 @@ const state = {
   activityFiltersOpen: false,
   activityFilters: loadActivityFilters(),
   activityWeekAnchor: today(),
+  leadFormStep: 0,
+  leadFormDetailsOpen: { company: false, contact: false, followup: false },
   leadDrawerOpen: false,
   leadDrawerTab: "overview",
   leadDrawerLoading: false,
@@ -92,6 +95,7 @@ const state = {
   sync: { online: navigator.onLine, syncing: false, pending: 0, failed: 0 },
   marketIntel: { items: [], heat_map: [], disabled: false },
   marketNews: { items: [], disabled: false, loading: false, error: "", reason: "", fetched_at: "" },
+  dashboardMarketNewsOpen: localStorage.getItem(DASHBOARD_MARKET_NEWS_KEY) === "true",
   editingLeadId: "",
   editingOriginalStage: "",
   editingLostData: null,
@@ -130,6 +134,8 @@ const els = {
   loginMessage: document.querySelector("#loginMessage"),
   signedInUser: document.querySelector("#signedInUser"),
   sidebarUserMenu: document.querySelector("#sidebarUserMenu"),
+  sidebarToolsMenu: document.querySelector("#sidebarToolsMenu"),
+  sidebarSearchPlaces: document.querySelector("#sidebarSearchPlaces"),
   sidebarUserName: document.querySelector("#sidebarUserName"),
   sidebarUserRole: document.querySelector("#sidebarUserRole"),
   sidebarUserAvatar: document.querySelector("#sidebarUserAvatar"),
@@ -188,6 +194,11 @@ const els = {
   metricsShell: document.querySelector("#metricsShell"),
   metricsPanel: document.querySelector("#metricsPanel"),
   dashboardView: document.querySelector("#dashboardView"),
+  dashboardQuickActions: document.querySelector("#dashboardQuickActions"),
+  dashboardQuickAddLead: document.querySelector("#dashboardQuickAddLead"),
+  dashboardQuickLogActivity: document.querySelector("#dashboardQuickLogActivity"),
+  dashboardQuickPipeline: document.querySelector("#dashboardQuickPipeline"),
+  dashboardToggleMarketNews: document.querySelector("#dashboardToggleMarketNews"),
   dailyAiPanel: document.querySelector("#dailyAiPanel"),
   dailyAiGreeting: document.querySelector("#dailyAiGreeting"),
   dailyAiSummary: document.querySelector("#dailyAiSummary"),
@@ -330,6 +341,10 @@ const els = {
   leadDrawerContent: document.querySelector("#leadDrawerContent"),
   leadDialog: document.querySelector("#leadDialog"),
   leadForm: document.querySelector("#leadForm"),
+  leadStepper: document.querySelector("#leadStepper"),
+  leadStepBack: document.querySelector("#leadStepBack"),
+  leadStepNext: document.querySelector("#leadStepNext"),
+  leadSubmitButton: document.querySelector("#leadSubmitButton"),
   formSalesman: document.querySelector("#formSalesman"),
   formStage: document.querySelector("#formStage"),
   formPriority: document.querySelector("#formPriority"),
@@ -2593,10 +2608,76 @@ function resetLeadEnrichmentSession({ clearFields = false } = {}) {
   if (clearFields) clearLeadAutoEnrichmentFields();
 }
 
+function resetLeadWizardState() {
+  state.leadFormStep = 0;
+  state.leadFormDetailsOpen = { company: false, contact: false, followup: false };
+}
+
+function renderLeadFormWizard() {
+  if (!els.leadForm) return;
+  const step = Number(state.leadFormStep || 0);
+  const panels = [...els.leadForm.querySelectorAll("[data-lead-step-panel]")];
+  const steps = [...els.leadForm.querySelectorAll("[data-lead-step]")];
+  panels.forEach((panel, index) => {
+    const active = index === step;
+    panel.hidden = !active;
+    panel.classList.toggle("active", active);
+  });
+  steps.forEach((button, index) => {
+    const active = index === step;
+    const complete = index < step;
+    button.classList.toggle("active", active);
+    button.classList.toggle("complete", complete);
+    button.setAttribute("aria-current", active ? "step" : "false");
+  });
+  ["company", "contact", "followup"].forEach(key => {
+    const open = Boolean(state.leadFormDetailsOpen[key]);
+    els.leadForm.querySelectorAll(`[data-lead-details-group="${key}"]`).forEach(node => {
+      node.classList.toggle("hidden", !open);
+    });
+    els.leadForm.querySelectorAll(`[data-lead-details-toggle="${key}"]`).forEach(button => {
+      button.textContent = open ? "Hide Details" : "Add Details";
+      button.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  });
+  els.leadStepBack?.classList.toggle("hidden", step === 0);
+  els.leadStepNext?.classList.toggle("hidden", step >= panels.length - 1);
+  els.leadSubmitButton?.classList.toggle("hidden", step < panels.length - 1);
+}
+
+function leadStepFieldNames(step = state.leadFormStep) {
+  const map = [
+    ["company_name", "territory", "assigned_salesman", "sector", "tier", "country_emirate", "location"],
+    ["contact_person", "primary_contact_title", "phone", "email", "stage", "priority", "estimated_value", "product_interest"],
+    ["next_action", "next_action_date", "activity_purpose", "estimated_monthly_volume", "first_order_date", "notes"]
+  ];
+  return map[step] || [];
+}
+
+function validateLeadStep(step = state.leadFormStep) {
+  const names = leadStepFieldNames(step);
+  for (const name of names) {
+    const field = els.leadForm?.elements?.[name];
+    if (field && typeof field.reportValidity === "function" && !field.reportValidity()) {
+      field.focus();
+      return false;
+    }
+  }
+  return true;
+}
+
+function setLeadFormStep(step) {
+  const panels = els.leadForm ? [...els.leadForm.querySelectorAll("[data-lead-step-panel]")] : [];
+  const max = Math.max(0, panels.length - 1);
+  state.leadFormStep = Math.max(0, Math.min(Number(step || 0), max));
+  renderLeadFormWizard();
+}
+
 function resetLeadFormForNewLead() {
   state.editingLeadId = "";
   state.editingOriginalStage = "";
   state.editingLostData = null;
+  resetLeadWizardState();
   els.leadForm.reset();
   leadFormTouched.clear();
   state.duplicateMatches = [];
@@ -2614,6 +2695,7 @@ function resetLeadFormForNewLead() {
   ensureLeadFormSelectValue("activity_purpose", ACTIVITY_PURPOSE_OPTIONS[0], ACTIVITY_PURPOSE_OPTIONS[0]);
   renderDuplicateWarning();
   setEnrichmentStatus("Type a company name to fetch Google business info.");
+  renderLeadFormWizard();
 }
 
 function applyLeadEnrichment(enrichment, { overwrite = false } = {}) {
@@ -4874,10 +4956,38 @@ function renderPortfolioAnalytics() {
 }
 
 function renderSalesmanDashboard() {
+  renderDashboardQuickActions();
   renderDailyAiPanel();
   renderMarketNewsPanel();
   renderSalesmanFollowups();
   renderPortfolioAnalytics();
+}
+
+function setDashboardMarketNewsOpen(open) {
+  state.dashboardMarketNewsOpen = Boolean(open);
+  localStorage.setItem(DASHBOARD_MARKET_NEWS_KEY, state.dashboardMarketNewsOpen ? "true" : "false");
+  renderDashboardQuickActions();
+  renderMarketNewsPanel();
+}
+
+function renderDashboardQuickActions() {
+  if (!els.dashboardQuickActions) return;
+  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  els.dashboardToggleMarketNews?.classList.toggle("hidden", !salesman);
+  if (!salesman || !els.dashboardToggleMarketNews) {
+    els.dashboardToggleMarketNews?.classList.remove("is-active");
+    return;
+  }
+  const open = Boolean(state.dashboardMarketNewsOpen);
+  const title = els.dashboardToggleMarketNews.querySelector("strong");
+  const body = els.dashboardToggleMarketNews.querySelector("small");
+  els.dashboardToggleMarketNews.classList.toggle("is-active", open);
+  if (title) title.textContent = open ? "Hide Market News" : "Show Market News";
+  if (body) {
+    body.textContent = open
+      ? "Close the headlines and keep the dashboard focused."
+      : "Open fresh industry headlines only when you need them.";
+  }
 }
 
 function renderDailyAiPanel() {
@@ -4925,8 +5035,9 @@ function marketNewsCardMarkup(item) {
 function renderMarketNewsPanel() {
   if (!els.marketNewsPanel || !els.marketNewsFeed) return;
   const salesmanDashboard = state.currentUser && state.currentUser.role !== "admin" && currentView === "dashboard";
-  els.marketNewsPanel.classList.toggle("hidden", !salesmanDashboard);
-  if (!salesmanDashboard) return;
+  const visible = Boolean(salesmanDashboard && state.dashboardMarketNewsOpen);
+  els.marketNewsPanel.classList.toggle("hidden", !visible);
+  if (!visible) return;
   if (els.marketNewsMeta) {
     els.marketNewsMeta.textContent = state.marketNews.loading
       ? "Refreshing..."
@@ -5678,6 +5789,16 @@ function detailField(label, value, options = {}) {
   return `<article class="drawer-field ${options.overdue ? "overdue" : ""}"><span>${escapeHtml(label)}${auto}</span><strong>${content}</strong></article>`;
 }
 
+function drawerSummaryMetric(label, value, options = {}) {
+  const tone = options.tone ? ` ${options.tone}` : "";
+  return `
+    <article class="drawer-summary-card${tone}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value || "Not set"))}</strong>
+    </article>
+  `;
+}
+
 function tagPills(value) {
   return String(value || "").split(",").map(tag => tag.trim()).filter(Boolean)
     .map(tag => `<span class="chip">${escapeHtml(tag)}</span>`).join("") || `<span class="empty-copy">No tags added.</span>`;
@@ -5877,47 +5998,102 @@ function renderLossDetails(lead) {
 
 function renderDrawerOverview(lead) {
   const overdue = lead.next_action_date && lead.next_action_date < today();
+  const primaryContact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ") || "Not added";
+  const secondaryContact = [lead.secondary_contact_name, lead.secondary_contact_title].filter(Boolean).join(" - ");
+  const locationLine = [lead.location, lead.country_emirate, lead.address].filter(Boolean).join(" - ");
+  const lastActivity = lead.last_activity ? `${daysAgoLabel(lead.last_activity)}` : "No activity yet";
+  const estimatedValue = formatAED(lead.estimated_value);
+  const overviewSnapshot = `
+    <section class="drawer-section drawer-overview-hero">
+      <div class="drawer-tab-heading">
+        <div>
+          <h3>Lead Snapshot</h3>
+          <p class="drawer-section-copy">Surface the next move first, then keep the supporting context available on demand.</p>
+        </div>
+      </div>
+      <div class="drawer-summary-grid">
+        ${drawerSummaryMetric("Next Action", lead.next_action ? normalizeNextActionPlan(lead.next_action) : "Not set", { tone: overdue ? "overdue" : "" })}
+        ${drawerSummaryMetric("Due Date", lead.next_action_date ? `${lead.next_action_date}${overdue ? " - overdue" : ""}` : "Not set", { tone: overdue ? "overdue" : "" })}
+        ${drawerSummaryMetric("Estimated Value", estimatedValue)}
+        ${drawerSummaryMetric("Last Activity", lastActivity)}
+      </div>
+      <div class="drawer-primary-actions">
+        <a class="ghost-button" href="${lead.phone ? `tel:${escapeHtml(lead.phone)}` : "#"}">Call</a>
+        <a class="ghost-button" href="${lead.email ? `mailto:${escapeHtml(lead.email)}` : "#"}">Email</a>
+        <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button>
+        <button class="primary-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit Lead</button>
+      </div>
+    </section>
+  `;
   return `
     ${autoEnrichmentBanner(lead)}
+    ${overviewSnapshot}
     <section class="drawer-section">
-      <h3>Contact Information</h3>
+      <div class="drawer-tab-heading">
+        <div>
+          <h3>Contact Essentials</h3>
+          <p class="drawer-section-copy">Keep the main relationship details easy to scan during calls and follow-ups.</p>
+        </div>
+      </div>
       <div class="drawer-field-grid">
-        ${detailField("Primary contact", [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - "), { auto: autoField(lead, "key_personnel") })}
+        ${detailField("Primary contact", primaryContact, { auto: autoField(lead, "key_personnel") })}
         ${detailField("Phone", lead.phone, lead.phone ? { href: `tel:${lead.phone}` } : {})}
         ${detailField("Email", lead.email, lead.email ? { href: `mailto:${lead.email}` } : {})}
-        ${detailField("Secondary contact", [lead.secondary_contact_name, lead.secondary_contact_title].filter(Boolean).join(" - "))}
-        ${detailField("Secondary phone", lead.secondary_contact_mobile, lead.secondary_contact_mobile ? { href: `tel:${lead.secondary_contact_mobile}` } : {})}
-        ${detailField("Secondary email", lead.secondary_contact_email, lead.secondary_contact_email ? { href: `mailto:${lead.secondary_contact_email}` } : {})}
         ${detailField("Website", lead.website, lead.website ? { href: lead.website, external: true } : {})}
         ${detailField("Google Maps", lead.google_maps_url ? "Open map" : "", lead.google_maps_url ? { href: lead.google_maps_url, external: true } : {})}
-      </div>
-    </section>
-    <section class="drawer-section">
-      <h3>Company & Commercial Details</h3>
-      <div class="drawer-field-grid">
-        ${detailField("Legal name", lead.legal_name)}
-        ${detailField("Year established", lead.year_established)}
-        ${detailField("Industry", lead.industry || lead.business_category || lead.sector, { auto: autoField(lead, "sector_classification") })}
-        ${detailField("Product interest", lead.product_interest)}
-        ${detailField("Quotation ref", lead.quotation_ref)}
-        ${detailField("First order date", lead.first_order_date)}
-        ${detailField("Monthly volume", lead.estimated_monthly_volume)}
         ${detailField("Assigned salesman", lead.assigned_salesman)}
-        ${detailField("Activity purpose", normalizeActivityPurpose(lead.activity_purpose))}
-        ${detailField("Next action date", lead.next_action_date ? `${lead.next_action_date}${overdue ? " - overdue" : ""}` : "", { overdue })}
-        ${detailField("Next action", lead.next_action ? normalizeNextActionPlan(lead.next_action) : "")}
+        ${detailField("Location", locationLine)}
       </div>
-      <div class="drawer-tags">${tagPills(lead.tags)}</div>
-      <p class="drawer-remarks">${autoField(lead, "recent_projects") ? `<span class="auto-tag">Auto</span> ` : ""}${escapeHtml(lead.products_services_remarks || "No products/services remarks added.")}</p>
     </section>
+    <details class="drawer-disclosure" open>
+      <summary>
+        <span>Commercial Details</span>
+        <small>Stage context, value, and what the customer is interested in.</small>
+      </summary>
+      <div class="drawer-disclosure-body">
+        <div class="drawer-field-grid">
+          ${detailField("Industry", lead.industry || lead.business_category || lead.sector, { auto: autoField(lead, "sector_classification") })}
+          ${detailField("Product interest", lead.product_interest)}
+          ${detailField("Activity purpose", normalizeActivityPurpose(lead.activity_purpose))}
+          ${detailField("Quotation ref", lead.quotation_ref)}
+          ${detailField("Monthly volume", lead.estimated_monthly_volume)}
+          ${detailField("First order date", lead.first_order_date)}
+        </div>
+      </div>
+    </details>
+    <details class="drawer-disclosure">
+      <summary>
+        <span>Additional Company Details</span>
+        <small>Legal, location, and enrichment-backed company profile data.</small>
+      </summary>
+      <div class="drawer-disclosure-body">
+        <div class="drawer-field-grid">
+          ${detailField("Legal name", lead.legal_name)}
+          ${detailField("Year established", lead.year_established)}
+          ${detailField("Business category", lead.business_category)}
+          ${detailField("Address", lead.address)}
+          ${detailField("Country / Emirate", lead.country_emirate)}
+          ${detailField("Territory", lead.territory)}
+        </div>
+      </div>
+    </details>
+    <details class="drawer-disclosure">
+      <summary>
+        <span>Secondary Contacts & Notes</span>
+        <small>Optional relationship details, tags, and sales remarks.</small>
+      </summary>
+      <div class="drawer-disclosure-body">
+        <div class="drawer-field-grid">
+          ${detailField("Secondary contact", secondaryContact)}
+          ${detailField("Secondary phone", lead.secondary_contact_mobile, lead.secondary_contact_mobile ? { href: `tel:${lead.secondary_contact_mobile}` } : {})}
+          ${detailField("Secondary email", lead.secondary_contact_email, lead.secondary_contact_email ? { href: `mailto:${lead.secondary_contact_email}` } : {})}
+        </div>
+        <div class="drawer-tags">${tagPills(lead.tags)}</div>
+        <p class="drawer-remarks">${autoField(lead, "recent_projects") ? `<span class="auto-tag">Auto</span> ` : ""}${escapeHtml(lead.products_services_remarks || "No products/services remarks added.")}</p>
+      </div>
+    </details>
     ${renderLossDetails(lead)}
     ${autoEnrichmentReviewPanel(lead)}
-    <div class="drawer-quick-actions">
-      <a class="ghost-button" href="${lead.phone ? `tel:${escapeHtml(lead.phone)}` : "#"}">Call</a>
-      <a class="ghost-button" href="${lead.email ? `mailto:${escapeHtml(lead.email)}` : "#"}">Email</a>
-      <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button>
-      <button class="primary-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit Lead</button>
-    </div>
     ${linkedinControls(lead)}
   `;
 }
@@ -5925,34 +6101,74 @@ function renderDrawerOverview(lead) {
 function renderDrawerActivities(lead) {
   const activities = [...(lead.activities || [])].sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
   const handoffs = [...(state.leadDrawerHandoffs || [])].sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
+  const reminders = remindersForLead(lead);
+  const latestActivity = activities[0];
+  const recentActivities = activities.slice(0, 3);
+  const olderActivities = activities.slice(3);
+  const activityCard = (activity, index) => `
+    <article class="drawer-activity ${activityTypeClass(activity.type)}">
+      <div><span class="activity-type-label"><i>${escapeHtml(ACTIVITY_TYPE_ICONS[activity.type] || "ACT")}</i>${escapeHtml(activity.type || "Note")}</span><span class="meta-label">${escapeHtml(activity.at || "")}</span></div>
+      <p class="activity-note clamp" data-expand-note>${escapeHtml(activity.text || activity.note || "No note added.")}</p>
+      <div class="activity-actions">${activityEditButton(lead.id, index, activity)}${activityDeleteButton(lead.id, index, activity)}</div>
+    </article>
+  `;
   return `
     <section class="drawer-section">
-      <div class="drawer-tab-heading"><h3>Activities</h3><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log New Activity</button></div>
-      ${handoffs.length ? `
-        <div class="handoff-history">
-          <h4>Ownership Handoff History</h4>
-          ${handoffs.map(item => `
-            <article class="handoff-event">
-              <div>
-                <span class="activity-type-label"><i>MOVE</i>Handoff</span>
-                <span class="meta-label">${escapeHtml(String(item.timestamp || "").slice(0, 10))}</span>
-              </div>
-              <strong>${escapeHtml(item.previous_owner_name || "Unassigned")} to ${escapeHtml(item.new_owner_name || "Unassigned")}</strong>
-              <small>${escapeHtml(item.previous_territory || "No territory")} to ${escapeHtml(item.new_territory || "No territory")} - by ${escapeHtml(item.initiated_by_name || "Admin")}</small>
-              <p class="activity-note clamp" data-expand-note>${escapeHtml(item.handoff_note || "No handoff note saved.")}</p>
-            </article>
-          `).join("")}
+      <div class="drawer-tab-heading">
+        <div>
+          <h3>Activities</h3>
+          <p class="drawer-section-copy">See the current rhythm first, then expand the full timeline only when you need the history.</p>
         </div>
-      ` : ""}
-      <div class="drawer-list">
-        ${activities.map((activity, index) => `
-          <article class="drawer-activity ${activityTypeClass(activity.type)}">
-            <div><span class="activity-type-label"><i>${escapeHtml(ACTIVITY_TYPE_ICONS[activity.type] || "ACT")}</i>${escapeHtml(activity.type || "Note")}</span><span class="meta-label">${escapeHtml(activity.at || "")}</span></div>
-            <p class="activity-note clamp" data-expand-note>${escapeHtml(activity.text || activity.note || "No note added.")}</p>
-            <div class="activity-actions">${activityEditButton(lead.id, index, activity)}${activityDeleteButton(lead.id, index, activity)}</div>
-          </article>
-        `).join("") || `<div class="timeline-empty"><strong>No activities logged yet.</strong><span>Log the first one.</span><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button></div>`}
+        <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log New Activity</button>
       </div>
+      <div class="drawer-summary-grid">
+        ${drawerSummaryMetric("Total Activities", String(activities.length))}
+        ${drawerSummaryMetric("Latest Activity", latestActivity?.type || "No activity")}
+        ${drawerSummaryMetric("Last Logged", latestActivity?.at || "Not recorded")}
+        ${drawerSummaryMetric("Active Reminders", String(reminders.length))}
+      </div>
+      <div class="drawer-list">
+        ${recentActivities.length
+          ? recentActivities.map((activity, index) => activityCard(activity, index)).join("")
+          : `<div class="timeline-empty"><strong>No activities logged yet.</strong><span>Log the first one.</span><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button></div>`
+        }
+      </div>
+      ${olderActivities.length ? `
+        <details class="drawer-disclosure">
+          <summary>
+            <span>Activity History</span>
+            <small>${olderActivities.length} older activit${olderActivities.length === 1 ? "y" : "ies"} available for review.</small>
+          </summary>
+          <div class="drawer-disclosure-body">
+            <div class="drawer-list">
+              ${olderActivities.map((activity, index) => activityCard(activity, index + 3)).join("")}
+            </div>
+          </div>
+        </details>
+      ` : ""}
+      ${handoffs.length ? `
+        <details class="drawer-disclosure">
+          <summary>
+            <span>Ownership Handoff History</span>
+            <small>${handoffs.length} ownership move${handoffs.length === 1 ? "" : "s"} captured for this lead.</small>
+          </summary>
+          <div class="drawer-disclosure-body">
+            <div class="handoff-history">
+              ${handoffs.map(item => `
+                <article class="handoff-event">
+                  <div>
+                    <span class="activity-type-label"><i>MOVE</i>Handoff</span>
+                    <span class="meta-label">${escapeHtml(String(item.timestamp || "").slice(0, 10))}</span>
+                  </div>
+                  <strong>${escapeHtml(item.previous_owner_name || "Unassigned")} to ${escapeHtml(item.new_owner_name || "Unassigned")}</strong>
+                  <small>${escapeHtml(item.previous_territory || "No territory")} to ${escapeHtml(item.new_territory || "No territory")} - by ${escapeHtml(item.initiated_by_name || "Admin")}</small>
+                  <p class="activity-note clamp" data-expand-note>${escapeHtml(item.handoff_note || "No handoff note saved.")}</p>
+                </article>
+              `).join("")}
+            </div>
+          </div>
+        </details>
+      ` : ""}
     </section>
   `;
 }
@@ -5972,26 +6188,57 @@ function linkedActivityLabel(lead, activityId) {
 }
 
 function renderDrawerPmrs(lead) {
+  const pmrs = [...(state.leadDrawerPmrs || [])].sort((a, b) => String(b.meeting_date || "").localeCompare(String(a.meeting_date || "")));
+  const latest = pmrs[0];
+  const earlierPmrs = pmrs.slice(1);
+  const pmrCard = pmr => `
+    <article class="drawer-pmr">
+      <div class="drawer-card-title"><strong>${escapeHtml(pmr.meeting_date || "Meeting")}</strong><span class="chip ${heatClass(pmr.relationship_heat_score)}">Heat ${escapeHtml(pmr.relationship_heat_score || "3")}/5</span></div>
+      <div class="chip-row">
+        ${pmr.pending_sync ? `<span class="chip warm">Pending sync</span>` : ""}
+        ${pmr.voice_note_pending_upload ? `<span class="chip warm">Voice upload queued</span>` : ""}
+        <span class="chip">${escapeHtml(pmr.first_order_timing || "Timing unknown")}</span>
+        <span class="chip">${escapeHtml(pmr.potential_annual_value || "Value unknown")}</span>
+        <span class="chip">${escapeHtml(pmr.director_action_required || "No director action")}</span>
+        ${pmr.activity_id ? `<span class="chip">${escapeHtml(linkedActivityLabel(lead, pmr.activity_id))}</span>` : ""}
+      </div>
+      <p class="activity-note clamp" data-expand-note>${escapeHtml(pmr.notes || "No PMR notes added.")}</p>
+      ${pmr.voice_note_url || pmr.voice_note_id ? `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(pmr.voice_note_id || "")}" ${pmr.voice_note_url ? `src="${escapeHtml(pmr.voice_note_url)}"` : ""}></audio>` : ""}
+    </article>
+  `;
   return `
     <section class="drawer-section">
-      <div class="drawer-tab-heading"><h3>Post-Meeting Reports</h3><button class="ghost-button" type="button" data-drawer-file-pmr="${escapeHtml(lead.id)}">File New PMR</button></div>
-      <div class="drawer-list">
-        ${state.leadDrawerPmrs.map(pmr => `
-          <article class="drawer-pmr">
-            <div class="drawer-card-title"><strong>${escapeHtml(pmr.meeting_date || "Meeting")}</strong><span class="chip ${heatClass(pmr.relationship_heat_score)}">Heat ${escapeHtml(pmr.relationship_heat_score || "3")}/5</span></div>
-            <div class="chip-row">
-              ${pmr.pending_sync ? `<span class="chip warm">Pending sync</span>` : ""}
-              ${pmr.voice_note_pending_upload ? `<span class="chip warm">Voice upload queued</span>` : ""}
-              <span class="chip">${escapeHtml(pmr.first_order_timing || "Timing unknown")}</span>
-              <span class="chip">${escapeHtml(pmr.potential_annual_value || "Value unknown")}</span>
-              <span class="chip">${escapeHtml(pmr.director_action_required || "No director action")}</span>
-              ${pmr.activity_id ? `<span class="chip">${escapeHtml(linkedActivityLabel(lead, pmr.activity_id))}</span>` : ""}
-            </div>
-            <p class="activity-note clamp" data-expand-note>${escapeHtml(pmr.notes || "No PMR notes added.")}</p>
-            ${pmr.voice_note_url || pmr.voice_note_id ? `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(pmr.voice_note_id || "")}" ${pmr.voice_note_url ? `src="${escapeHtml(pmr.voice_note_url)}"` : ""}></audio>` : ""}
-          </article>
-        `).join("") || `<div class="timeline-empty"><strong>No PMRs filed yet.</strong><span>File a report after the next customer meeting.</span></div>`}
+      <div class="drawer-tab-heading">
+        <div>
+          <h3>Post-Meeting Reports</h3>
+          <p class="drawer-section-copy">Highlight the latest meeting outcome first, then keep the report archive tucked underneath.</p>
+        </div>
+        <button class="ghost-button" type="button" data-drawer-file-pmr="${escapeHtml(lead.id)}">File New PMR</button>
       </div>
+      <div class="drawer-summary-grid">
+        ${drawerSummaryMetric("Total PMRs", String(pmrs.length))}
+        ${drawerSummaryMetric("Latest Meeting", latest?.meeting_date || "Not filed")}
+        ${drawerSummaryMetric("Relationship Heat", latest?.relationship_heat_score ? `Heat ${latest.relationship_heat_score}/5` : "Not scored")}
+        ${drawerSummaryMetric("Director Action", latest?.director_action_required || "None")}
+      </div>
+      ${latest ? `
+        <div class="drawer-list">
+          ${pmrCard(latest)}
+        </div>
+      ` : `<div class="timeline-empty"><strong>No PMRs filed yet.</strong><span>File a report after the next customer meeting.</span></div>`}
+      ${earlierPmrs.length ? `
+        <details class="drawer-disclosure">
+          <summary>
+            <span>PMR History</span>
+            <small>${earlierPmrs.length} previous report${earlierPmrs.length === 1 ? "" : "s"} available.</small>
+          </summary>
+          <div class="drawer-disclosure-body">
+            <div class="drawer-list">
+              ${earlierPmrs.map(pmrCard).join("")}
+            </div>
+          </div>
+        </details>
+      ` : ""}
     </section>
   `;
 }
@@ -6356,6 +6603,7 @@ function openLeadEdit(leadId) {
   state.editingLeadId = leadId;
   state.editingOriginalStage = lead.stage || "";
   state.editingLostData = null;
+  resetLeadWizardState();
   leadFormTouched.clear();
   resetLeadEnrichmentSession();
   els.leadForm.reset();
@@ -6368,6 +6616,7 @@ function openLeadEdit(leadId) {
   ensureLeadFormSelectValue("activity_purpose", normalizeActivityPurpose(lead.activity_purpose), ACTIVITY_PURPOSE_OPTIONS[0]);
   leadCompanyInputKey = leadCompanyOnlyKey(lead.company_name);
   setEnrichmentStatus("Editing existing lead. Review changes before saving.", "success");
+  renderLeadFormWizard();
   els.leadDialog.showModal();
 }
 
@@ -7948,6 +8197,7 @@ function configureRoleUi(user) {
   document.querySelectorAll('.sidebar [data-view="salesmen"]').forEach(item => {
     item.classList.toggle("hidden", !admin);
   });
+  els.sidebarToolsMenu?.classList.toggle("hidden", !admin);
   els.salesmanFilter?.closest("label")?.classList.toggle("hidden", !admin);
   els.formSalesman?.closest("label")?.classList.toggle("hidden", !admin);
   els.openSalesmanForm.classList.toggle("hidden", !admin);
@@ -7962,6 +8212,7 @@ function configureRoleUi(user) {
   els.dashboardPipelineFunnelPanel?.classList.toggle("hidden", false);
   els.dailyAiPanel?.classList.toggle("hidden", admin);
   els.marketNewsPanel?.classList.toggle("hidden", admin);
+  els.dashboardToggleMarketNews?.classList.toggle("hidden", admin);
   els.salesmanFollowupPanel?.classList.toggle("hidden", admin);
   els.portfolioPanel?.classList.toggle("hidden", admin);
   els.relationshipFocusPanel?.classList.toggle("hidden", !admin);
@@ -8235,6 +8486,28 @@ document.querySelector("#closeLeadForm").addEventListener("click", () => {
   resetLeadEnrichmentSession();
   els.leadDialog.close();
 });
+els.leadStepper?.addEventListener("click", event => {
+  const button = event.target.closest("[data-lead-step]");
+  if (!button) return;
+  const nextStep = Number(button.dataset.leadStep || 0);
+  if (nextStep > state.leadFormStep && !validateLeadStep(state.leadFormStep)) return;
+  setLeadFormStep(nextStep);
+});
+els.leadStepBack?.addEventListener("click", () => {
+  setLeadFormStep(state.leadFormStep - 1);
+});
+els.leadStepNext?.addEventListener("click", () => {
+  if (!validateLeadStep(state.leadFormStep)) return;
+  setLeadFormStep(state.leadFormStep + 1);
+});
+els.leadForm?.addEventListener("click", event => {
+  const toggle = event.target.closest("[data-lead-details-toggle]");
+  if (!toggle) return;
+  const key = toggle.dataset.leadDetailsToggle;
+  if (!key) return;
+  state.leadFormDetailsOpen[key] = !state.leadFormDetailsOpen[key];
+  renderLeadFormWizard();
+});
 document.querySelector("#closeSalesmanForm").addEventListener("click", () => els.salesmanDialog.close());
 document.querySelector("#closePmrForm").addEventListener("click", () => {
   resetPmrVoiceNote();
@@ -8386,6 +8659,26 @@ document.querySelectorAll("[data-quick-view]").forEach(button => {
   button.addEventListener("click", () => {
     setView(button.dataset.quickView || "dashboard");
   });
+});
+
+els.sidebarSearchPlaces?.addEventListener("click", () => {
+  document.querySelector("#openPlacesSearch")?.click();
+});
+
+els.dashboardQuickAddLead?.addEventListener("click", () => {
+  document.querySelector("#openLeadForm")?.click();
+});
+
+els.dashboardQuickLogActivity?.addEventListener("click", () => {
+  openQuickLog();
+});
+
+els.dashboardQuickPipeline?.addEventListener("click", () => {
+  setView("pipeline");
+});
+
+els.dashboardToggleMarketNews?.addEventListener("click", () => {
+  setDashboardMarketNewsOpen(!state.dashboardMarketNewsOpen);
 });
 
 els.logoutButton.addEventListener("click", async () => {
@@ -8649,6 +8942,7 @@ els.leadForm.querySelectorAll("input, textarea, select").forEach(field => {
     if (field.name) leadFormTouched.add(field.name);
   });
 });
+renderLeadFormWizard();
 
 els.leadForm.elements.company_name.addEventListener("input", handleLeadCompanyNameInput);
 els.leadForm.elements.location.addEventListener("input", handleLeadLocationInput);

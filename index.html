@@ -62,32 +62,28 @@
             <button class="sidebar-close-button" id="closeMobileSidebar" type="button" aria-label="Close navigation menu">&times;</button>
           </div>
           <div class="nav-group">
-            <span class="nav-group-label">Main</span>
+            <span class="nav-group-label">Views</span>
             <nav class="nav-list" aria-label="Main navigation">
-              <button class="nav-item active" data-view="dashboard">Dashboard</button>
-              <button class="nav-item" data-view="pipeline">Pipeline</button>
-              <button class="nav-item hidden" data-view="salesmen">Salesmen</button>
-              <button class="nav-item" data-view="activity">Activity</button>
+              <button class="nav-item active" data-view="dashboard"><span class="nav-item-icon" aria-hidden="true">DB</span><span>Dashboard</span></button>
+              <button class="nav-item" data-view="pipeline"><span class="nav-item-icon" aria-hidden="true">PL</span><span>Pipeline</span></button>
+              <button class="nav-item hidden" data-view="salesmen"><span class="nav-item-icon" aria-hidden="true">TM</span><span>Salesmen</span></button>
+              <button class="nav-item" data-view="activity"><span class="nav-item-icon" aria-hidden="true">AC</span><span>Activity</span></button>
             </nav>
           </div>
           <div class="nav-group">
-            <span class="nav-group-label">Records</span>
+            <span class="nav-group-label">Shortcuts</span>
             <nav class="nav-list" aria-label="Records navigation">
-              <button class="nav-item" type="button" data-quick-view="activity">Tasks</button>
-              <button class="nav-item" type="button" data-quick-view="pipeline">Quotes</button>
-              <button class="nav-item" type="button" data-quick-view="pipeline">Accounts</button>
+              <button class="nav-item" type="button" data-quick-view="activity"><span class="nav-item-icon" aria-hidden="true">TS</span><span>Tasks</span></button>
+              <button class="nav-item" type="button" data-quick-view="pipeline"><span class="nav-item-icon" aria-hidden="true">QT</span><span>Quotes</span></button>
+              <button class="nav-item" type="button" data-quick-view="pipeline"><span class="nav-item-icon" aria-hidden="true">AC</span><span>Accounts</span></button>
+              <button class="nav-item" type="button" id="sidebarSearchPlaces"><span class="nav-item-icon" aria-hidden="true">GP</span><span>Search Places</span></button>
             </nav>
           </div>
         </div>
         <div class="sidebar-footer">
-          <details class="sidebar-user-menu" id="sidebarUserMenu">
-            <summary class="sidebar-user-trigger">
-              <span class="sidebar-user-avatar" id="sidebarUserAvatar">AR</span>
-              <span class="sidebar-user-copy">
-                <strong id="sidebarUserName">User</strong>
-                <span id="sidebarUserRole">role</span>
-                <span class="sr-only" id="signedInUser"></span>
-              </span>
+          <details class="sidebar-tools-menu hidden" id="sidebarToolsMenu">
+            <summary class="sidebar-tools-trigger">
+              <span class="sidebar-tools-label">Tools</span>
               <span class="sidebar-user-chevron" aria-hidden="true">▾</span>
             </summary>
             <div class="sidebar-user-dropdown">
@@ -96,6 +92,14 @@
               <button class="user-menu-action hidden" id="openImportLeads" type="button">Import Leads</button>
             </div>
           </details>
+          <div class="sidebar-user-shell">
+            <span class="sidebar-user-avatar" id="sidebarUserAvatar">AR</span>
+            <span class="sidebar-user-copy">
+              <strong id="sidebarUserName">User</strong>
+              <span id="sidebarUserRole">role</span>
+              <span class="sr-only" id="signedInUser"></span>
+            </span>
+          </div>
         </div>
       </aside>
 
@@ -111,24 +115,11 @@
           <div class="topbar-actions">
             <button class="sync-status-pill hidden" id="syncStatusPill" type="button">All synced</button>
             <button class="ghost-button hidden" id="openSalesmanForm">Create Salesman Account</button>
-            <button class="ghost-button hidden" id="exportLeadsExcelTop" type="button">Export Excel</button>
-            <button class="ghost-button hidden" id="exportLeadsPdfTop" type="button">Export PDF</button>
             <button class="ghost-button" id="logoutButton">Sign Out</button>
             <button class="ghost-button" id="openPlacesSearch">Search places</button>
             <button class="primary-button" id="openLeadForm">Add lead</button>
           </div>
         </header>
-
-        <div class="panel market-news-panel market-news-container hidden" id="marketNewsPanel">
-          <div class="panel-header market-news-header">
-            <div>
-              <h2>Market News</h2>
-              <span>Latest construction, oil and gas, marine engineering, metal, and fabrication headlines</span>
-            </div>
-            <small class="market-news-meta" id="marketNewsMeta"></small>
-          </div>
-          <div class="market-news-feed" id="marketNewsFeed"></div>
-        </div>
 
         <section class="overdue-banner hidden" id="overdueBanner" aria-live="polite"></section>
 
@@ -163,6 +154,36 @@
         </section>
 
         <section class="dashboard-view" id="dashboardView">
+          <div class="panel dashboard-quick-actions" id="dashboardQuickActions">
+            <div class="panel-header">
+              <div>
+                <h2>Quick Actions</h2>
+                <span>Open the next workflow without hunting through the CRM.</span>
+              </div>
+            </div>
+            <div class="quick-actions-grid">
+              <button class="quick-action-card" id="dashboardQuickAddLead" type="button">
+                <span class="quick-action-kicker">Lead</span>
+                <strong>Add Lead</strong>
+                <small>Create a new account or opportunity.</small>
+              </button>
+              <button class="quick-action-card" id="dashboardQuickLogActivity" type="button">
+                <span class="quick-action-kicker">Activity</span>
+                <strong>Log Activity</strong>
+                <small>Capture a call, visit, email, or follow-up note.</small>
+              </button>
+              <button class="quick-action-card" id="dashboardQuickPipeline" type="button">
+                <span class="quick-action-kicker">Pipeline</span>
+                <strong>View Pipeline</strong>
+                <small>Jump into live leads, stages, and follow-ups.</small>
+              </button>
+              <button class="quick-action-card hidden" id="dashboardToggleMarketNews" type="button">
+                <span class="quick-action-kicker">Intel</span>
+                <strong>Show Market News</strong>
+                <small>Open fresh industry headlines only when you need them.</small>
+              </button>
+            </div>
+          </div>
           <div class="panel daily-ai-panel hidden" id="dailyAiPanel">
             <div class="daily-ai-copy">
               <span id="dailyAiGreeting">Good morning</span>
@@ -176,6 +197,16 @@
               <button class="ghost-button" type="button" data-salesperson-ai-action="new_intel">New intel</button>
             </div>
             <button class="daily-ai-summary hidden" id="dailyAiSummary" type="button"></button>
+          </div>
+          <div class="panel market-news-panel market-news-container hidden" id="marketNewsPanel">
+            <div class="panel-header market-news-header">
+              <div>
+                <h2>Market News</h2>
+                <span>Latest construction, oil and gas, marine engineering, metal, and fabrication headlines</span>
+              </div>
+              <small class="market-news-meta" id="marketNewsMeta"></small>
+            </div>
+            <div class="market-news-feed" id="marketNewsFeed"></div>
           </div>
           <div class="panel salesman-followup-panel hidden" id="salesmanFollowupPanel">
             <div class="panel-header">
@@ -742,75 +773,174 @@
         <div class="dialog-header">
           <div>
             <h2>Add New Lead</h2>
-            <p>Create once. Salesmen can access it from web or mobile.</p>
+            <p>Create once, then guide the team through contact capture and follow-up without the clutter.</p>
           </div>
           <button type="button" class="ghost-button" id="closeLeadForm">Close</button>
         </div>
-        <div class="form-grid">
-          <label class="company-field">Company name<input name="company_name" id="leadCompanyName" required></label>
-          <div class="wide duplicate-warning hidden" id="duplicateWarning" aria-live="polite"></div>
-          <div class="wide enrichment-strip">
-            <span class="enrichment-status" id="leadEnrichmentStatus" aria-live="polite">Type a company name to fetch Google business info.</span>
+        <div class="lead-wizard-shell">
+          <div class="lead-stepper" id="leadStepper" aria-label="Lead form progress">
+            <button class="lead-step active" type="button" data-lead-step="0" aria-current="step">
+              <span class="lead-step-index">1</span>
+              <span class="lead-step-copy">
+                <strong>Company Info</strong>
+                <small>Name, territory, sector</small>
+              </span>
+            </button>
+            <button class="lead-step" type="button" data-lead-step="1">
+              <span class="lead-step-index">2</span>
+              <span class="lead-step-copy">
+                <strong>Contact &amp; Engagement</strong>
+                <small>People, value, stage</small>
+              </span>
+            </button>
+            <button class="lead-step" type="button" data-lead-step="2">
+              <span class="lead-step-index">3</span>
+              <span class="lead-step-copy">
+                <strong>Follow-Up &amp; Notes</strong>
+                <small>Next action, PMR context</small>
+              </span>
+            </button>
           </div>
-          <label>Legal name<input name="legal_name" placeholder="Not available from Google Places API"></label>
-          <label>Year established<input name="year_established" placeholder="Not available from Google Places API"></label>
-          <label>Country / Emirate<input name="country_emirate" value="Dubai, UAE"></label>
-          <label>Sector<select name="sector" id="formSector"></select></label>
-          <label>Tier<select name="tier" id="formTier"></select></label>
-          <label>Industry<input name="industry"></label>
-          <label>Location<input name="location" placeholder="Dubai, UAE"></label>
-          <label>Address<input name="address"></label>
-          <label>Contact person<input name="contact_person"></label>
-          <label>Primary title<input name="primary_contact_title"></label>
-          <label>Phone<input name="phone"></label>
-          <label>Email<input name="email" type="email"></label>
-          <label>Secondary contact<input name="secondary_contact_name"></label>
-          <label>Secondary title<input name="secondary_contact_title"></label>
-          <label>Secondary mobile<input name="secondary_contact_mobile"></label>
-          <label>Secondary email<input name="secondary_contact_email" type="email"></label>
-          <label>Website<input name="website" type="url" placeholder="https://example.com"></label>
-          <label>Google Maps URL<input name="google_maps_url" type="url"></label>
-          <label>Business category<input name="business_category"></label>
-          <label>Territory<select name="territory" id="formTerritory"></select></label>
-          <label>Assigned salesman<select name="assigned_salesman" id="formSalesman"></select></label>
-          <label>Stage<select name="stage" id="formStage"></select></label>
-          <label>Priority<select name="priority" id="formPriority"></select></label>
-          <label>Estimated value<input name="estimated_value" type="number" min="0" value="0"></label>
-          <label>Next action plan<select name="next_action" id="formNextAction">
-            <option value="To Call">To Call</option>
-            <option value="To Send Email">To Send Email</option>
-            <option value="To Visit">To Visit</option>
-          </select></label>
-          <label>Next action date<input name="next_action_date" type="date"></label>
-          <label>Type / Purpose of Activity<select name="activity_purpose" id="formActivityPurpose">
-            <option value="Company Introductory">Company Introductory</option>
-            <option value="New Requirements">New Requirements</option>
-            <option value="Quotation Submission">Quotation Submission</option>
-            <option value="Quotation Follow-Up">Quotation Follow-Up</option>
-            <option value="Meeting">Meeting</option>
-          </select></label>
-          <label>First order date<input name="first_order_date" type="date"></label>
-          <label>Est. monthly volume<input name="estimated_monthly_volume" placeholder="MT/month"></label>
-          <label class="wide">Product interest<input name="product_interest"></label>
-          <label class="wide">Tags<input name="tags" placeholder="ICV-required, BAPCO-approved"></label>
-          <label class="wide">Quotation ref<input name="quotation_ref" placeholder="ERP reference only"></label>
-          <label class="wide">Products/services remarks<textarea name="products_services_remarks" rows="3" placeholder="Google Places limitations or sales notes"></textarea></label>
-          <input name="google_place_id" type="hidden">
-          <input name="google_rating" type="hidden">
-          <input name="google_review_count" type="hidden">
-          <input name="latitude" type="hidden">
-          <input name="longitude" type="hidden">
-          <input name="opening_hours" type="hidden">
-          <input name="enrichment_source" type="hidden">
-          <input name="enrichment_status" type="hidden">
-          <input name="enriched_at" type="hidden">
-          <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Type notes or record a voice note"></textarea></label>
-          <div class="wide voice-control">
-            <button class="voice-button" id="recordLeadVoice" type="button">Record Voice Note</button>
-            <span class="voice-status" id="leadVoiceStatus" aria-live="polite"></span>
+
+          <section class="lead-step-panel active" data-lead-step-panel="0">
+            <div class="lead-step-header">
+              <div>
+                <span class="lead-step-kicker">Step 1 of 3</span>
+                <h3>Company Info</h3>
+                <p>Start with the account basics and let enrichment do the heavy lifting where possible.</p>
+              </div>
+              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="company">Add Details</button>
+            </div>
+            <div class="form-grid">
+              <label class="company-field wide">Company name<input name="company_name" id="leadCompanyName" required></label>
+              <div class="wide duplicate-warning hidden" id="duplicateWarning" aria-live="polite"></div>
+              <div class="wide enrichment-strip">
+                <span class="enrichment-status" id="leadEnrichmentStatus" aria-live="polite">Type a company name to fetch Google business info.</span>
+              </div>
+              <label>Territory<select name="territory" id="formTerritory"></select></label>
+              <label>Assigned salesman<select name="assigned_salesman" id="formSalesman"></select></label>
+              <label>Sector<select name="sector" id="formSector"></select></label>
+              <label>Tier<select name="tier" id="formTier"></select></label>
+              <label>Country / Emirate<input name="country_emirate" value="Dubai, UAE"></label>
+              <label>Location<input name="location" placeholder="Dubai, UAE"></label>
+              <div class="wide lead-optional-group hidden" data-lead-details-group="company">
+                <div class="lead-section-card">
+                  <div class="lead-section-header">
+                    <strong>Additional company details</strong>
+                    <span>Show richer profile data only when needed.</span>
+                  </div>
+                  <div class="form-grid">
+                    <label>Legal name<input name="legal_name" placeholder="Not available from Google Places API"></label>
+                    <label>Year established<input name="year_established" placeholder="Not available from Google Places API"></label>
+                    <label>Industry<input name="industry"></label>
+                    <label>Business category<input name="business_category"></label>
+                    <label class="wide">Address<input name="address"></label>
+                    <label>Website<input name="website" type="url" placeholder="https://example.com"></label>
+                    <label>Google Maps URL<input name="google_maps_url" type="url"></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="lead-step-panel" data-lead-step-panel="1" hidden>
+            <div class="lead-step-header">
+              <div>
+                <span class="lead-step-kicker">Step 2 of 3</span>
+                <h3>Contact &amp; Engagement</h3>
+                <p>Capture the main contact, pipeline stage, and commercial context without overwhelming the user.</p>
+              </div>
+              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="contact">Add Details</button>
+            </div>
+            <div class="form-grid">
+              <label>Contact person<input name="contact_person"></label>
+              <label>Primary title<input name="primary_contact_title"></label>
+              <label>Phone<input name="phone"></label>
+              <label>Email<input name="email" type="email"></label>
+              <label>Stage<select name="stage" id="formStage"></select></label>
+              <label>Priority<select name="priority" id="formPriority"></select></label>
+              <label>Estimated value<input name="estimated_value" type="number" min="0" value="0"></label>
+              <label class="wide">Product interest<input name="product_interest"></label>
+              <div class="wide lead-optional-group hidden" data-lead-details-group="contact">
+                <div class="lead-section-card">
+                  <div class="lead-section-header">
+                    <strong>Additional engagement details</strong>
+                    <span>Use this only if there is a second contact or extra commercial context to capture.</span>
+                  </div>
+                  <div class="form-grid">
+                    <label>Secondary contact<input name="secondary_contact_name"></label>
+                    <label>Secondary title<input name="secondary_contact_title"></label>
+                    <label>Secondary mobile<input name="secondary_contact_mobile"></label>
+                    <label>Secondary email<input name="secondary_contact_email" type="email"></label>
+                    <label class="wide">Tags<input name="tags" placeholder="ICV-required, BAPCO-approved"></label>
+                    <label class="wide">Quotation ref<input name="quotation_ref" placeholder="ERP reference only"></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="lead-step-panel" data-lead-step-panel="2" hidden>
+            <div class="lead-step-header">
+              <div>
+                <span class="lead-step-kicker">Step 3 of 3</span>
+                <h3>Follow-Up &amp; Notes</h3>
+                <p>Set the next action clearly, then save sales notes or a voice capture for the team.</p>
+              </div>
+              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="followup">Add Details</button>
+            </div>
+            <div class="form-grid">
+              <label>Next action plan<select name="next_action" id="formNextAction">
+                <option value="To Call">To Call</option>
+                <option value="To Send Email">To Send Email</option>
+                <option value="To Visit">To Visit</option>
+              </select></label>
+              <label>Next action date<input name="next_action_date" type="date"></label>
+              <label>Type / Purpose of Activity<select name="activity_purpose" id="formActivityPurpose">
+                <option value="Company Introductory">Company Introductory</option>
+                <option value="New Requirements">New Requirements</option>
+                <option value="Quotation Submission">Quotation Submission</option>
+                <option value="Quotation Follow-Up">Quotation Follow-Up</option>
+                <option value="Meeting">Meeting</option>
+              </select></label>
+              <label>Est. monthly volume<input name="estimated_monthly_volume" placeholder="MT/month"></label>
+              <label>First order date<input name="first_order_date" type="date"></label>
+              <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Type notes or record a voice note"></textarea></label>
+              <div class="wide voice-control">
+                <button class="voice-button" id="recordLeadVoice" type="button">Record Voice Note</button>
+                <span class="voice-status" id="leadVoiceStatus" aria-live="polite"></span>
+              </div>
+              <div class="wide lead-optional-group hidden" data-lead-details-group="followup">
+                <div class="lead-section-card">
+                  <div class="lead-section-header">
+                    <strong>Additional follow-up detail</strong>
+                    <span>Use these when the opportunity already has richer sales context.</span>
+                  </div>
+                  <div class="form-grid">
+                    <label class="wide">Products/services remarks<textarea name="products_services_remarks" rows="3" placeholder="Google Places limitations or sales notes"></textarea></label>
+                  </div>
+                </div>
+              </div>
+              <input name="google_place_id" type="hidden">
+              <input name="google_rating" type="hidden">
+              <input name="google_review_count" type="hidden">
+              <input name="latitude" type="hidden">
+              <input name="longitude" type="hidden">
+              <input name="opening_hours" type="hidden">
+              <input name="enrichment_source" type="hidden">
+              <input name="enrichment_status" type="hidden">
+              <input name="enriched_at" type="hidden">
+            </div>
+          </section>
+
+          <div class="lead-step-actions">
+            <button class="ghost-button hidden" id="leadStepBack" type="button">Back</button>
+            <div class="lead-step-actions-right">
+              <button class="ghost-button" id="leadStepNext" type="button">Next</button>
+              <button class="primary-button hidden" id="leadSubmitButton" type="submit">Save Lead</button>
+            </div>
           </div>
         </div>
-        <button class="primary-button" type="submit">Save Lead</button>
       </form>
     </dialog>
 
