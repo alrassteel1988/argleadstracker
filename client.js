@@ -5216,44 +5216,66 @@ function renderLossReasonsAnalytics() {
 
 function renderSalesmanFollowups() {
   if (!els.salesmanFollowupPanel || state.currentUser?.role === "admin") return;
-  const groups = ["Overdue Follow-Ups", "Today", "Tomorrow", "This Week"];
   const followups = salesmanFollowups();
-  const grouped = groups.map(group => [group, followups.filter(reminder => followupGroup(reminder) === group)]);
-  const visibleGroups = grouped.filter(([, reminders]) => reminders.length);
-  els.salesmanFollowupGroups.innerHTML = visibleGroups.length ? visibleGroups.map(([group, reminders]) => `
-    <section class="followup-group">
-      <div class="followup-group-header">
-        <h3>${escapeHtml(group)}</h3>
-        <span>${reminders.length}</span>
-      </div>
-      <div class="followup-list">
-        ${reminders.map(reminder => {
-          const priority = followupPriority(reminder);
-          return `
-            <article class="followup-card priority-${priority.className}">
-              <div class="followup-main">
-                <span class="followup-priority">${escapeHtml(priority.label)}</span>
-                <strong>${escapeHtml(reminder.company_name)}</strong>
-                <p>${escapeHtml(reminder.activity_required || reminder.text || "Follow up with customer")}</p>
-                <div class="chip-row">
-                  <span class="chip">${escapeHtml(reminder.stage || "PROSPECT")}</span>
-                  <span class="chip">${escapeHtml([reminder.due_date, reminder.due_time].filter(Boolean).join(" "))}</span>
-                  <span class="chip ${priorityClass(reminder.priority)}">${escapeHtml(reminder.priority || "Normal")}</span>
-                </div>
+  const columns = [
+    { title: "Overdue Follow-Ups", groups: ["Overdue Follow-Ups"] },
+    { title: "Tomorrow", groups: ["Tomorrow"] },
+    { title: "This Week", groups: ["Today", "This Week"] }
+  ];
+  const columnMarkup = columns.map(column => {
+    const sections = column.groups.map(group => ({
+      title: group,
+      reminders: followups.filter(reminder => followupGroup(reminder) === group)
+    }));
+    const total = sections.reduce((count, section) => count + section.reminders.length, 0);
+    return `
+      <section class="followup-column" data-followup-column="${escapeHtml(column.title)}">
+        <div class="followup-group-header">
+          <h3>${escapeHtml(column.title)}</h3>
+          <span>${total}</span>
+        </div>
+        <div class="followup-column-body">
+          ${sections.map(section => `
+            <div class="followup-column-section">
+              ${section.title !== column.title ? `<p class="followup-subheading">${escapeHtml(section.title)}</p>` : ""}
+              <div class="followup-list">
+                ${section.reminders.map(reminder => renderSalesmanFollowupCard(reminder)).join("") || `<p class="empty-copy">No follow-ups in this bucket.</p>`}
               </div>
-              <div class="followup-actions">
-                <button class="small-action" type="button" data-followup-open="${escapeHtml(reminder.lead_id)}">Open Lead</button>
-                <button class="small-action" type="button" data-followup-complete="${escapeHtml(reminder.lead_id)}" data-followup-index="${escapeHtml(reminder.activity_index ?? "")}" data-followup-date="${escapeHtml(reminder.due_date || "")}" data-followup-time="${escapeHtml(reminder.due_time || "")}" data-followup-text="${escapeHtml(reminder.activity_required || reminder.text || "")}" data-followup-type="${escapeHtml(reminder.reminder_type || "General follow-up")}">Complete</button>
-                <button class="small-action" type="button" data-followup-reschedule="${escapeHtml(reminder.lead_id)}" data-followup-index="${escapeHtml(reminder.activity_index ?? "")}" data-followup-text="${escapeHtml(reminder.activity_required || reminder.text || "")}" data-followup-type="${escapeHtml(reminder.reminder_type || "General follow-up")}">Reschedule</button>
-                <button class="small-action" type="button" data-followup-note="${escapeHtml(reminder.lead_id)}">Add Note</button>
-              </div>
-            </article>
-          `;
-        }).join("") || `<p class="empty-copy">No follow-ups in this bucket.</p>`}
-      </div>
-    </section>
-  `).join("") : `<p class="empty-copy">No overdue or near-term follow-ups right now. Open the full pipeline only when you want the longer-range book.</p>`;
+            </div>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  });
+  const hasAny = columns.some(column => column.groups.some(group => followups.some(reminder => followupGroup(reminder) === group)));
+  els.salesmanFollowupGroups.innerHTML = hasAny
+    ? columnMarkup.join("")
+    : `<p class="empty-copy">No overdue or near-term follow-ups right now. Open the full pipeline only when you want the longer-range book.</p>`;
   bindFollowupActions();
+}
+
+function renderSalesmanFollowupCard(reminder) {
+  const priority = followupPriority(reminder);
+  return `
+    <article class="followup-card priority-${priority.className}">
+      <div class="followup-main">
+        <span class="followup-priority">${escapeHtml(priority.label)}</span>
+        <strong>${escapeHtml(reminder.company_name)}</strong>
+        <p>${escapeHtml(reminder.activity_required || reminder.text || "Follow up with customer")}</p>
+        <div class="chip-row">
+          <span class="chip">${escapeHtml(reminder.stage || "PROSPECT")}</span>
+          <span class="chip">${escapeHtml([reminder.due_date, reminder.due_time].filter(Boolean).join(" "))}</span>
+          <span class="chip ${priorityClass(reminder.priority)}">${escapeHtml(reminder.priority || "Normal")}</span>
+        </div>
+      </div>
+      <div class="followup-actions">
+        <button class="small-action" type="button" data-followup-open="${escapeHtml(reminder.lead_id)}">Open Lead</button>
+        <button class="small-action" type="button" data-followup-complete="${escapeHtml(reminder.lead_id)}" data-followup-index="${escapeHtml(reminder.activity_index ?? "")}" data-followup-date="${escapeHtml(reminder.due_date || "")}" data-followup-time="${escapeHtml(reminder.due_time || "")}" data-followup-text="${escapeHtml(reminder.activity_required || reminder.text || "")}" data-followup-type="${escapeHtml(reminder.reminder_type || "General follow-up")}">Complete</button>
+        <button class="small-action" type="button" data-followup-reschedule="${escapeHtml(reminder.lead_id)}" data-followup-index="${escapeHtml(reminder.activity_index ?? "")}" data-followup-text="${escapeHtml(reminder.activity_required || reminder.text || "")}" data-followup-type="${escapeHtml(reminder.reminder_type || "General follow-up")}">Reschedule</button>
+        <button class="small-action" type="button" data-followup-note="${escapeHtml(reminder.lead_id)}">Add Note</button>
+      </div>
+    </article>
+  `;
 }
 
 function renderPortfolioAnalytics() {
