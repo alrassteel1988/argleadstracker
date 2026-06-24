@@ -4125,7 +4125,14 @@ function pipelineFunnelStageMarkup(stage) {
   `;
 }
 
-function pipelineFunnelChartMarkup(metrics, { title = "Pipeline Funnel Chart", subtitle = "Visual conversion flow from assigned leads to outcomes" } = {}) {
+function pipelineFunnelChartMarkup(
+  metrics,
+  {
+    title = "Pipeline Funnel Chart",
+    subtitle = "Visual conversion flow from assigned leads to outcomes",
+    showStageBreakdown = true
+  } = {}
+) {
   const stages = pipelineFunnelStageRows(metrics);
   const totalAssigned = Math.max(0, Number(metrics.totalAssignedLeads || 0));
   const contactedOnly = Math.max(0, Number(metrics.contactedLeads || 0) - Number(metrics.openPipelineLeads || 0) - Number(metrics.wonDeals || 0) - Number(metrics.lostDeals || 0));
@@ -4146,7 +4153,7 @@ function pipelineFunnelChartMarkup(metrics, { title = "Pipeline Funnel Chart", s
     return `${slice.color} ${start}% ${cursor}%`;
   }).join(", ");
   return `
-    <section class="pipeline-funnel-chart-card pipelineFunnelChartCard">
+    <section class="pipeline-funnel-chart-card pipelineFunnelChartCard ${showStageBreakdown ? "" : "chartLegendOnly"}">
       <div class="pipeline-funnel-chart-head">
         <div>
           <span class="meta-label">${escapeHtml(title)}</span>
@@ -4167,28 +4174,30 @@ function pipelineFunnelChartMarkup(metrics, { title = "Pipeline Funnel Chart", s
             `).join("")}
           </div>
         </div>
-        <div class="pipeline-funnel-chart-stack">
-          ${stages.map(stage => {
-            const dropoffLabel = stage.dropoff == null ? "Baseline stage" : `Drop-off ${stage.dropoff}% from previous stage`;
-            return `
-              <article class="pipeline-funnel-chart-stage ${stage.tone}">
-                <div class="pipeline-funnel-chart-meta">
-                  <div>
-                    <strong>${escapeHtml(stage.label)}</strong>
-                    <span>${escapeHtml(dropoffLabel)}</span>
+        ${showStageBreakdown ? `
+          <div class="pipeline-funnel-chart-stack">
+            ${stages.map(stage => {
+              const dropoffLabel = stage.dropoff == null ? "Baseline stage" : `Drop-off ${stage.dropoff}% from previous stage`;
+              return `
+                <article class="pipeline-funnel-chart-stage ${stage.tone}">
+                  <div class="pipeline-funnel-chart-meta">
+                    <div>
+                      <strong>${escapeHtml(stage.label)}</strong>
+                      <span>${escapeHtml(dropoffLabel)}</span>
+                    </div>
+                    <div class="pipeline-funnel-chart-numbers">
+                      <b>${escapeHtml(String(stage.count))}</b>
+                      <small>${escapeHtml(String(stage.percentage))}% of assigned</small>
+                    </div>
                   </div>
-                  <div class="pipeline-funnel-chart-numbers">
-                    <b>${escapeHtml(String(stage.count))}</b>
-                    <small>${escapeHtml(String(stage.percentage))}% of assigned</small>
+                  <div class="pipeline-funnel-chart-progress">
+                    <i class="${stage.tone}" style="width:${Math.max(0, Math.min(100, stage.percentage || 0))}%"></i>
                   </div>
-                </div>
-                <div class="pipeline-funnel-chart-progress">
-                  <i class="${stage.tone}" style="width:${Math.max(0, Math.min(100, stage.percentage || 0))}%"></i>
-                </div>
-              </article>
-            `;
-          }).join("")}
-        </div>
+                </article>
+              `;
+            }).join("")}
+          </div>
+        ` : ""}
       </div>
     </section>
   `;
@@ -4347,7 +4356,7 @@ function renderPipelineFunnel() {
     }
     if (teamView) {
       const view = pipelineFunnelMarkup(leads, { selectedSalesman: state.filters.salesman });
-      const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
+      const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads), { showStageBreakdown: false });
       els.pipelineFunnelBadge.textContent = view.badge;
       els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
       els.pipelineFunnelBody.classList.add(view.singleSalesmanView ? "pipelineFunnelDetailWide" : "pipelineFunnelGrid");

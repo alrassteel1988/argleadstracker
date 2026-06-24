@@ -1192,14 +1192,16 @@ textarea {
 }
 
 body.pipeline-compact-mode .app-shell {
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100dvh;
+  height: auto;
+  overflow: visible;
 }
 
 body.pipeline-compact-mode .main {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100dvh;
+  height: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -1214,9 +1216,9 @@ body.pipeline-compact-mode .main > .pipeline-filter-notice {
 }
 
 body.pipeline-compact-mode #pipelineView {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   display: grid;
 }
 
@@ -1224,23 +1226,23 @@ body.pipeline-compact-mode #pipelineListPanel,
 body.pipeline-compact-mode #kanbanPanel,
 body.pipeline-compact-mode #detailPanel {
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
 }
 
 body.pipeline-compact-mode #leadList {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
   max-height: none;
-  overflow-y: auto;
+  overflow-y: visible;
   overflow-x: hidden;
 }
 
 body.pipeline-compact-mode .kanban-board {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: visible;
   overflow-x: hidden;
 }
 
@@ -1585,6 +1587,31 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   gap: 18px;
   align-items: start;
   min-width: 0;
+}
+
+.pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-chart-layout {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-items: center;
+  min-height: 100%;
+}
+
+.pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-chart-visual {
+  width: min(420px, 100%);
+  justify-items: center;
+  align-content: center;
+}
+
+.pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-pie {
+  width: min(320px, 100%);
+  max-width: 320px;
+  margin-inline: auto;
+}
+
+.pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-pie-legend {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
 }
 
 .pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-chart-layout {
@@ -7977,9 +8004,9 @@ body.salesman-dashboard-mode .open-article-link {
   }
 
   body.pipeline-compact-mode #pipelineView {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     align-items: stretch;
   }
 
@@ -7995,14 +8022,14 @@ body.salesman-dashboard-mode .open-article-link {
   }
 
   body.pipeline-compact-mode #leadList {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
     max-height: none;
-    overflow-y: auto;
+    overflow-y: visible;
   }
 
   body.pipeline-compact-mode .lead-list {
-    max-height: calc(100vh - 250px);
+    max-height: none;
   }
 
   body.pipeline-compact-mode .lead-card,
@@ -8053,7 +8080,7 @@ body.salesman-dashboard-mode .open-article-link {
   }
 
   body.pipeline-compact-mode .kanban-column {
-    grid-template-rows: auto minmax(200px, calc(100vh - 360px));
+    grid-template-rows: auto minmax(200px, auto);
   }
 
   body.pipeline-compact-mode .kanban-column-header {
