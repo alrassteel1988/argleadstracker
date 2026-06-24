@@ -7741,8 +7741,8 @@ body.salesman-dashboard-mode .open-article-link {
 
   body.pipeline-compact-mode #pipelineFunnelPanel {
     margin-bottom: 10px;
-    max-height: 300px;
-    overflow: hidden;
+    max-height: none;
+    overflow: visible;
   }
 
   body.pipeline-compact-mode #pipelineFunnelPanel > .panel-header {
@@ -7773,8 +7773,8 @@ body.salesman-dashboard-mode .open-article-link {
   body.pipeline-compact-mode #pipelineFunnelBody {
     gap: 10px;
     padding: 10px 14px 12px;
-    max-height: 236px;
-    overflow: hidden;
+    max-height: none;
+    overflow: visible;
   }
 
   body.pipeline-compact-mode .pipeline-funnel-body.pipelineFunnelGrid,
@@ -7820,7 +7820,7 @@ body.salesman-dashboard-mode .open-article-link {
     gap: 10px;
     padding: 14px 18px;
     min-height: 220px;
-    max-height: 240px;
+    max-height: none;
   }
 
   body.pipeline-compact-mode .pipeline-funnel-copy,
