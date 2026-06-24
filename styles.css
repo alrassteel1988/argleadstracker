@@ -1597,14 +1597,16 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 }
 
 .pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-chart-visual {
-  width: min(420px, 100%);
+  width: min(460px, 100%);
+  min-height: 100%;
   justify-items: center;
   align-content: center;
+  align-items: center;
 }
 
 .pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-pie {
-  width: min(320px, 100%);
-  max-width: 320px;
+  width: min(360px, 100%);
+  max-width: 360px;
   margin-inline: auto;
 }
 
@@ -1612,6 +1614,7 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   width: fit-content;
   max-width: 100%;
   margin-inline: auto;
+  justify-items: start;
 }
 
 .pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-chart-layout {
@@ -7921,6 +7924,12 @@ body.salesman-dashboard-mode .open-article-link {
     align-items: center;
   }
 
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-chart-layout {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    align-items: center;
+  }
+
   body.pipeline-compact-mode .pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-chart-layout,
   body.salesman-dashboard-mode .pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-chart-layout {
     grid-template-columns: minmax(220px, 0.66fr) minmax(0, 1.34fr);
@@ -7937,11 +7946,33 @@ body.salesman-dashboard-mode .open-article-link {
     width: min(220px, 100%);
   }
 
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-chart-visual {
+    width: min(420px, 100%);
+    min-height: 100%;
+    justify-items: center;
+    align-content: center;
+    align-items: center;
+  }
+
   body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie,
   body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-pie {
     width: min(190px, 100%);
     max-width: 190px;
     max-height: 190px;
+  }
+
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-pie {
+    width: min(300px, 100%);
+    max-width: 300px;
+    max-height: 300px;
+    margin-inline: auto;
+  }
+
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-chart-card.chartLegendOnly .pipeline-funnel-pie-legend {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+    justify-items: start;
   }
 
   body.pipeline-compact-mode .pipeline-funnel-body.pipelineFunnelDetailWide .pipeline-funnel-pie,
