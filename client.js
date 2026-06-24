@@ -713,6 +713,20 @@ const IMPORT_HEADER_SYNONYMS = [
 ];
 const IMPORT_TEMPLATE = `Company Name,Legal Name,Contact Person,Title,Phone,Email,Secondary Contact,Secondary Phone,Secondary Email,Website,Country,Emirate,Address,Industry,Sector,Tags,Stage,Priority,Estimated Value (AED),Next Action Date (YYYY-MM-DD),Product Interest,Notes
 Gulf Steel Fabricators LLC,Gulf Steel Fabricators LLC,Ahmed Al Rashidi,Procurement Manager,0501234567,ahmed@gulfsteel.ae,Sara Khalid,0507654321,sara@gulfsteel.ae,www.gulfsteel.ae,UAE,Dubai,Al Quoz Industrial Area 3,Steel Fabrication,Construction,fabricator;structural,Prospect,Hot,250000,2026-06-20,HEA/HEB Beams;Flat Bars,Regular buyer for villa projects`;
+const PRODUCT_INTEREST_OPTIONS = [
+  "Beams",
+  "European sections",
+  "Steel Plates",
+  "UPN/Channels",
+  "MS Angles",
+  "MS Plates",
+  "Hollow Sections",
+  "Pipes",
+  "GI Coils",
+  "Steel Bars",
+  "GI Gratings",
+  "PPGI Coils"
+];
 
 function allActivityTypes() {
   return ["Note", "Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed", "Reminder"];
@@ -2612,6 +2626,40 @@ function formValue(value) {
   return String(value ?? "").trim();
 }
 
+function parseDelimitedValues(value) {
+  if (Array.isArray(value)) return value.map(item => String(item || "").trim()).filter(Boolean);
+  return String(value || "")
+    .split(/[\n,;]+/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function productInterestSelections(value) {
+  return [...new Set(parseDelimitedValues(value))];
+}
+
+function leadProductInterestOptions(extraValues = []) {
+  return [...new Set([...PRODUCT_INTEREST_OPTIONS, ...productInterestSelections(extraValues)])];
+}
+
+function renderLeadProductInterestOptions(selectedValues = []) {
+  const container = document.querySelector("#leadProductInterestGrid");
+  if (!container) return;
+  const selected = new Set(productInterestSelections(selectedValues));
+  container.innerHTML = leadProductInterestOptions(selectedValues).map(option => `
+    <label class="lead-product-interest-option">
+      <input type="checkbox" name="product_interest" value="${escapeHtml(option)}" ${selected.has(option) ? "checked" : ""}>
+      <span>${escapeHtml(option)}</span>
+    </label>
+  `).join("");
+}
+
+function selectedLeadProductInterests() {
+  return [...document.querySelectorAll('#leadProductInterestGrid input[name="product_interest"]:checked')]
+    .map(input => input.value.trim())
+    .filter(Boolean);
+}
+
 function clearDynamicLeadFormOptions(name) {
   const field = els.leadForm?.elements?.[name];
   if (!field || field.tagName !== "SELECT") return;
@@ -2687,6 +2735,7 @@ function syncLeadWizardDetailsFromValues() {
   };
   Object.entries(groups).forEach(([key, fields]) => {
     state.leadFormDetailsOpen[key] = fields.some(name => {
+      if (name === "product_interest") return selectedLeadProductInterests().length > 0;
       const field = els.leadForm.elements[name];
       if (!field) return false;
       const value = String(field.value || "").trim();
@@ -2781,6 +2830,7 @@ function resetLeadFormForNewLead() {
   if (els.leadForm.elements.next_action_date) {
     els.leadForm.elements.next_action_date.value = today();
   }
+  renderLeadProductInterestOptions();
   ensureLeadFormSelectValue("next_action", NEXT_ACTION_PLAN_OPTIONS[0], NEXT_ACTION_PLAN_OPTIONS[0]);
   ensureLeadFormSelectValue("activity_purpose", ACTIVITY_PURPOSE_OPTIONS[0], ACTIVITY_PURPOSE_OPTIONS[0]);
   renderDuplicateWarning();
@@ -7272,10 +7322,12 @@ function openLeadEdit(leadId) {
   resetLeadEnrichmentSession();
   els.leadForm.reset();
   Object.entries(lead).forEach(([key, value]) => {
+    if (key === "product_interest") return;
     const field = els.leadForm.elements[key];
     if (!field) return;
     field.value = formValue(value);
   });
+  renderLeadProductInterestOptions(lead.product_interest);
   ensureLeadFormSelectValue("next_action", normalizeNextActionPlan(lead.next_action), NEXT_ACTION_PLAN_OPTIONS[0]);
   ensureLeadFormSelectValue("activity_purpose", normalizeActivityPurpose(lead.activity_purpose), ACTIVITY_PURPOSE_OPTIONS[0]);
   syncLeadWizardDetailsFromValues();
@@ -10715,6 +10767,12 @@ els.leadForm.querySelectorAll("input, textarea, select").forEach(field => {
     if (field.name) leadFormTouched.add(field.name);
   });
 });
+els.leadForm.addEventListener("change", event => {
+  const field = event.target;
+  if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)) return;
+  if (field.name) leadFormTouched.add(field.name);
+});
+renderLeadProductInterestOptions();
 renderLeadFormWizard();
 
 els.leadForm.elements.company_name.addEventListener("input", handleLeadCompanyNameInput);
@@ -10730,7 +10788,9 @@ document.querySelector("#recordLeadVoice").addEventListener("click", () => {
 
 els.leadForm.addEventListener("submit", async event => {
   event.preventDefault();
-  const payload = Object.fromEntries(new FormData(els.leadForm).entries());
+  const formData = new FormData(els.leadForm);
+  const payload = Object.fromEntries(formData.entries());
+  payload.product_interest = formData.getAll("product_interest").map(value => String(value || "").trim()).filter(Boolean).join(", ");
   payload.estimated_value = Number(payload.estimated_value || 0);
   let lead;
   if (state.editingLeadId) {

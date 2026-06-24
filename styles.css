@@ -27,8 +27,9 @@
   --color-border-tertiary: #dbe3ef;
   --color-text-secondary: var(--color-text-muted);
   --border-radius-lg: 8px;
-  --font-display: "Space Grotesk", sans-serif;
+  --font-display: "Plus Jakarta Sans", sans-serif;
   --font-body: "Inter", sans-serif;
+  --font-ui: "Plus Jakarta Sans", sans-serif;
   --label-letter-spacing: 0.15em;
   --label-text-transform: uppercase;
   --radius-card: 8px;
@@ -115,6 +116,25 @@ h3,
   font-family: var(--font-display);
 }
 
+label,
+.nav-item,
+.nav-group-label,
+.sidebar-tools-label,
+.toolbar span,
+.panel-header span,
+.meta-label,
+.auth-brand span,
+.brand span,
+.chip,
+.count-chip,
+.pill,
+.badge,
+.tag,
+.activity-type-label,
+.next-action-label {
+  font-family: var(--font-ui);
+}
+
 button,
 input,
 select,
@@ -131,6 +151,7 @@ textarea {
 
 button {
   cursor: pointer;
+  font-family: var(--font-ui);
   font-size: var(--text-button);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-label);
@@ -1184,6 +1205,70 @@ p {
   font-size: var(--text-label);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-label);
+}
+
+.lead-product-interest-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lead-product-interest-fieldset legend {
+  padding: 0;
+  color: #4f6074;
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-label);
+}
+
+.lead-product-interest-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.92), rgba(240, 246, 252, 0.82));
+}
+
+.lead-product-interest-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  line-height: 1.45;
+}
+
+.lead-product-interest-option input[type="checkbox"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  padding: 0;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.lead-product-interest-option span {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .lead-product-interest-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .lead-product-interest-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .view-toggle {
@@ -7690,8 +7775,23 @@ body.salesman-dashboard-mode {
   --line: #e7e2d8;
   --shadow-soft: 0 1px 3px rgba(20, 30, 50, 0.06);
   --shadow-elevated: 0 10px 24px rgba(20, 30, 50, 0.08);
+  --salesman-surface: rgba(255, 255, 255, 0.84);
+  --salesman-surface-strong: rgba(255, 255, 255, 0.92);
+  --salesman-surface-soft: rgba(250, 248, 244, 0.78);
+  --salesman-glass-stroke: rgba(231, 226, 216, 0.92);
+  --salesman-shadow:
+    0 16px 34px rgba(20, 30, 50, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
+  --salesman-shadow-soft:
+    0 10px 20px rgba(20, 30, 50, 0.05),
+    0 1px 0 rgba(255, 255, 255, 0.62) inset;
+  --salesman-ink: #162132;
+  --salesman-copy: #324052;
+  --salesman-muted: #5d6a7b;
+  --salesman-kicker: #7a6f62;
   background:
     radial-gradient(circle at top left, rgba(210, 178, 121, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 26%),
     linear-gradient(180deg, #faf7f1 0%, #f5f2ec 100%);
 }
 
@@ -7709,9 +7809,34 @@ body.salesman-dashboard-mode .salesman-dashboard-tools,
 body.salesman-dashboard-mode .portfolio-panel,
 body.salesman-dashboard-mode .market-intel-panel,
 body.salesman-dashboard-mode .agent-panel {
-  background: #ffffff;
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-soft);
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, var(--salesman-surface-strong) 0%, var(--salesman-surface) 100%);
+  border: 1px solid var(--salesman-glass-stroke);
+  box-shadow: var(--salesman-shadow);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+body.salesman-dashboard-mode .metrics article::before,
+body.salesman-dashboard-mode .daily-ai-panel::before,
+body.salesman-dashboard-mode .salesman-followup-panel::before,
+body.salesman-dashboard-mode .dashboard-quick-actions::before,
+body.salesman-dashboard-mode .salesman-loss-prompts-panel::before,
+body.salesman-dashboard-mode .salesman-dashboard-toggle-shell::before,
+body.salesman-dashboard-mode .salesman-dashboard-tools::before,
+body.salesman-dashboard-mode .portfolio-panel::before,
+body.salesman-dashboard-mode .market-intel-panel::before,
+body.salesman-dashboard-mode .agent-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.54), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.04) 40%);
+  opacity: 0.9;
 }
 
 body.salesman-dashboard-mode .dashboard-view,
@@ -7731,6 +7856,8 @@ body.salesman-dashboard-mode .panel-header > div,
 body.salesman-dashboard-mode .daily-ai-copy {
   display: grid;
   gap: 6px;
+  position: relative;
+  z-index: 1;
 }
 
 body.salesman-dashboard-mode .panel-header h2,
@@ -7742,12 +7869,13 @@ body.salesman-dashboard-mode .daily-ai-copy h2 {
   font-weight: 700;
   line-height: 1.14;
   letter-spacing: -0.01em;
+  color: var(--salesman-ink);
 }
 
 body.salesman-dashboard-mode .panel-header span,
 body.salesman-dashboard-mode .daily-ai-copy span {
   order: 2;
-  color: #7a6f62;
+  color: var(--salesman-kicker);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -7757,7 +7885,7 @@ body.salesman-dashboard-mode .daily-ai-copy span {
 
 body.salesman-dashboard-mode .daily-ai-copy p {
   order: 3;
-  color: #5c6472;
+  color: var(--salesman-copy);
   max-width: 44ch;
   margin: 0;
 }
@@ -7766,37 +7894,54 @@ body.salesman-dashboard-mode .daily-ai-panel,
 body.salesman-dashboard-mode .salesman-followup-panel,
 body.salesman-dashboard-mode .dashboard-quick-actions,
 body.salesman-dashboard-mode .salesman-loss-prompts-panel {
-  box-shadow: 0 1px 3px rgba(20, 30, 50, 0.06);
+  box-shadow: var(--salesman-shadow);
 }
 
 body.salesman-dashboard-mode .salesman-triage-card,
 body.salesman-dashboard-mode .salesman-first-touch-card,
 body.salesman-dashboard-mode .salesman-loss-card,
 body.salesman-dashboard-mode .tool-toggle-button {
-  background: #ffffff;
-  border: 1px solid var(--line);
-  box-shadow: none;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(252, 249, 244, 0.88));
+  border: 1px solid rgba(231, 226, 216, 0.96);
+  box-shadow: var(--salesman-shadow-soft);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card::before,
+body.salesman-dashboard-mode .salesman-first-touch-card::before,
+body.salesman-dashboard-mode .salesman-loss-card::before,
+body.salesman-dashboard-mode .tool-toggle-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 38%);
 }
 
 body.salesman-dashboard-mode .salesman-triage-card.tone-danger {
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.05), rgba(255, 255, 255, 0.98));
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.08), rgba(255, 255, 255, 0.96));
 }
 
 body.salesman-dashboard-mode .salesman-triage-card.tone-warm {
-  background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), rgba(255, 255, 255, 0.98));
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.09), rgba(255, 255, 255, 0.96));
 }
 
 body.salesman-dashboard-mode .salesman-triage-card.tone-info {
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.05), rgba(255, 255, 255, 0.98));
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
 }
 
 body.salesman-dashboard-mode .salesman-triage-card.tone-neutral {
-  background: linear-gradient(180deg, rgba(148, 163, 184, 0.05), rgba(255, 255, 255, 0.98));
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.08), rgba(255, 255, 255, 0.96));
 }
 
 body.salesman-dashboard-mode .daily-ai-summary {
-  background: rgba(244, 239, 231, 0.9);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(249, 245, 238, 0.96), rgba(244, 239, 231, 0.88));
+  border: 1px solid rgba(231, 226, 216, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 body.salesman-dashboard-mode .followup-groups {
@@ -7808,10 +7953,14 @@ body.salesman-dashboard-mode .followup-column {
   gap: 0;
   padding: 0;
   overflow: hidden;
-  background: #ffffff;
-  border: 1px solid var(--line);
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(252, 249, 244, 0.88));
+  border: 1px solid rgba(231, 226, 216, 0.96);
   border-radius: 18px;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--salesman-shadow-soft);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 body.salesman-dashboard-mode .followup-column[data-followup-column="Overdue Follow-Ups"] {
@@ -7828,7 +7977,8 @@ body.salesman-dashboard-mode .followup-column[data-followup-column="This Week"] 
 
 body.salesman-dashboard-mode .followup-group-header {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid rgba(231, 226, 216, 0.94);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.4);
 }
 
 body.salesman-dashboard-mode .followup-column[data-followup-column="Overdue Follow-Ups"] .followup-group-header {
@@ -7860,6 +8010,8 @@ body.salesman-dashboard-mode .followup-column[data-followup-column="This Week"] 
 
 body.salesman-dashboard-mode .followup-group-header span {
   background: rgba(255, 255, 255, 0.85);
+  color: var(--salesman-ink);
+  box-shadow: 0 1px 2px rgba(20, 30, 50, 0.05);
 }
 
 body.salesman-dashboard-mode .followup-column-body {
@@ -7873,18 +8025,24 @@ body.salesman-dashboard-mode .followup-column-section {
 }
 
 body.salesman-dashboard-mode .followup-subheading {
-  color: #6b7280;
+  color: var(--salesman-muted);
 }
 
 body.salesman-dashboard-mode .followup-card {
   gap: 0;
   padding: 0;
   overflow: hidden;
-  background: #ffffff;
-  border: 1px solid var(--line);
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 250, 246, 0.9));
+  border: 1px solid rgba(231, 226, 216, 0.96);
   border-left-width: 4px;
   border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(20, 30, 50, 0.04);
+  box-shadow:
+    0 10px 20px rgba(20, 30, 50, 0.05),
+    0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 body.salesman-dashboard-mode .followup-main {
@@ -7892,16 +8050,25 @@ body.salesman-dashboard-mode .followup-main {
   padding: 15px 16px 12px;
 }
 
+body.salesman-dashboard-mode .followup-main strong,
+body.salesman-dashboard-mode .salesman-triage-card strong,
+body.salesman-dashboard-mode .salesman-first-touch-card strong,
+body.salesman-dashboard-mode .salesman-loss-card strong,
+body.salesman-dashboard-mode .tool-toggle-button strong {
+  color: var(--salesman-ink);
+}
+
 body.salesman-dashboard-mode .followup-main p {
-  color: #5f6877;
+  color: var(--salesman-copy);
 }
 
 body.salesman-dashboard-mode .followup-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding: 12px 16px 14px;
-  border-top: 1px solid var(--line);
-  background: rgba(245, 242, 236, 0.72);
+  border-top: 1px solid rgba(231, 226, 216, 0.96);
+  background:
+    linear-gradient(180deg, rgba(247, 243, 236, 0.84), rgba(243, 238, 229, 0.72));
 }
 
 body.salesman-dashboard-mode .followup-actions .small-action {
@@ -7915,7 +8082,7 @@ body.salesman-dashboard-mode .followup-actions .small-action {
 body.salesman-dashboard-mode .followup-actions .small-action[data-followup-complete] {
   background: #16233a;
   color: #ffffff;
-  box-shadow: 0 1px 2px rgba(20, 30, 50, 0.10);
+  box-shadow: 0 8px 16px rgba(20, 30, 50, 0.12);
 }
 
 body.salesman-dashboard-mode .followup-actions .small-action[data-followup-complete]:hover {
@@ -7923,8 +8090,8 @@ body.salesman-dashboard-mode .followup-actions .small-action[data-followup-compl
 }
 
 body.salesman-dashboard-mode .followup-actions .small-action[data-followup-open] {
-  background: #edf3fb;
-  border-color: #d6deea;
+  background: rgba(232, 240, 249, 0.92);
+  border-color: #cfd8e6;
   color: #16233a;
 }
 
@@ -7935,8 +8102,8 @@ body.salesman-dashboard-mode .followup-actions .small-action[data-followup-open]
 body.salesman-dashboard-mode .followup-actions .small-action[data-followup-reschedule],
 body.salesman-dashboard-mode .followup-actions .small-action[data-followup-note] {
   background: transparent;
-  border-color: rgba(231, 226, 216, 0.92);
-  color: #5e6775;
+  border-color: rgba(220, 214, 205, 0.96);
+  color: var(--salesman-muted);
 }
 
 body.salesman-dashboard-mode .followup-actions .small-action[data-followup-reschedule]:hover,
@@ -7952,10 +8119,14 @@ body.salesman-dashboard-mode .daily-ai-copy span,
 body.salesman-dashboard-mode .market-news-time,
 body.salesman-dashboard-mode .market-news-meta {
   font-size: 12px;
+  color: var(--salesman-kicker);
+  opacity: 1;
 }
 
 body.salesman-dashboard-mode .metrics strong {
   font-size: 20px;
+  color: var(--salesman-ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 body.salesman-dashboard-mode .daily-ai-copy h2,
@@ -7972,6 +8143,26 @@ body.salesman-dashboard-mode .market-news-card p,
 body.salesman-dashboard-mode .market-news-panel .empty-copy {
   font-size: 13px;
   line-height: 1.5;
+  color: var(--salesman-copy);
+}
+
+body.salesman-dashboard-mode .salesman-triage-kicker,
+body.salesman-dashboard-mode .salesman-first-touch-kicker,
+body.salesman-dashboard-mode .salesman-loss-kicker {
+  color: var(--salesman-kicker);
+  opacity: 1;
+}
+
+body.salesman-dashboard-mode .daily-ai-summary strong,
+body.salesman-dashboard-mode .daily-ai-summary span,
+body.salesman-dashboard-mode .chip,
+body.salesman-dashboard-mode .count-chip,
+body.salesman-dashboard-mode .tag {
+  color: var(--salesman-ink);
+}
+
+body.salesman-dashboard-mode .empty-copy {
+  color: var(--salesman-muted);
 }
 
 body.salesman-dashboard-mode .daily-ai-actions {
