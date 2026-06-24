@@ -123,6 +123,13 @@ const PMR_ACCOUNT_STATUS = ["Cold", "Warm", "Hot", "Active"];
 const REMINDER_TYPES = ["Quotation follow-up", "Planned visit", "Important date", "Payment follow-up", "Sample approval", "General follow-up"];
 const ACTIVITY_EXTRA_FIELDS = ["followup_completed", "completed_due_date", "completed_activity_required", "completed_reminder_type", "quotation_ref", "quotation_status"];
 const LOST_REASON_KEYS = ["price", "no_budget", "competitor_relationship", "lead_time", "product_mismatch", "no_response", "project_cancelled", "credit_terms", "quality_concerns", "other"];
+const WEEKLY_REPORT_LIKELIHOOD = ["Low chance", "Could happen", "Good chance", "Almost certain"];
+const WEEKLY_REPORT_TIMING = ["This week", "Next week", "2 weeks", "3 weeks", "4 weeks"];
+const WEEKLY_REPORT_PROBLEMS = ["Overdue payment", "Credit limit pressure", "No recent activity", "Price pressure", "Competitor risk", "Project delay", "Documentation issue", "Other"];
+const WEEKLY_REPORT_ASSESSMENT = ["Managed", "Watch closely", "Could go either way", "Getting worse"];
+const WEEKLY_REPORT_DEMAND = ["Much slower", "Slightly slower", "Same", "Slightly busier", "Much busier"];
+const WEEKLY_REPORT_FOUR_BAND = ["None", "Occasional", "Frequent", "Severe"];
+const WEEKLY_REPORT_GOVERNMENT = ["No change", "Delayed", "Speeding up"];
 const OPTIONAL_SUPABASE_LEAD_COLUMNS = [
   "activity_purpose",
   "lost_reason",
@@ -264,6 +271,8 @@ function readDb() {
   db.ai_action_log = Array.isArray(db.ai_action_log) ? db.ai_action_log : [];
   db.attention_flags = Array.isArray(db.attention_flags) ? db.attention_flags : [];
   db.notifications = Array.isArray(db.notifications) ? db.notifications : [];
+  db.weekly_reports = Array.isArray(db.weekly_reports) ? db.weekly_reports : [];
+  db.weekly_report_events = Array.isArray(db.weekly_report_events) ? db.weekly_report_events : [];
   db.market_intelligence = Array.isArray(db.market_intelligence) ? db.market_intelligence : [];
   db.market_intelligence_archive = Array.isArray(db.market_intelligence_archive) ? db.market_intelligence_archive : [];
   db.configuration = normalizeConfiguration(db.configuration || {}, defaultCrmConfiguration());
@@ -2811,6 +2820,491 @@ function importLocalLeadRows(db, user, rows, mode, importedAt) {
   return { imported: imported.length - updated, updated, skipped, failed: failedRows.length, failed_rows: failedRows, leads: imported };
 }
 
+function isoDateOnly(value) {
+  return String(value || "").slice(0, 10);
+}
+
+function addDaysIso(baseDate, amount) {
+  const date = new Date(`${isoDateOnly(baseDate)}T00:00:00`);
+  date.setDate(date.getDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function reportingFriday(reference = new Date()) {
+  const seed = new Date(reference);
+  if (Number.isNaN(seed.getTime())) return new Date().toISOString().slice(0, 10);
+  const day = seed.getDay();
+  const delta = day === 6 ? -1 : day === 0 ? -2 : 5 - day;
+  seed.setDate(seed.getDate() + delta);
+  return seed.toISOString().slice(0, 10);
+}
+
+function reportingWeekStart(weekEnding) {
+  return addDaysIso(weekEnding, -4);
+}
+
+function weekDateRangeLabel(weekEnding) {
+  const start = reportingWeekStart(weekEnding);
+  return `${start} to ${weekEnding}`;
+}
+
+function branchForUser(user) {
+  const territory = canonicalTerritory(user?.territory || "");
+  return territory === "UAE-South" ? "Abu Dhabi / UAQ" : territory === "Saudi" ? "Saudi" : "JAFZA / UAE North";
+}
+
+function minSpecificEnough(value, { requireDateOrAmount = false } = {}) {
+  const text = String(value || "").trim();
+  if (text.length < 16) return false;
+  if (/^(n\/a|na|none|nothing|nil|ok|fine|good)$/i.test(text)) return false;
+  if (!requireDateOrAmount) return true;
+  const hasDate = /\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i.test(text);
+  const hasAmount = /\b(?:aed|usd|qar|sar)?\s?\d[\d,]*(?:\.\d+)?\b/i.test(text);
+  return hasDate || hasAmount;
+}
+
+function weeklyReportDefaultMarketIntelligence() {
+  return {
+    demand_band: "",
+    demand_note: "",
+    pricing_band: "",
+    competitor_loss: "",
+    competitor_loss_note: "",
+    competitor_pricing_note: "",
+    cashflow_band: "",
+    extended_terms_band: "",
+    defaults_heard: "",
+    defaults_details: "",
+    projects_note: "",
+    government_projects_band: "",
+    government_projects_note: "",
+    new_customers_note: "",
+    lost_customers_note: "",
+    big_changes_note: ""
+  };
+}
+
+function weeklyReportDefaults(user, weekEnding) {
+  return {
+    id: "",
+    week_ending: weekEnding,
+    rep_name: user?.name || user?.email || "",
+    rep_email: user?.email || "",
+    branch: branchForUser(user),
+    territory: user?.territory || "",
+    status: "not_started",
+    summary: "",
+    no_secured_orders_confirmed: false,
+    no_expected_orders_confirmed: false,
+    no_problematic_accounts_confirmed: false,
+    secured_orders: [],
+    expected_orders: [],
+    problematic_accounts: [],
+    market_intelligence: weeklyReportDefaultMarketIntelligence(),
+    next_week_plan: "",
+    attested: false,
+    attested_at: "",
+    attestation_device: "",
+    submitted_at: "",
+    reviewed_at: "",
+    review_note: "",
+    contradiction_flags: [],
+    created_at: "",
+    updated_at: ""
+  };
+}
+
+function weeklyReportIsLockedForEditing(status) {
+  return ["submitted", "under_review", "accepted"].includes(String(status || "").trim().toLowerCase());
+}
+
+function weeklyProblemCandidateFlags(lead) {
+  const flags = [];
+  const nextActionDate = isoDateOnly(lead?.next_action_date);
+  if (nextActionDate && nextActionDate < new Date().toISOString().slice(0, 10)) flags.push(`Follow-up overdue since ${nextActionDate}`);
+  if (String(lead?.priority || "").toLowerCase() === "at risk") flags.push("Marked at risk in CRM");
+  if (String(lead?.stage || "").toUpperCase() === "DORMANT") flags.push("Lead is in dormant / lost stage");
+  const lastActivity = isoDateOnly(lead?.last_activity);
+  if (lastActivity) {
+    const age = Math.floor((Date.now() - new Date(`${lastActivity}T00:00:00`).getTime()) / 86400000);
+    if (age >= 14) flags.push(`No activity logged for ${age} days`);
+  } else {
+    flags.push("No activity logged yet");
+  }
+  return flags;
+}
+
+function securedOrdersForWeeklyReport(leads, weekEnding) {
+  const start = reportingWeekStart(weekEnding);
+  return (leads || []).flatMap(lead => {
+    const activities = Array.isArray(lead?.activities) ? lead.activities : [];
+    const orderActivities = activities.filter(activity => {
+      const type = normalizedActivityType(activity?.type || "");
+      const at = isoDateOnly(activityDateOnly(activity) || activity?.at || "");
+      return type === "Order Placed" && at >= start && at <= weekEnding;
+    });
+    return orderActivities.map((activity, index) => ({
+      key: `${lead.id}:order:${activity.id || index}`,
+      lead_id: lead.id,
+      account_name: lead.company_name,
+      order_value: Number(lead.estimated_value || 0),
+      payment_terms: lead.payment_terms || "ERP not synced",
+      order_date: isoDateOnly(activityDateOnly(activity) || activity?.at || ""),
+      expected_delivery: lead.first_order_date || "",
+      product_type: lead.business_category || lead.sector || lead.industry || "Other",
+      status: "PO -> Ack -> Invoiced -> Delivered",
+      flagged: weeklyProblemCandidateFlags(lead).length > 0
+    }));
+  }).sort((a, b) => Number(b.order_value || 0) - Number(a.order_value || 0));
+}
+
+function expectedOrdersForWeeklyReport(leads) {
+  return (leads || [])
+    .filter(lead => !["ACTIVE", "DORMANT"].includes(String(lead?.stage || "").toUpperCase()))
+    .sort((a, b) => Number(b.estimated_value || 0) - Number(a.estimated_value || 0))
+    .slice(0, 12)
+    .map(lead => ({
+      lead_id: lead.id,
+      account_name: lead.company_name,
+      expected_value: Number(lead.estimated_value || 0),
+      likelihood: "",
+      timing: "",
+      order_scope: lead.product_interest || lead.products_services_remarks || "",
+      blockers: ""
+    }));
+}
+
+function problematicAccountsForWeeklyReport(leads) {
+  return (leads || [])
+    .map(lead => ({
+      lead_id: lead.id,
+      account_name: lead.company_name,
+      credit_limit: lead.credit_limit || "ERP not synced",
+      current_utilization: lead.credit_utilization || "ERP not synced",
+      last_payment_date: lead.last_payment_date || "ERP not synced",
+      days_late: lead.days_late || "ERP not synced",
+      system_flags: weeklyProblemCandidateFlags(lead)
+    }))
+    .filter(item => item.system_flags.length)
+    .sort((a, b) => b.system_flags.length - a.system_flags.length || String(a.account_name || "").localeCompare(String(b.account_name || "")));
+}
+
+function mergeWeeklyContext(report, context) {
+  const securedByKey = new Map((report?.secured_orders || []).map(item => [item.key, item]));
+  const expectedByLead = new Map((report?.expected_orders || []).map(item => [item.lead_id, item]));
+  const problemByLead = new Map((report?.problematic_accounts || []).map(item => [item.lead_id, item]));
+  return {
+    ...weeklyReportDefaults({ name: report?.rep_name, email: report?.rep_email, territory: report?.territory }, report?.week_ending || context.week_ending),
+    ...report,
+    market_intelligence: { ...weeklyReportDefaultMarketIntelligence(), ...(report?.market_intelligence || {}) },
+    secured_orders: context.secured_orders.map(item => ({ has_issue: "", problem_note: "", ...item, ...(securedByKey.get(item.key) || {}) })),
+    expected_orders: context.expected_orders.map(item => ({ likelihood: "", timing: "", blockers: "", ...item, ...(expectedByLead.get(item.lead_id) || {}) })),
+    problematic_accounts: context.problematic_accounts.map(item => ({
+      disposition: "",
+      problems: [],
+      other_problem: "",
+      specifics: "",
+      assessment: "",
+      dismiss_reason: "",
+      ...item,
+      ...(problemByLead.get(item.lead_id) || {})
+    }))
+  };
+}
+
+function contradictionFlagsForReport(report) {
+  return (report?.problematic_accounts || [])
+    .filter(item => item.disposition === "dismiss" && Array.isArray(item.system_flags) && item.system_flags.some(flag => /overdue|dormant|no activity|at risk/i.test(flag)))
+    .map(item => `${item.account_name}: dismissed despite active system flags.`);
+}
+
+function weeklyReportBlockers(report, context) {
+  const blockers = [];
+  if (!minSpecificEnough(report?.summary)) blockers.push("Add a specific weekly summary with more than filler text.");
+  if (!(report?.secured_orders || []).length && !report?.no_secured_orders_confirmed) {
+    blockers.push("Confirm explicitly if there were no secured orders worth reporting this week.");
+  }
+  (report?.secured_orders || []).forEach(item => {
+    if (item.flagged && String(item.has_issue || "").toLowerCase() === "yes" && !minSpecificEnough(item.problem_note, { requireDateOrAmount: true })) {
+      blockers.push(`Explain the secured-order issue for ${item.account_name} with a dated or quantified note.`);
+    }
+  });
+  if (!context.expected_orders.length && !report?.no_expected_orders_confirmed) {
+    blockers.push("Confirm explicitly if there were no expected orders to review this week.");
+  }
+  (report?.expected_orders || []).forEach(item => {
+    if (!WEEKLY_REPORT_LIKELIHOOD.includes(String(item.likelihood || ""))) blockers.push(`Choose the likelihood for ${item.account_name}.`);
+    if (!WEEKLY_REPORT_TIMING.includes(String(item.timing || ""))) blockers.push(`Choose the timing window for ${item.account_name}.`);
+    if (["Good chance", "Almost certain"].includes(String(item.likelihood || "")) && !minSpecificEnough(item.blockers)) {
+      blockers.push(`Describe what could stop ${item.account_name} because it is marked high probability.`);
+    }
+  });
+  if (!context.problematic_accounts.length && !report?.no_problematic_accounts_confirmed) {
+    blockers.push("Confirm explicitly if there were zero problematic accounts this week.");
+  }
+  context.problematic_accounts.forEach(item => {
+    const entry = (report?.problematic_accounts || []).find(candidate => candidate.lead_id === item.lead_id) || {};
+    if (!["report", "dismiss"].includes(String(entry.disposition || ""))) {
+      blockers.push(`Choose whether to report or dismiss ${item.account_name}.`);
+      return;
+    }
+    if (entry.disposition === "dismiss" && !minSpecificEnough(entry.dismiss_reason)) {
+      blockers.push(`Explain why ${item.account_name} was dismissed from the problematic-account queue.`);
+    }
+    if (entry.disposition === "report") {
+      if (!Array.isArray(entry.problems) || !entry.problems.length) blockers.push(`Select at least one problem for ${item.account_name}.`);
+      if (Array.isArray(entry.problems) && entry.problems.includes("Other") && !minSpecificEnough(entry.other_problem)) blockers.push(`Describe the “Other” problem for ${item.account_name}.`);
+      if (!minSpecificEnough(entry.specifics, { requireDateOrAmount: true })) blockers.push(`Add dated or quantified specifics for ${item.account_name}.`);
+      if (!WEEKLY_REPORT_ASSESSMENT.includes(String(entry.assessment || ""))) blockers.push(`Choose the honest assessment for ${item.account_name}.`);
+    }
+  });
+  const intel = report?.market_intelligence || {};
+  if (!WEEKLY_REPORT_DEMAND.includes(String(intel.demand_band || ""))) blockers.push("Choose the customer demand signal for the week.");
+  if (!minSpecificEnough(intel.demand_note)) blockers.push("Describe what customers said about their business this week.");
+  if (!WEEKLY_REPORT_FOUR_BAND.includes(String(intel.pricing_band || ""))) blockers.push("Choose the pricing-complaint level.");
+  if (!["yes", "no"].includes(String(intel.competitor_loss || "").toLowerCase())) blockers.push("Confirm whether any orders were lost to competitors this week.");
+  if (String(intel.competitor_loss || "").toLowerCase() === "yes" && !minSpecificEnough(intel.competitor_loss_note, { requireDateOrAmount: true })) blockers.push("Explain the competitor loss with specifics.");
+  if (!minSpecificEnough(intel.competitor_pricing_note)) blockers.push("Add a competitor pricing trend note or explicitly say none observed.");
+  if (!WEEKLY_REPORT_FOUR_BAND.includes(String(intel.cashflow_band || ""))) blockers.push("Choose the cash-flow stress signal.");
+  if (!WEEKLY_REPORT_FOUR_BAND.includes(String(intel.extended_terms_band || ""))) blockers.push("Choose the extended-terms signal.");
+  if (!["yes", "no"].includes(String(intel.defaults_heard || "").toLowerCase())) blockers.push("Confirm whether defaults or failures were heard in the market.");
+  if (String(intel.defaults_heard || "").toLowerCase() === "yes" && !minSpecificEnough(intel.defaults_details, { requireDateOrAmount: true })) blockers.push("Name the default/failure and give details.");
+  if (!minSpecificEnough(intel.projects_note)) blockers.push("List the big projects or state the live project signal explicitly.");
+  if (!WEEKLY_REPORT_GOVERNMENT.includes(String(intel.government_projects_band || ""))) blockers.push("Choose the government-project speed signal.");
+  if (["Delayed", "Speeding up"].includes(String(intel.government_projects_band || "")) && !minSpecificEnough(intel.government_projects_note)) blockers.push("Explain the government-project movement.");
+  if (!minSpecificEnough(intel.new_customers_note)) blockers.push("Confirm new customers this week or explicitly state none confirmed.");
+  if (!minSpecificEnough(intel.lost_customers_note)) blockers.push("Confirm lost customers this week or explicitly state none.");
+  if (!minSpecificEnough(intel.big_changes_note)) blockers.push("Describe any big account changes or explicitly state none.");
+  if (!minSpecificEnough(report?.next_week_plan)) blockers.push("Add next week’s action plan.");
+  if (!report?.attested) blockers.push("Tick the digital attestation before submission.");
+  return blockers;
+}
+
+function weeklyThinReport(report) {
+  const summaryLength = String(report?.summary || "").trim().length;
+  const plansLength = String(report?.next_week_plan || "").trim().length;
+  const intelDepth = [
+    report?.market_intelligence?.demand_note,
+    report?.market_intelligence?.projects_note,
+    report?.market_intelligence?.big_changes_note
+  ].map(value => String(value || "").trim().length).reduce((total, value) => total + value, 0);
+  return summaryLength < 40 || plansLength < 24 || intelDepth < 60;
+}
+
+function sanitizeWeeklyReportPayload(input, user, weekEnding) {
+  const base = weeklyReportDefaults(user, weekEnding);
+  const report = {
+    ...base,
+    ...input,
+    week_ending: weekEnding,
+    rep_name: user.name || user.email || "",
+    rep_email: user.email || "",
+    branch: branchForUser(user),
+    territory: user.territory || "",
+    summary: String(input.summary || "").trim(),
+    no_secured_orders_confirmed: Boolean(input.no_secured_orders_confirmed),
+    no_expected_orders_confirmed: Boolean(input.no_expected_orders_confirmed),
+    no_problematic_accounts_confirmed: Boolean(input.no_problematic_accounts_confirmed),
+    next_week_plan: String(input.next_week_plan || "").trim(),
+    attested: Boolean(input.attested),
+    attestation_device: String(input.attestation_device || "").trim(),
+    secured_orders: Array.isArray(input.secured_orders) ? input.secured_orders.map(item => ({
+      key: String(item.key || "").trim(),
+      lead_id: String(item.lead_id || "").trim(),
+      account_name: String(item.account_name || "").trim(),
+      flagged: Boolean(item.flagged),
+      has_issue: ["yes", "no"].includes(String(item.has_issue || "").toLowerCase()) ? String(item.has_issue || "").toLowerCase() : "",
+      problem_note: String(item.problem_note || "").trim()
+    })) : [],
+    expected_orders: Array.isArray(input.expected_orders) ? input.expected_orders.map(item => ({
+      lead_id: String(item.lead_id || "").trim(),
+      account_name: String(item.account_name || "").trim(),
+      expected_value: Number(item.expected_value || 0) || 0,
+      order_scope: String(item.order_scope || "").trim(),
+      likelihood: WEEKLY_REPORT_LIKELIHOOD.includes(String(item.likelihood || "")) ? String(item.likelihood) : "",
+      timing: WEEKLY_REPORT_TIMING.includes(String(item.timing || "")) ? String(item.timing) : "",
+      blockers: String(item.blockers || "").trim()
+    })) : [],
+    problematic_accounts: Array.isArray(input.problematic_accounts) ? input.problematic_accounts.map(item => ({
+      lead_id: String(item.lead_id || "").trim(),
+      account_name: String(item.account_name || "").trim(),
+      system_flags: Array.isArray(item.system_flags) ? item.system_flags.map(flag => String(flag || "").trim()).filter(Boolean) : [],
+      disposition: ["report", "dismiss"].includes(String(item.disposition || "").toLowerCase()) ? String(item.disposition || "").toLowerCase() : "",
+      problems: Array.isArray(item.problems) ? item.problems.filter(problem => WEEKLY_REPORT_PROBLEMS.includes(String(problem || ""))).map(problem => String(problem)) : [],
+      other_problem: String(item.other_problem || "").trim(),
+      specifics: String(item.specifics || "").trim(),
+      assessment: WEEKLY_REPORT_ASSESSMENT.includes(String(item.assessment || "")) ? String(item.assessment) : "",
+      dismiss_reason: String(item.dismiss_reason || "").trim()
+    })) : [],
+    market_intelligence: {
+      ...weeklyReportDefaultMarketIntelligence(),
+      ...(input.market_intelligence || {})
+    }
+  };
+  report.market_intelligence = Object.fromEntries(Object.entries(report.market_intelligence).map(([key, value]) => [key, String(value || "").trim()]));
+  return report;
+}
+
+function weeklyReportEventEntry(reportId, actor, action, details = {}) {
+  return {
+    id: newRecordId("wsre"),
+    report_id: reportId,
+    timestamp: new Date().toISOString(),
+    actor_uid: actor?.id || "",
+    actor_name: actor?.name || actor?.full_name || actor?.email || "System",
+    actor_role: actor?.role || "system",
+    action: String(action || "").trim(),
+    details
+  };
+}
+
+async function recordWeeklyReportEvent(db, token, supabaseEnabled, reportId, actor, action, details = {}) {
+  if (!reportId || !action) return null;
+  const entry = weeklyReportEventEntry(reportId, actor, action, details);
+  if (supabaseEnabled) {
+    try {
+      await rest("weekly_report_events", {
+        method: "POST",
+        ...supabaseDataOptions(token),
+        headers: { Prefer: "return=minimal" },
+        body: entry
+      });
+      return entry;
+    } catch {
+      const localDb = readDb();
+      return recordWeeklyReportEvent(localDb, token, false, reportId, actor, action, details);
+    }
+  }
+  db.weekly_report_events.unshift(entry);
+  writeDb(db);
+  return entry;
+}
+
+async function loadWeeklyReportEvents(db, token, supabaseEnabled, reportId) {
+  if (!reportId) return [];
+  if (supabaseEnabled) {
+    try {
+      return await rest(`weekly_report_events?report_id=eq.${encodeURIComponent(reportId)}&order=timestamp.desc&limit=12`, supabaseDataOptions(token));
+    } catch {
+      const localDb = readDb();
+      return loadWeeklyReportEvents(localDb, token, false, reportId);
+    }
+  }
+  return (db.weekly_report_events || [])
+    .filter(item => item.report_id === reportId)
+    .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))
+    .slice(0, 12);
+}
+
+function weeklyReportContext(user, leads, weekEnding) {
+  const visible = visibleLeadsForUser(leads, user).map(leadWithDerivedFields);
+  return {
+    week_ending: weekEnding,
+    week_range: weekDateRangeLabel(weekEnding),
+    branch: branchForUser(user),
+    secured_orders: securedOrdersForWeeklyReport(visible, weekEnding),
+    expected_orders: expectedOrdersForWeeklyReport(visible),
+    problematic_accounts: problematicAccountsForWeeklyReport(visible)
+  };
+}
+
+function localSalesmanAccounts(db) {
+  const users = Array.isArray(db?.users) ? db.users.filter(item => String(item.role || "").toLowerCase() === "salesman") : [];
+  if (users.length) return users.map(publicUser);
+  return Array.isArray(db?.salesmen) ? db.salesmen : [];
+}
+
+async function weeklyReportSalesmen(db, token, supabaseEnabled) {
+  if (supabaseEnabled) {
+    try {
+      const profiles = await rest("profiles?role=eq.salesman&select=*&order=full_name.asc", supabaseDataOptions(token));
+      return profiles.map(profile => ({
+        id: profile.id,
+        name: profile.full_name || profile.name || profile.email || "Unnamed salesman",
+        email: profile.email || "",
+        territory: profile.territory || "",
+        role: profile.role || "salesman",
+        status: profile.status || "active"
+      }));
+    } catch {
+      const localDb = readDb();
+      return localSalesmanAccounts(localDb);
+    }
+  }
+  return localSalesmanAccounts(db);
+}
+
+async function loadStoredWeeklyReports(db, token, supabaseEnabled) {
+  if (supabaseEnabled) {
+    try {
+      return await rest("weekly_sales_reports?select=*&order=week_ending.desc&order=submitted_at.desc.nullslast", supabaseDataOptions(token));
+    } catch {
+      const localDb = readDb();
+      return localDb.weekly_reports || [];
+    }
+  }
+  return db.weekly_reports || [];
+}
+
+async function upsertStoredWeeklyReport(db, token, supabaseEnabled, report) {
+  if (supabaseEnabled) {
+    try {
+      const existing = await rest(`weekly_sales_reports?user_id=eq.${encodeURIComponent(report.user_id)}&week_ending=eq.${encodeURIComponent(report.week_ending)}&select=id&limit=1`, supabaseDataOptions(token));
+      if (existing[0]?.id) {
+        const updated = await rest(`weekly_sales_reports?id=eq.${encodeURIComponent(existing[0].id)}&select=*`, {
+          method: "PATCH",
+          ...supabaseDataOptions(token),
+          headers: { Prefer: "return=representation" },
+          body: report
+        });
+        return { record: updated[0], storage_mode: "supabase" };
+      }
+      const inserted = await rest("weekly_sales_reports?select=*", {
+        method: "POST",
+        ...supabaseDataOptions(token),
+        headers: { Prefer: "return=representation" },
+        body: report
+      });
+      return { record: inserted[0], storage_mode: "supabase" };
+    } catch {
+      const localDb = readDb();
+      return upsertStoredWeeklyReport(localDb, token, false, report);
+    }
+  }
+  const next = { ...report };
+  const existingIndex = (db.weekly_reports || []).findIndex(item => item.user_id === report.user_id && item.week_ending === report.week_ending);
+  if (existingIndex >= 0) {
+    next.id = db.weekly_reports[existingIndex].id;
+    db.weekly_reports[existingIndex] = { ...db.weekly_reports[existingIndex], ...next };
+  } else {
+    next.id = next.id || newRecordId("wsr");
+    db.weekly_reports.unshift(next);
+  }
+  writeDb(db);
+  return { record: next, storage_mode: "local" };
+}
+
+async function weeklyReportForUser(db, token, supabaseEnabled, user, weekEnding) {
+  const reports = await loadStoredWeeklyReports(db, token, supabaseEnabled);
+  return reports.find(item => item.user_id === user.id && item.week_ending === weekEnding) || null;
+}
+
+function serializeWeeklyReport(report, context, storageMode = "local", events = []) {
+  const merged = mergeWeeklyContext(report, context);
+  const contradictionFlags = contradictionFlagsForReport(merged);
+  return {
+    report: {
+      ...merged,
+      contradiction_flags: contradictionFlags
+    },
+    context,
+    blockers: weeklyReportBlockers({ ...merged, contradiction_flags: contradictionFlags }, context),
+    thin_report: weeklyThinReport(merged),
+    storage_mode: storageMode,
+    events: Array.isArray(events) ? events : []
+  };
+}
+
 async function handleApi(req, res, url) {
   const supabaseEnabled = isSupabaseConfigured();
   const db = supabaseEnabled ? null : readDb();
@@ -2923,6 +3417,184 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/pmr-voice-notes") {
     return saveVoiceNote(req, res, { supabaseEnabled, user });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/weekly-reports/current") {
+    const weekEnding = String(url.searchParams.get("week") || reportingFriday()).slice(0, 10);
+    const leads = supabaseEnabled
+      ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+      : db.leads.map(leadWithDerivedFields);
+    const context = weeklyReportContext(user, leads, weekEnding);
+    const existing = await weeklyReportForUser(db, user.token, supabaseEnabled, user, weekEnding);
+    const baseline = existing || {
+      ...weeklyReportDefaults(user, weekEnding),
+      user_id: user.id,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    const events = baseline.id ? await loadWeeklyReportEvents(db, user.token, supabaseEnabled, baseline.id) : [];
+    return sendJson(res, 200, serializeWeeklyReport(baseline, context, existing ? "saved" : "draft", events));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/weekly-reports/current") {
+    const payload = await readBody(req);
+    const weekEnding = String(payload.week_ending || reportingFriday()).slice(0, 10);
+    const leads = supabaseEnabled
+      ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+      : db.leads.map(leadWithDerivedFields);
+    const context = weeklyReportContext(user, leads, weekEnding);
+    const existing = await weeklyReportForUser(db, user.token, supabaseEnabled, user, weekEnding);
+    if (existing && weeklyReportIsLockedForEditing(existing.status)) {
+      return sendJson(res, 409, { error: "This weekly report is locked after submission. Wait for a revision request before editing again." });
+    }
+    const now = new Date().toISOString();
+    const next = sanitizeWeeklyReportPayload(payload, user, weekEnding);
+    next.id = existing?.id || "";
+    next.user_id = user.id;
+    next.status = existing?.status && !["not_started", "revision_required"].includes(existing.status) ? existing.status : "in_progress";
+    next.created_at = existing?.created_at || now;
+    next.updated_at = now;
+    next.submitted_at = existing?.submitted_at || "";
+    next.reviewed_at = existing?.reviewed_at || "";
+    next.review_note = existing?.review_note || "";
+    next.contradiction_flags = contradictionFlagsForReport(next);
+    const saved = await upsertStoredWeeklyReport(db, user.token, supabaseEnabled, next);
+    await recordWeeklyReportEvent(db, user.token, supabaseEnabled, saved.record.id, user, existing ? "draft_saved" : "report_started", {
+      status: saved.record.status || "in_progress",
+      week_ending: saved.record.week_ending
+    });
+    const events = await loadWeeklyReportEvents(db, user.token, supabaseEnabled, saved.record.id);
+    return sendJson(res, 200, serializeWeeklyReport(saved.record, context, saved.storage_mode, events));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/weekly-reports/current/submit") {
+    const payload = await readBody(req);
+    const weekEnding = String(payload.week_ending || reportingFriday()).slice(0, 10);
+    const leads = supabaseEnabled
+      ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+      : db.leads.map(leadWithDerivedFields);
+    const context = weeklyReportContext(user, leads, weekEnding);
+    const existing = await weeklyReportForUser(db, user.token, supabaseEnabled, user, weekEnding);
+    if (existing && weeklyReportIsLockedForEditing(existing.status)) {
+      return sendJson(res, 409, { error: "This weekly report has already been submitted and is locked for editing." });
+    }
+    const now = new Date().toISOString();
+    const next = sanitizeWeeklyReportPayload(payload, user, weekEnding);
+    next.id = existing?.id || "";
+    next.user_id = user.id;
+    next.created_at = existing?.created_at || now;
+    next.updated_at = now;
+    next.contradiction_flags = contradictionFlagsForReport(next);
+    const blockers = weeklyReportBlockers(next, context);
+    if (blockers.length) return sendJson(res, 400, { error: "Clear all weekly report blockers before submitting.", blockers });
+    next.status = "submitted";
+    next.submitted_at = now;
+    next.attested = true;
+    next.attested_at = now;
+    const saved = await upsertStoredWeeklyReport(db, user.token, supabaseEnabled, next);
+    await recordWeeklyReportEvent(db, user.token, supabaseEnabled, saved.record.id, user, existing?.status === "revision_required" ? "resubmitted" : "submitted", {
+      status: "submitted",
+      attested_at: now,
+      week_ending: saved.record.week_ending
+    });
+    const events = await loadWeeklyReportEvents(db, user.token, supabaseEnabled, saved.record.id);
+    return sendJson(res, 200, serializeWeeklyReport(saved.record, context, saved.storage_mode, events));
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/weekly-reports/review") {
+    if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Director access required." });
+    const weekEnding = String(url.searchParams.get("week") || reportingFriday()).slice(0, 10);
+    const salesmen = await weeklyReportSalesmen(db, user.token, supabaseEnabled);
+    const reports = (await loadStoredWeeklyReports(db, user.token, supabaseEnabled)).filter(item => item.week_ending === weekEnding);
+    const missing = salesmen
+      .filter(person => !reports.some(report => report.user_id === person.id && ["submitted", "under_review", "accepted"].includes(String(report.status || ""))))
+      .map(person => ({
+        id: person.id,
+        name: person.name || person.full_name || person.email || "Unnamed salesman",
+        email: person.email || "",
+        territory: person.territory || "",
+        status: "missing"
+      }));
+    const items = reports.map(report => ({
+      id: report.id,
+      user_id: report.user_id,
+      rep_name: report.rep_name,
+      rep_email: report.rep_email,
+      territory: report.territory,
+      branch: report.branch,
+      status: report.status || "in_progress",
+      submitted_at: report.submitted_at || "",
+      reviewed_at: report.reviewed_at || "",
+      contradiction_flags: contradictionFlagsForReport(report),
+      thin_report: weeklyThinReport(report),
+      summary: String(report.summary || "").trim()
+    })).sort((a, b) => String(b.submitted_at || b.reviewed_at || "").localeCompare(String(a.submitted_at || a.reviewed_at || "")) || String(a.rep_name || "").localeCompare(String(b.rep_name || "")));
+    return sendJson(res, 200, {
+      week_ending: weekEnding,
+      week_range: weekDateRangeLabel(weekEnding),
+      reports: items,
+      missing
+    });
+  }
+
+  const weeklyReportDetailMatch = url.pathname.match(/^\/api\/weekly-reports\/([^/]+)$/);
+  if (req.method === "GET" && weeklyReportDetailMatch) {
+    const reports = await loadStoredWeeklyReports(db, user.token, supabaseEnabled);
+    const report = reports.find(item => item.id === weeklyReportDetailMatch[1]);
+    if (!report) return sendJson(res, 404, { error: "Weekly report not found." });
+    if (!isDirectorOrAdmin(user) && report.user_id !== user.id) return sendJson(res, 403, { error: "Access denied." });
+    const owner = report.user_id === user.id
+      ? user
+      : (await weeklyReportSalesmen(db, user.token, supabaseEnabled)).find(person => person.id === report.user_id) || {
+        id: report.user_id,
+        name: report.rep_name,
+        email: report.rep_email,
+        territory: report.territory,
+        role: "salesman"
+      };
+    const leads = supabaseEnabled
+      ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+      : db.leads.map(leadWithDerivedFields);
+    const context = weeklyReportContext(owner, leads, report.week_ending);
+    const events = await loadWeeklyReportEvents(db, user.token, supabaseEnabled, report.id);
+    return sendJson(res, 200, serializeWeeklyReport(report, context, "saved", events));
+  }
+
+  const weeklyReportReviewMatch = url.pathname.match(/^\/api\/weekly-reports\/([^/]+)\/review$/);
+  if (req.method === "POST" && weeklyReportReviewMatch) {
+    if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Director access required." });
+    const reports = await loadStoredWeeklyReports(db, user.token, supabaseEnabled);
+    const report = reports.find(item => item.id === weeklyReportReviewMatch[1]);
+    if (!report) return sendJson(res, 404, { error: "Weekly report not found." });
+    const payload = await readBody(req);
+    const action = String(payload.action || "").trim().toLowerCase();
+    if (!["under_review", "accepted", "revision_required"].includes(action)) {
+      return sendJson(res, 400, { error: "Choose a valid review action." });
+    }
+    const next = {
+      ...report,
+      status: action,
+      review_note: String(payload.note || "").trim(),
+      reviewed_at: new Date().toISOString()
+    };
+    const saved = await upsertStoredWeeklyReport(db, user.token, supabaseEnabled, next);
+    const owner = (await weeklyReportSalesmen(db, user.token, supabaseEnabled)).find(person => person.id === next.user_id) || {
+      id: next.user_id,
+      name: next.rep_name,
+      email: next.rep_email,
+      territory: next.territory,
+      role: "salesman"
+    };
+    const leads = supabaseEnabled
+      ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+      : db.leads.map(leadWithDerivedFields);
+    const context = weeklyReportContext(owner, leads, next.week_ending);
+    await recordWeeklyReportEvent(db, user.token, supabaseEnabled, saved.record.id, user, `review_${action}`, {
+      note: next.review_note || "",
+      status: action
+    });
+    const events = await loadWeeklyReportEvents(db, user.token, supabaseEnabled, saved.record.id);
+    return sendJson(res, 200, serializeWeeklyReport(saved.record, context, saved.storage_mode, events));
   }
 
   if (req.method === "GET" && url.pathname === "/api/integrations/status") {
@@ -4295,6 +4967,10 @@ server.normalizePmrAnalysisDraft = normalizePmrAnalysisDraft;
 server.leadBelongsToUser = leadBelongsToUser;
 server.visibleLeadsForUser = visibleLeadsForUser;
 server.prepareLeadPayloadForUser = prepareLeadPayloadForUser;
+server.weeklyReportDefaults = weeklyReportDefaults;
+server.weeklyReportBlockers = weeklyReportBlockers;
+server.weeklyReportIsLockedForEditing = weeklyReportIsLockedForEditing;
+server.weeklyReportContext = weeklyReportContext;
 server.normalizeEnglishText = normalizeEnglishText;
 server.transcribeAudio = transcribeAudio;
 module.exports = server;

@@ -1,6 +1,9 @@
 const ACTIVITY_FILTER_KEY = "arg_activity_filters";
 const OVERDUE_BANNER_KEY = "arg_overdue_banner_dismissed";
 const DASHBOARD_MARKET_NEWS_KEY = "arg_dashboard_market_news_open";
+const DASHBOARD_PERFORMANCE_KEY = "arg_dashboard_performance_open";
+const DASHBOARD_AGENT_KEY = "arg_dashboard_agent_open";
+const DASHBOARD_TOOLS_KEY = "arg_dashboard_tools_open";
 const PWA_VISIT_KEY = "arg_pwa_visit_count";
 const PWA_INSTALL_DISMISSED_KEY = "arg_pwa_install_dismissed_until";
 const LEAD_AI_SUMMARY_CACHE_KEY = "arg_lead_ai_summary_cache_v1";
@@ -10,6 +13,13 @@ const SMART_SEARCH_DEBOUNCE_MS = 220;
 const ACTIVITY_PRESETS = ["Today", "This Week", "This Month", "Last 30 Days", "Last 90 Days"];
 const QUICK_LOG_TYPES = ["Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed"];
 const QUICK_PHRASES = ["Discussed pricing", "Requested quotation", "Sample feedback", "Follow-up agreed", "Met procurement"];
+const WEEKLY_LIKELIHOOD_OPTIONS = ["Low chance", "Could happen", "Good chance", "Almost certain"];
+const WEEKLY_TIMING_OPTIONS = ["This week", "Next week", "2 weeks", "3 weeks", "4 weeks"];
+const WEEKLY_PROBLEM_OPTIONS = ["Overdue payment", "Credit limit pressure", "No recent activity", "Price pressure", "Competitor risk", "Project delay", "Documentation issue", "Other"];
+const WEEKLY_ASSESSMENT_OPTIONS = ["Managed", "Watch closely", "Could go either way", "Getting worse"];
+const WEEKLY_DEMAND_OPTIONS = ["Much slower", "Slightly slower", "Same", "Slightly busier", "Much busier"];
+const WEEKLY_FOUR_BAND_OPTIONS = ["None", "Occasional", "Frequent", "Severe"];
+const WEEKLY_GOVERNMENT_OPTIONS = ["No change", "Delayed", "Speeding up"];
 const ACTIVITY_TYPE_ICONS = {
   "Note": "TXT",
   "Phone Call": "TEL",
@@ -59,6 +69,16 @@ const state = {
   activityFiltersOpen: false,
   activityFilters: loadActivityFilters(),
   activityWeekAnchor: today(),
+  weeklyReports: {
+    loading: false,
+    current: null,
+    review: [],
+    missing: [],
+    selectedId: "",
+    selectedReport: null,
+    weekEnding: "",
+    storageMode: ""
+  },
   leadFormStep: 0,
   leadFormDetailsOpen: { company: false, contact: false, followup: false },
   leadDrawerOpen: false,
@@ -83,7 +103,7 @@ const state = {
   duplicateMatches: [],
   duplicateChecking: false,
   integrations: { linkedin_titles: [], agent_examples: [], configuration_agent_examples: [], ai_agent: false },
-  agentOpen: false,
+  agentOpen: localStorage.getItem(DASHBOARD_AGENT_KEY) === "true",
   agentLoading: false,
   configAgent: { loading: false, proposal: null, audit: [], examples: [] },
   attentionFlags: [],
@@ -97,6 +117,8 @@ const state = {
   marketIntel: { items: [], heat_map: [], disabled: false },
   marketNews: { items: [], disabled: false, loading: false, error: "", reason: "", fetched_at: "" },
   dashboardMarketNewsOpen: localStorage.getItem(DASHBOARD_MARKET_NEWS_KEY) === "true",
+  dashboardPerformanceOpen: localStorage.getItem(DASHBOARD_PERFORMANCE_KEY) === "true",
+  dashboardToolsOpen: localStorage.getItem(DASHBOARD_TOOLS_KEY) === "true",
   smartSearch: { query: "", results: [], open: false, expanded: false, searching: false },
   editingLeadId: "",
   editingOriginalStage: "",
@@ -201,19 +223,28 @@ const els = {
   metricsPanel: document.querySelector("#metricsPanel"),
   dashboardView: document.querySelector("#dashboardView"),
   dashboardQuickActions: document.querySelector("#dashboardQuickActions"),
-  dashboardQuickAddLead: document.querySelector("#dashboardQuickAddLead"),
+  dashboardFirstTouchList: document.querySelector("#dashboardFirstTouchList"),
   dashboardQuickLogActivity: document.querySelector("#dashboardQuickLogActivity"),
   dashboardQuickPipeline: document.querySelector("#dashboardQuickPipeline"),
+  dashboardOpenFullBriefing: document.querySelector("#dashboardOpenFullBriefing"),
+  dashboardTogglePerformance: document.querySelector("#dashboardTogglePerformance"),
   dashboardToggleMarketNews: document.querySelector("#dashboardToggleMarketNews"),
+  dashboardToggleAgent: document.querySelector("#dashboardToggleAgent"),
+  salesmanDashboardToggleShell: document.querySelector("#salesmanDashboardToggleShell"),
+  dashboardToggleTools: document.querySelector("#dashboardToggleTools"),
   dailyAiPanel: document.querySelector("#dailyAiPanel"),
   dailyAiGreeting: document.querySelector("#dailyAiGreeting"),
+  dailyAiActions: document.querySelector("#dailyAiActions"),
   dailyAiSummary: document.querySelector("#dailyAiSummary"),
+  salesmanLossPromptPanel: document.querySelector("#salesmanLossPromptPanel"),
+  salesmanLossPromptList: document.querySelector("#salesmanLossPromptList"),
   marketNewsPanel: document.querySelector("#marketNewsPanel"),
   marketNewsMeta: document.querySelector("#marketNewsMeta"),
   marketNewsFeed: document.querySelector("#marketNewsFeed"),
   salesmanFollowupPanel: document.querySelector("#salesmanFollowupPanel"),
   salesmanFollowupGroups: document.querySelector("#salesmanFollowupGroups"),
   portfolioPanel: document.querySelector("#portfolioPanel"),
+  salesmanDashboardToolsPanel: document.querySelector("#salesmanDashboardToolsPanel"),
   portfolioTotal: document.querySelector("#portfolioTotal"),
   portfolioActive: document.querySelector("#portfolioActive"),
   portfolioDormant: document.querySelector("#portfolioDormant"),
@@ -263,6 +294,7 @@ const els = {
   lossReasonsPanel: document.querySelector("#lossReasonsPanel"),
   lossReasonsChart: document.querySelector("#lossReasonsChart"),
   relationshipFocusPanel: document.querySelector("#relationshipFocusPanel"),
+  dashboardActivityPanel: document.querySelector("#dashboardActivityPanel"),
   pipelineHealthPanel: document.querySelector("#pipelineHealthPanel"),
   dashboardFocus: document.querySelector("#dashboardFocus"),
   dashboardStatus: document.querySelector("#dashboardStatus"),
@@ -305,6 +337,14 @@ const els = {
   salesmenView: document.querySelector("#salesmenView"),
   salesmenGrid: document.querySelector("#salesmenGrid"),
   salesmenSummary: document.querySelector("#salesmenSummary"),
+  tasksView: document.querySelector("#tasksView"),
+  tasksViewTitle: document.querySelector("#tasksViewTitle"),
+  tasksViewSubtitle: document.querySelector("#tasksViewSubtitle"),
+  tasksWeekLabel: document.querySelector("#tasksWeekLabel"),
+  tasksStatusBadge: document.querySelector("#tasksStatusBadge"),
+  tasksMessage: document.querySelector("#tasksMessage"),
+  tasksPrimary: document.querySelector("#tasksPrimary"),
+  tasksSidebar: document.querySelector("#tasksSidebar"),
   salesmanLeadsDialog: document.querySelector("#salesmanLeadsDialog"),
   salesmanLeadsTitle: document.querySelector("#salesmanLeadsTitle"),
   salesmanLeadsSubtitle: document.querySelector("#salesmanLeadsSubtitle"),
@@ -451,6 +491,7 @@ function isLeadRoutePath(pathname = window.location.pathname) {
 function parseAppRoute(locationLike = window.location) {
   const pathname = locationLike.pathname || "/";
   const search = new URLSearchParams(locationLike.search || "");
+  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks"]);
   if (isLeadRoutePath(pathname)) {
     return {
       view: "lead",
@@ -459,7 +500,7 @@ function parseAppRoute(locationLike = window.location) {
     };
   }
   return {
-    view: "dashboard",
+    view: allowedViews.has(search.get("view")) ? search.get("view") : "dashboard",
     leadId: "",
     tab: "overview"
   };
@@ -492,7 +533,7 @@ function syncBrowserRoute(options = {}) {
   const routeState = currentRouteState();
   const nextUrl = routeState.view === "lead" && routeState.leadId
     ? leadRouteUrl(routeState.leadId, routeState.tab)
-    : "/";
+    : (routeState.view && routeState.view !== "dashboard" ? `/?view=${encodeURIComponent(routeState.view)}` : "/");
   const currentUrl = `${window.location.pathname}${window.location.search}`;
   if (currentUrl === nextUrl && !options.forceState) return;
   window.history[replace ? "replaceState" : "pushState"](routeState, "", nextUrl);
@@ -4334,7 +4375,7 @@ function renderDashboardPipelineFunnel() {
   if (!els.dashboardPipelineFunnelPanel || !els.dashboardPipelineFunnelBody || !els.dashboardPipelineFunnelBadge) return;
   const role = String(state.currentUser?.role || "").toLowerCase();
   const admin = ["admin", "manager", "director"].includes(role);
-  const visible = Boolean(state.currentUser);
+  const visible = admin || Boolean(state.currentUser && state.dashboardToolsOpen && state.dashboardPerformanceOpen);
   const subtitle = els.dashboardPipelineFunnelPanel.querySelector(".panel-header > div > span");
   els.dashboardPipelineFunnelPanel.classList.toggle("hidden", !visible);
   if (!visible) return;
@@ -5164,10 +5205,11 @@ function renderLossReasonsAnalytics() {
 
 function renderSalesmanFollowups() {
   if (!els.salesmanFollowupPanel || state.currentUser?.role === "admin") return;
-  const groups = ["Overdue Follow-Ups", "Today", "Tomorrow", "This Week", "Next Week", "Future Follow-Ups"];
+  const groups = ["Overdue Follow-Ups", "Today", "Tomorrow", "This Week"];
   const followups = salesmanFollowups();
   const grouped = groups.map(group => [group, followups.filter(reminder => followupGroup(reminder) === group)]);
-  els.salesmanFollowupGroups.innerHTML = grouped.map(([group, reminders]) => `
+  const visibleGroups = grouped.filter(([, reminders]) => reminders.length);
+  els.salesmanFollowupGroups.innerHTML = visibleGroups.length ? visibleGroups.map(([group, reminders]) => `
     <section class="followup-group">
       <div class="followup-group-header">
         <h3>${escapeHtml(group)}</h3>
@@ -5199,12 +5241,15 @@ function renderSalesmanFollowups() {
         }).join("") || `<p class="empty-copy">No follow-ups in this bucket.</p>`}
       </div>
     </section>
-  `).join("");
+  `).join("") : `<p class="empty-copy">No overdue or near-term follow-ups right now. Open the full pipeline only when you want the longer-range book.</p>`;
   bindFollowupActions();
 }
 
 function renderPortfolioAnalytics() {
   if (!els.portfolioPanel || state.currentUser?.role === "admin") return;
+  const visible = Boolean(state.dashboardToolsOpen && state.dashboardPerformanceOpen);
+  els.portfolioPanel.classList.toggle("hidden", !visible);
+  if (!visible) return;
   const leads = portfolioFilteredLeads();
   const allDue = salesmanFollowups();
   const overdue = allDue.filter(reminder => daysUntil(reminder.due_date) < 0);
@@ -5247,9 +5292,40 @@ function renderPortfolioAnalytics() {
 function renderSalesmanDashboard() {
   renderDashboardQuickActions();
   renderDailyAiPanel();
+  renderSalesmanLossPromptPanel();
   renderMarketNewsPanel();
   renderSalesmanFollowups();
   renderPortfolioAnalytics();
+}
+
+function salesmanDashboardLeads() {
+  if (!state.currentUser || state.currentUser.role === "admin") return [...state.leads];
+  return state.leads.filter(lead => leadMatchesSalesman(lead, state.currentUser));
+}
+
+function firstTouchDueLeads() {
+  return salesmanDashboardLeads()
+    .filter(lead => !["WON", "LOST", "DORMANT", "ACTIVE"].includes(String(lead.stage || "").trim().toUpperCase()))
+    .filter(lead => !hasLeadContactedActivity(lead))
+    .sort((a, b) => {
+      const originRank = lead => leadOriginForCurrentUser(lead, state.currentUser).includes("Admin") ? 0 : 1;
+      return originRank(a) - originRank(b)
+        || compareNewestLeadFirst(a, b);
+    });
+}
+
+function lossReasonPromptDueLeads() {
+  return salesmanDashboardLeads()
+    .filter(lead => isLostStageValue(lead.stage) && !String(lead.lost_reason || "").trim())
+    .filter(lead => daysSince(lead.stage_updated_at || lead.updated_at || lead.created_at) >= 3)
+    .sort((a, b) =>
+      daysSince(b.stage_updated_at || b.updated_at || b.created_at) - daysSince(a.stage_updated_at || a.updated_at || a.created_at)
+      || compareNewestLeadFirst(a, b)
+    );
+}
+
+function scrollToDashboardPanel(panel) {
+  panel?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function setDashboardMarketNewsOpen(open) {
@@ -5257,26 +5333,223 @@ function setDashboardMarketNewsOpen(open) {
   localStorage.setItem(DASHBOARD_MARKET_NEWS_KEY, state.dashboardMarketNewsOpen ? "true" : "false");
   renderDashboardQuickActions();
   renderMarketNewsPanel();
+  renderMarketIntelPanel();
+}
+
+function setDashboardPerformanceOpen(open) {
+  state.dashboardPerformanceOpen = Boolean(open);
+  localStorage.setItem(DASHBOARD_PERFORMANCE_KEY, state.dashboardPerformanceOpen ? "true" : "false");
+  renderDashboardQuickActions();
+  renderPortfolioAnalytics();
+  renderDashboardPipelineFunnel();
+}
+
+function setDashboardAgentOpen(open) {
+  state.agentOpen = Boolean(open);
+  localStorage.setItem(DASHBOARD_AGENT_KEY, state.agentOpen ? "true" : "false");
+  renderDashboardQuickActions();
+  renderAgentPanel();
+}
+
+function setDashboardToolsOpen(open) {
+  state.dashboardToolsOpen = Boolean(open);
+  localStorage.setItem(DASHBOARD_TOOLS_KEY, state.dashboardToolsOpen ? "true" : "false");
+  renderDashboardQuickActions();
+  renderPortfolioAnalytics();
+  renderDashboardPipelineFunnel();
+  renderMarketNewsPanel();
+  renderMarketIntelPanel();
+  renderAgentPanel();
+}
+
+function salesmanPriorityActions() {
+  const allFollowups = salesmanFollowups();
+  const overdueFollowups = allFollowups.filter(reminder => daysUntil(reminder.due_date) < 0);
+  const todayFollowups = allFollowups.filter(reminder => daysUntil(reminder.due_date) === 0);
+  const firstTouches = firstTouchDueLeads();
+  const lossReasonPrompts = lossReasonPromptDueLeads();
+  const metrics = state.dailyPipelineSummary?.metrics || {};
+  const neglectedCount = Number(metrics.contact_overdue_count || 0);
+  const cards = [];
+
+  if (overdueFollowups.length) {
+    cards.push({
+      key: "followups",
+      tone: "danger",
+      kicker: "Overdue",
+      title: `Clear ${overdueFollowups.length} overdue follow-up${overdueFollowups.length === 1 ? "" : "s"}`,
+      body: `Oldest: ${overdueFollowups[0].company_name || "Lead"} - ${daysOverdueLabel(overdueFollowups[0].due_date)}`,
+      cta: "Review queue"
+    });
+  } else if (todayFollowups.length) {
+    cards.push({
+      key: "followups",
+      tone: "warm",
+      kicker: "Due today",
+      title: `${todayFollowups.length} follow-up${todayFollowups.length === 1 ? "" : "s"} scheduled for today`,
+      body: `Start with ${todayFollowups[0].company_name || "your next lead"} and keep the day moving.`,
+      cta: "Open today queue"
+    });
+  }
+
+  if (firstTouches.length) {
+    cards.push({
+      key: "first-touch",
+      tone: "info",
+      kicker: "First touch",
+      title: `${firstTouches.length} lead${firstTouches.length === 1 ? "" : "s"} still need the first contact`,
+      body: `${firstTouches[0].company_name || "Newest lead"} is still waiting for its opening call or visit.`,
+      cta: "Start first touch"
+    });
+  }
+
+  if (lossReasonPrompts.length) {
+    cards.push({
+      key: "loss-reasons",
+      tone: "danger",
+      kicker: "3-day deadline",
+      title: `${lossReasonPrompts.length} lost lead${lossReasonPrompts.length === 1 ? "" : "s"} still need a reason`,
+      body: `${lossReasonPrompts[0].company_name || "A lost lead"} has crossed the reason-capture deadline.`,
+      cta: "Capture reason"
+    });
+  }
+
+  if (cards.length < 3 && neglectedCount) {
+    cards.push({
+      key: "neglected",
+      tone: "neutral",
+      kicker: "Coverage gap",
+      title: `${neglectedCount} account${neglectedCount === 1 ? "" : "s"} are past expected contact frequency`,
+      body: "Use the queue and your next actions to revive the quiet relationships before they cool down.",
+      cta: "See neglected accounts",
+      aiAction: "neglected"
+    });
+  }
+
+  if (cards.length < 3 && allFollowups.length > overdueFollowups.length + todayFollowups.length) {
+    const nextReminder = allFollowups
+      .filter(reminder => daysUntil(reminder.due_date) > 0)
+      .sort((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")))[0];
+    if (nextReminder) {
+      cards.push({
+        key: "followups",
+        tone: "neutral",
+        kicker: "Next up",
+        title: `Prepare ${nextReminder.company_name || "the next account"} before it slips`,
+        body: `${formatPlanDate(nextReminder.due_date)} - ${nextReminder.next_action || nextReminder.activity_type || "Follow up"}`,
+        cta: "Review upcoming queue"
+      });
+    }
+  }
+
+  if (cards.length < 3) {
+    cards.push({
+      key: "log-activity",
+      tone: "info",
+      kicker: "Capture",
+      title: "Log today's field activity before it gets missed",
+      body: "Record the latest call, visit, or quotation follow-up while the details are still fresh.",
+      cta: "Log activity"
+    });
+  }
+
+  return cards.slice(0, 3);
 }
 
 function renderDashboardQuickActions() {
   if (!els.dashboardQuickActions) return;
   const salesman = state.currentUser && state.currentUser.role !== "admin";
-  els.dashboardToggleMarketNews?.classList.toggle("hidden", !salesman);
-  if (!salesman || !els.dashboardToggleMarketNews) {
+  els.dashboardQuickActions.classList.toggle("hidden", !salesman);
+  els.salesmanDashboardToggleShell?.classList.toggle("hidden", !salesman);
+  els.salesmanDashboardToolsPanel?.classList.toggle("hidden", !(salesman && state.dashboardToolsOpen));
+  if (!salesman) {
     els.dashboardToggleMarketNews?.classList.remove("is-active");
+    els.dashboardTogglePerformance?.classList.remove("is-active");
+    els.dashboardToggleAgent?.classList.remove("is-active");
+    if (els.dashboardToggleTools) els.dashboardToggleTools.setAttribute("aria-expanded", "false");
     return;
   }
-  const open = Boolean(state.dashboardMarketNewsOpen);
-  const title = els.dashboardToggleMarketNews.querySelector("strong");
-  const body = els.dashboardToggleMarketNews.querySelector("small");
-  els.dashboardToggleMarketNews.classList.toggle("is-active", open);
-  if (title) title.textContent = open ? "Hide Market News" : "Show Market News";
-  if (body) {
-    body.textContent = open
-      ? "Close the headlines and keep the dashboard focused."
-      : "Open fresh industry headlines only when you need them.";
+  const leads = firstTouchDueLeads().slice(0, 6);
+  if (els.dashboardFirstTouchList) {
+    els.dashboardFirstTouchList.innerHTML = leads.length ? leads.map(lead => {
+      const origin = leadOriginForCurrentUser(lead, state.currentUser);
+      const createdLabel = leadRegistrationDate(lead) ? formatPlanDate(leadRegistrationDate(lead)) : "New lead";
+      return `
+        <article class="salesman-first-touch-card">
+          <div class="salesman-first-touch-main">
+            <span class="salesman-first-touch-kicker">${escapeHtml(origin)}</span>
+            <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+            <p>${escapeHtml(lead.contact_person || lead.location || lead.territory || "No contact details added yet.")}</p>
+            <div class="chip-row">
+              <span class="chip">${escapeHtml(stageDisplayLabel(lead.stage || "PROSPECT"))}</span>
+              <span class="chip">${escapeHtml(createdLabel)}</span>
+              <span class="chip ${leadOriginChipClass(origin)}">${escapeHtml(origin)}</span>
+            </div>
+          </div>
+          <div class="salesman-first-touch-actions">
+            <button class="small-action" type="button" data-first-touch-open="${escapeHtml(lead.id)}">Open Lead</button>
+            <button class="small-action" type="button" data-first-touch-log="${escapeHtml(lead.id)}">Log First Touch</button>
+          </div>
+        </article>
+      `;
+    }).join("") : `<p class="empty-copy">Every open lead already has a first touch logged. Nice and calm.</p>`;
   }
+  document.querySelectorAll("[data-first-touch-open]").forEach(button => {
+    button.addEventListener("click", () => openLeadDrawer(button.dataset.firstTouchOpen));
+  });
+  document.querySelectorAll("[data-first-touch-log]").forEach(button => {
+    button.addEventListener("click", () => openQuickLog(button.dataset.firstTouchLog));
+  });
+
+  const insightsOpen = Boolean(state.dashboardMarketNewsOpen);
+  const performanceOpen = Boolean(state.dashboardPerformanceOpen);
+  const agentOpen = Boolean(state.agentOpen);
+  const toolsOpen = Boolean(state.dashboardToolsOpen);
+
+  if (els.dashboardToggleTools) {
+    els.dashboardToggleTools.classList.toggle("is-active", toolsOpen);
+    els.dashboardToggleTools.setAttribute("aria-expanded", toolsOpen ? "true" : "false");
+    const title = els.dashboardToggleTools.querySelector("strong");
+    const body = els.dashboardToggleTools.querySelector("small");
+    if (title) title.textContent = toolsOpen ? "Hide coaching and research tools" : "Open extra tools only when needed";
+    if (body) body.textContent = toolsOpen
+      ? "Collapse the non-urgent layers and return to the act-now dashboard."
+      : "Full pipeline, performance, market intel, and the database assistant stay tucked away until you choose to open them.";
+  }
+
+  const syncToolButton = (button, open, openTitle, closeTitle, openCopy, closeCopy) => {
+    if (!button) return;
+    const title = button.querySelector("strong");
+    const body = button.querySelector("small");
+    button.classList.toggle("is-active", open);
+    if (title) title.textContent = open ? closeTitle : openTitle;
+    if (body) body.textContent = open ? closeCopy : openCopy;
+  };
+
+  syncToolButton(
+    els.dashboardToggleMarketNews,
+    insightsOpen,
+    "Market intel and news",
+    "Hide intel and news",
+    "Browse headlines and project signals without crowding the default view.",
+    "Close the research layer and return to the action queue."
+  );
+  syncToolButton(
+    els.dashboardTogglePerformance,
+    performanceOpen,
+    "My performance",
+    "Hide performance",
+    "Reveal conversion, distribution, and portfolio metrics.",
+    "Hide the coaching metrics and keep the dashboard focused on execution."
+  );
+  syncToolButton(
+    els.dashboardToggleAgent,
+    agentOpen,
+    "Ask the database",
+    "Hide database oracle",
+    "Open the read-only CRM oracle when you have a specific question.",
+    "Close the oracle and keep the landing page free of reference material."
+  );
 }
 
 function renderDailyAiPanel() {
@@ -5285,22 +5558,76 @@ function renderDailyAiPanel() {
   els.dailyAiPanel.classList.toggle("hidden", !salesman);
   if (!salesman) return;
   if (els.dailyAiGreeting) els.dailyAiGreeting.textContent = `${greetingText()}, ${firstName(state.currentUser.name || state.currentUser.email)}`;
+  const actions = salesmanPriorityActions();
+  if (els.dailyAiActions) {
+    els.dailyAiActions.innerHTML = actions.map(item => `
+      <button class="salesman-triage-card tone-${escapeHtml(item.tone || "neutral")}" type="button" ${item.aiAction ? `data-salesperson-ai-action="${escapeHtml(item.aiAction)}"` : `data-dashboard-action="${escapeHtml(item.key)}"`}>
+        <span class="salesman-triage-kicker">${escapeHtml(item.kicker)}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.body)}</p>
+        <small>${escapeHtml(item.cta)}</small>
+      </button>
+    `).join("");
+  }
   els.dailyAiPanel.querySelectorAll("[data-salesperson-ai-action]").forEach(button => {
     button.disabled = state.dailyAiLoading || Date.now() < state.aiCooldownUntil;
   });
   if (!els.dailyAiSummary) return;
-  if (!state.dailyPipelineSummary?.metrics) {
-    els.dailyAiSummary.classList.add("hidden");
-    return;
-  }
-  const metrics = state.dailyPipelineSummary.metrics;
-  const trend = metrics.activity_trend;
+  const metrics = state.dailyPipelineSummary?.metrics || {};
+  const firstTouchCount = firstTouchDueLeads().length;
+  const lossReasonCount = lossReasonPromptDueLeads().length;
+  const overdueCount = Number(metrics.overdue_next_actions || salesmanFollowups().filter(reminder => daysUntil(reminder.due_date) < 0).length);
   els.dailyAiSummary.classList.remove("hidden");
   els.dailyAiSummary.innerHTML = `
-    <strong>${Number(metrics.total_companies || 0)} companies</strong>
-    <span>${Number(metrics.overdue_next_actions || 0)} overdue</span>
-    <span>${trend == null ? "trend baseline pending" : `${trend >= 0 ? "Up" : "Down"} ${Math.abs(trend)}% activity`}</span>
+    <strong>Today&apos;s queue</strong>
+    <span>${overdueCount} overdue follow-up${overdueCount === 1 ? "" : "s"}</span>
+    <span>${firstTouchCount} first touch${firstTouchCount === 1 ? "" : "es"}</span>
+    <span>${lossReasonCount} loss reason${lossReasonCount === 1 ? "" : "s"} due</span>
   `;
+}
+
+function renderSalesmanLossPromptPanel() {
+  if (!els.salesmanLossPromptPanel || !els.salesmanLossPromptList) return;
+  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  els.salesmanLossPromptPanel.classList.toggle("hidden", !salesman);
+  if (!salesman) return;
+  const dueLeads = lossReasonPromptDueLeads().slice(0, 6);
+  els.salesmanLossPromptList.innerHTML = dueLeads.length ? dueLeads.map(lead => {
+    const overdueDays = daysSince(lead.stage_updated_at || lead.updated_at || lead.created_at) - 3;
+    return `
+      <article class="salesman-loss-card">
+        <div class="salesman-loss-card-copy">
+          <span class="salesman-loss-kicker">Lost lead follow-through</span>
+          <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+          <p>${escapeHtml(lead.lost_reason_detail || lead.notes || "Capture the primary loss reason and any context for coaching.")}</p>
+          <div class="chip-row">
+            <span class="chip hot">${escapeHtml(overdueDays > 0 ? `${overdueDays} day${overdueDays === 1 ? "" : "s"} late` : "Due now")}</span>
+            <span class="chip">${escapeHtml(stageDisplayLabel(lead.stage || "LOST"))}</span>
+            <span class="chip">${escapeHtml(lead.assigned_salesman || salesmanName(state.currentUser))}</span>
+          </div>
+        </div>
+        <div class="salesman-loss-card-actions">
+          <button class="small-action" type="button" data-loss-prompt-open="${escapeHtml(lead.id)}">Open Lead</button>
+          <button class="small-action" type="button" data-loss-prompt-capture="${escapeHtml(lead.id)}">Capture Reason</button>
+        </div>
+      </article>
+    `;
+  }).join("") : `<p class="empty-copy">No loss-reason prompts are due right now.</p>`;
+
+  document.querySelectorAll("[data-loss-prompt-open]").forEach(button => {
+    button.addEventListener("click", () => openLeadDrawer(button.dataset.lossPromptOpen));
+  });
+  document.querySelectorAll("[data-loss-prompt-capture]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const lead = state.leads.find(item => item.id === button.dataset.lossPromptCapture);
+      if (!lead) return;
+      const lostData = await promptLostReason(lead);
+      if (!lostData) return;
+      await saveStageWithLostPrompt(lead, lead.stage, lostData);
+      await loadLeads();
+      render();
+    });
+  });
 }
 
 function marketNewsCardMarkup(item) {
@@ -5324,7 +5651,7 @@ function marketNewsCardMarkup(item) {
 function renderMarketNewsPanel() {
   if (!els.marketNewsPanel || !els.marketNewsFeed) return;
   const salesmanDashboard = state.currentUser && state.currentUser.role !== "admin" && currentView === "dashboard";
-  const visible = Boolean(salesmanDashboard && state.dashboardMarketNewsOpen);
+  const visible = Boolean(salesmanDashboard && state.dashboardToolsOpen && state.dashboardMarketNewsOpen);
   els.marketNewsPanel.classList.toggle("hidden", !visible);
   if (!visible) return;
   if (els.marketNewsMeta) {
@@ -5371,6 +5698,8 @@ function maybeAutoRunDailyPipeline() {
 
 function renderAgentPanel() {
   if (!els.agentPanel) return;
+  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  els.agentPanel.classList.toggle("hidden", Boolean(salesman && (!state.dashboardToolsOpen || !state.agentOpen)));
   els.agentPanel.classList.toggle("agent-open", state.agentOpen);
   els.agentBody?.classList.toggle("hidden", !state.agentOpen);
   if (els.agentToggle) els.agentToggle.textContent = `${state.agentOpen ? "Hide" : "Ask"} the database`;
@@ -5609,7 +5938,9 @@ function renderDashboardView() {
 function renderMarketIntelPanel() {
   if (!els.marketIntelPanel || !els.marketIntelFeed) return;
   const admin = ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
-  els.marketIntelPanel.classList.toggle("hidden", false);
+  const visible = admin || Boolean(state.dashboardToolsOpen && state.dashboardMarketNewsOpen);
+  els.marketIntelPanel.classList.toggle("hidden", !visible);
+  if (!visible) return;
   els.refreshMarketIntel?.classList.toggle("hidden", !admin);
   if (els.marketIntelKicker) els.marketIntelKicker.textContent = admin ? "Intel Overview" : "Market Intel";
   if (els.marketIntelTitle) els.marketIntelTitle.textContent = admin ? "Last 7 days across territories" : "Signals matched to your prospects";
@@ -5778,7 +6109,9 @@ function renderHeaderSummary() {
   if (els.greetingLabel) els.greetingLabel.textContent = greetingText();
   if (els.dashboardUserName) els.dashboardUserName.textContent = firstName(state.currentUser.name || state.currentUser.email);
   if (els.dashboardSubline) {
-    els.dashboardSubline.textContent = `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} - ${territory}`;
+    els.dashboardSubline.textContent = state.currentUser.role === "admin"
+      ? `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} - ${territory}`
+      : "Start with overdue follow-ups, first touch, and loss reasons due.";
   }
 }
 
@@ -5815,7 +6148,9 @@ function renderTopbar() {
   const config = {
     dashboard: {
       title: "Dashboard",
-      context: `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} across ${territory}`
+      context: state.currentUser.role === "admin"
+        ? `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} across ${territory}`
+        : "Start with the urgent queue and open coaching tools only when needed."
     },
     pipeline: {
       title: "Pipeline",
@@ -5824,6 +6159,12 @@ function renderTopbar() {
     salesmen: {
       title: "Salesmen",
       context: "Team ownership, activity, and follow-up performance"
+    },
+    tasks: {
+      title: "Tasks",
+      context: state.currentUser.role === "admin"
+        ? "Weekly sales reporting, review discipline, and missing-submission control"
+        : "Confirm the week, explain exceptions, and submit one clean report."
     },
     activity: {
       title: "Activity",
@@ -7935,6 +8276,923 @@ function renderWeeklyActivityLog(activities) {
   });
 }
 
+function weeklyReportStatusMeta(status) {
+  const value = String(status || "not_started").trim().toLowerCase();
+  if (value === "submitted") return { label: "Submitted", chipClass: "plan-upcoming" };
+  if (value === "under_review") return { label: "Under Review", chipClass: "warm" };
+  if (value === "accepted") return { label: "Accepted", chipClass: "success" };
+  if (value === "revision_required") return { label: "Revision Required", chipClass: "hot" };
+  if (value === "in_progress") return { label: "In Progress", chipClass: "plan-soon" };
+  return { label: "Not Started", chipClass: "plan-missing" };
+}
+
+function weeklyReportIsLocked(status) {
+  return ["submitted", "under_review", "accepted"].includes(String(status || "").trim().toLowerCase());
+}
+
+function weeklyDefaultMarketIntel() {
+  return {
+    demand_band: "",
+    demand_note: "",
+    pricing_band: "",
+    competitor_loss: "",
+    competitor_loss_note: "",
+    competitor_pricing_note: "",
+    cashflow_band: "",
+    extended_terms_band: "",
+    defaults_heard: "",
+    defaults_details: "",
+    projects_note: "",
+    government_projects_band: "",
+    government_projects_note: "",
+    new_customers_note: "",
+    lost_customers_note: "",
+    big_changes_note: ""
+  };
+}
+
+function normalizeWeeklyReportWrapper(payload) {
+  const report = payload?.report || {};
+  return {
+    report: {
+      ...report,
+      secured_orders: Array.isArray(report.secured_orders) ? report.secured_orders.map(item => ({ ...item })) : [],
+      expected_orders: Array.isArray(report.expected_orders) ? report.expected_orders.map(item => ({ ...item })) : [],
+      problematic_accounts: Array.isArray(report.problematic_accounts) ? report.problematic_accounts.map(item => ({
+        ...item,
+        system_flags: Array.isArray(item.system_flags) ? [...item.system_flags] : [],
+        problems: Array.isArray(item.problems) ? [...item.problems] : []
+      })) : [],
+      market_intelligence: {
+        ...weeklyDefaultMarketIntel(),
+        ...(report.market_intelligence || {})
+      },
+      contradiction_flags: Array.isArray(report.contradiction_flags) ? [...report.contradiction_flags] : []
+    },
+    context: payload?.context || {},
+    blockers: Array.isArray(payload?.blockers) ? [...payload.blockers] : [],
+    thin_report: Boolean(payload?.thin_report),
+    storage_mode: payload?.storage_mode || "",
+    events: Array.isArray(payload?.events) ? payload.events.map(item => ({ ...item })) : []
+  };
+}
+
+function weeklyWeekLabel(wrapper) {
+  const report = wrapper?.report || {};
+  if (wrapper?.context?.week_range) return wrapper.context.week_range;
+  if (report.week_ending) return `Week ending ${formatDisplayDate(report.week_ending)}`;
+  return "Week ending --";
+}
+
+function weeklySpecificEnough(value, options = {}) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text || text.length < (options.minLength || 10)) return false;
+  const banned = new Set(["none", "n/a", "na", "nil", "same", "ok", "normal"]);
+  if (banned.has(text.toLowerCase())) return false;
+  if (options.requireDateOrAmount && !(/(?:\d|aed|mt|ton|june|july|aug|sep|oct|nov|dec|jan|feb|mar|apr|may)/i.test(text))) return false;
+  return true;
+}
+
+function weeklyClientBlockers(wrapper) {
+  const report = wrapper?.report || {};
+  const blockers = [];
+  if (!weeklySpecificEnough(report.summary, { minLength: 24 })) blockers.push("Add a specific weekly summary with more than filler text.");
+  if (!(report.secured_orders || []).length && !report.no_secured_orders_confirmed) blockers.push("Confirm explicitly if there were no secured orders worth reporting this week.");
+  (report.secured_orders || []).forEach(item => {
+    if (item.flagged && String(item.has_issue || "").toLowerCase() === "yes" && !weeklySpecificEnough(item.problem_note, { requireDateOrAmount: true, minLength: 14 })) {
+      blockers.push(`Explain the secured-order issue for ${item.account_name || "this account"} with a dated or quantified note.`);
+    }
+  });
+  if (!(report.expected_orders || []).length && !report.no_expected_orders_confirmed) blockers.push("Confirm explicitly if there were no expected orders to review this week.");
+  (report.expected_orders || []).forEach(item => {
+    if (!WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || ""))) blockers.push(`Choose the likelihood for ${item.account_name || "an expected order"}.`);
+    if (!WEEKLY_TIMING_OPTIONS.includes(String(item.timing || ""))) blockers.push(`Choose the timing window for ${item.account_name || "an expected order"}.`);
+    if (["Good chance", "Almost certain"].includes(String(item.likelihood || "")) && !weeklySpecificEnough(item.blockers, { minLength: 12 })) {
+      blockers.push(`Describe what could stop ${item.account_name || "this expected order"} because it is marked high probability.`);
+    }
+  });
+  if (!(report.problematic_accounts || []).length && !report.no_problematic_accounts_confirmed) blockers.push("Confirm explicitly if there were zero problematic accounts this week.");
+  (report.problematic_accounts || []).forEach(item => {
+    const disposition = String(item.disposition || "").toLowerCase();
+    if (!["report", "dismiss"].includes(disposition)) {
+      blockers.push(`Choose whether to report or dismiss ${item.account_name || "this problematic account"}.`);
+      return;
+    }
+    if (disposition === "dismiss" && !weeklySpecificEnough(item.dismiss_reason, { minLength: 12 })) {
+      blockers.push(`Explain why ${item.account_name || "this account"} was dismissed from the problematic-account queue.`);
+    }
+    if (disposition === "report") {
+      if (!Array.isArray(item.problems) || !item.problems.length) blockers.push(`Select at least one problem for ${item.account_name || "this account"}.`);
+      if (Array.isArray(item.problems) && item.problems.includes("Other") && !weeklySpecificEnough(item.other_problem, { minLength: 10 })) {
+        blockers.push(`Describe the "Other" problem for ${item.account_name || "this account"}.`);
+      }
+      if (!weeklySpecificEnough(item.specifics, { requireDateOrAmount: true, minLength: 14 })) blockers.push(`Add dated or quantified specifics for ${item.account_name || "this account"}.`);
+      if (!WEEKLY_ASSESSMENT_OPTIONS.includes(String(item.assessment || ""))) blockers.push(`Choose the honest assessment for ${item.account_name || "this account"}.`);
+    }
+  });
+  const intel = { ...weeklyDefaultMarketIntel(), ...(report.market_intelligence || {}) };
+  if (!WEEKLY_DEMAND_OPTIONS.includes(String(intel.demand_band || ""))) blockers.push("Choose the customer demand signal for the week.");
+  if (!weeklySpecificEnough(intel.demand_note, { minLength: 14 })) blockers.push("Describe what customers said about their business this week.");
+  if (!WEEKLY_FOUR_BAND_OPTIONS.includes(String(intel.pricing_band || ""))) blockers.push("Choose the pricing-complaint level.");
+  if (!["yes", "no"].includes(String(intel.competitor_loss || "").toLowerCase())) blockers.push("Confirm whether any orders were lost to competitors this week.");
+  if (String(intel.competitor_loss || "").toLowerCase() === "yes" && !weeklySpecificEnough(intel.competitor_loss_note, { requireDateOrAmount: true, minLength: 14 })) blockers.push("Explain the competitor loss with specifics.");
+  if (!weeklySpecificEnough(intel.competitor_pricing_note, { minLength: 10 })) blockers.push("Add a competitor pricing trend note or explicitly say none observed.");
+  if (!WEEKLY_FOUR_BAND_OPTIONS.includes(String(intel.cashflow_band || ""))) blockers.push("Choose the cash-flow stress signal.");
+  if (!WEEKLY_FOUR_BAND_OPTIONS.includes(String(intel.extended_terms_band || ""))) blockers.push("Choose the extended-terms signal.");
+  if (!["yes", "no"].includes(String(intel.defaults_heard || "").toLowerCase())) blockers.push("Confirm whether defaults or failures were heard in the market.");
+  if (String(intel.defaults_heard || "").toLowerCase() === "yes" && !weeklySpecificEnough(intel.defaults_details, { requireDateOrAmount: true, minLength: 12 })) blockers.push("Name the default or failure and give details.");
+  if (!weeklySpecificEnough(intel.projects_note, { minLength: 10 })) blockers.push("List the big projects or state the live project signal explicitly.");
+  if (!WEEKLY_GOVERNMENT_OPTIONS.includes(String(intel.government_projects_band || ""))) blockers.push("Choose the government-project speed signal.");
+  if (["Delayed", "Speeding up"].includes(String(intel.government_projects_band || "")) && !weeklySpecificEnough(intel.government_projects_note, { minLength: 12 })) blockers.push("Explain the government-project movement.");
+  if (!weeklySpecificEnough(intel.new_customers_note, { minLength: 8 })) blockers.push("Confirm new customers this week or explicitly state none confirmed.");
+  if (!weeklySpecificEnough(intel.lost_customers_note, { minLength: 8 })) blockers.push("Confirm lost customers this week or explicitly state none.");
+  if (!weeklySpecificEnough(intel.big_changes_note, { minLength: 8 })) blockers.push("Describe any big account changes or explicitly state none.");
+  if (!weeklySpecificEnough(report.next_week_plan, { minLength: 16 })) blockers.push("Add next week's action plan.");
+  if (!report.attested) blockers.push("Tick the digital attestation before submission.");
+  return blockers;
+}
+
+function weeklyCompletionSnapshot(wrapper) {
+  const report = wrapper?.report || {};
+  const expected = report.expected_orders || [];
+  const problems = report.problematic_accounts || [];
+  const intel = { ...weeklyDefaultMarketIntel(), ...(report.market_intelligence || {}) };
+  const checks = [
+    weeklySpecificEnough(report.summary, { minLength: 24 }),
+    expected.length ? true : Boolean(report.no_expected_orders_confirmed),
+    !expected.length || expected.every(item => WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || "")) && WEEKLY_TIMING_OPTIONS.includes(String(item.timing || ""))),
+    problems.length ? true : Boolean(report.no_problematic_accounts_confirmed),
+    !problems.length || problems.every(item => ["report", "dismiss"].includes(String(item.disposition || "").toLowerCase())),
+    (report.secured_orders || []).length ? true : Boolean(report.no_secured_orders_confirmed),
+    WEEKLY_DEMAND_OPTIONS.includes(String(intel.demand_band || "")) && WEEKLY_FOUR_BAND_OPTIONS.includes(String(intel.pricing_band || "")),
+    WEEKLY_FOUR_BAND_OPTIONS.includes(String(intel.cashflow_band || "")) && WEEKLY_FOUR_BAND_OPTIONS.includes(String(intel.extended_terms_band || "")),
+    WEEKLY_GOVERNMENT_OPTIONS.includes(String(intel.government_projects_band || "")),
+    weeklySpecificEnough(report.next_week_plan, { minLength: 16 }),
+    Boolean(report.attested)
+  ];
+  const completed = checks.filter(Boolean).length;
+  const total = checks.length || 1;
+  return {
+    completed,
+    total,
+    percent: Math.round((completed / total) * 100)
+  };
+}
+
+function weeklySetValue(target, path, value) {
+  const parts = String(path || "").split(".").filter(Boolean);
+  if (!parts.length) return;
+  let cursor = target;
+  parts.forEach((part, index) => {
+    const last = index === parts.length - 1;
+    const key = /^\d+$/.test(part) ? Number(part) : part;
+    if (last) {
+      cursor[key] = value;
+      return;
+    }
+    const nextPart = parts[index + 1];
+    const shouldArray = /^\d+$/.test(nextPart);
+    if (cursor[key] == null) cursor[key] = shouldArray ? [] : {};
+    cursor = cursor[key];
+  });
+}
+
+function weeklyGetValue(target, path) {
+  return String(path || "").split(".").filter(Boolean).reduce((cursor, part) => {
+    const key = /^\d+$/.test(part) ? Number(part) : part;
+    return cursor?.[key];
+  }, target);
+}
+
+function weeklyReportFieldValue(path) {
+  return weeklyGetValue(state.weeklyReports.current?.report || {}, path);
+}
+
+function weeklyReportEventLabel(action) {
+  const value = String(action || "").trim().toLowerCase();
+  if (value === "report_started") return "Report started";
+  if (value === "draft_saved") return "Draft saved";
+  if (value === "submitted") return "Submitted for review";
+  if (value === "resubmitted") return "Resubmitted after revision";
+  if (value === "review_under_review") return "Marked under review";
+  if (value === "review_accepted") return "Accepted by director";
+  if (value === "review_revision_required") return "Revision requested";
+  return "Weekly report update";
+}
+
+function weeklySelectMarkup(options, selected, placeholder = "Choose") {
+  return [`<option value="">${escapeHtml(placeholder)}</option>`].concat(
+    options.map(option => `<option value="${escapeHtml(option)}" ${option === selected ? "selected" : ""}>${escapeHtml(option)}</option>`)
+  ).join("");
+}
+
+function weeklyStatusMarkup(status) {
+  const meta = weeklyReportStatusMeta(status);
+  return `<span class="chip ${meta.chipClass}">${escapeHtml(meta.label)}</span>`;
+}
+
+function setTasksMessage(message = "", type = "") {
+  if (!els.tasksMessage) return;
+  if (!message) {
+    els.tasksMessage.textContent = "";
+    els.tasksMessage.className = "tasks-message hidden";
+    return;
+  }
+  els.tasksMessage.textContent = message;
+  els.tasksMessage.className = `tasks-message ${type || ""}`.trim();
+}
+
+async function loadWeeklyReportReviewDetail(id) {
+  if (!id) {
+    state.weeklyReports.selectedId = "";
+    state.weeklyReports.selectedReport = null;
+    return;
+  }
+  const detail = await api(`/api/weekly-reports/${encodeURIComponent(id)}`);
+  state.weeklyReports.selectedId = id;
+  state.weeklyReports.selectedReport = normalizeWeeklyReportWrapper(detail);
+}
+
+async function loadWeeklyReportWorkspace(force = false) {
+  if (state.weeklyReports.loading && !force) return;
+  state.weeklyReports.loading = true;
+  renderTasksView();
+  try {
+    if (isAdminOrManager()) {
+      const review = await api("/api/weekly-reports/review");
+      state.weeklyReports.review = Array.isArray(review.reports) ? review.reports : [];
+      state.weeklyReports.missing = Array.isArray(review.missing) ? review.missing : [];
+      state.weeklyReports.weekEnding = review.week_ending || "";
+      state.weeklyReports.storageMode = "review";
+      const candidateId = state.weeklyReports.review.some(item => item.id === state.weeklyReports.selectedId)
+        ? state.weeklyReports.selectedId
+        : (state.weeklyReports.review[0]?.id || "");
+      if (candidateId) {
+        await loadWeeklyReportReviewDetail(candidateId);
+      } else {
+        state.weeklyReports.selectedId = "";
+        state.weeklyReports.selectedReport = null;
+      }
+    } else {
+      const current = await api("/api/weekly-reports/current");
+      const normalized = normalizeWeeklyReportWrapper(current);
+      state.weeklyReports.current = normalized;
+      state.weeklyReports.weekEnding = normalized.report.week_ending || "";
+      state.weeklyReports.storageMode = normalized.storage_mode || "";
+    }
+    setTasksMessage("");
+  } catch (error) {
+    setTasksMessage(error.message || "Unable to load weekly report workspace.", "error");
+  } finally {
+    state.weeklyReports.loading = false;
+    renderTasksView();
+  }
+}
+
+function weeklyReportCard(title, subtitle, body, tone = "") {
+  return `
+    <section class="tasks-section-card ${tone}">
+      <div class="tasks-section-head">
+        <div>
+          <h3>${escapeHtml(title)}</h3>
+          ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+        </div>
+      </div>
+      <div class="tasks-section-body">${body}</div>
+    </section>
+  `;
+}
+
+function renderWeeklySalesmanView() {
+  const wrapper = state.weeklyReports.current;
+  const report = wrapper?.report;
+  if (!report) {
+    els.tasksPrimary.innerHTML = `
+      <div class="timeline-empty">
+        <strong>Weekly sales report is not ready yet.</strong>
+        <span>Reload the workspace to pull your current reporting week.</span>
+      </div>
+    `;
+    els.tasksSidebar.innerHTML = "";
+    return;
+  }
+  const blockers = weeklyClientBlockers(wrapper);
+  const completion = weeklyCompletionSnapshot(wrapper);
+  const status = weeklyReportStatusMeta(report.status);
+  const locked = weeklyReportIsLocked(report.status);
+  const eventsMarkup = (wrapper.events || []).length
+    ? `
+      <ul class="tasks-audit-list">
+        ${wrapper.events.map(item => `
+          <li class="tasks-audit-item">
+            <strong>${escapeHtml(weeklyReportEventLabel(item.action))}</strong>
+            <span>${escapeHtml(item.actor_name || "System")} · ${escapeHtml(formatDateTime(item.timestamp))}</span>
+            ${item.details?.note ? `<p>${escapeHtml(item.details.note)}</p>` : ""}
+          </li>
+        `).join("")}
+      </ul>
+    `
+    : `<p class="empty-copy">The immutable event trail will appear here after the first save or submit.</p>`;
+  const securedMarkup = (report.secured_orders || []).length
+    ? report.secured_orders.map((item, index) => `
+      <article class="tasks-row-card ${item.flagged ? "is-flagged" : ""}">
+        <div class="tasks-row-head">
+          <div>
+            <strong>${escapeHtml(item.account_name || "Unnamed account")}</strong>
+            <p>${escapeHtml(formatAED(item.order_value || item.value || 0))}${item.product_type ? ` · ${escapeHtml(item.product_type)}` : ""}</p>
+          </div>
+          ${item.flagged ? `<span class="chip warm">Needs comment</span>` : `<span class="chip success">Clean</span>`}
+        </div>
+        ${item.flagged ? `
+          <div class="tasks-inline-grid">
+            <label>
+              <span>Any issue?</span>
+              <select data-weekly-field="secured_orders.${index}.has_issue">
+                ${weeklySelectMarkup(["yes", "no"], item.has_issue || "", "Choose")}
+              </select>
+            </label>
+            <label class="tasks-full-span ${String(item.has_issue || "").toLowerCase() === "yes" ? "" : "muted-field"}">
+              <span>Issue note</span>
+              <textarea rows="3" data-weekly-field="secured_orders.${index}.problem_note" placeholder="What happened, when, and what needs help?">${escapeHtml(item.problem_note || "")}</textarea>
+            </label>
+          </div>
+        ` : `<p class="tasks-muted-line">System marked this order as clean. No extra comment needed unless something changed.</p>`}
+      </article>
+    `).join("")
+    : `
+      <label class="tasks-checkline">
+        <input type="checkbox" data-weekly-field="no_secured_orders_confirmed" ${report.no_secured_orders_confirmed ? "checked" : ""}>
+        <span>Confirm there were no secured orders worth reporting this week.</span>
+      </label>
+    `;
+
+  const expectedMarkup = (report.expected_orders || []).length
+    ? report.expected_orders.map((item, index) => `
+      <article class="tasks-row-card">
+        <div class="tasks-row-head">
+          <div>
+            <strong>${escapeHtml(item.account_name || "Unnamed account")}</strong>
+            <p>${escapeHtml(formatAED(item.expected_value || 0))}${item.order_scope ? ` · ${escapeHtml(item.order_scope)}` : ""}</p>
+          </div>
+          ${item.likelihood ? `<span class="chip plan-upcoming">${escapeHtml(item.likelihood)}</span>` : ""}
+        </div>
+        <div class="tasks-inline-grid">
+          <label>
+            <span>Likelihood</span>
+            <select data-weekly-field="expected_orders.${index}.likelihood">
+              ${weeklySelectMarkup(WEEKLY_LIKELIHOOD_OPTIONS, item.likelihood || "", "Choose")}
+            </select>
+          </label>
+          <label>
+            <span>Timing</span>
+            <select data-weekly-field="expected_orders.${index}.timing">
+              ${weeklySelectMarkup(WEEKLY_TIMING_OPTIONS, item.timing || "", "Choose")}
+            </select>
+          </label>
+          <label class="tasks-full-span">
+            <span>What could stop it?</span>
+            <textarea rows="3" data-weekly-field="expected_orders.${index}.blockers" placeholder="If this is a good chance, name the blocker or next dependency.">${escapeHtml(item.blockers || "")}</textarea>
+          </label>
+        </div>
+      </article>
+    `).join("")
+    : `
+      <label class="tasks-checkline">
+        <input type="checkbox" data-weekly-field="no_expected_orders_confirmed" ${report.no_expected_orders_confirmed ? "checked" : ""}>
+        <span>Confirm there were no expected orders to review this week.</span>
+      </label>
+      <p class="empty-copy">No open expected orders are in your current visible pipeline.</p>
+    `;
+
+  const problemMarkup = (report.problematic_accounts || []).length
+    ? report.problematic_accounts.map((item, index) => {
+      const disposition = String(item.disposition || "").toLowerCase();
+      return `
+        <article class="tasks-row-card ${disposition === "report" ? "is-flagged" : ""}">
+          <div class="tasks-row-head">
+            <div>
+              <strong>${escapeHtml(item.account_name || "Unnamed account")}</strong>
+              <p>${(item.system_flags || []).map(flag => `<span class="chip hot">${escapeHtml(flag)}</span>`).join("") || `<span class="chip">No system flags</span>`}</p>
+            </div>
+            ${weeklyStatusMarkup(disposition === "report" ? "in_progress" : disposition === "dismiss" ? "accepted" : "not_started")}
+          </div>
+          <div class="tasks-inline-grid">
+            <div class="tasks-context-grid tasks-full-span">
+              <div class="tasks-context-pill"><span>Credit limit</span><strong>${escapeHtml(String(item.credit_limit || "ERP not synced"))}</strong></div>
+              <div class="tasks-context-pill"><span>Utilization</span><strong>${escapeHtml(String(item.current_utilization || "ERP not synced"))}</strong></div>
+              <div class="tasks-context-pill"><span>Last payment</span><strong>${escapeHtml(String(item.last_payment_date || "ERP not synced"))}</strong></div>
+              <div class="tasks-context-pill"><span>Days late</span><strong>${escapeHtml(String(item.days_late || "ERP not synced"))}</strong></div>
+            </div>
+            <label>
+              <span>Decision</span>
+              <select data-weekly-field="problematic_accounts.${index}.disposition">
+                ${weeklySelectMarkup(["report", "dismiss"], disposition || "", "Choose")}
+              </select>
+            </label>
+            ${disposition === "dismiss" ? `
+              <label class="tasks-full-span">
+                <span>Dismiss reason</span>
+                <textarea rows="3" data-weekly-field="problematic_accounts.${index}.dismiss_reason" placeholder="Why should this account stay out of the report this week?">${escapeHtml(item.dismiss_reason || "")}</textarea>
+              </label>
+            ` : ""}
+            ${disposition === "report" ? `
+              <div class="tasks-checkbox-grid tasks-full-span">
+                ${WEEKLY_PROBLEM_OPTIONS.map(problem => `
+                  <label class="tasks-checkline">
+                    <input type="checkbox" data-weekly-array-toggle="problematic_accounts.${index}.problems" value="${escapeHtml(problem)}" ${Array.isArray(item.problems) && item.problems.includes(problem) ? "checked" : ""}>
+                    <span>${escapeHtml(problem)}</span>
+                  </label>
+                `).join("")}
+              </div>
+              ${Array.isArray(item.problems) && item.problems.includes("Other") ? `
+                <label class="tasks-full-span">
+                  <span>Other problem</span>
+                  <input type="text" data-weekly-field="problematic_accounts.${index}.other_problem" value="${escapeHtml(item.other_problem || "")}" placeholder="Describe the other issue">
+                </label>
+              ` : ""}
+              <label class="tasks-full-span">
+                <span>Specifics</span>
+                <textarea rows="3" data-weekly-field="problematic_accounts.${index}.specifics" placeholder="What happened, with dates, amounts, or named blockers?">${escapeHtml(item.specifics || "")}</textarea>
+              </label>
+              <label>
+                <span>Assessment</span>
+                <select data-weekly-field="problematic_accounts.${index}.assessment">
+                  ${weeklySelectMarkup(WEEKLY_ASSESSMENT_OPTIONS, item.assessment || "", "Choose")}
+                </select>
+              </label>
+            ` : ""}
+          </div>
+        </article>
+      `;
+    }).join("")
+    : `
+      <label class="tasks-checkline">
+        <input type="checkbox" data-weekly-field="no_problematic_accounts_confirmed" ${report.no_problematic_accounts_confirmed ? "checked" : ""}>
+        <span>I confirm there were zero problematic accounts requiring mention this week.</span>
+      </label>
+      <p class="empty-copy">No system-flagged problematic accounts were pulled into this reporting week.</p>
+    `;
+
+  const intel = { ...weeklyDefaultMarketIntel(), ...(report.market_intelligence || {}) };
+  const marketIntelMarkup = `
+    <div class="tasks-inline-grid">
+      <label>
+        <span>Customer demand this week</span>
+        <select data-weekly-field="market_intelligence.demand_band">${weeklySelectMarkup(WEEKLY_DEMAND_OPTIONS, intel.demand_band || "", "Choose")}</select>
+      </label>
+      <label>
+        <span>Pricing complaints</span>
+        <select data-weekly-field="market_intelligence.pricing_band">${weeklySelectMarkup(WEEKLY_FOUR_BAND_OPTIONS, intel.pricing_band || "", "Choose")}</select>
+      </label>
+      <label class="tasks-full-span">
+        <span>What customers said about their business</span>
+        <textarea rows="3" data-weekly-field="market_intelligence.demand_note" placeholder="Summarize demand tone, slowdowns, or urgency from the field.">${escapeHtml(intel.demand_note || "")}</textarea>
+      </label>
+      <label>
+        <span>Any orders lost to competitors?</span>
+        <select data-weekly-field="market_intelligence.competitor_loss">${weeklySelectMarkup(["yes", "no"], intel.competitor_loss || "", "Choose")}</select>
+      </label>
+      <label>
+        <span>Cash-flow stress</span>
+        <select data-weekly-field="market_intelligence.cashflow_band">${weeklySelectMarkup(WEEKLY_FOUR_BAND_OPTIONS, intel.cashflow_band || "", "Choose")}</select>
+      </label>
+      <label>
+        <span>Extended terms requests</span>
+        <select data-weekly-field="market_intelligence.extended_terms_band">${weeklySelectMarkup(WEEKLY_FOUR_BAND_OPTIONS, intel.extended_terms_band || "", "Choose")}</select>
+      </label>
+      <label>
+        <span>Defaults or failures heard?</span>
+        <select data-weekly-field="market_intelligence.defaults_heard">${weeklySelectMarkup(["yes", "no"], intel.defaults_heard || "", "Choose")}</select>
+      </label>
+      <label>
+        <span>Government project speed</span>
+        <select data-weekly-field="market_intelligence.government_projects_band">${weeklySelectMarkup(WEEKLY_GOVERNMENT_OPTIONS, intel.government_projects_band || "", "Choose")}</select>
+      </label>
+      <label class="tasks-full-span">
+        <span>Competitor pricing trend</span>
+        <textarea rows="2" data-weekly-field="market_intelligence.competitor_pricing_note" placeholder="What did competitors do on price this week?">${escapeHtml(intel.competitor_pricing_note || "")}</textarea>
+      </label>
+      ${String(intel.competitor_loss || "").toLowerCase() === "yes" ? `
+        <label class="tasks-full-span">
+          <span>Competitor loss details</span>
+          <textarea rows="2" data-weekly-field="market_intelligence.competitor_loss_note" placeholder="Name the account, competitor, and what was lost.">${escapeHtml(intel.competitor_loss_note || "")}</textarea>
+        </label>
+      ` : ""}
+      ${String(intel.defaults_heard || "").toLowerCase() === "yes" ? `
+        <label class="tasks-full-span">
+          <span>Default or failure details</span>
+          <textarea rows="2" data-weekly-field="market_intelligence.defaults_details" placeholder="Who struggled, and what is the field impact?">${escapeHtml(intel.defaults_details || "")}</textarea>
+        </label>
+      ` : ""}
+      ${["Delayed", "Speeding up"].includes(String(intel.government_projects_band || "")) ? `
+        <label class="tasks-full-span">
+          <span>Government project note</span>
+          <textarea rows="2" data-weekly-field="market_intelligence.government_projects_note" placeholder="Which project moved, and why does it matter?">${escapeHtml(intel.government_projects_note || "")}</textarea>
+        </label>
+      ` : ""}
+      <label class="tasks-full-span">
+        <span>Big projects or live opportunities</span>
+        <textarea rows="2" data-weekly-field="market_intelligence.projects_note" placeholder="List the big projects or explicitly state none.">${escapeHtml(intel.projects_note || "")}</textarea>
+      </label>
+      <label class="tasks-full-span">
+        <span>New customers gained</span>
+        <textarea rows="2" data-weekly-field="market_intelligence.new_customers_note" placeholder="State names won this week or say none confirmed.">${escapeHtml(intel.new_customers_note || "")}</textarea>
+      </label>
+      <label class="tasks-full-span">
+        <span>Customers lost</span>
+        <textarea rows="2" data-weekly-field="market_intelligence.lost_customers_note" placeholder="State names lost this week or say none.">${escapeHtml(intel.lost_customers_note || "")}</textarea>
+      </label>
+      <label class="tasks-full-span">
+        <span>Any big account changes</span>
+        <textarea rows="2" data-weekly-field="market_intelligence.big_changes_note" placeholder="Any mergers, slowdowns, project delays, or management shifts?">${escapeHtml(intel.big_changes_note || "")}</textarea>
+      </label>
+    </div>
+  `;
+
+  els.tasksPrimary.innerHTML = `
+    <div class="tasks-section-stack">
+      ${locked ? `
+        <section class="tasks-section-card">
+          <div class="tasks-section-body">
+            <div class="tasks-lock-banner">
+              <strong>This weekly report is locked after submission.</strong>
+              <p>You can review it here, but it stays immutable until management sends it back with a revision request.</p>
+            </div>
+          </div>
+        </section>
+      ` : ""}
+      ${String(report.status || "").toLowerCase() === "revision_required" && report.review_note ? `
+        <section class="tasks-section-card warning">
+          <div class="tasks-section-head">
+            <div>
+              <h3>Revision note from management</h3>
+              <p>Clear the note below, then resubmit the report.</p>
+            </div>
+            ${weeklyStatusMarkup(report.status)}
+          </div>
+          <div class="tasks-section-body">
+            <p>${escapeHtml(report.review_note)}</p>
+          </div>
+        </section>
+      ` : ""}
+      ${weeklyReportCard("Week overview", "Summarize the week once, with specifics.", `
+        <label>
+          <span>Weekly summary</span>
+          <textarea rows="5" data-weekly-field="summary" placeholder="What actually happened this week, in plain sales language?">${escapeHtml(report.summary || "")}</textarea>
+        </label>
+      `)}
+      ${weeklyReportCard("Secured orders", "ERP facts should appear here already. Only explain the flagged exceptions.", securedMarkup)}
+      ${weeklyReportCard("Expected orders", "Confirm what is still likely and what could stop it.", expectedMarkup)}
+      ${weeklyReportCard("Problematic accounts", "Every system-flagged issue must be reported or dismissed with a reason.", problemMarkup)}
+      ${weeklyReportCard("Market intelligence overlay", "Capture the tacit market signal the system cannot infer.", marketIntelMarkup)}
+      ${weeklyReportCard("Next week plan", "Tell management what you will do next, not just what happened.", `
+        <label>
+          <span>Next week action plan</span>
+          <textarea rows="4" data-weekly-field="next_week_plan" placeholder="Name the accounts, action, and timing for next week.">${escapeHtml(report.next_week_plan || "")}</textarea>
+        </label>
+        <label class="tasks-checkline">
+          <input type="checkbox" data-weekly-field="attested" ${report.attested ? "checked" : ""}>
+          <span>I confirm this report is honest, specific, and complete for the week.</span>
+        </label>
+      `)}
+    </div>
+  `;
+
+  els.tasksSidebar.innerHTML = `
+    <div class="tasks-sidebar-stack">
+      <section class="tasks-status-card">
+        <span class="tasks-kicker">Submission status</span>
+        <strong>${escapeHtml(status.label)}</strong>
+        <p>${escapeHtml(weeklyWeekLabel(wrapper))}</p>
+        <div class="tasks-progress-meter">
+          <div class="tasks-progress-fill" style="width:${completion.percent}%"></div>
+        </div>
+        <div class="tasks-progress-copy">
+          <span>${completion.completed}/${completion.total} checkpoints complete</span>
+          <strong>${completion.percent}%</strong>
+        </div>
+        <div class="tasks-status-notes">
+          <span>${escapeHtml(report.updated_at ? `Last updated ${formatDateTime(report.updated_at)}` : "Not saved yet")}</span>
+          <span>${escapeHtml(wrapper.storage_mode ? `Storage: ${wrapper.storage_mode}` : "")}</span>
+          ${report.attested_at ? `<span>${escapeHtml(`Attested ${formatDateTime(report.attested_at)}`)}</span>` : ""}
+        </div>
+      </section>
+      <section class="tasks-section-card">
+        <div class="tasks-section-head">
+          <div>
+            <h3>Blockers to clear</h3>
+            <p>These are the gaps stopping clean submission.</p>
+          </div>
+        </div>
+        <div class="tasks-section-body">
+          ${blockers.length ? `<ul class="tasks-checklist">${blockers.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<p class="empty-copy">No blockers left. This report is ready to submit.</p>`}
+        </div>
+      </section>
+      ${report.contradiction_flags?.length ? weeklyReportCard("Director challenge queue", "These entries may need clarification before review.", `<ul class="tasks-checklist warning">${report.contradiction_flags.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`, "warning") : ""}
+      ${weeklyReportCard("Immutable report trail", "Each save, submit, and review action is preserved as an append-only event.", eventsMarkup)}
+      <section class="tasks-actions-card">
+        <button class="ghost-button" type="button" id="weeklySaveDraft" ${locked ? "disabled" : ""}>Save draft</button>
+        <button class="primary-button" type="button" id="weeklySubmitReport" ${locked ? "disabled" : ""}>Submit report</button>
+      </section>
+    </div>
+  `;
+
+  bindWeeklySalesmanEvents();
+}
+
+function renderWeeklyReviewView() {
+  const review = state.weeklyReports.review || [];
+  const missing = state.weeklyReports.missing || [];
+  const detail = state.weeklyReports.selectedReport;
+  els.tasksPrimary.innerHTML = detail ? `
+    <div class="tasks-review-shell">
+      <section class="tasks-section-card">
+        <div class="tasks-section-head">
+          <div>
+            <h3>${escapeHtml(detail.report.rep_name || detail.report.rep_email || "Weekly report")}</h3>
+            <p>${escapeHtml(detail.report.territory || "Territory not set")} · ${escapeHtml(weeklyWeekLabel(detail))}</p>
+          </div>
+          <div class="tasks-review-meta">
+            ${weeklyStatusMarkup(detail.report.status)}
+            ${detail.thin_report ? `<span class="chip hot">Thin report</span>` : ""}
+          </div>
+        </div>
+        <div class="tasks-review-grid">
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Summary</span>
+            <p>${escapeHtml(detail.report.summary || "No summary provided.")}</p>
+          </div>
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Next week plan</span>
+            <p>${escapeHtml(detail.report.next_week_plan || "No next-week plan provided.")}</p>
+          </div>
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Expected orders</span>
+            ${(detail.report.expected_orders || []).length ? `
+              <ul class="tasks-checklist compact">
+                ${(detail.report.expected_orders || []).map(item => `
+                  <li><strong>${escapeHtml(item.account_name || "Account")}</strong> · ${escapeHtml(item.likelihood || "No likelihood")} · ${escapeHtml(item.timing || "No timing")} ${item.blockers ? `· ${escapeHtml(item.blockers)}` : ""}</li>
+                `).join("")}
+              </ul>
+            ` : `<p>No expected orders in scope.</p>`}
+          </div>
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Problematic accounts</span>
+            ${(detail.report.problematic_accounts || []).length ? `
+              <ul class="tasks-checklist compact">
+                ${(detail.report.problematic_accounts || []).map(item => `
+                  <li>
+                    <strong>${escapeHtml(item.account_name || "Account")}</strong>
+                    · ${escapeHtml(item.disposition || "Undecided")}
+                    ${item.problems?.length ? `· ${escapeHtml(item.problems.join(", "))}` : ""}
+                    ${item.dismiss_reason ? `· ${escapeHtml(item.dismiss_reason)}` : ""}
+                    ${item.specifics ? `· ${escapeHtml(item.specifics)}` : ""}
+                  </li>
+                `).join("")}
+              </ul>
+            ` : `<p>No problematic accounts were surfaced.</p>`}
+          </div>
+          <div class="tasks-review-block tasks-review-block-full">
+            <span class="tasks-kicker">Market intelligence</span>
+            <div class="tasks-review-inline-list">
+              <span class="chip">${escapeHtml(detail.report.market_intelligence?.demand_band || "No demand signal")}</span>
+              <span class="chip">${escapeHtml(detail.report.market_intelligence?.pricing_band || "No pricing signal")}</span>
+              <span class="chip">${escapeHtml(detail.report.market_intelligence?.cashflow_band || "No cash-flow signal")}</span>
+              <span class="chip">${escapeHtml(detail.report.market_intelligence?.government_projects_band || "No government signal")}</span>
+            </div>
+            <p>${escapeHtml(detail.report.market_intelligence?.demand_note || "No demand note provided.")}</p>
+            <p>${escapeHtml(detail.report.market_intelligence?.projects_note || "No project signal provided.")}</p>
+          </div>
+        </div>
+      </section>
+      <section class="tasks-section-card ${detail.blockers?.length ? "warning" : ""}">
+        <div class="tasks-section-head">
+          <div>
+            <h3>Review notes and decision</h3>
+            <p>Challenge thin reports, push back on contradictions, then move the report forward.</p>
+          </div>
+        </div>
+        <div class="tasks-section-body">
+          ${detail.blockers?.length ? `<ul class="tasks-checklist warning">${detail.blockers.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<p class="empty-copy">No blockers left in the submitted report.</p>`}
+          ${detail.report.contradiction_flags?.length ? `<ul class="tasks-checklist warning">${detail.report.contradiction_flags.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+          <label>
+            <span>Review note</span>
+            <textarea rows="4" id="weeklyReviewNote" placeholder="Challenge unclear claims, confirm what is accepted, or tell the rep what to revise.">${escapeHtml(detail.report.review_note || "")}</textarea>
+          </label>
+          <div class="tasks-actions-card inline">
+            <button class="ghost-button" type="button" data-weekly-review-action="under_review">Mark under review</button>
+            <button class="ghost-button" type="button" data-weekly-review-action="revision_required">Request revision</button>
+            <button class="primary-button" type="button" data-weekly-review-action="accepted">Accept report</button>
+          </div>
+        </div>
+      </section>
+      ${weeklyReportCard("Immutable report trail", "Salesman saves, submissions, and director decisions are preserved as an append-only log.", (detail.events || []).length ? `
+        <ul class="tasks-audit-list">
+          ${(detail.events || []).map(item => `
+            <li class="tasks-audit-item">
+              <strong>${escapeHtml(weeklyReportEventLabel(item.action))}</strong>
+              <span>${escapeHtml(item.actor_name || "System")} · ${escapeHtml(formatDateTime(item.timestamp))}</span>
+              ${item.details?.note ? `<p>${escapeHtml(item.details.note)}</p>` : ""}
+            </li>
+          `).join("")}
+        </ul>
+      ` : `<p class="empty-copy">No immutable events were recorded yet.</p>`)}
+    </div>
+  ` : `
+    <div class="timeline-empty">
+      <strong>No submitted weekly reports yet.</strong>
+      <span>Once a salesman submits, the review detail will appear here.</span>
+    </div>
+  `;
+
+  els.tasksSidebar.innerHTML = `
+    <div class="tasks-sidebar-stack">
+      <section class="tasks-section-card">
+        <div class="tasks-section-head">
+          <div>
+            <h3>Submitted reports</h3>
+            <p>${escapeHtml(state.weeklyReports.weekEnding ? `Week ending ${formatDisplayDate(state.weeklyReports.weekEnding)}` : "Current reporting week")}</p>
+          </div>
+        </div>
+        <div class="tasks-section-body">
+          <div class="tasks-review-list">
+            ${review.length ? review.map(item => `
+              <button class="tasks-review-card ${state.weeklyReports.selectedId === item.id ? "active" : ""}" type="button" data-weekly-open-id="${escapeHtml(item.id)}">
+                <div class="tasks-review-card-head">
+                  <strong>${escapeHtml(item.rep_name || item.rep_email || "Salesman")}</strong>
+                  ${weeklyStatusMarkup(item.status)}
+                </div>
+                <p>${escapeHtml(item.territory || "Territory not set")}</p>
+                <small>${escapeHtml(item.summary || "No summary added yet.")}</small>
+                <div class="tasks-review-card-meta">
+                  ${item.contradiction_flags?.length ? `<span class="chip hot">${item.contradiction_flags.length} flags</span>` : ""}
+                  ${item.thin_report ? `<span class="chip warm">Thin</span>` : `<span class="chip success">Solid</span>`}
+                </div>
+              </button>
+            `).join("") : `<p class="empty-copy">No submitted reports yet.</p>`}
+          </div>
+        </div>
+      </section>
+      <section class="tasks-section-card">
+        <div class="tasks-section-head">
+          <div>
+            <h3>Missing submissions</h3>
+            <p>A missing report is itself a tracked escalation.</p>
+          </div>
+        </div>
+        <div class="tasks-section-body">
+          ${missing.length ? `
+            <ul class="tasks-checklist warning">
+              ${missing.map(item => `<li><strong>${escapeHtml(item.name || item.email || "Salesman")}</strong>${item.territory ? ` · ${escapeHtml(item.territory)}` : ""}</li>`).join("")}
+            </ul>
+          ` : `<p class="empty-copy">Every active salesman has a report or active review state for this week.</p>`}
+        </div>
+      </section>
+    </div>
+  `;
+
+  bindWeeklyReviewEvents();
+}
+
+function renderTasksView() {
+  if (!els.tasksPrimary || !els.tasksSidebar) return;
+  const admin = isAdminOrManager();
+  els.tasksViewTitle.textContent = admin ? "Weekly Sales Report Review" : "Weekly Sales Report";
+  els.tasksViewSubtitle.textContent = admin
+    ? "Review submitted reports, challenge contradictions, and chase missing weekly submissions."
+    : "Capture the week once, at the source, then lock it with an honest digital sign-off.";
+  els.tasksWeekLabel.textContent = admin
+    ? (state.weeklyReports.weekEnding ? `Week ending ${formatDisplayDate(state.weeklyReports.weekEnding)}` : "Current week")
+    : weeklyWeekLabel(state.weeklyReports.current);
+  const statusMeta = admin
+    ? weeklyReportStatusMeta(state.weeklyReports.selectedReport?.report?.status || (state.weeklyReports.review.length ? "submitted" : "not_started"))
+    : weeklyReportStatusMeta(state.weeklyReports.current?.report?.status || "not_started");
+  els.tasksStatusBadge.textContent = statusMeta.label;
+  els.tasksStatusBadge.className = `chip ${statusMeta.chipClass}`.trim();
+
+  if (state.weeklyReports.loading) {
+    els.tasksPrimary.innerHTML = `
+      <div class="timeline-empty">
+        <strong>Loading weekly report workspace…</strong>
+        <span>Pulling the current reporting week and its CRM-backed context.</span>
+      </div>
+    `;
+    els.tasksSidebar.innerHTML = "";
+    return;
+  }
+
+  if (admin) {
+    renderWeeklyReviewView();
+  } else {
+    renderWeeklySalesmanView();
+  }
+}
+
+function bindWeeklySalesmanEvents() {
+  const report = state.weeklyReports.current?.report || {};
+  const locked = weeklyReportIsLocked(report.status);
+  if (locked) {
+    els.tasksPrimary.querySelectorAll("[data-weekly-field], [data-weekly-array-toggle]").forEach(field => {
+      field.disabled = true;
+    });
+    return;
+  }
+
+  els.tasksPrimary.querySelectorAll("[data-weekly-field]").forEach(field => {
+    const applyValue = shouldRerender => {
+      const value = field.type === "checkbox" ? field.checked : field.value;
+      weeklySetValue(state.weeklyReports.current.report, field.dataset.weeklyField, value);
+      if (shouldRerender) renderTasksView();
+    };
+    field.addEventListener("input", () => applyValue(false));
+    field.addEventListener("change", () => applyValue(field.tagName === "SELECT" || field.type === "checkbox"));
+  });
+
+  els.tasksPrimary.querySelectorAll("[data-weekly-array-toggle]").forEach(field => {
+    field.addEventListener("change", () => {
+      const path = field.dataset.weeklyArrayToggle;
+      const current = Array.isArray(weeklyGetValue(state.weeklyReports.current.report, path)) ? [...weeklyGetValue(state.weeklyReports.current.report, path)] : [];
+      const value = field.value;
+      const next = field.checked
+        ? (current.includes(value) ? current : [...current, value])
+        : current.filter(item => item !== value);
+      weeklySetValue(state.weeklyReports.current.report, path, next);
+      renderTasksView();
+    });
+  });
+
+  els.tasksSidebar.querySelector("#weeklySaveDraft")?.addEventListener("click", async () => {
+    setTasksMessage("Saving weekly report draft…");
+    try {
+      state.weeklyReports.current.report.attestation_device = navigator.userAgent || "browser";
+      const saved = await api("/api/weekly-reports/current", {
+        method: "POST",
+        body: JSON.stringify(state.weeklyReports.current.report)
+      });
+      state.weeklyReports.current = normalizeWeeklyReportWrapper(saved);
+      state.weeklyReports.weekEnding = state.weeklyReports.current.report.week_ending || "";
+      setTasksMessage("Weekly report draft saved.", "success");
+      renderTasksView();
+    } catch (error) {
+      setTasksMessage(error.message || "Unable to save the weekly report draft.", "error");
+    }
+  });
+
+  els.tasksSidebar.querySelector("#weeklySubmitReport")?.addEventListener("click", async () => {
+    setTasksMessage("Submitting weekly report…");
+    try {
+      state.weeklyReports.current.report.attestation_device = navigator.userAgent || "browser";
+      const saved = await api("/api/weekly-reports/current/submit", {
+        method: "POST",
+        body: JSON.stringify(state.weeklyReports.current.report)
+      });
+      state.weeklyReports.current = normalizeWeeklyReportWrapper(saved);
+      state.weeklyReports.weekEnding = state.weeklyReports.current.report.week_ending || "";
+      setTasksMessage("Weekly report submitted for review.", "success");
+      renderTasksView();
+    } catch (error) {
+      const blockers = Array.isArray(error.details?.blockers) ? ` ${error.details.blockers.join(" ")}` : "";
+      setTasksMessage(`${error.message || "Unable to submit weekly report."}${blockers}`, "error");
+    }
+  });
+}
+
+function bindWeeklyReviewEvents() {
+  els.tasksSidebar.querySelectorAll("[data-weekly-open-id]").forEach(button => {
+    button.addEventListener("click", async () => {
+      setTasksMessage("Loading weekly report detail…");
+      try {
+        await loadWeeklyReportReviewDetail(button.dataset.weeklyOpenId);
+        setTasksMessage("");
+        renderTasksView();
+      } catch (error) {
+        setTasksMessage(error.message || "Unable to open the weekly report.", "error");
+      }
+    });
+  });
+
+  els.tasksPrimary.querySelectorAll("[data-weekly-review-action]").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (!state.weeklyReports.selectedId) return;
+      const note = els.tasksPrimary.querySelector("#weeklyReviewNote")?.value || "";
+      setTasksMessage("Saving review decision…");
+      try {
+        await api(`/api/weekly-reports/${encodeURIComponent(state.weeklyReports.selectedId)}/review`, {
+          method: "POST",
+          body: JSON.stringify({
+            action: button.dataset.weeklyReviewAction,
+            note
+          })
+        });
+        setTasksMessage("Weekly report review updated.", "success");
+        await loadWeeklyReportWorkspace(true);
+      } catch (error) {
+        setTasksMessage(error.message || "Unable to update the weekly report review.", "error");
+      }
+    });
+  });
+}
+
 function renderActivityView() {
   const activities = state.activities || [];
   els.activitySummary.textContent = `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`;
@@ -8304,6 +9562,7 @@ function render() {
   renderLeadDrawer();
   renderSalesmenView();
   renderSalesmanLeadsViewer();
+  renderTasksView();
   renderActivityView();
   renderPipelineFilterNotice();
   loadActivityAudioSources();
@@ -8319,9 +9578,11 @@ function applyView() {
   const isDashboard = currentView === "dashboard";
   const isPipeline = currentView === "pipeline";
   const isActivity = currentView === "activity";
+  const isTasks = currentView === "tasks";
   const isLead = currentView === "lead";
   const isKanban = state.pipelineViewMode === "kanban";
-  els.metricsShell?.classList.toggle("hidden", !(isDashboard || isPipeline));
+  const showMetricsShell = isPipeline || (isDashboard && state.currentUser?.role === "admin");
+  els.metricsShell?.classList.toggle("hidden", !showMetricsShell);
   els.dashboardView.classList.toggle("hidden", !isDashboard);
   els.pipelineFunnelPanel?.classList.toggle("hidden", !isPipeline);
   els.pipelineToolbar.classList.toggle("hidden", !isPipeline);
@@ -8333,6 +9594,7 @@ function applyView() {
   els.detailPanel?.classList.toggle("hidden", true);
   els.leadDetailView?.classList.toggle("hidden", !isLead);
   els.salesmenView.classList.toggle("hidden", currentView !== "salesmen");
+  els.tasksView?.classList.toggle("hidden", !isTasks);
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll("[data-pipeline-mode]").forEach(button => {
     button.classList.toggle("active", button.dataset.pipelineMode === state.pipelineViewMode);
@@ -8342,7 +9604,9 @@ function applyView() {
   });
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
   document.body.classList.toggle("activity-mode", isActivity);
+  document.body.classList.toggle("pipeline-compact-mode", isPipeline);
   document.body.classList.toggle("salesman-dashboard-mode", Boolean(isDashboard && state.currentUser?.role !== "admin"));
+  document.body.classList.toggle("tasks-mode", isTasks);
 }
 
 function closeMobileMenu() {
@@ -8366,6 +9630,9 @@ function setView(view) {
   syncBrowserRoute({ replace: false });
   closeMobileMenu();
   render();
+  if (view === "tasks") {
+    loadWeeklyReportWorkspace(true).catch(error => setTasksMessage(error.message, "error"));
+  }
 }
 
 async function loadLeads() {
@@ -8486,6 +9753,16 @@ function showLogin(message = "") {
 
 function configureRoleUi(user) {
   const admin = user.role === "admin";
+  if (!admin) {
+    state.dashboardToolsOpen = false;
+    state.dashboardPerformanceOpen = false;
+    state.dashboardMarketNewsOpen = false;
+    state.agentOpen = false;
+    localStorage.setItem(DASHBOARD_TOOLS_KEY, "false");
+    localStorage.setItem(DASHBOARD_PERFORMANCE_KEY, "false");
+    localStorage.setItem(DASHBOARD_MARKET_NEWS_KEY, "false");
+    localStorage.setItem(DASHBOARD_AGENT_KEY, "false");
+  }
   document.querySelectorAll('.sidebar [data-view="salesmen"]').forEach(item => {
     item.classList.toggle("hidden", !admin);
   });
@@ -8502,11 +9779,16 @@ function configureRoleUi(user) {
   els.adminTaskPanel?.classList.toggle("hidden", !admin);
   els.needsAttentionPanel?.classList.toggle("hidden", !admin);
   els.dashboardPipelineFunnelPanel?.classList.toggle("hidden", false);
+  els.dashboardQuickActions?.classList.toggle("hidden", admin);
   els.dailyAiPanel?.classList.toggle("hidden", admin);
+  els.salesmanLossPromptPanel?.classList.toggle("hidden", admin);
+  els.salesmanDashboardToolsPanel?.classList.toggle("hidden", admin);
   els.marketNewsPanel?.classList.toggle("hidden", admin);
   els.dashboardToggleMarketNews?.classList.toggle("hidden", admin);
   els.salesmanFollowupPanel?.classList.toggle("hidden", admin);
   els.portfolioPanel?.classList.toggle("hidden", admin);
+  els.salesmanDashboardToggleShell?.classList.toggle("hidden", admin);
+  els.dashboardActivityPanel?.classList.toggle("hidden", !admin);
   els.relationshipFocusPanel?.classList.toggle("hidden", !admin);
   els.pipelineHealthPanel?.classList.toggle("hidden", !admin);
   els.configAgentPanel?.classList.toggle("hidden", !admin);
@@ -8579,6 +9861,7 @@ async function loadWorkspace() {
   els.leadForm.elements.next_action_date.value = today();
   await loadConfigurationAgentState();
   await loadLeads();
+  await loadWeeklyReportWorkspace();
   await marketNewsPromise;
   maybeAutoRunDailyPipeline();
 }
@@ -9008,10 +10291,6 @@ els.sidebarSearchPlaces?.addEventListener("click", () => {
   document.querySelector("#openPlacesSearch")?.click();
 });
 
-els.dashboardQuickAddLead?.addEventListener("click", () => {
-  document.querySelector("#openLeadForm")?.click();
-});
-
 els.dashboardQuickLogActivity?.addEventListener("click", () => {
   openQuickLog();
 });
@@ -9020,8 +10299,24 @@ els.dashboardQuickPipeline?.addEventListener("click", () => {
   setView("pipeline");
 });
 
+els.dashboardOpenFullBriefing?.addEventListener("click", () => {
+  runSalespersonAiAction("pipeline_health");
+});
+
+els.dashboardToggleTools?.addEventListener("click", () => {
+  setDashboardToolsOpen(!state.dashboardToolsOpen);
+});
+
+els.dashboardTogglePerformance?.addEventListener("click", () => {
+  setDashboardPerformanceOpen(!state.dashboardPerformanceOpen);
+});
+
 els.dashboardToggleMarketNews?.addEventListener("click", () => {
   setDashboardMarketNewsOpen(!state.dashboardMarketNewsOpen);
+});
+
+els.dashboardToggleAgent?.addEventListener("click", () => {
+  setDashboardAgentOpen(!state.agentOpen);
 });
 
 els.logoutButton.addEventListener("click", async () => {
@@ -9109,8 +10404,7 @@ async function submitAgentPrompt() {
 }
 
 els.agentToggle?.addEventListener("click", () => {
-  state.agentOpen = !state.agentOpen;
-  renderAgentPanel();
+  setDashboardAgentOpen(!state.agentOpen);
 });
 
 els.agentAsk?.addEventListener("click", submitAgentPrompt);
@@ -9175,11 +10469,32 @@ els.aiActionResult?.addEventListener("click", event => {
 });
 
 els.dailyAiPanel?.addEventListener("click", event => {
+  const dashboardAction = event.target.closest("[data-dashboard-action]");
+  if (dashboardAction) {
+    const action = dashboardAction.dataset.dashboardAction;
+    if (action === "followups") {
+      scrollToDashboardPanel(els.salesmanFollowupPanel);
+      return;
+    }
+    if (action === "first-touch") {
+      scrollToDashboardPanel(els.dashboardQuickActions);
+      return;
+    }
+    if (action === "loss-reasons") {
+      scrollToDashboardPanel(els.salesmanLossPromptPanel);
+      return;
+    }
+    if (action === "log-activity") {
+      openQuickLog();
+      return;
+    }
+    if (action === "pipeline") {
+      setView("pipeline");
+      return;
+    }
+  }
   const button = event.target.closest("[data-salesperson-ai-action]");
   if (!button) {
-    if (event.target.closest("#dailyAiSummary")) {
-      runSalespersonAiAction("pipeline_health");
-    }
     return;
   }
   runSalespersonAiAction(button.dataset.salespersonAiAction);

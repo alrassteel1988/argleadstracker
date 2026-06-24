@@ -73,7 +73,7 @@
           <div class="nav-group">
             <span class="nav-group-label">Shortcuts</span>
             <nav class="nav-list" aria-label="Records navigation">
-              <button class="nav-item" type="button" data-quick-view="activity"><span class="nav-item-icon" aria-hidden="true">TS</span><span>Tasks</span></button>
+              <button class="nav-item" data-view="tasks" type="button"><span class="nav-item-icon" aria-hidden="true">TS</span><span>Tasks</span></button>
               <button class="nav-item" type="button" data-quick-view="pipeline"><span class="nav-item-icon" aria-hidden="true">QT</span><span>Quotes</span></button>
               <button class="nav-item" type="button" data-quick-view="pipeline"><span class="nav-item-icon" aria-hidden="true">AC</span><span>Accounts</span></button>
               <button class="nav-item" type="button" id="sidebarSearchPlaces"><span class="nav-item-icon" aria-hidden="true">GP</span><span>Search Places</span></button>
@@ -164,46 +164,36 @@
           <div class="panel dashboard-quick-actions" id="dashboardQuickActions">
             <div class="panel-header">
               <div>
-                <h2>Quick Actions</h2>
-                <span>Open the next workflow without hunting through the CRM.</span>
+                <h2>Needs First Touch</h2>
+                <span>Start with new or newly assigned leads that still need the first contact.</span>
               </div>
             </div>
-            <div class="quick-actions-grid">
-              <button class="quick-action-card" id="dashboardQuickAddLead" type="button">
-                <span class="quick-action-kicker">Lead</span>
-                <strong>Add Lead</strong>
-                <small>Create a new account or opportunity.</small>
-              </button>
-              <button class="quick-action-card" id="dashboardQuickLogActivity" type="button">
-                <span class="quick-action-kicker">Activity</span>
-                <strong>Log Activity</strong>
-                <small>Capture a call, visit, email, or follow-up note.</small>
-              </button>
-              <button class="quick-action-card" id="dashboardQuickPipeline" type="button">
-                <span class="quick-action-kicker">Pipeline</span>
-                <strong>View Pipeline</strong>
-                <small>Jump into live leads, stages, and follow-ups.</small>
-              </button>
-              <button class="quick-action-card hidden" id="dashboardToggleMarketNews" type="button">
-                <span class="quick-action-kicker">Intel</span>
-                <strong>Show Market News</strong>
-                <small>Open fresh industry headlines only when you need them.</small>
-              </button>
-            </div>
+            <div class="salesman-first-touch-list" id="dashboardFirstTouchList"></div>
           </div>
           <div class="panel daily-ai-panel hidden" id="dailyAiPanel">
             <div class="daily-ai-copy">
               <span id="dailyAiGreeting">Good morning</span>
-              <h2>Daily AI briefing</h2>
-              <p>One-tap guidance from your assigned leads, follow-ups, PMRs, and market signals.</p>
+              <h2>Top 3 actions today</h2>
+              <p>Act on the next best moves first. Open the full coaching layer only when you need it.</p>
             </div>
-            <div class="daily-ai-actions">
-              <button class="primary-button" type="button" data-salesperson-ai-action="focus_today">What should I focus on today?</button>
-              <button class="ghost-button" type="button" data-salesperson-ai-action="neglected">Who have I neglected?</button>
-              <button class="ghost-button" type="button" data-salesperson-ai-action="pipeline_health">My pipeline health</button>
-              <button class="ghost-button" type="button" data-salesperson-ai-action="new_intel">New intel</button>
-            </div>
+            <div class="daily-ai-actions" id="dailyAiActions"></div>
             <button class="daily-ai-summary hidden" id="dailyAiSummary" type="button"></button>
+          </div>
+          <div class="panel salesman-loss-prompts-panel hidden" id="salesmanLossPromptPanel">
+            <div class="panel-header">
+              <div>
+                <h2>Loss Reasons Due</h2>
+                <span>Close the loop on lost opportunities that need a reason captured within 3 days.</span>
+              </div>
+            </div>
+            <div class="salesman-loss-prompts-list" id="salesmanLossPromptList"></div>
+          </div>
+          <div class="panel salesman-dashboard-toggle-shell hidden" id="salesmanDashboardToggleShell">
+            <button class="salesman-dashboard-toggle" id="dashboardToggleTools" type="button" aria-expanded="false">
+              <span class="tool-toggle-kicker">Coaching and research</span>
+              <strong>Open extra tools only when needed</strong>
+              <small>Full pipeline, performance, market intel, and the database assistant stay tucked away until you choose to open them.</small>
+            </button>
           </div>
           <div class="panel market-news-panel market-news-container hidden" id="marketNewsPanel">
             <div class="panel-header market-news-header">
@@ -227,8 +217,8 @@
           <div class="panel portfolio-panel hidden" id="portfolioPanel">
             <div class="panel-header portfolio-header">
               <div>
-                <h2>Lead Portfolio Analytics</h2>
-                <span>Territory, stage, and engagement distribution</span>
+                <h2>My Performance</h2>
+                <span>Coaching view for territory, stage, and engagement distribution</span>
               </div>
             </div>
             <div class="portfolio-kpis">
@@ -250,6 +240,46 @@
               <div class="portfolio-legend" id="portfolioLegend"></div>
             </div>
             <div class="portfolio-insights" id="portfolioInsights"></div>
+          </div>
+          <div class="panel salesman-dashboard-tools hidden" id="salesmanDashboardToolsPanel">
+            <div class="panel-header">
+              <div>
+                <h2>More Tools</h2>
+                <span>Open the wider CRM only when you need to explore, coach, or research.</span>
+              </div>
+            </div>
+            <div class="salesman-dashboard-tool-grid">
+              <button class="tool-toggle-button" id="dashboardQuickLogActivity" type="button">
+                <span class="tool-toggle-kicker">Activity</span>
+                <strong>Log activity</strong>
+                <small>Capture a call, visit, email, or follow-up note.</small>
+              </button>
+              <button class="tool-toggle-button" id="dashboardQuickPipeline" type="button">
+                <span class="tool-toggle-kicker">Pipeline</span>
+                <strong>Open full pipeline</strong>
+                <small>Switch to the full list or kanban when you need the whole book.</small>
+              </button>
+              <button class="tool-toggle-button" id="dashboardOpenFullBriefing" type="button">
+                <span class="tool-toggle-kicker">AI Briefing</span>
+                <strong>Open full briefing</strong>
+                <small>Run the deeper coaching layer only on demand.</small>
+              </button>
+              <button class="tool-toggle-button" id="dashboardTogglePerformance" type="button">
+                <span class="tool-toggle-kicker">Coaching</span>
+                <strong>My performance</strong>
+                <small>Reveal conversion, distribution, and portfolio metrics.</small>
+              </button>
+              <button class="tool-toggle-button" id="dashboardToggleMarketNews" type="button">
+                <span class="tool-toggle-kicker">Intel</span>
+                <strong>Market intel and news</strong>
+                <small>Browse headlines and project signals without crowding the default view.</small>
+              </button>
+              <button class="tool-toggle-button" id="dashboardToggleAgent" type="button">
+                <span class="tool-toggle-kicker">Ask</span>
+                <strong>Ask the database</strong>
+                <small>Open the read-only CRM oracle when you have a specific question.</small>
+              </button>
+            </div>
           </div>
           <div class="panel market-intel-panel" id="marketIntelPanel">
             <div class="panel-header">
@@ -605,6 +635,28 @@
             </div>
           </form>
         </dialog>
+
+        <section class="view-panel hidden" id="tasksView">
+          <div class="tasks-dashboard">
+            <section class="panel tasks-shell">
+              <div class="panel-header tasks-header">
+                <div>
+                  <h2 id="tasksViewTitle">Weekly Sales Report</h2>
+                  <span id="tasksViewSubtitle">Capture the week once, at the source, then lock it with an honest digital sign-off.</span>
+                </div>
+                <div class="tasks-header-meta">
+                  <span class="activity-count-pill" id="tasksWeekLabel">Week ending --</span>
+                  <strong class="attention-count" id="tasksStatusBadge">Not started</strong>
+                </div>
+              </div>
+              <div class="tasks-message hidden" id="tasksMessage" aria-live="polite"></div>
+              <div class="tasks-layout">
+                <div class="tasks-primary" id="tasksPrimary"></div>
+                <aside class="tasks-sidebar" id="tasksSidebar"></aside>
+              </div>
+            </section>
+          </div>
+        </section>
 
         <section class="view-panel hidden" id="activityView">
           <div class="activity-dashboard">
