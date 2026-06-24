@@ -337,6 +337,8 @@ const els = {
   salesmenView: document.querySelector("#salesmenView"),
   salesmenGrid: document.querySelector("#salesmenGrid"),
   salesmenSummary: document.querySelector("#salesmenSummary"),
+  salesmenDetailSummary: document.querySelector("#salesmenDetailSummary"),
+  salesmanDetailGroups: document.querySelector("#salesmanDetailGroups"),
   tasksView: document.querySelector("#tasksView"),
   tasksViewTitle: document.querySelector("#tasksViewTitle"),
   tasksViewSubtitle: document.querySelector("#tasksViewSubtitle"),
@@ -7418,6 +7420,8 @@ function renderSalesmenView() {
   if (state.currentUser?.role !== "admin") {
     els.salesmenSummary.textContent = "My workspace";
     els.salesmenGrid.innerHTML = `<p class="empty-copy">Salesman accounts are visible to administrators only.</p>`;
+    if (els.salesmenDetailSummary) els.salesmenDetailSummary.textContent = "0 leads";
+    if (els.salesmanDetailGroups) els.salesmanDetailGroups.innerHTML = "";
     return;
   }
   const salesmen = analyticsSalesmen().filter(person => salesmanName(person) !== "Unassigned");
@@ -7436,7 +7440,7 @@ function renderSalesmenView() {
           <h2>${escapeHtml(name)}</h2>
             <p>${escapeHtml(territory)}</p>
           </div>
-          <button class="ghost-button salesman-open-button" type="button" data-open-salesman-leads="${escapeHtml(name)}">View Leads</button>
+          <button class="ghost-button salesman-open-button" type="button" data-open-salesman-leads="${escapeHtml(name)}">Jump to Leads</button>
         </div>
         <div class="mini-metrics">
           <span><strong>${owned.length}</strong> Companies</span>
@@ -7447,9 +7451,89 @@ function renderSalesmenView() {
       </article>
     `;
   }).join("") || `<p class="empty-copy">No salesman accounts found.</p>`;
+  renderSalesmanLeadDetails(salesmen);
   els.salesmenGrid.querySelectorAll("[data-open-salesman-leads]").forEach(button => {
     button.addEventListener("click", () => {
-      openSalesmanLeadsViewer(button.dataset.openSalesmanLeads);
+      const targetId = `salesman-detail-${actionPlanGroupKey(button.dataset.openSalesmanLeads)}`;
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+function renderSalesmanLeadDetails(salesmen) {
+  if (!els.salesmanDetailGroups || !els.salesmenDetailSummary) return;
+  const roster = Array.isArray(salesmen) ? salesmen : [];
+  const totalLeads = roster.reduce((count, person) => count + state.leads.filter(lead => leadMatchesSalesman(lead, person)).length, 0);
+  els.salesmenDetailSummary.textContent = `${totalLeads} ${totalLeads === 1 ? "lead" : "leads"}`;
+  els.salesmanDetailGroups.innerHTML = roster.map(person => {
+    const name = salesmanName(person);
+    const territory = (typeof person === "string" ? "" : person.territory) || "Territory not set";
+    const leads = state.leads.filter(lead => leadMatchesSalesman(lead, person)).sort(compareLeadRecentFirst);
+    const overdue = leads.filter(isOverdue).length;
+    const value = leads.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
+    const groupId = `salesman-detail-${actionPlanGroupKey(name)}`;
+    return `
+      <article class="salesman-detail-card" id="${escapeHtml(groupId)}" data-salesman-lead-group="${escapeHtml(actionPlanGroupKey(name))}">
+        <div class="salesman-detail-head">
+          <div>
+            <h3>${escapeHtml(name)}</h3>
+            <p>${escapeHtml(territory)} | ${leads.length} ${leads.length === 1 ? "lead" : "leads"} | ${overdue} overdue</p>
+          </div>
+          <div class="salesman-detail-summary-pill">
+            <span><strong>${money.format(value)}</strong> open value</span>
+          </div>
+        </div>
+        ${leads.length ? `
+          <div class="salesman-detail-table-wrap">
+            <table class="salesman-detail-table">
+              <thead>
+                <tr>
+                  <th>Registered</th>
+                  <th>Lead</th>
+                  <th>Stage</th>
+                  <th>Next Action</th>
+                  <th>Due</th>
+                  <th>Last Activity</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${leads.map(lead => {
+                  const plan = leadActionPlanState(lead);
+                  const recent = leadRecentTimestamp(lead);
+                  const recentLabel = recent ? formatDisplayDate(String(recent).slice(0, 10)) : "No activity yet";
+                  const registered = lead.created_at ? formatDisplayDate(String(lead.created_at).slice(0, 10)) : "Not set";
+                  return `
+                    <tr>
+                      <td>${escapeHtml(registered)}</td>
+                      <td>
+                        <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+                        <small>${escapeHtml(lead.location || lead.address || "Location not set")}</small>
+                      </td>
+                      <td><span class="chip ${priorityClass(lead.stage)}">${escapeHtml(lead.stage || "Prospect")}</span></td>
+                      <td>${escapeHtml(plan.action || "No next action")}</td>
+                      <td><span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span></td>
+                      <td>${escapeHtml(recentLabel)}</td>
+                      <td><button class="ghost-button small-action" type="button" data-salesman-detail-lead="${escapeHtml(lead.id)}">Open Lead</button></td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div class="timeline-empty">
+            <strong>No leads found for this salesman.</strong>
+            <span>There are no assigned or generated leads to review yet.</span>
+          </div>
+        `}
+      </article>
+    `;
+  }).join("") || `<p class="empty-copy">No salesman accounts found.</p>`;
+  els.salesmanDetailGroups.querySelectorAll("[data-salesman-detail-lead]").forEach(button => {
+    button.addEventListener("click", () => {
+      openLeadDrawer(button.dataset.salesmanDetailLead, "overview");
+      render();
     });
   });
 }

@@ -6436,6 +6436,11 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   gap: 14px;
 }
 
+.view-panel#salesmenView {
+  display: grid;
+  gap: 16px;
+}
+
 .salesman-card-head {
   display: flex;
   align-items: flex-start;
@@ -6446,6 +6451,110 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .salesman-open-button {
   min-height: 38px;
   white-space: nowrap;
+}
+
+.salesman-detail-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.salesman-detail-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fbfdff;
+  overflow: hidden;
+}
+
+.salesman-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(136, 135, 128, 0.14);
+}
+
+.salesman-detail-head h3 {
+  margin: 0;
+  font-size: var(--text-card);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-heading);
+}
+
+.salesman-detail-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--text-body);
+}
+
+.salesman-detail-summary-pill {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.salesman-detail-summary-pill span {
+  border-radius: 999px;
+  background: #eef3f8;
+  color: var(--muted);
+  font-size: var(--text-label);
+  line-height: var(--leading-label);
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.salesman-detail-summary-pill strong {
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.salesman-detail-table-wrap {
+  overflow-x: auto;
+}
+
+.salesman-detail-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.salesman-detail-table th,
+.salesman-detail-table td {
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(136, 135, 128, 0.12);
+  text-align: left;
+  vertical-align: top;
+}
+
+.salesman-detail-table th {
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.salesman-detail-table td {
+  color: var(--ink);
+  font-size: var(--text-body);
+}
+
+.salesman-detail-table td strong {
+  display: block;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.salesman-detail-table td small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.salesman-detail-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .salesman-leads-dialog {
@@ -9751,6 +9860,15 @@ dialog::backdrop {
     align-items: stretch;
   }
 
+  .salesman-detail-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .salesman-detail-summary-pill {
+    justify-content: flex-start;
+  }
+
   .salesman-leads-summary {
     grid-template-columns: 1fr 1fr;
   }
@@ -11625,6 +11743,10 @@ body,
 
   .salesman-leads-summary {
     padding: 0 14px 14px;
+  }
+
+  .salesman-detail-table {
+    min-width: 720px;
   }
 
   .salesman-leads-list-wrap {

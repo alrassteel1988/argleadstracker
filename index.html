@@ -301,62 +301,6 @@
             </div>
             <div class="needs-attention-list" id="needsAttentionList"></div>
           </div>
-          <div class="panel performance-panel hidden" id="performancePanel">
-            <div class="panel-header performance-header">
-              <div>
-                <h2>Salesman Performance Overview</h2>
-                <span>Lead ownership, activity, and follow-up productivity</span>
-              </div>
-              <label class="performance-filter">
-                <span>Stage</span>
-                <select id="performanceStageFilter">
-                  <option value="all">All Stages</option>
-                </select>
-              </label>
-            </div>
-            <div class="sp-wrap">
-              <p class="sp-section-label">Team leaderboard</p>
-              <div class="sp-leader-grid" id="performanceLeaderboard"></div>
-
-              <div class="sp-card sp-chart-card">
-                <p class="sp-section-label">Team activity comparison</p>
-                <div class="sp-legend" aria-label="Chart legend">
-                  <span class="sp-legend-item"><i style="background:#378ADD"></i>Assigned</span>
-                  <span class="sp-legend-item"><i style="background:#7F77DD"></i>Activities</span>
-                  <span class="sp-legend-item"><i style="background:#BA7517"></i>Follow-ups</span>
-                  <span class="sp-legend-item"><i style="background:#1D9E75"></i>Stage leads</span>
-                </div>
-                <div class="sp-chart-scroll">
-                  <div class="sp-chart-frame">
-                    <canvas id="performanceChart" role="img" aria-label="Grouped bar chart comparing assigned leads, activities, follow-ups, and stage leads per salesman."></canvas>
-                  </div>
-                </div>
-              </div>
-
-              <div class="sp-two-col">
-                <div class="sp-card">
-                  <p class="sp-section-label">Performance heatmap</p>
-                  <table class="sp-hm-table">
-                    <thead>
-                      <tr>
-                        <th>Salesman</th>
-                        <th>Leads</th>
-                        <th>Act.</th>
-                        <th>F-ups</th>
-                        <th>Score</th>
-                      </tr>
-                    </thead>
-                    <tbody id="performanceTable"></tbody>
-                  </table>
-                </div>
-
-                <div class="sp-card">
-                  <p class="sp-section-label">Recent activity</p>
-                  <div class="sp-feed" id="performanceFeed"></div>
-                </div>
-              </div>
-            </div>
-          </div>
           <div class="panel admin-task-panel hidden" id="adminTaskPanel">
             <div class="panel-header">
               <div>
@@ -611,12 +555,78 @@
         </section>
 
         <section class="view-panel hidden" id="salesmenView">
+          <div class="panel performance-panel hidden" id="performancePanel">
+            <div class="panel-header performance-header">
+              <div>
+                <h2>Salesman Performance Overview</h2>
+                <span>Lead ownership, activity, and follow-up productivity</span>
+              </div>
+              <label class="performance-filter">
+                <span>Stage</span>
+                <select id="performanceStageFilter">
+                  <option value="all">All Stages</option>
+                </select>
+              </label>
+            </div>
+            <div class="sp-wrap">
+              <p class="sp-section-label">Team leaderboard</p>
+              <div class="sp-leader-grid" id="performanceLeaderboard"></div>
+
+              <div class="sp-card sp-chart-card">
+                <p class="sp-section-label">Team activity comparison</p>
+                <div class="sp-legend" aria-label="Chart legend">
+                  <span class="sp-legend-item"><i style="background:#378ADD"></i>Assigned</span>
+                  <span class="sp-legend-item"><i style="background:#7F77DD"></i>Activities</span>
+                  <span class="sp-legend-item"><i style="background:#BA7517"></i>Follow-ups</span>
+                  <span class="sp-legend-item"><i style="background:#1D9E75"></i>Stage leads</span>
+                </div>
+                <div class="sp-chart-scroll">
+                  <div class="sp-chart-frame">
+                    <canvas id="performanceChart" role="img" aria-label="Grouped bar chart comparing assigned leads, activities, follow-ups, and stage leads per salesman."></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sp-two-col">
+                <div class="sp-card">
+                  <p class="sp-section-label">Performance heatmap</p>
+                  <table class="sp-hm-table">
+                    <thead>
+                      <tr>
+                        <th>Salesman</th>
+                        <th>Leads</th>
+                        <th>Act.</th>
+                        <th>F-ups</th>
+                        <th>Score</th>
+                      </tr>
+                    </thead>
+                    <tbody id="performanceTable"></tbody>
+                  </table>
+                </div>
+
+                <div class="sp-card">
+                  <p class="sp-section-label">Recent activity</p>
+                  <div class="sp-feed" id="performanceFeed"></div>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="panel">
             <div class="panel-header">
-              <h2>Salesman Performance</h2>
+              <h2>Salesman Lead Summary</h2>
               <span id="salesmenSummary">0 salesmen</span>
             </div>
             <div class="salesmen-grid" id="salesmenGrid"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Leads by Salesman</h2>
+                <span>Detailed lead records grouped by owner</span>
+              </div>
+              <span id="salesmenDetailSummary">0 leads</span>
+            </div>
+            <div class="salesman-detail-groups" id="salesmanDetailGroups"></div>
           </div>
         </section>
 
