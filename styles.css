@@ -7685,6 +7685,266 @@ body.salesman-dashboard-mode .market-news-panel { order: 8; }
 body.salesman-dashboard-mode .market-intel-panel { order: 9; }
 body.salesman-dashboard-mode .agent-panel { order: 10; }
 
+body.salesman-dashboard-mode {
+  --bg: #f5f2ec;
+  --line: #e7e2d8;
+  --shadow-soft: 0 1px 3px rgba(20, 30, 50, 0.06);
+  --shadow-elevated: 0 10px 24px rgba(20, 30, 50, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(210, 178, 121, 0.12), transparent 24%),
+    linear-gradient(180deg, #faf7f1 0%, #f5f2ec 100%);
+}
+
+body.salesman-dashboard-mode .main {
+  background: transparent;
+}
+
+body.salesman-dashboard-mode .metrics article,
+body.salesman-dashboard-mode .daily-ai-panel,
+body.salesman-dashboard-mode .salesman-followup-panel,
+body.salesman-dashboard-mode .dashboard-quick-actions,
+body.salesman-dashboard-mode .salesman-loss-prompts-panel,
+body.salesman-dashboard-mode .salesman-dashboard-toggle-shell,
+body.salesman-dashboard-mode .salesman-dashboard-tools,
+body.salesman-dashboard-mode .portfolio-panel,
+body.salesman-dashboard-mode .market-intel-panel,
+body.salesman-dashboard-mode .agent-panel {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+}
+
+body.salesman-dashboard-mode .dashboard-view,
+body.salesman-dashboard-mode .view-panel,
+body.salesman-dashboard-mode .content-grid {
+  gap: 24px;
+}
+
+body.salesman-dashboard-mode .metrics,
+body.salesman-dashboard-mode .metrics-shell,
+body.salesman-dashboard-mode .dashboard-view,
+body.salesman-dashboard-mode .view-panel {
+  margin-bottom: 0;
+}
+
+body.salesman-dashboard-mode .panel-header > div,
+body.salesman-dashboard-mode .daily-ai-copy {
+  display: grid;
+  gap: 6px;
+}
+
+body.salesman-dashboard-mode .panel-header h2,
+body.salesman-dashboard-mode .daily-ai-copy h2 {
+  order: 1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2vw, 28px);
+  font-weight: 700;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+}
+
+body.salesman-dashboard-mode .panel-header span,
+body.salesman-dashboard-mode .daily-ai-copy span {
+  order: 2;
+  color: #7a6f62;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+body.salesman-dashboard-mode .daily-ai-copy p {
+  order: 3;
+  color: #5c6472;
+  max-width: 44ch;
+  margin: 0;
+}
+
+body.salesman-dashboard-mode .daily-ai-panel,
+body.salesman-dashboard-mode .salesman-followup-panel,
+body.salesman-dashboard-mode .dashboard-quick-actions,
+body.salesman-dashboard-mode .salesman-loss-prompts-panel {
+  box-shadow: 0 1px 3px rgba(20, 30, 50, 0.06);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card,
+body.salesman-dashboard-mode .salesman-first-touch-card,
+body.salesman-dashboard-mode .salesman-loss-card,
+body.salesman-dashboard-mode .tool-toggle-button {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-danger {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.05), rgba(255, 255, 255, 0.98));
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-warm {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), rgba(255, 255, 255, 0.98));
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-info {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.05), rgba(255, 255, 255, 0.98));
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-neutral {
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.05), rgba(255, 255, 255, 0.98));
+}
+
+body.salesman-dashboard-mode .daily-ai-summary {
+  background: rgba(244, 239, 231, 0.9);
+  border: 1px solid var(--line);
+}
+
+body.salesman-dashboard-mode .followup-groups {
+  gap: 18px;
+  padding: 20px 20px 22px;
+}
+
+body.salesman-dashboard-mode .followup-column {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="Overdue Follow-Ups"] {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.04), rgba(255, 255, 255, 0.96) 22%);
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="Tomorrow"] {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.045), rgba(255, 255, 255, 0.96) 22%);
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="This Week"] {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.045), rgba(255, 255, 255, 0.96) 22%);
+}
+
+body.salesman-dashboard-mode .followup-group-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="Overdue Follow-Ups"] .followup-group-header {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="Tomorrow"] .followup-group-header {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="This Week"] .followup-group-header {
+  background: rgba(16, 185, 129, 0.08);
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="Overdue Follow-Ups"] .followup-group-header h3,
+body.salesman-dashboard-mode .followup-column[data-followup-column="Overdue Follow-Ups"] .followup-group-header span {
+  color: #b42318;
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="Tomorrow"] .followup-group-header h3,
+body.salesman-dashboard-mode .followup-column[data-followup-column="Tomorrow"] .followup-group-header span {
+  color: #b45309;
+}
+
+body.salesman-dashboard-mode .followup-column[data-followup-column="This Week"] .followup-group-header h3,
+body.salesman-dashboard-mode .followup-column[data-followup-column="This Week"] .followup-group-header span {
+  color: #047857;
+}
+
+body.salesman-dashboard-mode .followup-group-header span {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+body.salesman-dashboard-mode .followup-column-body {
+  gap: 14px;
+  padding: 16px;
+  padding-right: 16px;
+}
+
+body.salesman-dashboard-mode .followup-column-section {
+  gap: 10px;
+}
+
+body.salesman-dashboard-mode .followup-subheading {
+  color: #6b7280;
+}
+
+body.salesman-dashboard-mode .followup-card {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(20, 30, 50, 0.04);
+}
+
+body.salesman-dashboard-mode .followup-main {
+  gap: 8px;
+  padding: 15px 16px 12px;
+}
+
+body.salesman-dashboard-mode .followup-main p {
+  color: #5f6877;
+}
+
+body.salesman-dashboard-mode .followup-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--line);
+  background: rgba(245, 242, 236, 0.72);
+}
+
+body.salesman-dashboard-mode .followup-actions .small-action {
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px 12px;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+body.salesman-dashboard-mode .followup-actions .small-action[data-followup-complete] {
+  background: #16233a;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(20, 30, 50, 0.10);
+}
+
+body.salesman-dashboard-mode .followup-actions .small-action[data-followup-complete]:hover {
+  background: #0f1a2b;
+}
+
+body.salesman-dashboard-mode .followup-actions .small-action[data-followup-open] {
+  background: #edf3fb;
+  border-color: #d6deea;
+  color: #16233a;
+}
+
+body.salesman-dashboard-mode .followup-actions .small-action[data-followup-open]:hover {
+  background: #e3ebf6;
+}
+
+body.salesman-dashboard-mode .followup-actions .small-action[data-followup-reschedule],
+body.salesman-dashboard-mode .followup-actions .small-action[data-followup-note] {
+  background: transparent;
+  border-color: rgba(231, 226, 216, 0.92);
+  color: #5e6775;
+}
+
+body.salesman-dashboard-mode .followup-actions .small-action[data-followup-reschedule]:hover,
+body.salesman-dashboard-mode .followup-actions .small-action[data-followup-note]:hover {
+  background: rgba(248, 244, 238, 0.96);
+  color: #172033;
+}
+
 body.salesman-dashboard-mode .metrics span,
 body.salesman-dashboard-mode .panel-header span,
 body.salesman-dashboard-mode .meta-label,
