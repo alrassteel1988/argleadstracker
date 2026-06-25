@@ -11162,6 +11162,14 @@ body,
   display: grid;
   grid-template-columns: minmax(0, 1fr) 220px;
   gap: 14px;
+  padding: 4px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(226, 240, 252, 0.62), transparent 34%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.98), rgba(238, 246, 252, 0.86));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 18px 38px rgba(15, 23, 42, 0.08);
 }
 
 .activity-main-column,
@@ -11178,31 +11186,36 @@ body,
 }
 
 .activity-kpi-card {
-  border: 1px solid rgba(180, 215, 235, 0.55);
+  border: 1px solid rgba(167, 196, 221, 0.78);
   border-radius: 14px;
-  background: rgba(232, 246, 255, 0.65);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 8px 24px rgba(30, 80, 120, 0.08);
-  padding: 12px 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(231, 243, 252, 0.8));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 14px 28px rgba(30, 80, 120, 0.12);
+  padding: 14px 16px;
 }
 
 .activity-kpi-card span,
 .activity-kpi-card small {
   display: block;
-  color: #64748b;
-  font-size: 10px;
-  line-height: 1.35;
+  color: #56677d;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
   text-transform: none;
 }
 
 .activity-kpi-card strong {
   display: block;
-  margin: 5px 0 4px;
-  color: #0f172a;
-  font-size: 20px;
-  font-weight: 600;
+  margin: 6px 0 5px;
+  color: #102033;
+  font-size: 24px;
+  font-weight: 700;
   line-height: 1.1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 
 .activity-kpi-card strong.is-overdue {
@@ -11215,44 +11228,53 @@ body,
 
 .activity-card,
 .activity-side-panel {
-  border: 1px solid #dce3ea;
-  border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(171, 195, 217, 0.82);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(242, 248, 253, 0.82));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 18px 34px rgba(15, 23, 42, 0.09);
 }
 
 .activity-card-header {
   align-items: center;
-  padding: 12px 14px;
-  border-bottom: 1px solid #dce3ea;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.9));
-  border-top-left-radius: 14px;
-  border-top-right-radius: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(176, 197, 217, 0.72);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(233, 243, 251, 0.78));
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
   margin-bottom: 0;
 }
 
 .activity-card-header h2,
 .activity-side-panel h2 {
-  font-size: 12px;
-  font-weight: 600;
-  color: #0f172a;
+  font-size: 16px;
+  font-weight: 700;
+  color: #102033;
+  letter-spacing: 0.01em;
 }
 
 .activity-card-header span,
 .activity-side-panel .compact-header span {
-  color: #64748b;
-  font-size: 10px;
-  line-height: 1.35;
+  color: #5a6d81;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
   text-transform: none;
 }
 
 .activity-count-pill {
   margin: 0;
-  background: #f3f8fc;
-  color: #475569;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 4px 8px;
+  background: rgba(237, 245, 251, 0.92);
+  color: #425469;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border: 1px solid rgba(178, 200, 220, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
 }
 
 .calendar-toolbar {
@@ -11264,33 +11286,34 @@ body,
 .calendar-nav-button {
   width: 28px;
   height: 28px;
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  border: 1px solid rgba(177, 196, 214, 0.9);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 249, 255, 0.92));
-  color: #475569;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(225, 238, 249, 0.92));
+  color: #34465b;
   font-size: 16px;
   line-height: 1;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
 .calendar-range-pill {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  border: 1px solid rgba(177, 196, 214, 0.9);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 249, 255, 0.88));
-  color: #6b7280;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 0 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(227, 239, 249, 0.88));
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .activity-weekly-log {
   gap: 10px;
-  padding: 12px 14px 14px;
+  padding: 14px 16px 16px;
   border-bottom: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(249, 252, 255, 0.92));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 248, 253, 0.9));
 }
 
 .weekly-log-header {
@@ -11301,9 +11324,9 @@ body,
   display: inline-flex;
   flex-wrap: wrap;
   gap: 12px;
-  color: #6b7280;
-  font-size: 10px;
-  font-weight: 500;
+  color: #506276;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .calendar-legend span {
@@ -11331,10 +11354,13 @@ body,
   grid-template-columns: 36px repeat(7, minmax(90px, 1fr));
   grid-auto-rows: 42px;
   min-width: 720px;
-  border: 1px solid #dce3ea;
-  border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(176, 197, 217, 0.84);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 253, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 16px 32px rgba(15, 23, 42, 0.08);
 }
 
 .calendar-corner-spacer {
@@ -11344,15 +11370,15 @@ body,
 
 .calendar-day-head {
   gap: 2px;
-  border-left: 1px solid #cbd5e1;
-  border-bottom: 1px solid #cbd5e1;
-  background: linear-gradient(180deg, rgba(240, 249, 255, 0.85), rgba(229, 244, 255, 0.55));
+  border-left: 1px solid #c6d5e3;
+  border-bottom: 1px solid #c6d5e3;
+  background: linear-gradient(180deg, rgba(237, 247, 255, 0.96), rgba(223, 239, 251, 0.78));
 }
 
 .calendar-day-head strong {
-  color: #4b5563;
-  font-size: 10px;
-  font-weight: 600;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .calendar-day-head span {
@@ -11360,9 +11386,9 @@ body,
   height: auto;
   border: 0;
   border-radius: 0;
-  color: #1f2937;
-  font-size: 11px;
-  font-weight: 600;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .calendar-day-head.today {
@@ -11376,9 +11402,9 @@ body,
 
 .calendar-time {
   padding-left: 8px;
-  color: #6b7280;
-  font-size: 10px;
-  font-weight: 500;
+  color: #596b80;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .calendar-slot {
@@ -11390,17 +11416,17 @@ body,
   min-height: 24px;
   width: calc(100% - 6px);
   transform: translateY(calc(var(--event-offset, 0) * 8px - 6px));
-  border-left-width: 2px;
-  border-radius: 0;
-  background: #f3f4f6;
-  box-shadow: none;
-  color: #374151;
-  padding: 2px 5px;
+  border-left-width: 3px;
+  border-radius: 0 10px 10px 0;
+  background: rgba(241, 245, 249, 0.96);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  color: #243447;
+  padding: 4px 6px;
 }
 
 .calendar-event span {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .calendar-event.activity-reminder {
@@ -11423,9 +11449,9 @@ body,
 
 .activity-filter-shell {
   gap: 10px;
-  border-bottom: 0.5px solid var(--color-border);
-  background: #fafcfd;
-  padding: 12px 14px;
+  border-bottom: 1px solid rgba(176, 197, 217, 0.72);
+  background: linear-gradient(180deg, rgba(250, 252, 254, 0.98), rgba(242, 247, 251, 0.86));
+  padding: 14px 16px;
 }
 
 .activity-filter-bar {
@@ -11465,9 +11491,9 @@ body,
 
 .activity-filter-bar span,
 .activity-results-summary {
-  color: var(--color-text-tertiary);
-  font-size: 10px;
-  font-weight: 500;
+  color: #596b80;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: none;
 }
 
@@ -11478,13 +11504,14 @@ body,
 .date-preset,
 .type-pill {
   min-height: 28px;
-  border: 0.5px solid var(--color-border);
+  border: 1px solid rgba(186, 202, 218, 0.84);
   border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 10px;
-  font-weight: 400;
+  background: rgba(255, 255, 255, 0.72);
+  color: #43566b;
+  font-size: 11px;
+  font-weight: 600;
   padding: 5px 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .date-preset.active,
@@ -11513,7 +11540,7 @@ body,
 
 .activity-feed {
   gap: 0;
-  padding: 6px 14px 14px;
+  padding: 10px 16px 16px;
 }
 
 .timeline-day {
@@ -11522,9 +11549,9 @@ body,
 
 .timeline-divider {
   margin-top: 10px;
-  color: var(--color-text-tertiary);
-  font-size: 10px;
-  font-weight: 500;
+  color: #56677d;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: none;
 }
 
@@ -11533,16 +11560,19 @@ body,
 }
 
 .activity-feed-item {
-  border: 0;
-  border-bottom: 0.5px solid var(--color-border);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  padding: 9px 0;
+  border: 1px solid rgba(178, 198, 218, 0.66);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(243, 248, 252, 0.84));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 10px 22px rgba(15, 23, 42, 0.06);
+  padding: 12px 12px 10px;
+  margin-bottom: 10px;
 }
 
 .activity-feed-item:last-child {
-  border-bottom: 0;
+  margin-bottom: 0;
 }
 
 .activity-feed-head {
@@ -11558,10 +11588,11 @@ body,
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  background: #f0f4f7;
-  color: var(--color-text-secondary);
+  background: rgba(236, 243, 249, 0.94);
+  color: #3d5368;
   font-size: 13px;
   font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
 }
 
 .timeline-card.activity-reminder .activity-type-icon {
@@ -11587,16 +11618,18 @@ body,
 }
 
 .activity-feed-item strong {
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.3;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #102033;
 }
 
 .activity-feed-item p {
   margin: 0;
-  color: var(--color-text-secondary);
-  font-size: 10px;
-  line-height: 1.4;
+  color: #4d6177;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .activity-note.clamp {
@@ -11610,6 +11643,8 @@ body,
   gap: 8px 10px;
   margin-top: 8px;
   padding-left: 35px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(191, 206, 220, 0.66);
 }
 
 .activity-footer-actions {
@@ -11620,10 +11655,11 @@ body,
 
 .activity-footer-actions .small-action {
   min-height: 24px;
-  border: 0.5px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 10px;
+  border: 1px solid rgba(182, 199, 214, 0.84);
+  background: rgba(255, 255, 255, 0.74);
+  color: #43566b;
+  font-size: 11px;
+  font-weight: 700;
   padding: 4px 7px;
 }
 
@@ -11637,11 +11673,11 @@ body,
 
 .activity-feed-item .chip {
   border-radius: 3px;
-  background: #f5f5f5;
-  color: var(--color-text-secondary);
-  font-size: 10px;
-  font-weight: 500;
-  padding: 1px 6px;
+  background: rgba(236, 243, 249, 0.96);
+  color: #405367;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
 }
 
 .chip.plan-upcoming,
@@ -11664,16 +11700,16 @@ body,
 }
 
 .activity-side-panel {
-  padding: 12px;
+  padding: 14px;
 }
 
 .activity-side-panel .compact-header {
-  margin: -12px -12px 10px;
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid #dce3ea;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.9));
-  border-top-left-radius: 14px;
-  border-top-right-radius: 14px;
+  margin: -14px -14px 12px;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid rgba(176, 197, 217, 0.72);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(233, 243, 251, 0.78));
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
 }
 
 .reminder-stack {
@@ -11689,8 +11725,8 @@ body,
 }
 
 .reminder-stack-header span {
-  color: var(--color-text-tertiary);
-  font-size: 10px;
+  color: #596b80;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -11702,12 +11738,13 @@ body,
   justify-content: center;
   min-height: 20px;
   border-radius: 999px;
-  background: #f3f5f7;
-  color: var(--color-text-secondary);
-  font-size: 10px;
+  background: rgba(238, 244, 249, 0.94);
+  color: #425469;
+  font-size: 11px;
   font-style: normal;
-  font-weight: 500;
-  padding: 0 7px;
+  font-weight: 700;
+  padding: 0 9px;
+  border: 1px solid rgba(181, 199, 217, 0.74);
 }
 
 .count-chip.warning {
@@ -11727,11 +11764,14 @@ body,
 
 .reminder-card {
   align-items: center;
-  border: 0.5px solid var(--color-border);
-  border-left-width: 2px;
-  border-radius: 0 8px 8px 0;
-  background: #fbfdff;
-  padding: 8px 9px;
+  border: 1px solid rgba(178, 198, 218, 0.68);
+  border-left-width: 4px;
+  border-radius: 0 12px 12px 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 249, 253, 0.84));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 10px 20px rgba(15, 23, 42, 0.06);
+  padding: 10px 11px;
 }
 
 .reminder-card.upcoming {
@@ -11746,22 +11786,25 @@ body,
 
 .reminder-card strong {
   margin-top: 0;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 700;
+  color: #102033;
 }
 
 .reminder-card p {
   margin-top: 2px;
-  color: var(--color-text-secondary);
-  font-size: 10px;
-  line-height: 1.35;
+  color: #4d6177;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .reminder-card .meta-label {
   display: block;
   margin-top: 4px;
-  color: var(--color-text-tertiary);
-  font-size: 10px;
+  color: #627489;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .calendar-link.icon-only {
@@ -11795,10 +11838,11 @@ body,
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  border: 0.5px solid var(--color-border);
-  border-radius: 8px;
-  background: #fff;
-  padding: 7px 9px;
+  border: 1px solid rgba(181, 198, 216, 0.74);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(240, 246, 251, 0.82));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
+  padding: 9px 10px;
   text-align: left;
 }
 
@@ -11819,9 +11863,9 @@ body,
 }
 
 .activity-quick-link-copy strong {
-  color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 500;
+  color: #1f3146;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .activity-mode .metrics {
