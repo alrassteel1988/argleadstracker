@@ -1381,6 +1381,11 @@ function recorderMimeType() {
 }
 
 async function toggleVoiceRecording({ button, status, target }) {
+  const idleLabel = button?.dataset?.idleLabel || button?.textContent || "Record Voice Note";
+  const stopLabel = button?.dataset?.stopLabel || "Stop Recording";
+  const listeningLabel = button?.dataset?.listeningLabel || "Recording voice note...";
+  const transcribingLabel = button?.dataset?.transcribingLabel || "Converting voice note to English text...";
+  const successLabel = button?.dataset?.successLabel || "English transcript added. You can edit it before saving.";
   if (activeRecorder) {
     if (activeRecorder.button !== button) {
       status.textContent = "Finish the current voice note first.";
@@ -1402,9 +1407,9 @@ async function toggleVoiceRecording({ button, status, target }) {
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     const timeout = setTimeout(() => recorder.state === "recording" && recorder.stop(), 120_000);
     activeRecorder = { recorder, stream, chunks, button, status, target, timeout };
-    button.textContent = "Stop Recording";
+    button.textContent = stopLabel;
     button.classList.add("recording");
-    status.textContent = "Recording voice note...";
+    status.textContent = listeningLabel;
 
     recorder.addEventListener("dataavailable", event => {
       if (event.data.size) chunks.push(event.data);
@@ -1414,15 +1419,15 @@ async function toggleVoiceRecording({ button, status, target }) {
       activeRecorder = null;
       clearTimeout(current.timeout);
       current.stream.getTracks().forEach(track => track.stop());
-      current.button.textContent = "Record Voice Note";
+      current.button.textContent = idleLabel;
       current.button.classList.remove("recording");
-      current.status.textContent = "Converting voice note to English text...";
+      current.status.textContent = transcribingLabel;
       try {
         const transcript = await transcribeRecording(new Blob(current.chunks, { type: recorder.mimeType || "audio/webm" }));
         if (!transcript) throw new Error("No speech was detected. Please record again.");
         current.target.value = [current.target.value.trim(), transcript].filter(Boolean).join(current.target.value.trim() ? "\n" : "");
         current.target.dispatchEvent(new Event("input", { bubbles: true }));
-        current.status.textContent = "English transcript added. You can edit it before saving.";
+        current.status.textContent = successLabel;
       } catch (error) {
         current.status.textContent = error.message;
       }
@@ -8711,7 +8716,7 @@ function renderWeeklySalesmanView() {
 
   const expectedMarkup = (report.expected_orders || []).length
     ? report.expected_orders.map((item, index) => `
-      <article class="tasks-row-card">
+      <article class="tasks-row-card tasks-expected-order-card">
         <div class="tasks-row-head">
           <div>
             <strong>${escapeHtml(item.account_name || "Unnamed account")}</strong>
@@ -8734,8 +8739,22 @@ function renderWeeklySalesmanView() {
           </label>
           <label class="tasks-full-span">
             <span>What could stop it?</span>
-            <textarea rows="3" data-weekly-field="expected_orders.${index}.blockers" placeholder="If this is a good chance, name the blocker or next dependency.">${escapeHtml(item.blockers || "")}</textarea>
+            <textarea rows="3" id="weeklyExpectedBlockers${index}" data-weekly-field="expected_orders.${index}.blockers" placeholder="If this is a good chance, name the blocker or next dependency.">${escapeHtml(item.blockers || "")}</textarea>
           </label>
+          <div class="tasks-voice-row tasks-full-span">
+            <button
+              class="ghost-button tasks-voice-button"
+              type="button"
+              data-weekly-voice-button
+              data-voice-target="weeklyExpectedBlockers${index}"
+              data-idle-label="Voice Note"
+              data-stop-label="Stop"
+              data-listening-label="Listening..."
+              data-transcribing-label="Transcribing..."
+              data-success-label="Transcript added below. Review before saving."
+            >Voice Note</button>
+            <span class="tasks-voice-status" data-weekly-voice-status>Append a blocker note by voice. Your transcript will be added to the field above.</span>
+          </div>
         </div>
       </article>
     `).join("")
@@ -9175,7 +9194,7 @@ function bindWeeklySalesmanEvents() {
   const report = state.weeklyReports.current?.report || {};
   const locked = weeklyReportIsLocked(report.status);
   if (locked) {
-    els.tasksPrimary.querySelectorAll("[data-weekly-field], [data-weekly-array-toggle]").forEach(field => {
+    els.tasksPrimary.querySelectorAll("[data-weekly-field], [data-weekly-array-toggle], [data-weekly-voice-button]").forEach(field => {
       field.disabled = true;
     });
     return;
@@ -9201,6 +9220,16 @@ function bindWeeklySalesmanEvents() {
         : current.filter(item => item !== value);
       weeklySetValue(state.weeklyReports.current.report, path, next);
       renderTasksView();
+    });
+  });
+
+  els.tasksPrimary.querySelectorAll("[data-weekly-voice-button]").forEach(button => {
+    button.addEventListener("click", () => {
+      const targetId = button.dataset.voiceTarget;
+      const target = targetId ? els.tasksPrimary.querySelector(`#${targetId}`) : null;
+      const status = button.parentElement?.querySelector("[data-weekly-voice-status]");
+      if (!(target instanceof HTMLTextAreaElement) || !(status instanceof HTMLElement)) return;
+      toggleVoiceRecording({ button, status, target });
     });
   });
 
@@ -9689,6 +9718,7 @@ function applyView() {
   document.body.classList.toggle("activity-mode", isActivity);
   document.body.classList.toggle("pipeline-compact-mode", isPipeline);
   document.body.classList.toggle("salesman-dashboard-mode", Boolean(isDashboard && state.currentUser?.role !== "admin"));
+  document.body.classList.toggle("admin-dashboard-mode", Boolean(isDashboard && state.currentUser?.role === "admin"));
   document.body.classList.toggle("tasks-mode", isTasks);
 }
 

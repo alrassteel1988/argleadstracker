@@ -5957,6 +5957,12 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .tasks-shell {
   display: grid;
   gap: 16px;
+  padding: 4px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(243, 248, 255, 0.62)),
+    rgba(240, 246, 255, 0.56);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 .tasks-header {
@@ -5974,11 +5980,12 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .tasks-message {
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #f8fafc;
-  color: var(--muted);
+  background: rgba(255, 255, 255, 0.88);
+  color: #475569;
   padding: 12px 14px;
   font-size: var(--text-label);
   font-weight: var(--weight-medium);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
 }
 
 .tasks-message.success {
@@ -6014,17 +6021,25 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .tasks-status-card,
 .tasks-actions-card,
 .tasks-review-card {
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: #fbfdff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(214, 224, 238, 0.92);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(246, 250, 255, 0.82)),
+    rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 18px 36px rgba(15, 23, 42, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.7) inset;
   min-width: 0;
 }
 
 .tasks-section-card.warning,
 .tasks-row-card.is-flagged {
-  border-color: rgba(245, 158, 11, 0.32);
-  background: rgba(255, 247, 223, 0.62);
+  border-color: rgba(245, 158, 11, 0.34);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 244, 0.98), rgba(255, 247, 223, 0.8)),
+    rgba(255, 247, 223, 0.7);
 }
 
 .tasks-section-head {
@@ -6032,15 +6047,15 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px 18px 0;
+  padding: 20px 20px 0;
 }
 
 .tasks-section-head h3,
 .tasks-status-card strong,
 .tasks-review-card strong {
   margin: 0;
-  color: var(--ink);
-  font-size: 18px;
+  color: #111827;
+  font-size: 24px;
   font-weight: var(--weight-bold);
   line-height: 1.2;
 }
@@ -6052,15 +6067,15 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .tasks-review-block p,
 .tasks-status-notes span {
   margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.55;
+  color: #55657a;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .tasks-section-body,
 .tasks-status-card,
 .tasks-actions-card {
-  padding: 18px;
+  padding: 20px;
 }
 
 .tasks-status-card {
@@ -6069,10 +6084,10 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 }
 
 .tasks-kicker {
-  color: var(--muted);
+  color: #7b8aa0;
   font-size: 11px;
   font-weight: var(--weight-semibold);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
@@ -6112,9 +6127,9 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   display: grid;
   gap: 8px;
   border: 1px solid rgba(59, 130, 246, 0.18);
-  border-radius: 14px;
-  background: rgba(59, 130, 246, 0.06);
-  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.92), rgba(226, 239, 255, 0.72));
+  padding: 16px;
 }
 
 .tasks-lock-banner strong {
@@ -6133,19 +6148,40 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .tasks-row-card {
   display: grid;
   gap: 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #fff;
-  padding: 14px;
+  border: 1px solid rgba(214, 224, 238, 0.98);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.9)),
+    rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 14px 26px rgba(15, 23, 42, 0.05),
+    0 1px 0 rgba(255, 255, 255, 0.65) inset;
+  padding: 16px;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.tasks-row-card:hover,
+.tasks-row-card:focus-within {
+  transform: translateY(-1px);
+  border-color: rgba(59, 130, 246, 0.22);
+  box-shadow:
+    0 18px 32px rgba(15, 23, 42, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
 }
 
 .tasks-row-head strong,
 .tasks-review-block strong {
   display: block;
-  color: var(--ink);
-  font-size: 15px;
+  color: #182235;
+  font-size: 17px;
   font-weight: var(--weight-bold);
   line-height: 1.35;
+}
+
+.tasks-row-head p {
+  color: #48586d;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .tasks-inline-grid {
@@ -6189,7 +6225,7 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .tasks-review-block label {
   display: grid;
   gap: 6px;
-  color: var(--muted);
+  color: #42536a;
   font-size: 12px;
   font-weight: var(--weight-semibold);
   line-height: 1.35;
@@ -6214,6 +6250,19 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .tasks-review-block textarea {
   width: 100%;
   min-width: 0;
+  border: 1px solid rgba(199, 210, 224, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  color: #172033;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+.tasks-inline-grid textarea::placeholder,
+.tasks-inline-grid input::placeholder,
+.tasks-section-body textarea::placeholder,
+.tasks-section-body input::placeholder,
+.tasks-review-block textarea::placeholder {
+  color: #7b8ba1;
+  opacity: 1;
 }
 
 .tasks-checkbox-grid {
@@ -6240,7 +6289,7 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 
 .tasks-muted-line,
 .muted-field {
-  color: var(--muted);
+  color: #64748b;
 }
 
 .tasks-checklist {
@@ -6300,9 +6349,9 @@ body.pipeline-compact-mode .detail-panel .empty-state {
 .tasks-audit-item {
   display: grid;
   gap: 4px;
-  border: 1px solid rgba(136, 135, 128, 0.12);
-  border-radius: 12px;
-  background: #fff;
+  border: 1px solid rgba(214, 224, 238, 0.88);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
   padding: 12px;
 }
 
@@ -6325,6 +6374,48 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   gap: 8px;
   padding: 14px;
   text-align: left;
+}
+
+.tasks-expected-order-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.tasks-expected-order-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 18px 0 0 18px;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.9), rgba(16, 185, 129, 0.85));
+}
+
+.tasks-voice-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid rgba(214, 224, 238, 0.9);
+}
+
+.tasks-voice-button {
+  min-height: 40px;
+  border-color: rgba(59, 130, 246, 0.22);
+  color: #1d4ed8;
+  background: rgba(239, 246, 255, 0.9);
+}
+
+.tasks-voice-button.recording {
+  color: #ffffff;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: transparent;
+}
+
+.tasks-voice-status {
+  color: #5f6f84;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .tasks-review-card.active {
@@ -7680,6 +7771,31 @@ body.salesman-dashboard-mode .market-news-panel { order: 8; }
 body.salesman-dashboard-mode .market-intel-panel { order: 9; }
 body.salesman-dashboard-mode .agent-panel { order: 10; }
 
+body.pipeline-compact-mode {
+  --bg: #f5f2ec;
+  --line: #e7e2d8;
+  --shadow-soft: 0 1px 3px rgba(20, 30, 50, 0.06);
+  --shadow-elevated: 0 12px 28px rgba(20, 30, 50, 0.08);
+  --pipeline-surface: rgba(255, 255, 255, 0.84);
+  --pipeline-surface-strong: rgba(255, 255, 255, 0.92);
+  --pipeline-surface-soft: rgba(250, 248, 244, 0.8);
+  --pipeline-glass-stroke: rgba(231, 226, 216, 0.92);
+  --pipeline-shadow:
+    0 16px 34px rgba(20, 30, 50, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
+  --pipeline-shadow-soft:
+    0 10px 20px rgba(20, 30, 50, 0.05),
+    0 1px 0 rgba(255, 255, 255, 0.62) inset;
+  --pipeline-ink: #162132;
+  --pipeline-copy: #324052;
+  --pipeline-muted: #5d6a7b;
+  --pipeline-kicker: #7a6f62;
+  background:
+    radial-gradient(circle at top left, rgba(210, 178, 121, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 26%),
+    linear-gradient(180deg, #faf7f1 0%, #f5f2ec 100%);
+}
+
 body.salesman-dashboard-mode {
   --bg: #f5f2ec;
   --line: #e7e2d8;
@@ -7707,6 +7823,137 @@ body.salesman-dashboard-mode {
 
 body.salesman-dashboard-mode .main {
   background: transparent;
+}
+
+body.pipeline-compact-mode .main {
+  background: transparent;
+}
+
+body.pipeline-compact-mode .metrics article,
+body.pipeline-compact-mode #pipelineFunnelPanel,
+body.pipeline-compact-mode #pipelineToolbar,
+body.pipeline-compact-mode #pipelineListPanel,
+body.pipeline-compact-mode #kanbanPanel,
+body.pipeline-compact-mode #detailPanel {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, var(--pipeline-surface-strong) 0%, var(--pipeline-surface) 100%);
+  border: 1px solid var(--pipeline-glass-stroke);
+  box-shadow: var(--pipeline-shadow);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+body.pipeline-compact-mode .metrics article::before,
+body.pipeline-compact-mode #pipelineFunnelPanel::before,
+body.pipeline-compact-mode #pipelineToolbar::before,
+body.pipeline-compact-mode #pipelineListPanel::before,
+body.pipeline-compact-mode #kanbanPanel::before,
+body.pipeline-compact-mode #detailPanel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.54), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.04) 40%);
+  opacity: 0.9;
+}
+
+body.pipeline-compact-mode .panel-header > div,
+body.pipeline-compact-mode .pipeline-funnel-copy,
+body.pipeline-compact-mode .pipeline-funnel-table-head,
+body.pipeline-compact-mode .pipeline-funnel-chart-head,
+body.pipeline-compact-mode .lead-list-head,
+body.pipeline-compact-mode .toolbar {
+  position: relative;
+  z-index: 1;
+}
+
+body.pipeline-compact-mode .metrics article,
+body.pipeline-compact-mode .panel,
+body.pipeline-compact-mode .toolbar,
+body.pipeline-compact-mode .lead-card,
+body.pipeline-compact-mode .kanban-card,
+body.pipeline-compact-mode .next-action-block {
+  color: var(--pipeline-copy);
+}
+
+body.pipeline-compact-mode .panel-header h2,
+body.pipeline-compact-mode .pipeline-funnel-copy h3,
+body.pipeline-compact-mode .pipeline-funnel-table-head h3,
+body.pipeline-compact-mode .pipeline-funnel-chart-head h3,
+body.pipeline-compact-mode .lead-list-head h2,
+body.pipeline-compact-mode .detail-panel h2,
+body.pipeline-compact-mode .lead-title strong,
+body.pipeline-compact-mode .kanban-card-title strong {
+  color: var(--pipeline-ink);
+}
+
+body.pipeline-compact-mode .panel-header span,
+body.pipeline-compact-mode .metrics span,
+body.pipeline-compact-mode .meta-label,
+body.pipeline-compact-mode .pipeline-funnel-copy span,
+body.pipeline-compact-mode .pipeline-funnel-table-head span,
+body.pipeline-compact-mode .pipeline-funnel-chart-head span,
+body.pipeline-compact-mode .lead-list-head span,
+body.pipeline-compact-mode .toolbar span {
+  color: var(--pipeline-kicker);
+  opacity: 1;
+}
+
+body.pipeline-compact-mode .metrics strong,
+body.pipeline-compact-mode .pipeline-funnel-stage strong,
+body.pipeline-compact-mode .pipeline-funnel-chart-meta strong,
+body.pipeline-compact-mode .pipeline-funnel-table td,
+body.pipeline-compact-mode .detail-panel strong {
+  color: var(--pipeline-ink);
+}
+
+body.pipeline-compact-mode .metric-sub,
+body.pipeline-compact-mode .pipeline-funnel-table th,
+body.pipeline-compact-mode .pipeline-funnel-table td small,
+body.pipeline-compact-mode .lead-meta,
+body.pipeline-compact-mode .next-action-meta,
+body.pipeline-compact-mode .kanban-card-meta,
+body.pipeline-compact-mode .detail-panel p,
+body.pipeline-compact-mode .empty-copy,
+body.pipeline-compact-mode .smart-search-results small {
+  color: var(--pipeline-copy);
+}
+
+body.pipeline-compact-mode .pipeline-funnel-summary-card,
+body.pipeline-compact-mode .pipeline-funnel-table-card,
+body.pipeline-compact-mode .pipeline-funnel-chart-card,
+body.pipeline-compact-mode .kanban-column,
+body.pipeline-compact-mode .lead-card,
+body.pipeline-compact-mode .next-action-block {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(252, 249, 244, 0.9));
+  border: 1px solid rgba(231, 226, 216, 0.96);
+  box-shadow: var(--pipeline-shadow-soft);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+body.pipeline-compact-mode .kanban-column-header {
+  background: linear-gradient(180deg, rgba(248, 245, 239, 0.92), rgba(241, 236, 227, 0.86));
+  border-bottom: 1px solid rgba(231, 226, 216, 0.9);
+}
+
+body.pipeline-compact-mode .chip,
+body.pipeline-compact-mode .stage-badge,
+body.pipeline-compact-mode .count-chip,
+body.pipeline-compact-mode .tag {
+  color: #223246;
+}
+
+body.pipeline-compact-mode .toggle-button,
+body.pipeline-compact-mode .ghost-button,
+body.pipeline-compact-mode .primary-button,
+body.pipeline-compact-mode .small-action {
+  box-shadow: 0 8px 16px rgba(20, 30, 50, 0.06);
 }
 
 body.salesman-dashboard-mode .metrics article,
@@ -9506,6 +9753,217 @@ dialog::backdrop {
 
 .import-dialog {
   width: min(980px, calc(100vw - 24px));
+}
+
+@media (min-width: 1280px) {
+  body.admin-dashboard-mode {
+    --text-page: 21px;
+    --text-section: 17px;
+    --text-card: 15px;
+    --text-body: 13px;
+    --text-label: 11px;
+    --text-badge: 10px;
+    --text-button: 13px;
+  }
+
+  body.admin-dashboard-mode .main {
+    padding: 16px;
+  }
+
+  body.admin-dashboard-mode .topbar,
+  body.admin-dashboard-mode .overdue-banner,
+  body.admin-dashboard-mode .metrics-shell,
+  body.admin-dashboard-mode .dashboard-view,
+  body.admin-dashboard-mode .view-panel {
+    margin-bottom: 10px;
+  }
+
+  body.admin-dashboard-mode .topbar {
+    gap: 10px;
+  }
+
+  body.admin-dashboard-mode .topbar-actions {
+    gap: 6px;
+  }
+
+  body.admin-dashboard-mode .smart-search-shell {
+    flex-basis: 300px;
+    max-width: 440px;
+  }
+
+  body.admin-dashboard-mode .smart-search-field {
+    min-height: 38px;
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  body.admin-dashboard-mode .smart-search-field input {
+    padding: 9px 0;
+  }
+
+  body.admin-dashboard-mode .topbar .ghost-button,
+  body.admin-dashboard-mode .topbar .primary-button {
+    min-height: 38px;
+    padding: 9px 14px;
+  }
+
+  body.admin-dashboard-mode .overdue-banner {
+    gap: 10px;
+    padding: 9px 12px;
+  }
+
+  body.admin-dashboard-mode .metrics {
+    gap: 10px;
+    margin-bottom: 0;
+  }
+
+  body.admin-dashboard-mode .metrics article {
+    min-height: 80px;
+    padding: 13px 15px;
+  }
+
+  body.admin-dashboard-mode .metrics article::after {
+    inset: auto 10px 10px auto;
+    width: 34px;
+    height: 34px;
+    opacity: 0.16;
+  }
+
+  body.admin-dashboard-mode .metrics span {
+    font-size: 10px;
+  }
+
+  body.admin-dashboard-mode .metrics strong {
+    margin-top: 4px;
+    font-size: 24px;
+  }
+
+  body.admin-dashboard-mode .metric-sub {
+    margin-top: 2px;
+  }
+
+  body.admin-dashboard-mode .dashboard-view,
+  body.admin-dashboard-mode .view-panel,
+  body.admin-dashboard-mode .content-grid {
+    gap: 10px;
+  }
+
+  body.admin-dashboard-mode .panel-header {
+    gap: 10px;
+    padding: 11px 14px;
+  }
+
+  body.admin-dashboard-mode .panel-header h2 {
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  body.admin-dashboard-mode .panel-header span {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+
+  body.admin-dashboard-mode .panel-header-actions {
+    gap: 8px;
+  }
+
+  body.admin-dashboard-mode .panel-collapse-toggle,
+  body.admin-dashboard-mode .ghost-button {
+    min-height: 32px;
+    padding: 7px 10px;
+  }
+
+  body.admin-dashboard-mode #marketIntelPanel .panel-header,
+  body.admin-dashboard-mode #needsAttentionPanel .panel-header,
+  body.admin-dashboard-mode #adminTaskPanel .panel-header,
+  body.admin-dashboard-mode #marketSnapshotPanel .panel-header {
+    padding-block: 10px;
+  }
+
+  body.admin-dashboard-mode #marketIntelPanel .panel-header h2,
+  body.admin-dashboard-mode #needsAttentionPanel .panel-header h2,
+  body.admin-dashboard-mode #adminTaskPanel .panel-header h2,
+  body.admin-dashboard-mode #marketSnapshotPanel .panel-header h2 {
+    font-size: 16px;
+  }
+
+  body.admin-dashboard-mode .market-intel-feed,
+  body.admin-dashboard-mode .needs-attention-list,
+  body.admin-dashboard-mode .intel-list {
+    gap: 8px;
+  }
+
+  body.admin-dashboard-mode .intel-item,
+  body.admin-dashboard-mode .attention-flag-card {
+    padding: 10px;
+  }
+
+  body.admin-dashboard-mode .empty-copy {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  body.admin-dashboard-mode .attention-count {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+
+  body.admin-dashboard-mode .admin-task-table-wrap {
+    max-height: 360px;
+  }
+
+  body.admin-dashboard-mode .admin-task-table th,
+  body.admin-dashboard-mode .admin-task-table td {
+    padding: 10px 14px;
+  }
+
+  body.admin-dashboard-mode .market-snapshot-header {
+    align-items: end;
+  }
+
+  body.admin-dashboard-mode .market-snapshot-filter {
+    min-width: 190px;
+  }
+
+  body.admin-dashboard-mode .market-snapshot-filter span {
+    margin-bottom: 4px;
+    font-size: 10px;
+  }
+
+  body.admin-dashboard-mode .market-snapshot-grid {
+    gap: 10px;
+    padding: 12px 14px 14px;
+  }
+
+  body.admin-dashboard-mode .snapshot-card {
+    padding: 12px;
+  }
+
+  body.admin-dashboard-mode .snapshot-visual {
+    grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  body.admin-dashboard-mode .market-snapshot-panel .portfolio-pie {
+    width: min(180px, 100%);
+  }
+
+  body.admin-dashboard-mode .market-snapshot-panel .portfolio-pie span {
+    font-size: 15px;
+  }
+
+  body.admin-dashboard-mode .market-snapshot-panel .portfolio-pie small {
+    font-size: 9px;
+  }
+
+  body.admin-dashboard-mode .snapshot-legend {
+    gap: 6px;
+  }
+
+  body.admin-dashboard-mode .snapshot-legend span,
+  body.admin-dashboard-mode .snapshot-legend strong {
+    font-size: 12px;
+  }
 }
 
 .import-form {
