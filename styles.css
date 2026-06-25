@@ -3860,47 +3860,62 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   justify-content: space-between;
   gap: 10px;
   align-items: flex-start;
-  color: #fff;
+  color: var(--ink);
   padding: 12px;
 }
 
 .kanban-column-header h3 {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   font-size: var(--text-body);
   font-weight: var(--weight-bold);
   line-height: var(--leading-heading);
 }
 
+.kanban-stage-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--kanban-stage-pill-bg, #E5FCFF);
+  color: var(--kanban-stage-pill-color, #37371F);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+}
+
 .kanban-column-header span,
 .kanban-column-header strong {
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--muted);
   font-size: var(--text-badge);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-label);
 }
 
 .stage-prospect {
-  background: var(--color-text-muted);
+  background: linear-gradient(180deg, rgba(229, 252, 255, 0.92), rgba(229, 252, 255, 0.8));
 }
 
 .stage-qualified {
-  background: var(--color-accent-blue);
+  background: linear-gradient(180deg, rgba(244, 172, 69, 0.22), rgba(244, 172, 69, 0.12));
 }
 
 .stage-proposal {
-  background: var(--color-accent-orange);
+  background: linear-gradient(180deg, rgba(55, 55, 31, 0.14), rgba(55, 55, 31, 0.08));
 }
 
 .stage-negotiation {
-  background: var(--color-accent-orange);
+  background: linear-gradient(180deg, rgba(244, 172, 69, 0.22), rgba(244, 172, 69, 0.12));
 }
 
 .stage-won {
-  background: var(--color-accent-green);
+  background: linear-gradient(180deg, rgba(16, 150, 72, 0.18), rgba(16, 150, 72, 0.1));
 }
 
 .stage-lost {
-  background: var(--color-accent-red);
+  background: linear-gradient(180deg, rgba(229, 75, 75, 0.18), rgba(229, 75, 75, 0.1));
 }
 
 .kanban-card-list {
