@@ -699,90 +699,82 @@
                 <div class="activity-weekly-log" id="activityWeeklyLog"></div>
               </section>
 
-              <section class="panel activity-card">
-                <div class="panel-header activity-card-header">
-                  <div>
-                    <h2>Activity log</h2>
-                    <span>Calls, visits, emails, reminders, and review requests.</span>
-                  </div>
-                  <span class="activity-count-pill" id="activitySummary">0 activities</span>
-                </div>
-                <div class="activity-filter-shell">
-                  <button class="ghost-button activity-filter-toggle" type="button" id="activityFilterToggle">Filters</button>
-                  <div class="activity-filter-bar" id="activityFilterBar">
-                    <div class="activity-filter-main">
-                      <div class="activity-date-filter">
-                        <span>Date range</span>
-                        <div class="date-presets" id="activityDatePresets"></div>
-                      </div>
-                      <div class="activity-filter-right">
-                        <label class="activity-salesman-filter">
-                          <span>Salesman</span>
-                          <select id="activitySalesmanFilter">
-                            <option value="all">All Salesmen</option>
-                          </select>
-                        </label>
-                        <label class="activity-type-select-wrap">
-                          <span>Activity type</span>
-                          <select id="activityTypeSelect">
-                            <option value="all">All types</option>
-                          </select>
-                        </label>
-                      </div>
+              <div class="activity-secondary-grid">
+                <section class="panel activity-card activity-log-panel">
+                  <div class="panel-header activity-card-header">
+                    <div>
+                      <h2>Activity log</h2>
+                      <span>Calls, visits, emails, reminders, and review requests.</span>
                     </div>
-                    <div class="activity-filter-secondary">
-                      <div class="date-range-inputs">
-                        <label>From<input type="date" id="activityDateFrom"></label>
-                        <label>To<input type="date" id="activityDateTo"></label>
-                      </div>
-                      <label class="activity-company-search">
-                        <span>Company / Lead</span>
-                        <div class="search-with-clear">
-                          <input id="activityCompanySearch" type="search" placeholder="Search company name">
-                          <button class="clear-search hidden" type="button" id="activitySearchClear" aria-label="Clear company search">&times;</button>
+                    <span class="activity-count-pill" id="activitySummary">0 activities</span>
+                  </div>
+                  <div class="activity-filter-shell">
+                    <button class="ghost-button activity-filter-toggle" type="button" id="activityFilterToggle">Filters</button>
+                    <div class="activity-filter-bar" id="activityFilterBar">
+                      <div class="activity-filter-main">
+                        <div class="activity-date-filter">
+                          <span>Date range</span>
+                          <div class="date-presets" id="activityDatePresets"></div>
                         </div>
-                      </label>
-                      <button class="ghost-button hidden" type="button" id="activityResetFilters">Reset filters</button>
+                        <div class="activity-filter-right">
+                          <label class="activity-salesman-filter">
+                            <span>Salesman</span>
+                            <select id="activitySalesmanFilter">
+                              <option value="all">All Salesmen</option>
+                            </select>
+                          </label>
+                          <label class="activity-type-select-wrap">
+                            <span>Activity type</span>
+                            <select id="activityTypeSelect">
+                              <option value="all">All types</option>
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+                      <div class="activity-filter-secondary">
+                        <div class="date-range-inputs">
+                          <label>From<input type="date" id="activityDateFrom"></label>
+                          <label>To<input type="date" id="activityDateTo"></label>
+                        </div>
+                        <label class="activity-company-search">
+                          <span>Company / Lead</span>
+                          <div class="search-with-clear">
+                            <input id="activityCompanySearch" type="search" placeholder="Search company name">
+                            <button class="clear-search hidden" type="button" id="activitySearchClear" aria-label="Clear company search">&times;</button>
+                          </div>
+                        </label>
+                        <button class="ghost-button hidden" type="button" id="activityResetFilters">Reset filters</button>
+                      </div>
+                    </div>
+                    <div class="activity-results-summary" id="activityResultsSummary">Showing activity from the last 30 days</div>
+                  </div>
+                  <div class="activity-loading hidden" id="activityLoading">Loading activities...</div>
+                  <div class="activity-feed" id="activityFeed"></div>
+                </section>
+
+                <section class="panel activity-side-panel activity-reminders-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>Reminders</h2>
+                      <span>Upcoming and overdue follow-up work.</span>
                     </div>
                   </div>
-                  <div class="activity-results-summary" id="activityResultsSummary">Showing activity from the last 30 days</div>
-                </div>
-                <div class="activity-loading hidden" id="activityLoading">Loading activities...</div>
-                <div class="activity-feed" id="activityFeed"></div>
-              </section>
+                  <div class="activity-reminders-filters">
+                    <p class="activity-reminders-filter-label">Activity types</p>
+                    <div class="activity-shortcut-chips" id="activityTypeShortcutChips"></div>
+                  </div>
+                  <div id="activityReminders"></div>
+                  <div class="activity-reminders-links">
+                    <div class="activity-reminders-links-head">
+                      <h3>Quick links</h3>
+                      <span>Live counts across records</span>
+                    </div>
+                    <div class="activity-quick-links" id="activityQuickLinks"></div>
+                  </div>
+                </section>
+              </div>
             </div>
 
-            <aside class="activity-side-column">
-              <section class="panel activity-side-panel">
-                <div class="panel-header compact-header">
-                  <div>
-                    <h2>Reminders</h2>
-                    <span>Upcoming and overdue follow-up work.</span>
-                  </div>
-                </div>
-                <div id="activityReminders"></div>
-              </section>
-
-              <section class="panel activity-side-panel">
-                <div class="panel-header compact-header">
-                  <div>
-                    <h2>Activity types</h2>
-                    <span>Filter shortcuts</span>
-                  </div>
-                </div>
-                <div class="activity-shortcut-chips" id="activityTypeShortcutChips"></div>
-              </section>
-
-              <section class="panel activity-side-panel">
-                <div class="panel-header compact-header">
-                  <div>
-                    <h2>Quick links</h2>
-                    <span>Live counts across records</span>
-                  </div>
-                </div>
-                <div class="activity-quick-links" id="activityQuickLinks"></div>
-              </section>
-            </aside>
           </div>
         </section>
       </main>
