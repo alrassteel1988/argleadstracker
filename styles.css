@@ -3875,21 +3875,8 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   font-size: var(--text-body);
   font-weight: var(--weight-bold);
   line-height: var(--leading-heading);
-}
-
-.kanban-stage-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--kanban-stage-pill-bg, #E5FCFF);
-  color: var(--kanban-stage-pill-color, #37371F);
-  font-size: var(--text-body);
-  font-weight: var(--weight-bold);
-  line-height: 1;
+  color: var(--kanban-header-title, var(--ink));
   letter-spacing: 0.01em;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
 }
 
 .kanban-column-header > div > span,

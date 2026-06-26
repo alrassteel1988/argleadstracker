@@ -617,15 +617,6 @@ const KANBAN_STAGES = [
   { key: "DORMANT", label: "Lost", color: "stage-lost", aliases: ["DORMANT", "LOST", "AT RISK"] }
 ];
 
-const KANBAN_STAGE_STYLES = {
-  Prospect: { background: "#E5FCFF", color: "#37371F" },
-  Qualified: { background: "#F4AC45", color: "#37371F" },
-  "Proposal Sent": { background: "#37371F", color: "#FFFFFF" },
-  Negotiation: { background: "#F4AC45", color: "#37371F" },
-  Won: { background: "#109648", color: "#FFFFFF" },
-  Lost: { background: "#E54B4B", color: "#FFFFFF" }
-};
-
 const NEXT_ACTION_PLAN_OPTIONS = ["To Call", "To Send Email", "To Visit"];
 const ACTIVITY_PURPOSE_OPTIONS = [
   "Company Introductory",
@@ -7385,7 +7376,6 @@ function renderKanbanView() {
   els.kanbanBoard.innerHTML = KANBAN_STAGES.map(stage => {
     const stageLeads = leads.filter(lead => kanbanStageForLead(lead) === stage.key);
     const stageValue = stageLeads.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
-    const stageStyle = KANBAN_STAGE_STYLES[stage.label] || { background: "#E5FCFF", color: "#37371F" };
     const cards = stageLeads.length ? stageLeads.map(lead => {
       const origin = leadOriginForCurrentUser(lead, state.currentUser);
       const overdue = Boolean(lead.next_action_date) && new Date(`${lead.next_action_date}T23:59:59`) < new Date();
@@ -7424,7 +7414,7 @@ function renderKanbanView() {
       <section class="kanban-column ${stage.key === activeStage ? "active" : ""}" data-kanban-stage="${stage.key}">
         <div class="kanban-column-header ${stage.color}">
           <div>
-            <h3><span class="kanban-stage-pill" style="--kanban-stage-pill-bg: ${stageStyle.background}; --kanban-stage-pill-color: ${stageStyle.color};">${escapeHtml(stage.label)}</span></h3>
+            <h3>${escapeHtml(stage.label)}</h3>
             <span>${stageLeads.length} lead${stageLeads.length === 1 ? "" : "s"}</span>
           </div>
           <strong>${escapeHtml(formatAED(stageValue))}</strong>
