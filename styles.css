@@ -119,6 +119,630 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Al Ras Steel premium UI refresh */
+
+:root {
+  --arg-navy-950: #031E35;
+  --arg-navy-900: #062B49;
+  --arg-navy-850: #082F52;
+  --arg-steel-blue: #2F5F7C;
+  --arg-gold: #D6A23A;
+  --arg-bg: #F5F7FA;
+  --arg-card: #FFFFFF;
+  --arg-soft: #F9FAFC;
+  --arg-border: #E1E7EF;
+  --arg-text: #0F172A;
+  --arg-text-secondary: #475569;
+  --arg-text-muted: #64748B;
+  --arg-header-ice: rgba(233, 241, 248, 0.92);
+  --arg-card-glass: rgba(255, 255, 255, 0.93);
+  --arg-card-glass-strong: rgba(255, 255, 255, 0.97);
+  --arg-card-soft: rgba(249, 250, 252, 0.9);
+  --arg-shadow-soft: 0 1px 3px rgba(20, 30, 50, 0.06), 0 14px 32px rgba(6, 43, 73, 0.06);
+  --arg-shadow-raised: 0 20px 44px rgba(6, 43, 73, 0.09), 0 1px 0 rgba(255, 255, 255, 0.78) inset;
+  --arg-border-strong: rgba(225, 231, 239, 0.98);
+  --arg-header-border: rgba(210, 222, 235, 0.95);
+  --arg-accent-wash: rgba(47, 95, 124, 0.08);
+
+  --blue-sidebar: var(--arg-navy-950);
+  --blue-sidebar-hover: #0D3559;
+  --blue-active: var(--arg-steel-blue);
+  --blue-primary: var(--arg-navy-900);
+  --blue-primary-hover: #0A3A63;
+  --blue-bg: var(--arg-bg);
+  --blue-card: var(--arg-card);
+  --blue-border: var(--arg-border);
+  --blue-input: #F8FAFD;
+  --blue-table-header: #ECF3F9;
+  --blue-text-main: var(--arg-text);
+  --blue-text-muted: var(--arg-text-secondary);
+  --blue-accent: var(--arg-gold);
+  --color-bg-header: var(--arg-navy-900);
+  --color-bg-body: var(--arg-bg);
+  --color-text-body: var(--arg-text);
+  --color-text-muted: var(--arg-text-secondary);
+  --color-accent-blue: var(--arg-steel-blue);
+  --color-avatar-bg: var(--arg-gold);
+  --color-background-primary: var(--arg-card);
+  --color-background-secondary: var(--arg-soft);
+  --color-border: var(--arg-border);
+  --color-border-tertiary: #E8EEF5;
+  --color-text-secondary: var(--arg-text-secondary);
+  --shadow-card: var(--arg-shadow-soft);
+  --shadow-soft: var(--arg-shadow-soft);
+  --shadow-elevated: var(--arg-shadow-raised);
+  --panel-glass: var(--arg-card-glass);
+  --panel-glass-strong: var(--arg-card-glass-strong);
+  --panel-glass-soft: var(--arg-card-soft);
+  --surface-highlight: rgba(255, 255, 255, 0.78);
+  --line: var(--arg-border);
+  --line-strong: var(--arg-border-strong);
+  --glass-stroke: rgba(255, 255, 255, 0.7);
+  --ink: var(--arg-text);
+  --muted: var(--arg-text-secondary);
+  --accent: var(--arg-navy-900);
+  --accent-strong: var(--arg-navy-850);
+  --gold: var(--arg-gold);
+}
+
+body,
+.main {
+  background:
+    radial-gradient(circle at 12% 10%, rgba(214, 162, 58, 0.09), transparent 24%),
+    radial-gradient(circle at 88% 12%, rgba(47, 95, 124, 0.08), transparent 22%),
+    radial-gradient(circle at 22% 82%, rgba(6, 43, 73, 0.05), transparent 18%),
+    linear-gradient(180deg, #fbfcfd 0%, var(--arg-bg) 34%, #eef3f8 100%);
+  color: var(--arg-text);
+}
+
+.app-shell,
+.activity-dashboard {
+  width: 100%;
+  max-width: 100%;
+}
+
+.auth-screen {
+  background:
+    radial-gradient(circle at 16% 18%, rgba(214, 162, 58, 0.18), transparent 28%),
+    radial-gradient(circle at 84% 16%, rgba(47, 95, 124, 0.18), transparent 26%),
+    linear-gradient(135deg, #04192d 0%, var(--arg-navy-900) 58%, var(--arg-navy-850) 100%);
+}
+
+.auth-hero {
+  background:
+    radial-gradient(circle at 20% 18%, rgba(214, 162, 58, 0.18), transparent 28%),
+    radial-gradient(circle at 78% 20%, rgba(110, 168, 204, 0.16), transparent 26%),
+    linear-gradient(160deg, rgba(3, 30, 53, 0.96), rgba(6, 43, 73, 0.92) 55%, rgba(8, 47, 82, 0.95) 100%);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 30px 80px rgba(2, 12, 24, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 0 42px rgba(214, 162, 58, 0.08);
+}
+
+.auth-hero::before {
+  background:
+    radial-gradient(circle at 18% 20%, rgba(214, 162, 58, 0.18), transparent 30%),
+    radial-gradient(circle at 82% 16%, rgba(96, 165, 250, 0.15), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01));
+}
+
+.auth-brand span,
+.auth-hero p {
+  color: rgba(241, 245, 249, 0.82);
+}
+
+.auth-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(249, 250, 252, 0.93));
+  border-color: rgba(225, 231, 239, 0.92);
+  box-shadow: var(--arg-shadow-raised);
+}
+
+.auth-card h2,
+.auth-card h1,
+.topbar-copy h1,
+.panel-header h2,
+.kanban-panel-header h2,
+.detail-heading h2,
+.lead-detail-page-toolbar h2,
+.lead-ai-summary-panel h2,
+.drawer-tab-heading h2,
+.drawer-card-title strong,
+.lead-section-header h2,
+.performance-panel .panel-header h2,
+.pipeline-funnel-table-head h3 {
+  color: var(--arg-text);
+}
+
+.auth-card p,
+.auth-card label,
+.topbar-copy p,
+.panel-header span,
+.kanban-panel-header span,
+.detail-heading p,
+.meta-label,
+.pipeline-funnel-copy p,
+.empty-copy,
+.form-message,
+.timeline-empty span,
+.smart-search-panel-header small {
+  color: var(--arg-text-secondary);
+}
+
+.sidebar {
+  background:
+    linear-gradient(180deg, var(--arg-navy-950) 0%, #062844 58%, var(--arg-navy-850) 100%);
+  border-right: 1px solid rgba(214, 162, 58, 0.16);
+  box-shadow: 20px 0 40px rgba(3, 30, 53, 0.16);
+}
+
+.brand-mark,
+.sidebar-user-avatar,
+.drawer-avatar,
+.detail-avatar {
+  background: linear-gradient(135deg, #E0B55C 0%, var(--arg-gold) 100%);
+  color: var(--arg-navy-950);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.brand strong,
+.sidebar-tools-label,
+.sidebar-user-copy strong,
+.sidebar-user-trigger,
+.sidebar-tools-trigger {
+  color: #F8FAFC;
+}
+
+.brand span,
+.nav-group-label,
+.sidebar-user-copy span,
+.sidebar-user-chevron {
+  color: rgba(226, 232, 240, 0.64);
+}
+
+.nav-item {
+  color: rgba(241, 245, 249, 0.72);
+  border-left: 3px solid transparent;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+}
+
+.nav-item.active {
+  background: linear-gradient(90deg, rgba(214, 162, 58, 0.18), rgba(255, 255, 255, 0.08));
+  border-left-color: var(--arg-gold);
+  color: #FFFFFF;
+}
+
+.nav-item.active::before {
+  display: none;
+}
+
+.nav-item-icon {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.topbar {
+  border: 1px solid var(--arg-border-strong);
+  border-radius: 18px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(249, 250, 252, 0.76));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--arg-shadow-soft);
+}
+
+.topbar .ghost-button,
+.topbar .primary-button,
+.panel-header-actions > .ghost-button,
+.panel-header-actions > .primary-button,
+.action-plan-toolbar-button,
+.action-plan-toggle,
+.activity-filter-secondary .ghost-button,
+.small-action,
+.text-button,
+.voice-button,
+.danger-button {
+  min-height: 38px;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(6, 43, 73, 0.06);
+}
+
+.primary-button,
+.topbar .primary-button,
+.toggle-button.active {
+  border: 1px solid rgba(6, 43, 73, 0.9);
+  background: linear-gradient(135deg, var(--arg-navy-900), var(--arg-steel-blue));
+  color: #FFFFFF;
+  box-shadow: 0 14px 28px rgba(6, 43, 73, 0.18);
+}
+
+.primary-button:hover,
+.topbar .primary-button:hover,
+.toggle-button.active:hover {
+  background: linear-gradient(135deg, var(--arg-navy-850), #3A6F90);
+}
+
+.ghost-button,
+.topbar .ghost-button,
+.panel-collapse-toggle,
+.small-action,
+.text-button,
+.voice-button {
+  border: 1px solid rgba(218, 226, 236, 0.96);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 248, 251, 0.82));
+  color: var(--arg-text);
+}
+
+.ghost-button:hover,
+.topbar .ghost-button:hover,
+.panel-collapse-toggle:hover,
+.small-action:hover,
+.text-button:hover,
+.voice-button:hover {
+  background:
+    linear-gradient(180deg, rgba(250, 252, 255, 0.98), rgba(239, 244, 249, 0.9));
+}
+
+input,
+select,
+textarea,
+.smart-search-field input,
+.activity-filter-shell input,
+.activity-filter-shell select,
+.activity-type-select-wrap select,
+.activity-salesman-filter select {
+  border: 1px solid rgba(225, 231, 239, 0.98);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+  color: var(--arg-text);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 10px 22px rgba(6, 43, 73, 0.05);
+}
+
+input::placeholder,
+textarea::placeholder,
+.smart-search-field input::placeholder {
+  color: var(--arg-text-muted);
+}
+
+.panel,
+.view-panel,
+.quick-actions-card,
+.dashboard-quick-actions,
+.daily-ai-panel,
+.salesman-loss-prompts-panel,
+.salesman-followup-panel,
+.portfolio-panel,
+.market-news-panel,
+.market-intel-panel,
+.agent-panel,
+.config-agent-panel,
+.performance-panel,
+.admin-task-panel,
+.market-snapshot-panel,
+.needs-attention-panel,
+.action-plan-panel,
+.kanban-panel,
+.pipeline-funnel-panel,
+.lead-detail-page-panel,
+.lead-ai-summary-panel,
+.activity-weekly-card,
+.activity-log-panel,
+.activity-reminders-panel,
+.tasks-status-card,
+.auto-review-panel,
+.delete-approval-panel,
+.lead-step-panel,
+.detail-panel,
+.drawer-section,
+.drawer-field,
+.drawer-list,
+.meta-box,
+.activity-kpi-card,
+.status-card,
+.salesman-card,
+.salesman-plan-card,
+.admin-task-table-wrap,
+.activity-feed-item,
+.reminder-card,
+.lead-card,
+.weekly-report-card,
+.tasks-section-card,
+.tasks-review-block,
+.tasks-inline-grid,
+.tasks-context-pill,
+.quick-log-sheet,
+.ai-action-sheet {
+  background:
+    radial-gradient(circle at top right, rgba(47, 95, 124, 0.07), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(249, 250, 252, 0.9));
+  border: 1px solid rgba(225, 231, 239, 0.96);
+  box-shadow: var(--arg-shadow-soft);
+  backdrop-filter: blur(14px) saturate(125%);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
+}
+
+.activity-dashboard,
+.dashboard-view,
+.pipeline-view,
+.tasks-view,
+.lead-drawer-shell,
+.detail-body,
+.content-grid,
+.pipeline-funnel-body,
+.activity-secondary-grid {
+  background: transparent;
+}
+
+.panel-header,
+.kanban-panel-header,
+.compact-header,
+.lead-section-header,
+.activity-side-panel .compact-header,
+.pipeline-funnel-table-head,
+.lead-detail-page-toolbar,
+.drawer-tabs,
+.lead-ai-toolbar {
+  background:
+    linear-gradient(180deg, rgba(233, 241, 248, 0.96), rgba(226, 236, 246, 0.9));
+  border-bottom: 1px solid var(--arg-header-border);
+}
+
+.kanban-panel-header,
+.lead-detail-page-toolbar,
+.lead-ai-toolbar {
+  border-radius: 16px 16px 0 0;
+}
+
+.panel-header h2,
+.kanban-panel-header h2,
+.compact-header h2,
+.lead-section-header h2,
+.pipeline-funnel-table-head h3,
+.lead-detail-page-toolbar h2,
+.lead-ai-toolbar h2,
+.smart-search-panel-header strong {
+  color: var(--arg-text);
+}
+
+.panel-header span,
+.kanban-panel-header span,
+.compact-header span,
+.lead-section-header span,
+.pipeline-funnel-table-head span,
+.lead-ai-toolbar .chip,
+.market-news-panel .panel-header span {
+  color: var(--arg-text-secondary);
+}
+
+.toolbar,
+.smart-search-panel,
+.activity-filter-shell,
+.calendar-toolbar,
+.quick-actions-card button,
+.view-toggle > div {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(245, 248, 251, 0.76));
+  border: 1px solid rgba(225, 231, 239, 0.94);
+  box-shadow: 0 8px 20px rgba(6, 43, 73, 0.05);
+}
+
+.toolbar label,
+.lead-form label,
+.lead-product-interest-fieldset legend,
+.activity-filter-shell label,
+.date-range-inputs label,
+.activity-type-label,
+.meta-label,
+.panel-header .meta-label {
+  color: var(--arg-text-secondary);
+}
+
+.pipeline-funnel-summary-card,
+.pipeline-funnel-table-card,
+.pipeline-funnel-stage,
+.pipeline-funnel-micro-kpis article,
+.kanban-column,
+.portfolio-chart-card,
+.sp-leader-card,
+.dashboard-activity-item,
+.market-news-card,
+.activity-card,
+.timeline-day,
+.tasks-status-card,
+.drawer-summary-card {
+  border-color: rgba(225, 231, 239, 0.98);
+  box-shadow: 0 14px 28px rgba(6, 43, 73, 0.06);
+}
+
+.pipeline-funnel-table,
+.admin-task-table,
+.salesman-plan-table,
+.performance-table,
+.sp-hm-table,
+.import-table {
+  background: transparent;
+}
+
+.pipeline-funnel-table th,
+.pipeline-funnel-table td,
+.admin-task-table th,
+.admin-task-table td,
+.salesman-plan-table th,
+.salesman-plan-table td,
+.performance-table th,
+.performance-table td,
+.sp-hm-table th,
+.sp-hm-table td,
+.import-table th,
+.import-table td {
+  border-bottom-color: rgba(225, 231, 239, 0.9);
+}
+
+.pipeline-funnel-table th,
+.admin-task-table th,
+.salesman-plan-table th,
+.performance-table th,
+.sp-hm-table th,
+.import-table th {
+  color: var(--arg-text-secondary);
+  background: rgba(245, 248, 251, 0.76);
+}
+
+.pipeline-funnel-table td,
+.admin-task-table td,
+.salesman-plan-table td,
+.performance-table td,
+.sp-hm-table td,
+.import-table td,
+.meta-value,
+.detail-panel p,
+.drawer-field strong,
+.drawer-field a,
+.drawer-remarks,
+.drawer-notes-view,
+.drawer-pmr p,
+.drawer-activity p,
+.activity-feed-item p,
+.reminder-card p,
+.market-news-card p {
+  color: var(--arg-text);
+}
+
+.meta-value,
+.detail-heading p,
+.activity-feed-item p,
+.reminder-card p,
+.market-news-card p,
+.pipeline-funnel-meta,
+.pipeline-funnel-stage-stats small,
+.activity-kpi-card span,
+.activity-kpi-card small,
+.timeline-divider span {
+  color: var(--arg-text-secondary);
+}
+
+.chip,
+.pill,
+.badge,
+.tag,
+.source-badge,
+.quote-ref-pill,
+.type-pill,
+.activity-count-pill,
+.calendar-range-pill,
+.drawer-stage-pill,
+.tasks-context-pill,
+.online-badge {
+  border: 1px solid rgba(210, 222, 235, 0.92);
+  background: rgba(245, 248, 251, 0.94);
+  color: var(--arg-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+.drawer-tabs button,
+.mobile-tabs .nav-item,
+.kanban-stage-tab,
+.toggle-button,
+.type-pill {
+  color: var(--arg-text-secondary);
+}
+
+.drawer-tabs button.active,
+.mobile-tabs .nav-item.active,
+.kanban-stage-tab.active,
+.type-pill.active {
+  color: #FFFFFF;
+  background: linear-gradient(135deg, var(--arg-navy-900), var(--arg-steel-blue));
+  border-color: rgba(6, 43, 73, 0.9);
+}
+
+.quick-actions-card strong,
+.status-card strong,
+.activity-kpi-card strong,
+.pipeline-funnel-stage strong,
+.pipeline-funnel-stage-stats span,
+.pipeline-funnel-copy h3,
+.pipeline-funnel-table-head h3,
+.salesman-plan-head strong,
+.drawer-summary-card strong,
+.meta-box strong,
+.market-news-card h3,
+.lead-card strong,
+.detail-heading h2 {
+  color: var(--arg-text);
+}
+
+.overdue-banner {
+  background:
+    linear-gradient(180deg, rgba(255, 245, 240, 0.98), rgba(255, 237, 230, 0.94));
+  border: 1px solid rgba(240, 153, 123, 0.78);
+  box-shadow: 0 12px 24px rgba(185, 56, 21, 0.06);
+}
+
+.kanban-column-header {
+  border-bottom: 1px solid rgba(225, 231, 239, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.kanban-column-header h3,
+.kanban-column-header > div > span,
+.kanban-column-header strong,
+.lead-card p,
+.lead-card .meta-label {
+  color: var(--arg-text);
+}
+
+.timeline-divider::before,
+.timeline-divider::after,
+.portfolio-legend li,
+.activity-divider {
+  border-color: rgba(225, 231, 239, 0.88);
+}
+
+.empty-copy,
+.empty-state span,
+.timeline-empty span,
+.table-empty-state,
+.pipeline-funnel-empty span {
+  color: var(--arg-text-muted);
+}
+
+.empty-state strong,
+.timeline-empty strong,
+.pipeline-funnel-empty strong {
+  color: var(--arg-text);
+}
+
+@media (min-width: 1200px) {
+  .topbar-copy h1 {
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .topbar-copy p {
+    font-size: 13px;
+  }
+
+  .panel-header h2,
+  .kanban-panel-header h2,
+  .lead-section-header h2,
+  .pipeline-funnel-table-head h3 {
+    font-size: 26px;
+  }
+}
+
 body.menu-open {
   overflow: hidden;
 }
