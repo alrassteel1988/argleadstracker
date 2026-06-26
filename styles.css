@@ -11931,13 +11931,13 @@ body,
 .activity-side-panel h2 {
   font-size: 16px;
   font-weight: 700;
-  color: #102033;
+  color: #0f172a;
   letter-spacing: 0.01em;
 }
 
 .activity-card-header span,
 .activity-side-panel .compact-header span {
-  color: #4b6075;
+  color: #52667b;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.45;
@@ -11947,7 +11947,7 @@ body,
 .activity-count-pill {
   margin: 0;
   background: linear-gradient(180deg, rgba(245, 250, 255, 0.98), rgba(229, 238, 247, 0.94));
-  color: #23364a;
+  color: #334155;
   font-size: 12px;
   font-weight: 700;
   padding: 6px 12px;
@@ -12179,13 +12179,13 @@ body,
 }
 
 .activity-filter-bar label {
-  color: #42566a;
+  color: #334155;
   font-weight: 700;
 }
 
 .activity-filter-bar span,
 .activity-results-summary {
-  color: #465b70;
+  color: #475569;
   font-size: 11px;
   font-weight: 700;
   text-transform: none;
@@ -12216,7 +12216,7 @@ body,
   border: 1px solid rgba(186, 202, 218, 0.84);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
-  color: #35495f;
+  color: #334155;
   font-size: 11px;
   font-weight: 700;
   padding: 5px 10px;
@@ -12248,7 +12248,7 @@ body,
 }
 
 .activity-results-summary {
-  color: #53687c;
+  color: #475569;
   font-size: 12px;
 }
 
@@ -12268,7 +12268,7 @@ body,
 
 .activity-reminders-filter-label {
   margin: 0;
-  color: #41566c;
+  color: #334155;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -12302,7 +12302,7 @@ body,
 }
 
 .activity-reminders-links-head span {
-  color: #4b6075;
+  color: #52667b;
   font-size: 11px;
   font-weight: 600;
 }
@@ -12313,7 +12313,7 @@ body,
 
 .timeline-divider {
   margin-top: 10px;
-  color: #495d73;
+  color: #475569;
   font-size: 11px;
   font-weight: 700;
   text-transform: none;
@@ -12326,7 +12326,7 @@ body,
 
 .timeline-divider span {
   background: linear-gradient(180deg, rgba(246, 250, 254, 0.98), rgba(237, 244, 250, 0.94));
-  color: #4f6379;
+  color: #475569;
   padding: 2px 12px;
   border-radius: 999px;
   border: 1px solid rgba(192, 205, 218, 0.82);
@@ -12399,19 +12399,19 @@ body,
   font-size: 14px;
   font-weight: 700;
   line-height: 1.4;
-  color: #11253b;
+  color: #0f172a;
 }
 
 .activity-feed-item p {
   margin: 0;
-  color: #42586d;
+  color: #334155;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
 }
 
 .activity-feed-item .meta-label {
-  color: #5b7085;
+  color: #475569;
   font-size: 11px;
   font-weight: 700;
 }
@@ -12441,7 +12441,7 @@ body,
   min-height: 24px;
   border: 1px solid rgba(170, 189, 207, 0.9);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 247, 252, 0.92));
-  color: #33475c;
+  color: #334155;
   font-size: 11px;
   font-weight: 700;
   padding: 4px 7px;
@@ -12459,7 +12459,7 @@ body,
 .activity-feed-item .chip {
   border-radius: 3px;
   background: rgba(233, 241, 248, 0.98);
-  color: #33475d;
+  color: #334155;
   font-size: 11px;
   font-weight: 700;
   padding: 3px 8px;
@@ -12510,7 +12510,7 @@ body,
 }
 
 .reminder-stack-header span {
-  color: #596b80;
+  color: #475569;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -12524,7 +12524,7 @@ body,
   min-height: 20px;
   border-radius: 999px;
   background: rgba(238, 244, 249, 0.94);
-  color: #425469;
+  color: #334155;
   font-size: 11px;
   font-style: normal;
   font-weight: 700;
@@ -12573,12 +12573,12 @@ body,
   margin-top: 0;
   font-size: 13px;
   font-weight: 700;
-  color: #102033;
+  color: #0f172a;
 }
 
 .reminder-card p {
   margin-top: 2px;
-  color: #4d6177;
+  color: #334155;
   font-size: 11px;
   font-weight: 600;
   line-height: 1.45;
@@ -12587,7 +12587,7 @@ body,
 .reminder-card .meta-label {
   display: block;
   margin-top: 4px;
-  color: #627489;
+  color: #475569;
   font-size: 11px;
   font-weight: 600;
 }
@@ -12601,7 +12601,7 @@ body,
   border: 0.5px solid var(--color-border);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.75);
-  color: var(--color-text-secondary);
+  color: #475569;
   font-size: 12px;
   padding: 0;
 }
