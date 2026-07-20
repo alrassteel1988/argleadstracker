@@ -112,6 +112,12 @@
   --bauhaus-radius: 8px;
   --dashboard-header-blue: #1B4B6B;
   --dashboard-header-subtitle: #C7DCEA;
+  --panel-border-primary: #1B4B6B;
+  --panel-border-urgent: #C94A4A;
+  --panel-border-action: #D68A2C;
+  --panel-border-new: #1D9E75;
+  --panel-border-pending: #7F77DD;
+  --panel-border-summary: #6B9A3E;
   --font-sans: var(--font-body);
   --text-page: 32px;
   --text-section: 24px;
@@ -18609,4 +18615,221 @@ body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-p
   body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
     grid-template-rows: 90px 70px minmax(154px, 1.4fr) minmax(88px, 0.8fr) 88px;
   }
+}
+
+/* Bordered dashboard panels: color identifies purpose without heavy fills. */
+body.salesman-dashboard-mode .topbar-copy h1 {
+  font-size: 20px;
+  font-weight: 500;
+}
+
+body.salesman-dashboard-mode .topbar-copy p {
+  color: #A9C6DA;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+body.salesman-dashboard-mode .topbar button,
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard button,
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard h2,
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard h3,
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard strong,
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard .chip {
+  font-weight: 500;
+}
+
+body.salesman-dashboard-mode .topbar input,
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard p,
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard small {
+  font-weight: 400;
+}
+
+body.salesman-dashboard-mode .overdue-banner {
+  border: 2px solid var(--panel-border-urgent);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.salesman-dashboard-mode .overdue-banner-copy {
+  margin-left: 0;
+  padding-inline: 8px;
+  border: 0;
+  background: transparent;
+}
+
+body.salesman-dashboard-mode .overdue-banner-icon {
+  margin-left: 0;
+}
+
+body.salesman-dashboard-mode .overdue-banner-copy strong,
+body.salesman-dashboard-mode .overdue-action {
+  font-weight: 500;
+}
+
+body.salesman-dashboard-mode .overdue-banner-copy div {
+  font-weight: 400;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero {
+  border: 2px solid var(--panel-border-primary);
+  border-radius: var(--bauhaus-radius);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero-header {
+  border: 0;
+  border-radius: 6px 6px 0 0;
+  background: var(--dashboard-header-blue);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero-header > span {
+  color: #A9C6DA;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-copy h2 {
+  color: var(--arg-text);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-copy p {
+  color: var(--arg-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-top-actions {
+  border: 2px solid var(--panel-border-action);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-call-queue {
+  border: 2px solid var(--panel-border-urgent);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-first-touch {
+  border: 2px solid var(--panel-border-new);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-loss-reasons {
+  border: 2px solid var(--panel-border-pending);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline {
+  border: 2px solid var(--panel-border-summary);
+}
+
+body.salesman-dashboard-mode :is(
+  .salesman-dashboard-top-actions,
+  .salesman-dashboard-call-queue,
+  .salesman-dashboard-first-touch,
+  .salesman-dashboard-loss-reasons,
+  .salesman-dashboard-pipeline
+) {
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.salesman-dashboard-mode :is(
+  .salesman-dashboard-top-actions,
+  .salesman-dashboard-call-queue,
+  .salesman-dashboard-first-touch,
+  .salesman-dashboard-loss-reasons,
+  .salesman-dashboard-pipeline
+) > .panel-header {
+  height: auto;
+  min-height: 0;
+  padding: 8px 11px 4px;
+  border: 0;
+  border-radius: 6px 6px 0 0;
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode :is(
+  .salesman-dashboard-top-actions,
+  .salesman-dashboard-call-queue,
+  .salesman-dashboard-first-touch,
+  .salesman-dashboard-loss-reasons,
+  .salesman-dashboard-pipeline
+) > .panel-header h2 {
+  color: var(--arg-text);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+body.salesman-dashboard-mode :is(
+  .salesman-dashboard-top-actions,
+  .salesman-dashboard-call-queue,
+  .salesman-dashboard-first-touch,
+  .salesman-dashboard-loss-reasons,
+  .salesman-dashboard-pipeline
+) > .panel-header span {
+  margin-top: 2px;
+  color: var(--arg-text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric span {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric strong {
+  font-size: 26px;
+  font-weight: 500;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric small,
+body.salesman-dashboard-mode .salesman-simplified-metric p {
+  font-size: 11px;
+  font-weight: 400;
+}
+
+body.salesman-dashboard-mode :is(
+  .salesman-triage-kicker,
+  .salesman-first-touch-kicker,
+  .salesman-loss-kicker
+) {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+body.salesman-dashboard-mode :is(
+  .salesman-triage-card,
+  .salesman-simplified-queue-item,
+  .salesman-first-touch-card,
+  .salesman-loss-card
+) strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+body.salesman-dashboard-mode :is(
+  .salesman-triage-card,
+  .salesman-simplified-queue-item,
+  .salesman-first-touch-card,
+  .salesman-loss-card
+) :is(p, small) {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage span {
+  font-weight: 400;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage strong {
+  font-weight: 500;
 }
