@@ -127,6 +127,565 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Laptop dashboard density: keep the field-sales triage view inside one viewport. */
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.salesman-dashboard-mode {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  body.salesman-dashboard-mode .app-shell {
+    grid-template-columns: 156px minmax(0, 1fr);
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.salesman-dashboard-mode .sidebar {
+    height: 100dvh;
+    min-height: 0;
+    gap: 12px;
+    padding: 14px 12px;
+    overflow: hidden;
+  }
+
+  body.salesman-dashboard-mode .sidebar-brand-row,
+  body.salesman-dashboard-mode .brand {
+    gap: 8px;
+  }
+
+  body.salesman-dashboard-mode .brand-mark {
+    width: 34px;
+    height: 34px;
+    font-size: 11px;
+  }
+
+  body.salesman-dashboard-mode .brand strong {
+    font-size: 11px;
+  }
+
+  body.salesman-dashboard-mode .brand span,
+  body.salesman-dashboard-mode .nav-group-label,
+  body.salesman-dashboard-mode .sidebar-user-copy span {
+    font-size: 9px;
+  }
+
+  body.salesman-dashboard-mode .nav-groups,
+  body.salesman-dashboard-mode .nav-group,
+  body.salesman-dashboard-mode .nav-list {
+    gap: 5px;
+  }
+
+  body.salesman-dashboard-mode .nav-group-label {
+    margin: 4px 4px 2px;
+  }
+
+  body.salesman-dashboard-mode .nav-item {
+    min-height: 32px;
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+
+  body.salesman-dashboard-mode .nav-item-icon {
+    width: 22px;
+    height: 22px;
+    font-size: 9px;
+  }
+
+  body.salesman-dashboard-mode .sidebar-footer,
+  body.salesman-dashboard-mode .sidebar-user-shell {
+    gap: 8px;
+  }
+
+  body.salesman-dashboard-mode .sidebar-user-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 10px;
+  }
+
+  body.salesman-dashboard-mode .sidebar-user-copy strong {
+    font-size: 11px;
+  }
+
+  body.salesman-dashboard-mode .main {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    padding: 10px 12px;
+    overflow: hidden;
+  }
+
+  body.salesman-dashboard-mode .topbar {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: minmax(210px, 0.62fr) minmax(0, 1.38fr);
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    margin-bottom: 8px;
+    padding: 7px 10px;
+    border-radius: 12px;
+  }
+
+  body.salesman-dashboard-mode .topbar-title,
+  body.salesman-dashboard-mode .topbar-copy {
+    min-width: 0;
+  }
+
+  body.salesman-dashboard-mode .topbar-copy h1 {
+    margin-bottom: 2px;
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  body.salesman-dashboard-mode .topbar-copy p {
+    margin: 0;
+    overflow: hidden;
+    color: #52677f;
+    font-size: 11px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.salesman-dashboard-mode .topbar-actions {
+    flex-wrap: nowrap;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  body.salesman-dashboard-mode .smart-search-shell {
+    flex: 1 1 220px;
+    min-width: 150px;
+    max-width: 340px;
+  }
+
+  body.salesman-dashboard-mode .smart-search-field {
+    min-height: 34px;
+    padding: 0 9px;
+  }
+
+  body.salesman-dashboard-mode .smart-search-field input {
+    padding: 7px 0;
+    font-size: 11px;
+  }
+
+  body.salesman-dashboard-mode .topbar .ghost-button,
+  body.salesman-dashboard-mode .topbar .primary-button {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  body.salesman-dashboard-mode .overdue-banner {
+    position: relative;
+    top: auto;
+    flex: 0 0 auto;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 7px;
+    min-height: 34px;
+    margin-bottom: 8px;
+    padding: 5px 9px;
+    border-radius: 10px;
+  }
+
+  body.salesman-dashboard-mode .overdue-banner-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+
+  body.salesman-dashboard-mode .overdue-banner-copy {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+  }
+
+  body.salesman-dashboard-mode .overdue-banner-copy strong {
+    flex: 0 0 auto;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  body.salesman-dashboard-mode .overdue-banner-copy div {
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.salesman-dashboard-mode .overdue-banner-actions {
+    gap: 4px;
+  }
+
+  body.salesman-dashboard-mode .overdue-action,
+  body.salesman-dashboard-mode .overdue-dismiss {
+    min-height: 26px;
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  body.salesman-dashboard-mode .dashboard-view {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-dashboard.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: 76px 70px minmax(154px, 1.4fr) minmax(88px, 0.8fr) 58px;
+    gap: 10px;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-width: none;
+    overflow: hidden;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-hero,
+  body.salesman-dashboard-mode .salesman-simplified-metrics,
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline {
+    grid-column: 1 / -1;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-top-actions {
+    grid-column: span 5;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-call-queue {
+    grid-column: span 7;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-first-touch,
+  body.salesman-dashboard-mode .salesman-dashboard-loss-reasons {
+    grid-column: span 6;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 0;
+    padding: 10px 14px;
+    border-radius: 14px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-copy {
+    gap: 2px;
+    max-width: none;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-copy span {
+    font-size: 9px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-copy h2 {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-copy p {
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-hero > .primary-button {
+    min-height: 34px;
+    padding: 7px 11px;
+    font-size: 11px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    min-height: 0;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric {
+    justify-content: center;
+    gap: 3px;
+    min-height: 0;
+    padding: 10px 12px;
+    border-radius: 13px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric::after {
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric span,
+  body.salesman-dashboard-mode .salesman-triage-kicker,
+  body.salesman-dashboard-mode .salesman-first-touch-kicker,
+  body.salesman-dashboard-mode .salesman-loss-kicker {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric strong {
+    font-size: 30px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric small,
+  body.salesman-dashboard-mode .salesman-simplified-metric p {
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-block {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0;
+    border-radius: 14px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-block > .panel-header {
+    flex: 0 0 auto;
+    gap: 8px;
+    min-height: 45px;
+    padding: 7px 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-block > .panel-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-block > .panel-header span {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    font-size: 9px;
+    line-height: 1.2;
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-block .ghost-button {
+    min-height: 28px;
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-actions {
+    flex: 1 1 auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    min-height: 0;
+    padding: 8px 9px 9px;
+  }
+
+  body.salesman-dashboard-mode .salesman-triage-card {
+    gap: 4px;
+    min-height: 0;
+    height: 100%;
+    padding: 9px;
+    overflow: hidden;
+  }
+
+  body.salesman-dashboard-mode .salesman-triage-card strong,
+  body.salesman-dashboard-mode .salesman-first-touch-card strong,
+  body.salesman-dashboard-mode .salesman-loss-card strong,
+  body.salesman-dashboard-mode .salesman-simplified-queue-item strong {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  body.salesman-dashboard-mode .salesman-triage-card p {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  body.salesman-dashboard-mode .salesman-triage-card small {
+    font-size: 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-queue,
+  body.salesman-dashboard-mode .salesman-first-touch-list,
+  body.salesman-dashboard-mode .salesman-loss-prompts-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: rgba(84, 112, 143, 0.55) transparent;
+    scrollbar-width: thin;
+    box-shadow: inset 0 -12px 14px -16px rgba(18, 32, 51, 0.7);
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-queue::-webkit-scrollbar,
+  body.salesman-dashboard-mode .salesman-first-touch-list::-webkit-scrollbar,
+  body.salesman-dashboard-mode .salesman-loss-prompts-list::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-queue::-webkit-scrollbar-thumb,
+  body.salesman-dashboard-mode .salesman-first-touch-list::-webkit-scrollbar-thumb,
+  body.salesman-dashboard-mode .salesman-loss-prompts-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(84, 112, 143, 0.48);
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-queue {
+    gap: 6px;
+    padding: 8px 9px 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-queue-item {
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 7px 9px;
+    border-radius: 11px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-queue-item p {
+    margin-top: 2px;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-queue-item small {
+    flex: 0 0 auto;
+    min-width: 68px;
+    padding: 5px 7px;
+    font-size: 9px;
+  }
+
+  body.salesman-dashboard-mode .salesman-first-touch-list,
+  body.salesman-dashboard-mode .salesman-loss-prompts-list {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 6px;
+    padding: 7px 9px 9px;
+  }
+
+  body.salesman-dashboard-mode .salesman-first-touch-card,
+  body.salesman-dashboard-mode .salesman-loss-card {
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-first-touch-main,
+  body.salesman-dashboard-mode .salesman-loss-card-copy {
+    gap: 3px;
+  }
+
+  body.salesman-dashboard-mode .salesman-first-touch-card p,
+  body.salesman-dashboard-mode .salesman-loss-card p {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  body.salesman-dashboard-mode .salesman-first-touch-actions,
+  body.salesman-dashboard-mode .salesman-loss-card-actions {
+    gap: 4px;
+  }
+
+  body.salesman-dashboard-mode .salesman-first-touch-actions button,
+  body.salesman-dashboard-mode .salesman-loss-card-actions button {
+    min-height: 26px;
+    padding: 4px 7px;
+    font-size: 9px;
+  }
+
+  body.salesman-dashboard-mode .salesman-first-touch-list > .empty-copy,
+  body.salesman-dashboard-mode .salesman-loss-prompts-list > .empty-copy {
+    align-self: start;
+    margin: 0;
+    padding: 7px 9px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.54);
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.62fr) minmax(0, 1.38fr);
+    align-items: center;
+    gap: 8px;
+    padding: 6px 9px;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header {
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header h2 {
+    font-size: 16px;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header span {
+    font-size: 9px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-pipeline-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    min-width: 0;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-stage {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 36px;
+    padding: 6px 9px;
+    border-radius: 9px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-stage span {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-stage strong {
+    margin: 0;
+    font-size: 20px;
+  }
+}
+
 /* Al Ras Steel premium UI refresh */
 
 :root {
@@ -14586,5 +15145,30 @@ body,
   .calendar-toolbar {
     width: 100%;
     justify-content: space-between;
+  }
+}
+
+/* Keep the laptop dashboard density rules authoritative over older wide-screen overrides. */
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.salesman-dashboard-mode .app-shell {
+    grid-template-columns: 156px minmax(0, 1fr);
+  }
+
+  body.salesman-dashboard-mode .sidebar {
+    padding: 14px 12px;
+  }
+
+  body.salesman-dashboard-mode .main {
+    padding: 10px 12px;
+  }
+
+  body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
+    gap: 10px;
+  }
+}
+
+@media (min-width: 1025px) and (min-height: 600px) and (max-height: 650px) {
+  body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
+    grid-template-rows: 70px 64px minmax(148px, 1.4fr) minmax(82px, 0.8fr) 52px;
   }
 }
