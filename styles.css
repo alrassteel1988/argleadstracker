@@ -83,6 +83,24 @@
   --bauhaus-red-soft: rgba(239, 68, 68, 0.08);
   --bauhaus-yellow-soft: rgba(245, 158, 11, 0.08);
   --bauhaus-green-soft: rgba(15, 154, 138, 0.08);
+  --bauhaus-ink: #0B0B0B;
+  --bauhaus-surface: #FFFFFF;
+  --bauhaus-blue: #378ADD;
+  --bauhaus-blue-text: #042C53;
+  --bauhaus-blue-tint: #B5D4F4;
+  --bauhaus-red: #E24B4A;
+  --bauhaus-red-text: #501313;
+  --bauhaus-red-tint: #F7C1C1;
+  --bauhaus-amber: #EF9F27;
+  --bauhaus-amber-text: #412402;
+  --bauhaus-amber-tint: #FAC775;
+  --bauhaus-green: #97C459;
+  --bauhaus-green-text: #173404;
+  --bauhaus-contacted: #85B7EB;
+  --bauhaus-coral: #F0997B;
+  --bauhaus-coral-text: #4A1B0C;
+  --bauhaus-border: 2px solid var(--bauhaus-ink);
+  --bauhaus-radius: 4px;
   --font-sans: var(--font-body);
   --text-page: 32px;
   --text-section: 24px;
@@ -15171,4 +15189,226 @@ body,
   body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
     grid-template-rows: 70px 64px minmax(148px, 1.4fr) minmax(82px, 0.8fr) 52px;
   }
+}
+
+/* Salesman Dashboard Bauhaus card theme. Layout and navigation remain unchanged. */
+body.salesman-dashboard-mode #openLeadForm {
+  border: var(--bauhaus-border);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-ink);
+  box-shadow: none;
+  color: var(--bauhaus-surface);
+}
+
+body.salesman-dashboard-mode #openLeadForm:hover,
+body.salesman-dashboard-mode #openLeadForm:focus-visible {
+  border-color: var(--bauhaus-ink);
+  background: var(--bauhaus-ink);
+  box-shadow: none;
+  color: var(--bauhaus-surface);
+}
+
+body.salesman-dashboard-mode .overdue-banner {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .overdue-banner-icon {
+  z-index: 2;
+  width: 10px;
+  height: 10px;
+  margin-left: 6px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--bauhaus-red);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .overdue-banner-copy {
+  align-self: stretch;
+  min-width: 0;
+  margin-left: -25px;
+  padding: 5px 10px 5px 30px;
+  border: var(--bauhaus-border);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .overdue-banner-copy strong,
+body.salesman-dashboard-mode .overdue-banner-copy div {
+  color: var(--bauhaus-red-text);
+}
+
+body.salesman-dashboard-mode .overdue-action {
+  border: var(--bauhaus-border);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-red);
+  box-shadow: none;
+  color: var(--bauhaus-surface);
+}
+
+body.salesman-dashboard-mode .overdue-action:hover,
+body.salesman-dashboard-mode .overdue-action:focus-visible {
+  border-color: var(--bauhaus-ink);
+  background: var(--bauhaus-red);
+  box-shadow: none;
+  color: var(--bauhaus-surface);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero,
+body.salesman-dashboard-mode .salesman-simplified-block {
+  border: var(--bauhaus-border);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero::before,
+body.salesman-dashboard-mode .salesman-simplified-block::before,
+body.salesman-dashboard-mode .salesman-simplified-metric::after,
+body.salesman-dashboard-mode .salesman-triage-card::before,
+body.salesman-dashboard-mode .salesman-first-touch-card::before,
+body.salesman-dashboard-mode .salesman-loss-card::before {
+  display: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-block > .panel-header {
+  border-bottom: var(--bauhaus-border);
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric {
+  border: var(--bauhaus-border);
+  border-radius: var(--bauhaus-radius);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-info {
+  background: var(--bauhaus-blue);
+  color: var(--bauhaus-blue-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-danger {
+  background: var(--bauhaus-red);
+  color: var(--bauhaus-red-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-warm {
+  background: var(--bauhaus-amber);
+  color: var(--bauhaus-amber-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-info > *,
+body.salesman-dashboard-mode .salesman-triage-card.tone-info > * {
+  color: var(--bauhaus-blue-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-danger > *,
+body.salesman-dashboard-mode .salesman-triage-card.tone-danger > * {
+  color: var(--bauhaus-red-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-warm > *,
+body.salesman-dashboard-mode .salesman-triage-card.tone-warm > * {
+  color: var(--bauhaus-amber-text);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card,
+body.salesman-dashboard-mode .salesman-simplified-queue-item,
+body.salesman-dashboard-mode .salesman-first-touch-card,
+body.salesman-dashboard-mode .salesman-loss-card {
+  border: var(--bauhaus-border);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-danger {
+  background: var(--bauhaus-red-tint);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-warm {
+  background: var(--bauhaus-amber-tint);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-info {
+  background: var(--bauhaus-blue-tint);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-neutral {
+  background: var(--bauhaus-amber-tint);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-neutral > * {
+  color: var(--bauhaus-amber-text);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card:hover,
+body.salesman-dashboard-mode .salesman-triage-card:focus-visible,
+body.salesman-dashboard-mode .salesman-simplified-queue-item:hover,
+body.salesman-dashboard-mode .salesman-simplified-queue-item:focus-visible,
+body.salesman-dashboard-mode .salesman-first-touch-card:hover,
+body.salesman-dashboard-mode .salesman-loss-card:hover {
+  border-color: var(--bauhaus-ink);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-queue-item .chip,
+body.salesman-dashboard-mode .salesman-first-touch-card .chip,
+body.salesman-dashboard-mode .salesman-loss-card .chip,
+body.salesman-dashboard-mode .salesman-simplified-block .small-action,
+body.salesman-dashboard-mode .salesman-simplified-block .ghost-button {
+  border: var(--bauhaus-border);
+  border-radius: var(--bauhaus-radius);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-queue-item .chip {
+  background: var(--bauhaus-blue-tint);
+  color: var(--bauhaus-blue-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-queue-item .chip.hot {
+  background: var(--bauhaus-amber-tint);
+  color: var(--bauhaus-amber-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-queue-item:first-child .chip.hot {
+  background: var(--bauhaus-red-tint);
+  color: var(--bauhaus-red-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage {
+  border: var(--bauhaus-border);
+  border-radius: var(--bauhaus-radius);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage:nth-child(1) {
+  background: var(--bauhaus-green);
+  color: var(--bauhaus-green-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage:nth-child(2) {
+  background: var(--bauhaus-contacted);
+  color: var(--bauhaus-blue-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage:nth-child(3) {
+  background: var(--bauhaus-coral);
+  color: var(--bauhaus-coral-text);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage:nth-child(4) {
+  background: var(--bauhaus-ink);
+  color: var(--bauhaus-surface);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage span,
+body.salesman-dashboard-mode .salesman-simplified-stage strong {
+  color: inherit;
 }
