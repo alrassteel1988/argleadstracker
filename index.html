@@ -182,7 +182,7 @@
         </section>
 
         <section class="dashboard-view" id="dashboardView">
-          <div class="panel salesman-simplified-dashboard hidden" id="salesmanSimplifiedDashboard">
+          <div class="panel salesman-simplified-dashboard dashboard-grid hidden" id="salesmanSimplifiedDashboard">
             <div class="salesman-simplified-hero">
               <div class="salesman-simplified-copy">
                 <span id="salesmanSimplifiedGreeting">Good morning</span>
@@ -192,8 +192,7 @@
               <button class="primary-button" id="salesmanSimplifiedAddLead" type="button">Add lead</button>
             </div>
             <div class="salesman-simplified-metrics" id="salesmanSimplifiedMetrics"></div>
-            <div class="salesman-simplified-grid">
-              <section class="salesman-simplified-block">
+            <section class="salesman-simplified-block salesman-dashboard-top-actions">
                 <div class="panel-header">
                   <div>
                     <h2>Top 3 actions today</h2>
@@ -201,8 +200,8 @@
                   </div>
                 </div>
                 <div class="salesman-simplified-actions" id="salesmanSimplifiedActions"></div>
-              </section>
-              <section class="salesman-simplified-block">
+            </section>
+            <section class="salesman-simplified-block salesman-dashboard-call-queue">
                 <div class="panel-header">
                   <div>
                     <h2>Call these next</h2>
@@ -213,10 +212,8 @@
                   </div>
                 </div>
                 <div class="salesman-simplified-queue" id="salesmanSimplifiedQueue"></div>
-              </section>
-            </div>
-            <div class="salesman-simplified-grid">
-              <section class="salesman-simplified-block">
+            </section>
+            <section class="salesman-simplified-block salesman-dashboard-first-touch">
                 <div class="panel-header">
                   <div>
                     <h2>New or assigned leads needing first touch</h2>
@@ -224,8 +221,8 @@
                   </div>
                 </div>
                 <div class="salesman-first-touch-list" id="salesmanSimplifiedFirstTouch"></div>
-              </section>
-              <section class="salesman-simplified-block">
+            </section>
+            <section class="salesman-simplified-block salesman-dashboard-loss-reasons">
                 <div class="panel-header">
                   <div>
                     <h2>Loss reasons due</h2>
@@ -233,9 +230,8 @@
                   </div>
                 </div>
                 <div class="salesman-loss-prompts-list" id="salesmanSimplifiedLossPrompts"></div>
-              </section>
-            </div>
-            <section class="salesman-simplified-block">
+            </section>
+            <section class="salesman-simplified-block salesman-dashboard-pipeline">
               <div class="panel-header">
                 <div>
                   <h2>My pipeline</h2>
