@@ -108,7 +108,7 @@ const ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || "";
 const SESSION_SECRET = process.env.APP_SESSION_SECRET || "local-development-session-secret-change-me";
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 const transcriptionRateLimit = new Map();
-const COMPANY_STATUSES = ["PROSPECT", "OUTREACH", "ENGAGED", "SAMPLING", "ACTIVE", "DORMANT"];
+const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "LOST"];
 const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
 const COMPANY_TIERS = ["1", "2", "3"];
 const GCC_TERRITORIES = ["UAE-North", "UAE-South", "Saudi", "Kuwait", "Bahrain", "Oman", "Mixed"];
@@ -636,11 +636,26 @@ function normalizePmrAnalysisDraft(input = {}) {
   return draft;
 }
 
-function normalizeStageValue(value, fallback = "PROSPECT") {
+function normalizeStageValue(value, fallback = "NEW") {
   const normalized = String(value || "").trim().toUpperCase();
-  if (normalized === "LOST") return "DORMANT";
-  if (normalized === "WON") return "ACTIVE";
-  return COMPANY_STATUSES.includes(normalized) ? normalized : fallback;
+  const aliases = {
+    PROSPECT: "NEW",
+    NEW: "NEW",
+    OUTREACH: "CONTACTED",
+    QUALIFIED: "CONTACTED",
+    CONTACTED: "CONTACTED",
+    ENGAGED: "NEGOTIATION",
+    SAMPLING: "NEGOTIATION",
+    PROPOSAL: "NEGOTIATION",
+    "PROPOSAL SENT": "NEGOTIATION",
+    NEGOTIATION: "NEGOTIATION",
+    ACTIVE: "WON",
+    WON: "WON",
+    DORMANT: "LOST",
+    "AT RISK": "LOST",
+    LOST: "LOST"
+  };
+  return aliases[normalized] || (COMPANY_STATUSES.includes(normalized) ? normalized : fallback);
 }
 
 async function analyzePmrTranscriptText(transcript, lead = {}) {
@@ -768,7 +783,7 @@ function normalizeActivityPurpose(value) {
 
 function normalizeLead(input) {
   const now = new Date().toISOString().slice(0, 10);
-  const status = normalizeStageValue(input.stage || input.status || input.lead_status, "PROSPECT");
+  const status = normalizeStageValue(input.stage || input.status || input.lead_status, "NEW");
   const tier = COMPANY_TIERS.includes(String(input.tier || "")) ? String(input.tier) : "2";
   const list = value => Array.isArray(value) ? value.map(String).map(item => item.trim()).filter(Boolean) : String(value || "").split(/\n|,/).map(item => item.trim()).filter(Boolean);
   const personnel = Array.isArray(input.key_personnel) ? input.key_personnel : [];
@@ -843,8 +858,7 @@ function normalizeLead(input) {
 }
 
 function isLostStage(value) {
-  const normalized = String(value || "").trim().toUpperCase();
-  return normalized === "DORMANT" || normalized === "LOST";
+  return normalizeStageValue(value, "NEW") === "LOST";
 }
 
 function normalizeLostFields(input = {}, user = {}) {
@@ -1154,15 +1168,21 @@ function expectedFrequencyDays(lead) {
 function relationshipHealth(lead) {
   const elapsed = daysSince(lead.last_activity || lead.next_action_date);
   const expected = expectedFrequencyDays(lead);
-  if (lead.stage === "DORMANT" || elapsed > expected * 1.6) return { label: "RED", score: 1, reason: `${elapsed} days since last activity` };
+  if (normalizeStageValue(lead.stage, "NEW") === "LOST" || elapsed > expected * 1.6) return { label: "RED", score: 1, reason: `${elapsed} days since last activity` };
   if (elapsed > expected) return { label: "AMBER", score: 2, reason: `${elapsed} days since last activity` };
   return { label: "GREEN", score: 3, reason: `Activity within ${expected}-day expected contact window` };
 }
 
 function leadWithDerivedFields(lead) {
-  return {
+  const stage = normalizeStageValue(lead.stage || lead.lead_status, "NEW");
+  const normalizedLead = {
     ...lead,
-    health: relationshipHealth(lead)
+    stage,
+    lead_status: stage
+  };
+  return {
+    ...normalizedLead,
+    health: relationshipHealth(normalizedLead)
   };
 }
 
@@ -2115,7 +2135,7 @@ function portfolioCompany(lead, latestPmr = null, intel = []) {
   return {
     id: lead.id,
     name: lead.company_name,
-    status: lead.stage || lead.lead_status || "PROSPECT",
+    status: normalizeStageValue(lead.stage || lead.lead_status, "NEW"),
     tier: String(lead.tier || "2"),
     sector: lead.sector || lead.industry || "",
     territory: lead.territory || "",
@@ -2141,7 +2161,7 @@ function portfolioCompany(lead, latestPmr = null, intel = []) {
 function computePipelineMetricsForPortfolio(companies, leads, activities) {
   const byStatus = COMPANY_STATUSES.reduce((acc, status) => ({ ...acc, [status]: 0 }), {});
   companies.forEach(company => {
-    const status = String(company.status || "PROSPECT").toUpperCase();
+    const status = normalizeStageValue(company.status, "NEW");
     byStatus[status] = (byStatus[status] || 0) + 1;
   });
   const { monthStart, prevMonthStart } = monthBounds();
@@ -2676,7 +2696,7 @@ function importedLeadPayload(row, user, importedAt) {
     imported_by: user.id,
     source: row?.source || "CSV import",
     activity_purpose: row?.activity_purpose || "Company Introductory",
-    stage: normalizeStageValue(row?.stage || row?.lead_status, "PROSPECT"),
+    stage: normalizeStageValue(row?.stage || row?.lead_status, "NEW"),
     priority: row?.priority || "New",
     estimated_value: Number(row?.estimated_value || 0) || 0
   };
@@ -2923,7 +2943,7 @@ function weeklyProblemCandidateFlags(lead) {
   const nextActionDate = isoDateOnly(lead?.next_action_date);
   if (nextActionDate && nextActionDate < new Date().toISOString().slice(0, 10)) flags.push(`Follow-up overdue since ${nextActionDate}`);
   if (String(lead?.priority || "").toLowerCase() === "at risk") flags.push("Marked at risk in CRM");
-  if (String(lead?.stage || "").toUpperCase() === "DORMANT") flags.push("Lead is in dormant / lost stage");
+  if (normalizeStageValue(lead?.stage, "NEW") === "LOST") flags.push("Lead is in lost stage");
   const lastActivity = isoDateOnly(lead?.last_activity);
   if (lastActivity) {
     const age = Math.floor((Date.now() - new Date(`${lastActivity}T00:00:00`).getTime()) / 86400000);
@@ -2960,7 +2980,7 @@ function securedOrdersForWeeklyReport(leads, weekEnding) {
 
 function expectedOrdersForWeeklyReport(leads) {
   return (leads || [])
-    .filter(lead => !["ACTIVE", "DORMANT"].includes(String(lead?.stage || "").toUpperCase()))
+    .filter(lead => !["WON", "LOST"].includes(normalizeStageValue(lead?.stage, "NEW")))
     .sort((a, b) => Number(b.estimated_value || 0) - Number(a.estimated_value || 0))
     .slice(0, 12)
     .map(lead => ({

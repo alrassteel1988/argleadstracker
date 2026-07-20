@@ -182,6 +182,69 @@
         </section>
 
         <section class="dashboard-view" id="dashboardView">
+          <div class="panel salesman-simplified-dashboard hidden" id="salesmanSimplifiedDashboard">
+            <div class="salesman-simplified-hero">
+              <div class="salesman-simplified-copy">
+                <span id="salesmanSimplifiedGreeting">Good morning</span>
+                <h2>What do I do next?</h2>
+                <p>Start with the leads that need your next move right now, then expand the wider CRM only when you need it.</p>
+              </div>
+              <button class="primary-button" id="salesmanSimplifiedAddLead" type="button">Add lead</button>
+            </div>
+            <div class="salesman-simplified-metrics" id="salesmanSimplifiedMetrics"></div>
+            <div class="salesman-simplified-grid">
+              <section class="salesman-simplified-block">
+                <div class="panel-header">
+                  <div>
+                    <h2>Top 3 actions today</h2>
+                    <span>Use the next-best moves first and ignore the rest until this queue is clear.</span>
+                  </div>
+                </div>
+                <div class="salesman-simplified-actions" id="salesmanSimplifiedActions"></div>
+              </section>
+              <section class="salesman-simplified-block">
+                <div class="panel-header">
+                  <div>
+                    <h2>Call these next</h2>
+                    <span id="salesmanSimplifiedQueueMeta">Upcoming follow-ups for your book only.</span>
+                  </div>
+                  <div class="panel-header-actions">
+                    <button class="ghost-button" id="salesmanSimplifiedViewAll" type="button">View all</button>
+                  </div>
+                </div>
+                <div class="salesman-simplified-queue" id="salesmanSimplifiedQueue"></div>
+              </section>
+            </div>
+            <div class="salesman-simplified-grid">
+              <section class="salesman-simplified-block">
+                <div class="panel-header">
+                  <div>
+                    <h2>New or assigned leads needing first touch</h2>
+                    <span>Keep the first contact moving so new work never goes stale.</span>
+                  </div>
+                </div>
+                <div class="salesman-first-touch-list" id="salesmanSimplifiedFirstTouch"></div>
+              </section>
+              <section class="salesman-simplified-block">
+                <div class="panel-header">
+                  <div>
+                    <h2>Loss reasons due</h2>
+                    <span>Capture the reason within 3 days so the record is complete while it is still fresh.</span>
+                  </div>
+                </div>
+                <div class="salesman-loss-prompts-list" id="salesmanSimplifiedLossPrompts"></div>
+              </section>
+            </div>
+            <section class="salesman-simplified-block">
+              <div class="panel-header">
+                <div>
+                  <h2>My pipeline</h2>
+                  <span>New, contacted, negotiation, and won counts for your own book.</span>
+                </div>
+              </div>
+              <div class="salesman-simplified-pipeline-strip" id="salesmanSimplifiedPipeline"></div>
+            </section>
+          </div>
           <div class="panel dashboard-quick-actions" id="dashboardQuickActions">
             <div class="panel-header">
               <div>

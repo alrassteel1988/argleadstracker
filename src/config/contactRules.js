@@ -1,10 +1,22 @@
 const STATUS_THRESHOLDS = {
-  PROSPECT: 30,
-  OUTREACH: 21,
-  ENGAGED: 14,
-  SAMPLING: 14,
-  ACTIVE: 30,
-  DORMANT: 90
+  NEW: 30,
+  CONTACTED: 21,
+  NEGOTIATION: 14,
+  WON: 30,
+  LOST: 90
+};
+
+const STATUS_ALIASES = {
+  PROSPECT: "NEW",
+  OUTREACH: "CONTACTED",
+  QUALIFIED: "CONTACTED",
+  ENGAGED: "NEGOTIATION",
+  SAMPLING: "NEGOTIATION",
+  PROPOSAL: "NEGOTIATION",
+  "PROPOSAL SENT": "NEGOTIATION",
+  ACTIVE: "WON",
+  DORMANT: "LOST",
+  "AT RISK": "LOST"
 };
 
 const TIER_MULTIPLIERS = {
@@ -14,7 +26,8 @@ const TIER_MULTIPLIERS = {
 };
 
 function effectiveThreshold(status, tier) {
-  const key = String(status || "PROSPECT").trim().toUpperCase();
+  const rawKey = String(status || "NEW").trim().toUpperCase();
+  const key = STATUS_ALIASES[rawKey] || rawKey;
   const base = STATUS_THRESHOLDS[key] ?? 30;
   const mult = TIER_MULTIPLIERS[String(tier || "2")] ?? 1.0;
   return Math.round(base * mult);

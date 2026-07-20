@@ -61,7 +61,7 @@ const state = {
   actionPlanCollapsed: {},
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
   pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
-  kanbanStage: localStorage.getItem("arg_kanban_stage") || "PROSPECT",
+  kanbanStage: localStorage.getItem("arg_kanban_stage") || "NEW",
   draggedLeadId: "",
   importLeads: null,
   activities: [],
@@ -222,6 +222,17 @@ const els = {
   metricsShell: document.querySelector("#metricsShell"),
   metricsPanel: document.querySelector("#metricsPanel"),
   dashboardView: document.querySelector("#dashboardView"),
+  salesmanSimplifiedDashboard: document.querySelector("#salesmanSimplifiedDashboard"),
+  salesmanSimplifiedGreeting: document.querySelector("#salesmanSimplifiedGreeting"),
+  salesmanSimplifiedAddLead: document.querySelector("#salesmanSimplifiedAddLead"),
+  salesmanSimplifiedMetrics: document.querySelector("#salesmanSimplifiedMetrics"),
+  salesmanSimplifiedActions: document.querySelector("#salesmanSimplifiedActions"),
+  salesmanSimplifiedQueueMeta: document.querySelector("#salesmanSimplifiedQueueMeta"),
+  salesmanSimplifiedQueue: document.querySelector("#salesmanSimplifiedQueue"),
+  salesmanSimplifiedViewAll: document.querySelector("#salesmanSimplifiedViewAll"),
+  salesmanSimplifiedFirstTouch: document.querySelector("#salesmanSimplifiedFirstTouch"),
+  salesmanSimplifiedLossPrompts: document.querySelector("#salesmanSimplifiedLossPrompts"),
+  salesmanSimplifiedPipeline: document.querySelector("#salesmanSimplifiedPipeline"),
   dashboardQuickActions: document.querySelector("#dashboardQuickActions"),
   dashboardFirstTouchList: document.querySelector("#dashboardFirstTouchList"),
   dashboardQuickLogActivity: document.querySelector("#dashboardQuickLogActivity"),
@@ -609,13 +620,33 @@ const money = new Intl.NumberFormat("en-AE", {
 });
 
 const KANBAN_STAGES = [
-  { key: "PROSPECT", label: "Prospect", color: "stage-prospect", aliases: ["PROSPECT", "NEW"] },
-  { key: "OUTREACH", label: "Qualified", color: "stage-qualified", aliases: ["OUTREACH", "QUALIFIED"] },
-  { key: "SAMPLING", label: "Proposal Sent", color: "stage-proposal", aliases: ["SAMPLING", "PROPOSAL", "PROPOSAL SENT"] },
-  { key: "ENGAGED", label: "Negotiation", color: "stage-negotiation", aliases: ["ENGAGED", "NEGOTIATION"] },
-  { key: "ACTIVE", label: "Won", color: "stage-won", aliases: ["ACTIVE", "WON"] },
-  { key: "DORMANT", label: "Lost", color: "stage-lost", aliases: ["DORMANT", "LOST", "AT RISK"] }
+  { key: "NEW", label: "New", color: "stage-prospect", aliases: ["NEW", "PROSPECT"] },
+  { key: "CONTACTED", label: "Contacted", color: "stage-qualified", aliases: ["CONTACTED", "OUTREACH", "QUALIFIED"] },
+  { key: "NEGOTIATION", label: "Negotiation", color: "stage-negotiation", aliases: ["NEGOTIATION", "ENGAGED", "SAMPLING", "PROPOSAL", "PROPOSAL SENT"] },
+  { key: "WON", label: "Won", color: "stage-won", aliases: ["WON", "ACTIVE"] },
+  { key: "LOST", label: "Lost", color: "stage-lost", aliases: ["LOST", "DORMANT", "AT RISK"] }
 ];
+
+const STAGE_ALIAS_MAP = new Map(
+  KANBAN_STAGES.flatMap(stage => stage.aliases.map(alias => [String(alias).trim().toUpperCase(), stage.key]))
+);
+
+function normalizeRoleValue(role) {
+  return String(role || "").trim().toLowerCase();
+}
+
+function isSalesmanRole(role = state.currentUser?.role) {
+  return normalizeRoleValue(role) === "salesman";
+}
+
+function isPrivilegedDashboardRole(role = state.currentUser?.role) {
+  return ["admin", "manager", "director"].includes(normalizeRoleValue(role));
+}
+
+function normalizeStageKey(stage, fallback = "NEW") {
+  const normalized = String(stage || "").trim().toUpperCase();
+  return STAGE_ALIAS_MAP.get(normalized) || fallback;
+}
 
 const NEXT_ACTION_PLAN_OPTIONS = ["To Call", "To Send Email", "To Visit"];
 const ACTIVITY_PURPOSE_OPTIONS = [
@@ -3220,7 +3251,7 @@ function importErrorReport(rows) {
 
 function normalizeImportStage(value) {
   const raw = String(value || "").trim();
-  if (!raw) return "PROSPECT";
+  if (!raw) return "NEW";
   const upper = raw.toUpperCase();
   const stage = KANBAN_STAGES.find(item => item.key === upper || item.aliases.includes(upper) || item.label.toUpperCase() === upper);
   if (stage) return stage.key;
@@ -3271,8 +3302,8 @@ function mappedImportRows() {
     if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) warnings.push("Email format looks invalid.");
     if (data.phone && data.phone.replace(/\D/g, "").length < 7) warnings.push("Phone has fewer than 7 digits.");
     const stage = normalizeImportStage(data.stage);
-    if (!stage) warnings.push("Stage not recognised; defaulted to Prospect.");
-    data.stage = stage || "PROSPECT";
+    if (!stage) warnings.push("Stage not recognised; defaulted to New.");
+    data.stage = stage || "NEW";
     const priority = normalizeImportPriority(data.priority);
     if (!priority) warnings.push("Priority not recognised; defaulted to New.");
     data.priority = priority || "New";
@@ -3666,7 +3697,7 @@ function smartSearchHasPhrase(query, phrases) {
 
 function smartSearchMetaLine(lead) {
   return [
-    stageDisplayLabel(lead.stage || "PROSPECT"),
+    stageDisplayLabel(lead.stage || "NEW"),
     lead.priority || "No priority",
     lead.assigned_salesman || "Unassigned"
   ].filter(Boolean).join(" · ");
@@ -3681,16 +3712,16 @@ function smartSearchFollowupLine(lead, overdueCount = 0) {
 }
 
 function smartSearchLeadResult(lead, query, tokens) {
-  const stageUpper = String(lead.stage || "").trim().toUpperCase();
+  const normalizedStage = normalizeStageKey(lead.stage, "NEW");
   const reminders = remindersForLead(lead);
   const overdueCount = overdueReminderItemsForLead(lead).length + (leadHasOverdueNextAction(lead) ? 1 : 0);
   const noFollowup = !lead.next_action_date;
   const staleDays = daysSince(lead.last_activity || lead.updated_at || lead.created_at);
-  const dormant = stageUpper === "DORMANT" || staleDays >= 60;
-  const inactive = stageUpper === "DORMANT" || staleDays >= 75 || (!lead.last_activity && !lead.next_action_date);
-  const openPipeline = !["WON", "LOST", "ACTIVE", "DORMANT"].includes(stageUpper);
+  const dormant = normalizedStage === "LOST" || staleDays >= 60;
+  const inactive = normalizedStage === "LOST" || staleDays >= 75 || (!lead.last_activity && !lead.next_action_date);
+  const openPipeline = !["WON", "LOST"].includes(normalizedStage);
   const lostLead = isLostStageValue(lead.stage) || Boolean(lead.lost_reason);
-  const activeCustomer = stageUpper === "ACTIVE";
+  const activeCustomer = normalizedStage === "WON";
   const quotationRelated = Boolean(lead.quotation_ref)
     || /quotation|quote|proposal/i.test([
       lead.notes,
@@ -3754,8 +3785,8 @@ function smartSearchLeadResult(lead, query, tokens) {
     kind: "lead",
     id: lead.id,
     company_name: lead.company_name || "Unnamed company",
-    stage: stageDisplayLabel(lead.stage || "PROSPECT"),
-    rawStage: lead.stage || "PROSPECT",
+    stage: stageDisplayLabel(lead.stage || "NEW"),
+    rawStage: normalizeStageKey(lead.stage || "NEW"),
     meta: smartSearchMetaLine(lead),
     reason: best.label,
     supporting: smartSearchFollowupLine(lead, overdueCount),
@@ -3907,11 +3938,11 @@ function healthClass(health) {
 }
 
 function isOverdue(lead) {
-  return lead.next_action_date <= today() && lead.stage !== "ACTIVE" && lead.stage !== "DORMANT";
+  return lead.next_action_date <= today() && !["WON", "LOST"].includes(normalizeStageKey(lead.stage));
 }
 
 function isAdminOrManager() {
-  return ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase());
+  return isPrivilegedDashboardRole();
 }
 
 function activeLeadForOverdue(lead) {
@@ -4013,10 +4044,10 @@ function renderMetrics() {
   const due = state.leads.filter(isOverdue).length;
   const overdue = overdueItems().length;
   const openValue = state.leads
-    .filter(lead => lead.stage !== "ACTIVE" && lead.stage !== "DORMANT")
+    .filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage)))
     .reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
-  const active = state.leads.filter(lead => lead.stage === "ACTIVE").length;
-  const atRisk = state.leads.filter(lead => lead.health?.label === "RED" || lead.stage === "DORMANT" || lead.priority === "At Risk").length;
+  const active = state.leads.filter(lead => normalizeStageKey(lead.stage) === "WON").length;
+  const atRisk = state.leads.filter(lead => lead.health?.label === "RED" || normalizeStageKey(lead.stage) === "LOST" || lead.priority === "At Risk").length;
   renderHeaderSummary();
   els.metricTotal.textContent = active;
   if (els.metricTotalSub) els.metricTotalSub.textContent = `of ${state.leads.length}`;
@@ -4036,7 +4067,7 @@ function hasLeadContactedActivity(lead) {
 }
 
 function isOpenPipelineStage(stage) {
-  return ["OUTREACH", "SAMPLING", "ENGAGED"].includes(kanbanStageForLead({ stage }));
+  return ["CONTACTED", "NEGOTIATION"].includes(kanbanStageForLead({ stage }));
 }
 
 function percentOf(value, total) {
@@ -4053,8 +4084,8 @@ function pipelineFunnelMetricsForLeads(leads) {
   const totalAssignedLeads = leads.length;
   const contactedLeads = leads.filter(hasLeadContactedActivity).length;
   const openPipelineLeads = leads.filter(lead => isOpenPipelineStage(lead.stage)).length;
-  const wonDeals = leads.filter(lead => kanbanStageForLead(lead) === "ACTIVE").length;
-  const lostDeals = leads.filter(lead => kanbanStageForLead(lead) === "DORMANT").length;
+  const wonDeals = leads.filter(lead => kanbanStageForLead(lead) === "WON").length;
+  const lostDeals = leads.filter(lead => kanbanStageForLead(lead) === "LOST").length;
   return {
     totalAssignedLeads,
     contactedLeads,
@@ -4716,7 +4747,7 @@ function salesmanPerformanceRows() {
     const followupsCompleted = activities.filter(completedFollowupActivity).length;
     const upcomingFollowups = assignedLeads.flatMap(remindersForLead)
       .filter(reminder => !reminder.due_date || reminder.due_date >= today()).length;
-    const progressedLeads = assignedLeads.filter(lead => !["PROSPECT", "DORMANT"].includes(String(lead.stage || "").toUpperCase())).length;
+    const progressedLeads = assignedLeads.filter(lead => !["NEW", "LOST"].includes(normalizeStageKey(lead.stage))).length;
     const lastActivityDate = latestDate([
       ...assignedLeads.map(lead => lead.last_activity),
       ...activities.map(activity => activity.at)
@@ -5316,7 +5347,7 @@ function renderSalesmanFollowupCard(reminder) {
         <strong>${escapeHtml(reminder.company_name)}</strong>
         <p>${escapeHtml(reminder.activity_required || reminder.text || "Follow up with customer")}</p>
         <div class="chip-row">
-          <span class="chip">${escapeHtml(reminder.stage || "PROSPECT")}</span>
+          <span class="chip">${escapeHtml(stageDisplayLabel(reminder.stage || "NEW"))}</span>
           <span class="chip">${escapeHtml([reminder.due_date, reminder.due_time].filter(Boolean).join(" "))}</span>
           <span class="chip ${priorityClass(reminder.priority)}">${escapeHtml(reminder.priority || "Normal")}</span>
         </div>
@@ -5332,7 +5363,7 @@ function renderSalesmanFollowupCard(reminder) {
 }
 
 function renderPortfolioAnalytics() {
-  if (!els.portfolioPanel || state.currentUser?.role === "admin") return;
+  if (!els.portfolioPanel || !isSalesmanRole()) return;
   const visible = Boolean(state.dashboardToolsOpen && state.dashboardPerformanceOpen);
   els.portfolioPanel.classList.toggle("hidden", !visible);
   if (!visible) return;
@@ -5340,8 +5371,8 @@ function renderPortfolioAnalytics() {
   const allDue = salesmanFollowups();
   const overdue = allDue.filter(reminder => daysUntil(reminder.due_date) < 0);
   els.portfolioTotal.textContent = leads.length;
-  els.portfolioActive.textContent = leads.filter(lead => lead.stage === "ACTIVE").length;
-  els.portfolioDormant.textContent = leads.filter(lead => lead.stage === "DORMANT").length;
+  els.portfolioActive.textContent = leads.filter(lead => normalizeStageKey(lead.stage) === "WON").length;
+  els.portfolioDormant.textContent = leads.filter(lead => normalizeStageKey(lead.stage) === "LOST").length;
   els.portfolioHot.textContent = leads.filter(lead => String(lead.priority || "").toLowerCase() === "hot").length;
   els.portfolioDue.textContent = allDue.filter(reminder => daysUntil(reminder.due_date) <= 7).length;
   els.portfolioOverdue.textContent = overdue.length;
@@ -5351,7 +5382,7 @@ function renderPortfolioAnalytics() {
     ? countBy(leads, inferCountry)
     : reportView === "emirate"
       ? countBy(leads, inferEmirate)
-      : countBy(leads, lead => lead.stage || "PROSPECT");
+      : countBy(leads, lead => stageDisplayLabel(lead.stage || "NEW"));
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const slices = pieSlices(entries);
   els.portfolioPie.style.background = slices.length
@@ -5362,9 +5393,9 @@ function renderPortfolioAnalytics() {
     <span><i style="background:${slice.color}"></i>${escapeHtml(slice.label)} <strong>${slice.count}</strong></span>
   `).join("") || `<p class="empty-copy">No leads match the selected filters.</p>`;
 
-  const stageCounts = Object.entries(countBy(leads, lead => lead.stage || "PROSPECT")).sort((a, b) => b[1] - a[1]);
+  const stageCounts = Object.entries(countBy(leads, lead => stageDisplayLabel(lead.stage || "NEW"))).sort((a, b) => b[1] - a[1]);
   const countryCounts = Object.entries(countBy(leads, inferCountry)).sort((a, b) => b[1] - a[1]);
-  const dormantPct = leads.length ? Math.round((leads.filter(lead => lead.stage === "DORMANT").length / leads.length) * 100) : 0;
+  const dormantPct = leads.length ? Math.round((leads.filter(lead => normalizeStageKey(lead.stage) === "LOST").length / leads.length) * 100) : 0;
   const concentration = entries[0] ? `${entries[0][0]} (${entries[0][1]})` : "No data";
   els.portfolioInsights.innerHTML = `
     <article><span>Highest Lead Concentration</span><strong>${escapeHtml(concentration)}</strong></article>
@@ -5376,22 +5407,36 @@ function renderPortfolioAnalytics() {
 }
 
 function renderSalesmanDashboard() {
-  renderDashboardQuickActions();
-  renderDailyAiPanel();
-  renderSalesmanLossPromptPanel();
-  renderMarketNewsPanel();
-  renderSalesmanFollowups();
-  renderPortfolioAnalytics();
+  const salesman = isSalesmanRole() && currentView === "dashboard";
+  els.salesmanSimplifiedDashboard?.classList.toggle("hidden", !salesman);
+  els.dashboardQuickActions?.classList.add("hidden");
+  els.dailyAiPanel?.classList.add("hidden");
+  els.salesmanLossPromptPanel?.classList.add("hidden");
+  els.marketNewsPanel?.classList.add("hidden");
+  els.salesmanFollowupPanel?.classList.add("hidden");
+  els.portfolioPanel?.classList.add("hidden");
+  els.salesmanDashboardToolsPanel?.classList.add("hidden");
+  els.salesmanDashboardToggleShell?.classList.add("hidden");
+  if (!salesman) {
+    renderDashboardQuickActions();
+    renderDailyAiPanel();
+    renderSalesmanLossPromptPanel();
+    renderMarketNewsPanel();
+    renderSalesmanFollowups();
+    renderPortfolioAnalytics();
+    return;
+  }
+  renderSalesmanSimplifiedDashboard();
 }
 
 function salesmanDashboardLeads() {
-  if (!state.currentUser || state.currentUser.role === "admin") return [...state.leads];
+  if (!state.currentUser || isPrivilegedDashboardRole()) return [...state.leads];
   return state.leads.filter(lead => leadMatchesSalesman(lead, state.currentUser));
 }
 
 function firstTouchDueLeads() {
   return salesmanDashboardLeads()
-    .filter(lead => !["WON", "LOST", "DORMANT", "ACTIVE"].includes(String(lead.stage || "").trim().toUpperCase()))
+    .filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage)))
     .filter(lead => !hasLeadContactedActivity(lead))
     .sort((a, b) => {
       const originRank = lead => leadOriginForCurrentUser(lead, state.currentUser).includes("Admin") ? 0 : 1;
@@ -5408,6 +5453,169 @@ function lossReasonPromptDueLeads() {
       daysSince(b.stage_updated_at || b.updated_at || b.created_at) - daysSince(a.stage_updated_at || a.updated_at || a.created_at)
       || compareNewestLeadFirst(a, b)
     );
+}
+
+function actionableSalesmanLeads() {
+  return salesmanDashboardLeads()
+    .filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage)))
+    .filter(lead => String(lead.next_action_date || "").slice(0, 10))
+    .sort((a, b) =>
+      String(a.next_action_date || "").localeCompare(String(b.next_action_date || ""))
+      || compareNewestLeadFirst(a, b)
+    );
+}
+
+function renderSalesmanSimplifiedDashboard() {
+  if (!els.salesmanSimplifiedDashboard) return;
+  const leads = salesmanDashboardLeads();
+  const queue = actionableSalesmanLeads();
+  const overdue = queue.filter(lead => leadHasOverdueNextAction(lead));
+  const dueToday = queue.filter(lead => String(lead.next_action_date || "").slice(0, 10) === today());
+  const pipelineCounts = {
+    NEW: leads.filter(lead => normalizeStageKey(lead.stage) === "NEW").length,
+    CONTACTED: leads.filter(lead => normalizeStageKey(lead.stage) === "CONTACTED").length,
+    NEGOTIATION: leads.filter(lead => normalizeStageKey(lead.stage) === "NEGOTIATION").length,
+    WON: leads.filter(lead => normalizeStageKey(lead.stage) === "WON").length
+  };
+
+  if (els.salesmanSimplifiedGreeting) {
+    els.salesmanSimplifiedGreeting.textContent = `${greetingText()}, ${firstName(state.currentUser?.name || state.currentUser?.email)}`;
+  }
+
+  if (els.salesmanSimplifiedMetrics) {
+    els.salesmanSimplifiedMetrics.innerHTML = [
+      { label: "My leads", value: leads.length, meta: "Total assigned to you", tone: "info" },
+      { label: "Overdue calls", value: overdue.length, meta: overdue.length ? `${overdue[0].company_name || "Next lead"} first` : "Nothing overdue right now", tone: "danger" },
+      { label: "Due today", value: dueToday.length, meta: dueToday.length ? `${dueToday[0].company_name || "Next lead"} is due today` : "No calls due today", tone: "warm" }
+    ].map(card => `
+      <article class="salesman-simplified-metric tone-${escapeHtml(card.tone)}">
+        <span>${escapeHtml(card.label)}</span>
+        <strong>${escapeHtml(String(card.value))}</strong>
+        <small>${escapeHtml(card.meta)}</small>
+      </article>
+    `).join("");
+  }
+
+  if (els.salesmanSimplifiedActions) {
+    els.salesmanSimplifiedActions.innerHTML = salesmanPriorityActions().map(item => `
+      <button class="salesman-triage-card tone-${escapeHtml(item.tone || "neutral")}" type="button" ${item.aiAction ? `data-salesperson-ai-action="${escapeHtml(item.aiAction)}"` : `data-dashboard-action="${escapeHtml(item.key)}"`}>
+        <span class="salesman-triage-kicker">${escapeHtml(item.kicker)}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.body)}</p>
+        <small>${escapeHtml(item.cta)}</small>
+      </button>
+    `).join("");
+  }
+
+  const visibleQueue = queue.slice(0, 10);
+  if (els.salesmanSimplifiedQueueMeta) {
+    els.salesmanSimplifiedQueueMeta.textContent = visibleQueue.length
+      ? `${visibleQueue.length} next action${visibleQueue.length === 1 ? "" : "s"} sorted by due date`
+      : "No scheduled next actions yet.";
+  }
+  if (els.salesmanSimplifiedQueue) {
+    els.salesmanSimplifiedQueue.innerHTML = visibleQueue.length ? visibleQueue.map(lead => {
+      const dueDate = String(lead.next_action_date || "").slice(0, 10);
+      const overdueLabel = leadHasOverdueNextAction(lead)
+        ? `${daysOverdue(dueDate)} day${daysOverdue(dueDate) === 1 ? "" : "s"} overdue`
+        : formatPlanDate(dueDate);
+      return `
+        <button class="salesman-simplified-queue-item" type="button" data-salesman-queue-open="${escapeHtml(lead.id)}">
+          <div>
+            <strong>${escapeHtml(lead.company_name || "Unnamed lead")}</strong>
+            <p>${escapeHtml(lead.next_action || "Next step")} - ${escapeHtml(lead.activity_purpose || "Follow-up")}</p>
+          </div>
+          <span class="chip ${leadHasOverdueNextAction(lead) ? "hot" : ""}">${escapeHtml(overdueLabel)}</span>
+        </button>
+      `;
+    }).join("") : `<p class="empty-copy">Your next-action queue is clear. Add a new lead or log activity from the field.</p>`;
+  }
+
+  if (els.salesmanSimplifiedFirstTouch) {
+    const firstTouches = firstTouchDueLeads().slice(0, 6);
+    els.salesmanSimplifiedFirstTouch.innerHTML = firstTouches.length ? firstTouches.map(lead => {
+      const origin = leadOriginForCurrentUser(lead, state.currentUser);
+      return `
+        <article class="salesman-first-touch-card">
+          <div class="salesman-first-touch-main">
+            <span class="salesman-first-touch-kicker">${escapeHtml(origin)}</span>
+            <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+            <p>${escapeHtml(lead.contact_person || lead.location || lead.territory || "No contact details added yet.")}</p>
+            <div class="chip-row">
+              <span class="chip">${escapeHtml(stageDisplayLabel(lead.stage))}</span>
+              <span class="chip ${leadOriginChipClass(origin)}">${escapeHtml(origin)}</span>
+            </div>
+          </div>
+          <div class="salesman-first-touch-actions">
+            <button class="small-action" type="button" data-first-touch-open="${escapeHtml(lead.id)}">Open lead</button>
+            <button class="small-action" type="button" data-first-touch-log="${escapeHtml(lead.id)}">Log first touch</button>
+          </div>
+        </article>
+      `;
+    }).join("") : `<p class="empty-copy">Every open lead already has a first touch logged.</p>`;
+  }
+
+  if (els.salesmanSimplifiedLossPrompts) {
+    const dueLeads = lossReasonPromptDueLeads().slice(0, 6);
+    els.salesmanSimplifiedLossPrompts.innerHTML = dueLeads.length ? dueLeads.map(lead => {
+      const overdueDays = Math.max(0, daysSince(lead.stage_updated_at || lead.updated_at || lead.created_at) - 3);
+      return `
+        <article class="salesman-loss-card">
+          <div class="salesman-loss-card-copy">
+            <span class="salesman-loss-kicker">Lost lead follow-through</span>
+            <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+            <p>${escapeHtml(lead.lost_reason_detail || "Capture the reason now while the context is still fresh.")}</p>
+            <div class="chip-row">
+              <span class="chip hot">${escapeHtml(overdueDays ? `${overdueDays} day${overdueDays === 1 ? "" : "s"} late` : "Due now")}</span>
+              <span class="chip">${escapeHtml(stageDisplayLabel(lead.stage))}</span>
+            </div>
+          </div>
+          <div class="salesman-loss-card-actions">
+            <button class="small-action" type="button" data-loss-prompt-open="${escapeHtml(lead.id)}">Open lead</button>
+            <button class="small-action" type="button" data-loss-prompt-capture="${escapeHtml(lead.id)}">Capture reason</button>
+          </div>
+        </article>
+      `;
+    }).join("") : `<p class="empty-copy">No loss-reason prompts are due right now.</p>`;
+  }
+
+  if (els.salesmanSimplifiedPipeline) {
+    els.salesmanSimplifiedPipeline.innerHTML = [
+      ["New", pipelineCounts.NEW],
+      ["Contacted", pipelineCounts.CONTACTED],
+      ["Negotiation", pipelineCounts.NEGOTIATION],
+      ["Won", pipelineCounts.WON]
+    ].map(([label, value]) => `
+      <article class="salesman-simplified-stage">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(String(value))}</strong>
+      </article>
+    `).join("");
+  }
+
+  document.querySelectorAll("[data-salesman-queue-open]").forEach(button => {
+    button.addEventListener("click", () => openLeadDrawer(button.dataset.salesmanQueueOpen));
+  });
+  document.querySelectorAll("[data-first-touch-open]").forEach(button => {
+    button.addEventListener("click", () => openLeadDrawer(button.dataset.firstTouchOpen));
+  });
+  document.querySelectorAll("[data-first-touch-log]").forEach(button => {
+    button.addEventListener("click", () => openQuickLog(button.dataset.firstTouchLog));
+  });
+  document.querySelectorAll("[data-loss-prompt-open]").forEach(button => {
+    button.addEventListener("click", () => openLeadDrawer(button.dataset.lossPromptOpen));
+  });
+  document.querySelectorAll("[data-loss-prompt-capture]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const lead = state.leads.find(item => item.id === button.dataset.lossPromptCapture);
+      if (!lead) return;
+      const lostData = await promptLostReason(lead);
+      if (!lostData) return;
+      await saveStageWithLostPrompt(lead, lead.stage, lostData);
+      await loadLeads();
+      render();
+    });
+  });
 }
 
 function scrollToDashboardPanel(panel) {
@@ -5544,7 +5752,7 @@ function salesmanPriorityActions() {
 
 function renderDashboardQuickActions() {
   if (!els.dashboardQuickActions) return;
-  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  const salesman = isSalesmanRole();
   els.dashboardQuickActions.classList.toggle("hidden", !salesman);
   els.salesmanDashboardToggleShell?.classList.toggle("hidden", !salesman);
   els.salesmanDashboardToolsPanel?.classList.toggle("hidden", !(salesman && state.dashboardToolsOpen));
@@ -5567,7 +5775,7 @@ function renderDashboardQuickActions() {
             <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
             <p>${escapeHtml(lead.contact_person || lead.location || lead.territory || "No contact details added yet.")}</p>
             <div class="chip-row">
-              <span class="chip">${escapeHtml(stageDisplayLabel(lead.stage || "PROSPECT"))}</span>
+              <span class="chip">${escapeHtml(stageDisplayLabel(lead.stage || "NEW"))}</span>
               <span class="chip">${escapeHtml(createdLabel)}</span>
               <span class="chip ${leadOriginChipClass(origin)}">${escapeHtml(origin)}</span>
             </div>
@@ -5640,7 +5848,7 @@ function renderDashboardQuickActions() {
 
 function renderDailyAiPanel() {
   if (!els.dailyAiPanel) return;
-  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  const salesman = isSalesmanRole();
   els.dailyAiPanel.classList.toggle("hidden", !salesman);
   if (!salesman) return;
   if (els.dailyAiGreeting) els.dailyAiGreeting.textContent = `${greetingText()}, ${firstName(state.currentUser.name || state.currentUser.email)}`;
@@ -5674,7 +5882,7 @@ function renderDailyAiPanel() {
 
 function renderSalesmanLossPromptPanel() {
   if (!els.salesmanLossPromptPanel || !els.salesmanLossPromptList) return;
-  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  const salesman = isSalesmanRole();
   els.salesmanLossPromptPanel.classList.toggle("hidden", !salesman);
   if (!salesman) return;
   const dueLeads = lossReasonPromptDueLeads().slice(0, 6);
@@ -5736,7 +5944,7 @@ function marketNewsCardMarkup(item) {
 
 function renderMarketNewsPanel() {
   if (!els.marketNewsPanel || !els.marketNewsFeed) return;
-  const salesmanDashboard = state.currentUser && state.currentUser.role !== "admin" && currentView === "dashboard";
+  const salesmanDashboard = isSalesmanRole() && currentView === "dashboard";
   const visible = Boolean(salesmanDashboard && state.dashboardToolsOpen && state.dashboardMarketNewsOpen);
   els.marketNewsPanel.classList.toggle("hidden", !visible);
   if (!visible) return;
@@ -5775,7 +5983,7 @@ function renderMarketNewsPanel() {
 }
 
 function maybeAutoRunDailyPipeline() {
-  if (!state.currentUser || state.currentUser.role === "admin") return;
+  if (!state.currentUser || !isSalesmanRole()) return;
   const key = `arg_daily_pipeline_${state.currentUser.id || state.currentUser.email}_${today()}`;
   if (localStorage.getItem(key) === "true") return;
   localStorage.setItem(key, "true");
@@ -5784,7 +5992,7 @@ function maybeAutoRunDailyPipeline() {
 
 function renderAgentPanel() {
   if (!els.agentPanel) return;
-  const salesman = state.currentUser && state.currentUser.role !== "admin";
+  const salesman = isSalesmanRole();
   els.agentPanel.classList.toggle("hidden", Boolean(salesman && (!state.dashboardToolsOpen || !state.agentOpen)));
   els.agentPanel.classList.toggle("agent-open", state.agentOpen);
   els.agentBody?.classList.toggle("hidden", !state.agentOpen);
@@ -5807,7 +6015,7 @@ function renderAgentPanel() {
       ? state.integrations.agent_examples
       : [
         "Which accounts have overdue follow-ups?",
-        "How many leads are in ENGAGED status?",
+        "How many leads are in Negotiation?",
         "Who has the most activity this month?"
       ];
     els.agentExamples.innerHTML = examples.map(prompt => `
@@ -6170,12 +6378,7 @@ function firstName(value) {
 
 function stageDisplayLabel(stage) {
   const key = kanbanStageForLead({ stage });
-  if (key === "OUTREACH") return "CONTACTED";
-  if (key === "SAMPLING") return "QUOTATION SENT";
-  if (key === "ENGAGED") return "NEGOTIATION";
-  if (key === "ACTIVE") return "WON";
-  if (key === "DORMANT") return "LOST";
-  return "NEW";
+  return KANBAN_STAGE_BY_KEY[key]?.label || "New";
 }
 
 function daysAgoLabel(dateValue) {
@@ -6273,8 +6476,8 @@ function leadInitial(lead) {
 }
 
 function drawerStageLabel(stage) {
-  const match = KANBAN_STAGES.find(item => item.key === String(stage || "").toUpperCase() || item.aliases.includes(String(stage || "").toUpperCase()));
-  return match?.label || stage || "Prospect";
+  const match = KANBAN_STAGE_BY_KEY[normalizeStageKey(stage)];
+  return match?.label || stage || "New";
 }
 
 function drawerStageClass(stage) {
@@ -6283,7 +6486,7 @@ function drawerStageClass(stage) {
 }
 
 function isLostStageValue(stage) {
-  return kanbanStageForLead({ stage }) === "DORMANT" || String(stage || "").trim().toUpperCase() === "LOST";
+  return kanbanStageForLead({ stage }) === "LOST";
 }
 
 function lostReasonLabel(value) {
@@ -7341,9 +7544,7 @@ function openLeadEdit(leadId) {
 }
 
 function kanbanStageForLead(lead) {
-  const raw = String(lead.stage || "").trim().toUpperCase();
-  const match = KANBAN_STAGES.find(stage => stage.key === raw || stage.aliases.includes(raw));
-  return match?.key || "PROSPECT";
+  return normalizeStageKey(lead?.stage, "NEW");
 }
 
 function canDragKanban() {
@@ -8143,11 +8344,11 @@ function renderActivityReminders(upcoming, overdue) {
 function renderActivityQuickLinks() {
   if (!els.activityQuickLinks) return;
   const tasks = allReminders().length;
-  const activePipeline = state.leads.filter(lead => !["ACTIVE", "DORMANT"].includes(String(lead.stage || "").toUpperCase())).length;
+  const activePipeline = state.leads.filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage))).length;
   const quotes = state.leads.filter(lead =>
     Boolean(lead.quotation_ref)
     || String(lead.activity_purpose || "").toLowerCase().includes("quotation")
-    || String(lead.stage || "").toUpperCase() === "SAMPLING"
+    || normalizeStageKey(lead.stage) === "NEGOTIATION"
   ).length;
   const accounts = state.leads.length;
   const links = [
@@ -9684,7 +9885,7 @@ function render() {
 }
 
 function applyView() {
-  if (state.currentUser?.role !== "admin" && currentView === "salesmen") {
+  if (isSalesmanRole() && ["salesmen", "activity"].includes(currentView)) {
     currentView = "dashboard";
   }
   const isDashboard = currentView === "dashboard";
@@ -9693,7 +9894,7 @@ function applyView() {
   const isTasks = currentView === "tasks";
   const isLead = currentView === "lead";
   const isKanban = state.pipelineViewMode === "kanban";
-  const showMetricsShell = isPipeline || (isDashboard && state.currentUser?.role === "admin");
+  const showMetricsShell = isPipeline || (isDashboard && !isSalesmanRole());
   els.metricsShell?.classList.toggle("hidden", !showMetricsShell);
   els.dashboardView.classList.toggle("hidden", !isDashboard);
   els.pipelineFunnelPanel?.classList.toggle("hidden", !isPipeline);
@@ -9717,8 +9918,8 @@ function applyView() {
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
   document.body.classList.toggle("activity-mode", isActivity);
   document.body.classList.toggle("pipeline-compact-mode", isPipeline);
-  document.body.classList.toggle("salesman-dashboard-mode", Boolean(isDashboard && state.currentUser?.role !== "admin"));
-  document.body.classList.toggle("admin-dashboard-mode", Boolean(isDashboard && state.currentUser?.role === "admin"));
+  document.body.classList.toggle("salesman-dashboard-mode", Boolean(isDashboard && isSalesmanRole()));
+  document.body.classList.toggle("admin-dashboard-mode", Boolean(isDashboard && !isSalesmanRole()));
   document.body.classList.toggle("tasks-mode", isTasks);
 }
 
@@ -9736,7 +9937,7 @@ function toggleMobileMenu() {
 }
 
 function setView(view) {
-  if (state.currentUser?.role !== "admin" && view === "salesmen") view = "dashboard";
+  if (isSalesmanRole() && ["salesmen", "activity"].includes(view)) view = "dashboard";
   if (view !== "lead") state.lastNonLeadView = view;
   currentView = view;
   state.leadDrawerOpen = view === "lead";
@@ -9865,8 +10066,11 @@ function showLogin(message = "") {
 }
 
 function configureRoleUi(user) {
-  const admin = user.role === "admin";
-  if (!admin) {
+  const role = normalizeRoleValue(user?.role);
+  const admin = role === "admin";
+  const salesman = role === "salesman";
+  const privileged = !salesman;
+  if (salesman) {
     state.dashboardToolsOpen = false;
     state.dashboardPerformanceOpen = false;
     state.dashboardMarketNewsOpen = false;
@@ -9877,39 +10081,44 @@ function configureRoleUi(user) {
     localStorage.setItem(DASHBOARD_AGENT_KEY, "false");
   }
   document.querySelectorAll('.sidebar [data-view="salesmen"]').forEach(item => {
-    item.classList.toggle("hidden", !admin);
+    item.classList.toggle("hidden", !privileged);
   });
-  els.sidebarToolsMenu?.classList.toggle("hidden", !admin);
-  els.salesmanFilter?.closest("label")?.classList.toggle("hidden", !admin);
-  els.formSalesman?.closest("label")?.classList.toggle("hidden", !admin);
+  document.querySelectorAll('.sidebar [data-view="activity"]').forEach(item => {
+    item.classList.toggle("hidden", salesman);
+  });
+  els.sidebarToolsMenu?.classList.toggle("hidden", salesman);
+  els.sidebarSearchPlaces?.classList.toggle("hidden", salesman);
+  els.openPlacesSearch?.classList.toggle("hidden", salesman);
+  els.salesmanFilter?.closest("label")?.classList.toggle("hidden", !privileged);
+  els.formSalesman?.closest("label")?.classList.toggle("hidden", !privileged);
   els.openSalesmanForm.classList.toggle("hidden", !admin);
   els.exportLeadsExcel?.classList.toggle("hidden", !admin);
   els.exportLeadsPdf?.classList.toggle("hidden", !admin);
   els.exportLeadsExcelTop?.classList.toggle("hidden", !admin);
   els.exportLeadsPdfTop?.classList.toggle("hidden", !admin);
   els.openImportLeads?.classList.toggle("hidden", !admin);
-  els.performancePanel?.classList.toggle("hidden", !admin);
-  els.adminTaskPanel?.classList.toggle("hidden", !admin);
-  els.needsAttentionPanel?.classList.toggle("hidden", !admin);
-  els.dashboardPipelineFunnelPanel?.classList.toggle("hidden", false);
-  els.dashboardQuickActions?.classList.toggle("hidden", admin);
-  els.dailyAiPanel?.classList.toggle("hidden", admin);
-  els.salesmanLossPromptPanel?.classList.toggle("hidden", admin);
-  els.salesmanDashboardToolsPanel?.classList.toggle("hidden", admin);
-  els.marketNewsPanel?.classList.toggle("hidden", admin);
-  els.dashboardToggleMarketNews?.classList.toggle("hidden", admin);
-  els.salesmanFollowupPanel?.classList.toggle("hidden", admin);
-  els.portfolioPanel?.classList.toggle("hidden", admin);
-  els.salesmanDashboardToggleShell?.classList.toggle("hidden", admin);
-  els.dashboardActivityPanel?.classList.toggle("hidden", !admin);
-  els.relationshipFocusPanel?.classList.toggle("hidden", !admin);
-  els.pipelineHealthPanel?.classList.toggle("hidden", !admin);
-  els.configAgentPanel?.classList.toggle("hidden", !admin);
+  els.performancePanel?.classList.toggle("hidden", !privileged);
+  els.adminTaskPanel?.classList.toggle("hidden", !privileged);
+  els.needsAttentionPanel?.classList.toggle("hidden", !privileged);
+  els.dashboardPipelineFunnelPanel?.classList.toggle("hidden", salesman);
+  els.dashboardQuickActions?.classList.toggle("hidden", privileged);
+  els.dailyAiPanel?.classList.toggle("hidden", privileged);
+  els.salesmanLossPromptPanel?.classList.toggle("hidden", privileged);
+  els.salesmanDashboardToolsPanel?.classList.toggle("hidden", privileged);
+  els.marketNewsPanel?.classList.toggle("hidden", privileged);
+  els.dashboardToggleMarketNews?.classList.toggle("hidden", privileged);
+  els.salesmanFollowupPanel?.classList.toggle("hidden", privileged);
+  els.portfolioPanel?.classList.toggle("hidden", privileged);
+  els.salesmanDashboardToggleShell?.classList.toggle("hidden", privileged);
+  els.dashboardActivityPanel?.classList.toggle("hidden", !privileged);
+  els.relationshipFocusPanel?.classList.toggle("hidden", !privileged);
+  els.pipelineHealthPanel?.classList.toggle("hidden", !privileged);
+  els.configAgentPanel?.classList.toggle("hidden", !privileged);
   renderHeaderSummary();
   renderConfigAgentPanel();
-  if (!admin) {
+  if (salesman) {
     state.filters.salesman = "all";
-    if (currentView === "salesmen") currentView = "dashboard";
+    if (["salesmen", "activity"].includes(currentView)) currentView = "dashboard";
   }
 }
 
@@ -9937,7 +10146,7 @@ async function loadWorkspace() {
   await loadIntegrationStatus();
   state.settings = await api("/api/settings");
   await fetchSalesmanAccounts();
-  const marketNewsPromise = state.currentUser?.role === "admin"
+  const marketNewsPromise = !isSalesmanRole()
     ? Promise.resolve()
     : fetchMarketNews();
   fillSelect(els.stageFilter, state.settings.stages, "All stages");
