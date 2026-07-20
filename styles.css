@@ -110,6 +110,8 @@
   --bauhaus-border-soft: #D7DDE5;
   --bauhaus-border: 1px solid var(--bauhaus-border-soft);
   --bauhaus-radius: 8px;
+  --dashboard-header-blue: #1B4B6B;
+  --dashboard-header-subtitle: #C7DCEA;
   --font-sans: var(--font-body);
   --text-page: 32px;
   --text-section: 24px;
@@ -1310,6 +1312,239 @@ body.salesmen-mode .sp-lead-summary-details .salesman-open-button {
 
   body.salesmen-mode .sp-two-col {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Dashboard header alignment and reusable section caps. */
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .brand {
+  min-width: 0;
+  align-items: center;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .brand-copy {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  align-content: center;
+  line-height: 1.15;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .brand-copy strong,
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .brand-copy span {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .brand-copy strong {
+  white-space: nowrap;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar {
+  background: var(--dashboard-header-blue);
+  border-color: var(--dashboard-header-blue);
+  color: #FFFFFF;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-copy h1 {
+  color: #FFFFFF;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-copy p {
+  color: var(--dashboard-header-subtitle);
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
+  max-width: none;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-actions > *,
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-actions button,
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .sync-status-pill {
+  white-space: nowrap;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-actions button,
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .sync-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-actions .smart-search-shell {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 360px;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-actions .smart-search-field {
+  width: 100%;
+  min-width: 0;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-actions .smart-search-field input {
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar .ghost-button {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar .ghost-button:hover,
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar .ghost-button:focus-visible {
+  background: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar .smart-search-field {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .panel-header {
+  border-bottom: 1px solid rgba(5, 37, 59, 0.46);
+  border-radius: var(--bauhaus-radius) var(--bauhaus-radius) 0 0;
+  background: var(--dashboard-header-blue);
+  box-shadow: none;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .panel-header h2,
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .panel-header strong {
+  color: #FFFFFF;
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .panel-header span,
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .panel-header p {
+  color: var(--dashboard-header-subtitle);
+}
+
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .panel-header .ghost-button,
+body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .panel-header .panel-collapse-toggle {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.94);
+  color: #173A53;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero-header {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 6px 14px;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero-header > span {
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1 1 auto;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 14px;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero-body .salesman-simplified-copy {
+  min-width: 0;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero-body > .primary-button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-block > .panel-header {
+  border-bottom-color: rgba(5, 37, 59, 0.46);
+  background: var(--dashboard-header-blue);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(5, 37, 59, 0.46);
+  border-radius: var(--bauhaus-radius) var(--bauhaus-radius) 0 0;
+  background: var(--dashboard-header-blue);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header h2 {
+  color: #FFFFFF;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header span {
+  color: var(--dashboard-header-subtitle);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-pipeline-strip {
+  flex: 1 1 auto;
+  padding: 7px 9px 9px;
+}
+
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.salesman-dashboard-mode .app-shell {
+    grid-template-columns: 170px minmax(0, 1fr);
+  }
+
+  body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
+    grid-template-rows: 82px 70px minmax(154px, 1.4fr) minmax(88px, 0.8fr) 76px;
+  }
+}
+
+@media (min-width: 1025px) and (max-width: 1240px) {
+  body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  body.salesman-dashboard-mode .salesman-simplified-hero-body {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-hero-body > .primary-button {
+    width: 100%;
   }
 }
 
@@ -18315,5 +18550,63 @@ body.activity-mode .activity-quick-link .count-chip.neutral {
   body.activity-mode .activity-feed,
   body.activity-mode .activity-reminders-panel #activityReminders {
     overflow: visible;
+  }
+}
+
+/* Authoritative dashboard header overrides after all legacy theme layers. */
+body.salesman-dashboard-mode .topbar-actions {
+  width: 100%;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-hero-header > span {
+  color: #FFFFFF;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-block > .panel-header,
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header {
+  border-bottom: 1px solid rgba(5, 37, 59, 0.46);
+  border-radius: var(--bauhaus-radius) var(--bauhaus-radius) 0 0;
+  background: var(--dashboard-header-blue);
+  box-shadow: none;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-block > .panel-header h2,
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header h2 {
+  color: #FFFFFF;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-block > .panel-header span,
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header span {
+  color: var(--dashboard-header-subtitle);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header {
+  min-height: 36px;
+  height: 36px;
+  padding: 4px 9px;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header h2 {
+  font-size: 14px;
+  line-height: 1.05;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header span {
+  margin-top: 1px;
+  font-size: 8px;
+  line-height: 1.1;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-pipeline-strip {
+  padding: 6px 8px;
+}
+
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.salesman-dashboard-mode .app-shell {
+    grid-template-columns: 170px minmax(0, 1fr);
+  }
+
+  body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
+    grid-template-rows: 90px 70px minmax(154px, 1.4fr) minmax(88px, 0.8fr) 88px;
   }
 }
