@@ -649,16 +649,18 @@
               </label>
             </div>
             <div class="sp-wrap">
-              <p class="sp-section-label">Team leaderboard</p>
-              <div class="sp-leader-grid" id="performanceLeaderboard"></div>
+              <section class="sp-leader-section">
+                <p class="sp-section-label">Team leaderboard</p>
+                <div class="sp-leader-grid" id="performanceLeaderboard"></div>
+              </section>
 
               <div class="sp-card sp-chart-card">
                 <p class="sp-section-label">Team activity comparison</p>
                 <div class="sp-legend" aria-label="Chart legend">
-                  <span class="sp-legend-item"><i style="background:#378ADD"></i>Assigned</span>
-                  <span class="sp-legend-item"><i style="background:#7F77DD"></i>Activities</span>
-                  <span class="sp-legend-item"><i style="background:#BA7517"></i>Follow-ups</span>
-                  <span class="sp-legend-item"><i style="background:#1D9E75"></i>Stage leads</span>
+                  <span class="sp-legend-item"><i style="background:#2E6DA4"></i>Assigned</span>
+                  <span class="sp-legend-item"><i style="background:#6B9A3E"></i>Activities</span>
+                  <span class="sp-legend-item"><i style="background:#D68A2C"></i>Follow-ups</span>
+                  <span class="sp-legend-item"><i style="background:#8291A3"></i>Stage leads</span>
                 </div>
                 <div class="sp-chart-scroll">
                   <div class="sp-chart-frame">
@@ -689,14 +691,14 @@
                   <div class="sp-feed" id="performanceFeed"></div>
                 </div>
               </div>
+              <details class="sp-card sp-lead-summary-details">
+                <summary>
+                  <span>Salesman Lead Summary</span>
+                  <span id="salesmenSummary">0 salesmen</span>
+                </summary>
+                <div class="salesmen-grid" id="salesmenGrid"></div>
+              </details>
             </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header">
-              <h2>Salesman Lead Summary</h2>
-              <span id="salesmenSummary">0 salesmen</span>
-            </div>
-            <div class="salesmen-grid" id="salesmenGrid"></div>
           </div>
         </section>
 

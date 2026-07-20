@@ -4865,41 +4865,25 @@ function scoreHeatmapClass(score) {
 
 function leaderboardCard(row, index) {
   const inactive = row.accountStatus === "inactive";
-  const color = performanceRankColor(index, inactive);
   const rank = ordinalLabel(index + 1);
   const stateLabel = performanceStateLabel(row, index);
   const toneClass = inactive ? "is-inactive" : index === 0 ? "is-top" : row.performanceScore >= 70 ? "is-strong" : row.performanceScore >= 35 ? "is-mid" : "is-low";
-  const subtitle = inactive
-    ? `${rank} - Inactive`
-    : index === 0
-      ? "1st - Most active"
-      : index === 1
-        ? "2nd - Active"
-        : `${rank} - Active`;
   return `
     <article class="sp-leader-card ${index === 0 ? "top" : ""} ${toneClass}">
       <div class="sp-leader-top">
-        <div class="sp-avatar ${inactive ? "sp-av-gray" : index === 0 ? "sp-av-blue" : index === 1 ? "sp-av-teal" : "sp-av-gray"}">${escapeHtml(salesmanInitials(row.name))}</div>
         <div class="sp-leader-copy">
           <p class="sp-leader-name">${escapeHtml(row.name)}</p>
-          <p class="sp-leader-sub">${escapeHtml(subtitle)}</p>
         </div>
-        <div class="sp-leader-badges">
-          <span class="sp-rank-badge">${escapeHtml(rank)}</span>
-          <span class="sp-state-badge">${escapeHtml(stateLabel)}</span>
-        </div>
+        <span class="sp-rank-badge">${escapeHtml(rank)}</span>
       </div>
-      <div class="sp-score-row">
-        <span class="sp-score-label">Progress</span>
-        <div class="sp-score-bar-bg"><div class="sp-score-bar-fill" style="width:${row.performanceScore}%; background:${color};"></div></div>
-        <span class="sp-score-pct">${row.performanceScore}%</span>
+      <div class="sp-leader-status-row">
+        <span class="sp-state-badge">${escapeHtml(stateLabel)}</span>
       </div>
       <div class="sp-stats-row">
-        <div class="sp-stat-mini"><span class="sp-stat-mini-val">${row.activitiesLogged}</span><span class="sp-stat-mini-lbl">Activities</span></div>
-        <div class="sp-stat-mini"><span class="sp-stat-mini-val">${row.totalAssigned}</span><span class="sp-stat-mini-lbl">Leads</span></div>
-        <div class="sp-stat-mini"><span class="sp-stat-mini-val">${row.followupsCompleted}</span><span class="sp-stat-mini-lbl">Follow-ups</span></div>
+        <span><strong>${row.activitiesLogged}</strong> act</span>
+        <span><strong>${row.totalAssigned}</strong> leads</span>
+        <span><strong>${row.followupsCompleted}</strong> f-ups</span>
       </div>
-      <p class="sp-stale">Last active: ${lastActiveMarkup(row.lastActivityDate)}</p>
     </article>
   `;
 }
@@ -4917,7 +4901,7 @@ function chartLabelName(name) {
 function applyPerformanceChartWidth(rows) {
   const frame = els.performanceChart?.closest(".sp-chart-frame");
   if (!frame) return;
-  const chartMinWidth = Math.max(960, rows.length * 180);
+  const chartMinWidth = Math.max(720, rows.length * 110);
   frame.style.setProperty("--performance-chart-min-width", `${chartMinWidth}px`);
 }
 
@@ -4937,10 +4921,10 @@ function renderPerformanceChart(rows) {
     data: {
       labels: rows.map(row => chartLabelName(row.name)),
       datasets: [
-        { label: "Assigned leads", data: rows.map(row => row.totalAssigned), backgroundColor: "#378ADD", borderRadius: 6, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.72, maxBarThickness: 40 },
-        { label: "Activities logged", data: rows.map(row => row.activitiesLogged), backgroundColor: "#7F77DD", borderRadius: 6, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.72, maxBarThickness: 40 },
-        { label: "Follow-ups", data: rows.map(row => row.followupsCompleted), backgroundColor: "#BA7517", borderRadius: 6, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.72, maxBarThickness: 40 },
-        { label: "Stage leads", data: rows.map(row => row.filteredStageCount), backgroundColor: "#1D9E75", borderRadius: 6, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.72, maxBarThickness: 40 }
+        { label: "Assigned leads", data: rows.map(row => row.totalAssigned), backgroundColor: "#2E6DA4", borderRadius: 4, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 24 },
+        { label: "Activities logged", data: rows.map(row => row.activitiesLogged), backgroundColor: "#6B9A3E", borderRadius: 4, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 24 },
+        { label: "Follow-ups", data: rows.map(row => row.followupsCompleted), backgroundColor: "#D68A2C", borderRadius: 4, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 24 },
+        { label: "Stage leads", data: rows.map(row => row.filteredStageCount), backgroundColor: "#8291A3", borderRadius: 4, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 24 }
       ]
     },
     options: {
@@ -4960,17 +4944,17 @@ function renderPerformanceChart(rows) {
           grid: { display: false },
           offset: true,
           ticks: {
-            font: { size: 13, weight: "600" },
-            color: "#EAF2FF",
+            font: { size: 11, weight: "600" },
+            color: "#334155",
             maxRotation: 0,
             minRotation: 0,
             autoSkip: false,
-            padding: 10
+            padding: 5
           }
         },
         y: {
-          grid: { color: "rgba(136,135,128,0.15)" },
-          ticks: { font: { size: 11, weight: "600" }, color: "#C6D5F2", stepSize: 1, precision: 0 },
+          grid: { color: "rgba(148,163,184,0.22)" },
+          ticks: { font: { size: 10, weight: "600" }, color: "#64748B", stepSize: 1, precision: 0 },
           beginAtZero: true
         }
       }
@@ -8415,11 +8399,11 @@ function activityCardMarkup(activity) {
   const statusLabel = isReminder
     ? activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled")
     : activity.stage || "Prospect";
-  const statusClass = isReminder ? (reminderOverdue ? "hot" : "plan-upcoming") : priorityClass(activity.stage);
+  const statusClass = reminderOverdue ? "hot" : "activity-status-neutral";
   const actionLabel = isReminder ? `${statusLabel}${dueDate ? ` · ${formatDisplayDate(dueDate)}` : ""}` : formatDisplayDate(activityDisplayDate(activity));
   const timeLabel = activityDisplayTime(activity);
   return `
-    <article class="activity-feed-item timeline-card ${activityTypeClass(type)}" data-activity-lead="${escapeHtml(activity.lead_id)}" tabindex="0">
+    <article class="activity-feed-item timeline-card ${activityTypeClass(type)} ${reminderOverdue ? "is-urgent" : ""}" data-activity-lead="${escapeHtml(activity.lead_id)}" tabindex="0">
       <div class="activity-feed-head">
         <span class="activity-type-icon" aria-hidden="true">${escapeHtml(activityIconGlyph(type))}</span>
         <div class="activity-feed-body">
@@ -8462,8 +8446,9 @@ function weekDays(dateValue = state.activityWeekAnchor || today()) {
   const start = weekStart(dateValue);
   return Array.from({ length: 7 }, (_, index) => {
     const date = addDays(start, index);
+    const localDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     return {
-      date: isoDateFromDate(date),
+      date: localDate,
       day: date.toLocaleDateString("en-US", { weekday: "short" }),
       number: date.getDate()
     };
@@ -8520,39 +8505,56 @@ function activityWeeklyItems(activities, anchorDate = state.activityWeekAnchor |
 function renderWeeklyActivityLog(activities) {
   if (!els.activityWeeklyLog) return;
   const days = weekDays(state.activityWeekAnchor);
-  const hours = Array.from({ length: 9 }, (_, index) => 9 + index);
   const items = activityWeeklyItems(activities, state.activityWeekAnchor);
+  const selectedDate = days.some(day => day.date === state.activitySelectedDay)
+    ? state.activitySelectedDay
+    : "";
+  const selectedItems = selectedDate ? items.filter(item => item.date === selectedDate) : [];
+  const itemsForDay = date => items.filter(item => item.date === date);
+  const dayTone = day => {
+    const dayItems = itemsForDay(day.date);
+    if (!dayItems.length) return "neutral";
+    if (dayItems.some(item => item.type === "Reminder" && item.date < today())) return "overdue";
+    if (day.date >= today()) return "upcoming";
+    return "has-activity";
+  };
   els.activityWeeklyLog.innerHTML = `
     <div class="calendar-legend">
       <span><i class="legend-swatch overdue"></i>Overdue</span>
       <span><i class="legend-swatch upcoming"></i>Upcoming</span>
       <span><i class="legend-swatch neutral"></i>Neutral</span>
     </div>
-    <div class="weekly-calendar" style="--hour-count: ${hours.length}">
-      <div class="calendar-corner-spacer" aria-hidden="true"></div>
+    <div class="activity-day-strip" role="list" aria-label="Activity days for ${escapeHtml(weekRangeLabel(state.activityWeekAnchor))}">
       ${days.map(day => `
-        <div class="calendar-day-head ${day.date === today() ? "today" : ""}">
-          <strong>${escapeHtml(day.day)}</strong>
-          <span>${escapeHtml(day.number)}</span>
-        </div>
-      `).join("")}
-      ${hours.map(hour => `
-        <div class="calendar-time">${String(hour).padStart(2, "0")}.00</div>
-        ${days.map(() => `<div class="calendar-slot"></div>`).join("")}
-      `).join("")}
-      ${items.map(item => `
         <button
           type="button"
-          class="calendar-event ${activityTypeClass(item.type)}"
-          data-calendar-lead="${escapeHtml(item.leadId)}"
-          style="grid-column: ${item.dayIndex + 2}; grid-row: ${item.hour - 7}; --event-offset: ${item.offset};"
-          title="${escapeHtml(`${item.company}: ${item.title}`)}"
+          class="activity-day-chip ${dayTone(day)} ${day.date === today() ? "today" : ""} ${day.date === selectedDate ? "selected" : ""}"
+          data-activity-calendar-day="${escapeHtml(day.date)}"
+          aria-pressed="${String(day.date === selectedDate)}"
+          title="${escapeHtml(`${itemsForDay(day.date).length} calendar item${itemsForDay(day.date).length === 1 ? "" : "s"}`)}"
         >
-          <span>${escapeHtml(item.title)}</span>
+          <strong>${escapeHtml(day.day)}</strong>
+          <span>${escapeHtml(day.number)}</span>
         </button>
       `).join("")}
-      ${items.length ? "" : `<p class="calendar-empty">No activity scheduled this week.</p>`}
     </div>
+    ${selectedDate ? `
+      <div class="activity-day-detail" aria-live="polite">
+        <div class="activity-day-detail-head">
+          <strong>${escapeHtml(formatDisplayDate(selectedDate))}</strong>
+          <button type="button" data-activity-calendar-close aria-label="Close selected day details">Close</button>
+        </div>
+        <div class="activity-day-detail-list">
+          ${selectedItems.map(item => `
+            <button type="button" class="activity-day-event" data-calendar-lead="${escapeHtml(item.leadId)}">
+              <span>${escapeHtml(item.time)}</span>
+              <strong>${escapeHtml(item.company)}</strong>
+              <em>${escapeHtml(item.title)}</em>
+            </button>
+          `).join("") || `<p>No activity scheduled for this day.</p>`}
+        </div>
+      </div>
+    ` : ""}
   `;
   if (els.activityWeekRange) els.activityWeekRange.textContent = weekRangeLabel(state.activityWeekAnchor);
   if (els.activityKpiWeek) els.activityKpiWeek.textContent = String(items.length);
@@ -8562,6 +8564,18 @@ function renderWeeklyActivityLog(activities) {
       state.selectedId = button.dataset.calendarLead;
       openLeadDrawer(state.selectedId, "activities");
     });
+  });
+  els.activityWeeklyLog.querySelectorAll("[data-activity-calendar-day]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.activitySelectedDay = state.activitySelectedDay === button.dataset.activityCalendarDay
+        ? ""
+        : button.dataset.activityCalendarDay;
+      renderWeeklyActivityLog(activities);
+    });
+  });
+  els.activityWeeklyLog.querySelector("[data-activity-calendar-close]")?.addEventListener("click", () => {
+    state.activitySelectedDay = "";
+    renderWeeklyActivityLog(activities);
   });
 }
 
@@ -8917,13 +8931,15 @@ function renderWeeklySalesmanView() {
 
   const expectedMarkup = (report.expected_orders || []).length
     ? report.expected_orders.map((item, index) => `
-      <article class="tasks-row-card tasks-expected-order-card">
+      <article class="tasks-row-card tasks-expected-order-card ${WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || "")) && WEEKLY_TIMING_OPTIONS.includes(String(item.timing || "")) ? "is-complete" : "needs-input"}">
         <div class="tasks-row-head">
           <div>
             <strong>${escapeHtml(item.account_name || "Unnamed account")}</strong>
             <p>${escapeHtml(formatAED(item.expected_value || 0))}${item.order_scope ? ` · ${escapeHtml(item.order_scope)}` : ""}</p>
           </div>
-          ${item.likelihood ? `<span class="chip plan-upcoming">${escapeHtml(item.likelihood)}</span>` : ""}
+          ${WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || "")) && WEEKLY_TIMING_OPTIONS.includes(String(item.timing || ""))
+            ? `<span class="chip success">${escapeHtml(item.likelihood)}</span>`
+            : `<span class="chip plan-missing">Needs input</span>`}
         </div>
         <div class="tasks-inline-grid">
           <label>
@@ -8971,7 +8987,7 @@ function renderWeeklySalesmanView() {
     ? report.problematic_accounts.map((item, index) => {
       const disposition = String(item.disposition || "").toLowerCase();
       return `
-        <article class="tasks-row-card ${disposition === "report" ? "is-flagged" : ""}">
+        <article class="tasks-row-card tasks-problematic-account-card ${disposition === "report" ? "is-flagged" : ""}">
           <div class="tasks-row-head">
             <div>
               <strong>${escapeHtml(item.account_name || "Unnamed account")}</strong>
@@ -9165,7 +9181,7 @@ function renderWeeklySalesmanView() {
     <div class="tasks-sidebar-stack">
       <section class="tasks-status-card">
         <span class="tasks-kicker">Submission status</span>
-        <strong>${escapeHtml(status.label)}</strong>
+        <strong class="chip ${status.chipClass}">${escapeHtml(status.label)}</strong>
         <p>${escapeHtml(weeklyWeekLabel(wrapper))}</p>
         <div class="tasks-progress-meter">
           <div class="tasks-progress-fill" style="width:${completion.percent}%"></div>
@@ -9180,7 +9196,7 @@ function renderWeeklySalesmanView() {
           ${report.attested_at ? `<span>${escapeHtml(`Attested ${formatDateTime(report.attested_at)}`)}</span>` : ""}
         </div>
       </section>
-      <section class="tasks-section-card">
+      <section class="tasks-section-card tasks-blockers-card">
         <div class="tasks-section-head">
           <div>
             <h3>Blockers to clear</h3>
@@ -9918,6 +9934,7 @@ function applyView() {
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
   document.body.classList.toggle("activity-mode", isActivity);
   document.body.classList.toggle("pipeline-compact-mode", isPipeline);
+  document.body.classList.toggle("salesmen-mode", currentView === "salesmen" && state.currentUser?.role === "admin");
   document.body.classList.toggle("salesman-dashboard-mode", Boolean(isDashboard && isSalesmanRole()));
   document.body.classList.toggle("admin-dashboard-mode", Boolean(isDashboard && !isSalesmanRole()));
   document.body.classList.toggle("tasks-mode", isTasks);
