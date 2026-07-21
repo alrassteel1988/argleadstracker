@@ -1066,12 +1066,12 @@ function renderLeadAiSummaryPanel(lead, options = {}) {
     `;
   } else if (summary) {
     body = [
-      leadAiCard("Current Lead Status", `<p>${escapeHtml(summary.current_lead_status || "No summary available.")}</p>`),
+      leadAiCard("Current Lead Status", `<p>${escapeHtml(summary.current_lead_status || "No summary available.")}</p>`, { tone: "status" }),
       leadAiCard("Market Intelligence", `
         <p>${escapeHtml(summary.market_intelligence || "Market intelligence unavailable.")}</p>
         ${summaryState.marketIntelUnavailableReason ? `<div class="lead-ai-note">${escapeHtml(summaryState.marketIntelUnavailableReason)}</div>` : ""}
       `, { tone: "intel" }),
-      leadAiCard("Salesman Engagement History", `<p>${escapeHtml(summary.salesman_engagement_history || "No engagement history recorded.")}</p>`),
+      leadAiCard("Salesman Engagement History", `<p>${escapeHtml(summary.salesman_engagement_history || "No engagement history recorded.")}</p>`, { tone: "engagement" }),
       leadAiCard("Risks / Attention Needed", summaryList(summary.risks_attention_needed, "risk"), { tone: "risk" }),
       leadAiCard("Recommended Next Action", `
         <p class="lead-ai-action-copy">${escapeHtml(summary.recommended_next_action || "No next action recommended yet.")}</p>
@@ -4305,7 +4305,7 @@ function pipelineFunnelComparisonTableRowsMarkup(rows) {
   `).join("");
 }
 
-function dashboardPipelineFunnelCompactMarkup(leads) {
+function dashboardPipelineFunnelCompactMarkup(leads, { dialogTitleId = "dashboardFunnelDialogTitle" } = {}) {
   const metrics = pipelineFunnelMetricsForLeads(leads);
   const stages = pipelineFunnelStageRows(metrics).filter(stage => ["contacted", "open"].includes(stage.key));
   const rows = pipelineFunnelComparisonRows(leads);
@@ -4339,11 +4339,11 @@ function dashboardPipelineFunnelCompactMarkup(leads) {
       <span><strong>Salesman comparison (${escapeHtml(String(rows.length))})</strong> &mdash; ${escapeHtml(leaderSummary)}</span>
       <button class="ghost-button" type="button" data-dashboard-funnel-table-open>View table</button>
     </div>
-    <dialog class="dashboard-funnel-dialog" data-dashboard-funnel-dialog aria-labelledby="dashboardFunnelDialogTitle">
+    <dialog class="dashboard-funnel-dialog" data-dashboard-funnel-dialog aria-labelledby="${escapeHtml(dialogTitleId)}">
       <div class="dialog-header">
         <div>
           <span class="meta-label">Salesman comparison</span>
-          <h2 id="dashboardFunnelDialogTitle">Conversion by owner</h2>
+          <h2 id="${escapeHtml(dialogTitleId)}">Conversion by owner</h2>
         </div>
         <button class="ghost-button" type="button" data-dashboard-funnel-table-close aria-label="Close salesman comparison">Close</button>
       </div>
@@ -4367,10 +4367,10 @@ function dashboardPipelineFunnelCompactMarkup(leads) {
   `;
 }
 
-function bindDashboardFunnelDialog() {
-  const dialog = els.dashboardPipelineFunnelBody?.querySelector("[data-dashboard-funnel-dialog]");
+function bindPipelineFunnelDialog(container) {
+  const dialog = container?.querySelector("[data-dashboard-funnel-dialog]");
   if (!dialog) return;
-  els.dashboardPipelineFunnelBody.querySelector("[data-dashboard-funnel-table-open]")?.addEventListener("click", () => {
+  container.querySelector("[data-dashboard-funnel-table-open]")?.addEventListener("click", () => {
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
   });
@@ -4378,6 +4378,10 @@ function bindDashboardFunnelDialog() {
   dialog.addEventListener("click", event => {
     if (event.target === dialog) dialog.close();
   });
+}
+
+function bindDashboardFunnelDialog() {
+  bindPipelineFunnelDialog(els.dashboardPipelineFunnelBody);
 }
 
 function pipelineFunnelMarkup(
@@ -4498,6 +4502,7 @@ function renderPipelineFunnel() {
   const teamView = isAdminOrManager();
   if (state.leadsLoading && !state.leadsLoaded) {
     els.pipelineFunnelBadge.textContent = "Loading lead conversion";
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelCompactView");
     els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-skeleton">
@@ -4512,6 +4517,7 @@ function renderPipelineFunnel() {
     const leads = filteredLeads();
     if (!leads.length) {
       els.pipelineFunnelBadge.textContent = "0 visible leads";
+      els.pipelineFunnelBody.classList.remove("pipelineFunnelCompactView");
       els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
       els.pipelineFunnelBody.innerHTML = `
         <div class="pipeline-funnel-empty">
@@ -4522,21 +4528,22 @@ function renderPipelineFunnel() {
       return;
     }
     if (teamView) {
-      const view = pipelineFunnelMarkup(leads, { selectedSalesman: state.filters.salesman });
-      const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads), { showStageBreakdown: false });
-      els.pipelineFunnelBadge.textContent = view.badge;
+      els.pipelineFunnelBadge.textContent = `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`;
       els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
-      els.pipelineFunnelBody.classList.add(view.singleSalesmanView ? "pipelineFunnelDetailWide" : "pipelineFunnelGrid");
-      els.pipelineFunnelBody.innerHTML = `${view.html}${chart}`;
+      els.pipelineFunnelBody.classList.add("pipelineFunnelCompactView");
+      els.pipelineFunnelBody.innerHTML = dashboardPipelineFunnelCompactMarkup(leads, { dialogTitleId: "pipelineFunnelDialogTitle" });
+      bindPipelineFunnelDialog(els.pipelineFunnelBody);
       return;
     }
 
     const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
     els.pipelineFunnelBadge.textContent = `${leads.length} visible lead${leads.length === 1 ? "" : "s"}`;
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelCompactView");
     els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
     els.pipelineFunnelBody.innerHTML = chart;
   } catch (error) {
     els.pipelineFunnelBadge.textContent = "Funnel unavailable";
+    els.pipelineFunnelBody.classList.remove("pipelineFunnelCompactView");
     els.pipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "pipelineFunnelDetailWide");
     els.pipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
