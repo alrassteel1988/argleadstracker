@@ -10109,8 +10109,8 @@ function renderDetail() {
 function render() {
   renderMetrics();
   renderOverdueBanner();
-  renderPipelineFunnel();
-  renderPipelineFunnelSummary();
+  // Funnel analytics remain available for Dashboard and their planned
+  // Salesmen-page relocation; the Pipeline workspace is worklist-first.
   renderSidebarIdentity();
   renderTopbar();
   renderSmartSearch();
@@ -10140,19 +10140,12 @@ function applyView() {
   const isTasks = currentView === "tasks";
   const isLead = currentView === "lead";
   const isKanban = state.pipelineViewMode === "kanban";
-  const usesDesktopPipelineLayout = window.matchMedia("(min-width: 1025px) and (min-height: 600px)").matches;
-  const showKanbanSummary = isPipeline && isKanban && usesDesktopPipelineLayout && !state.pipelineKanbanFunnelExpanded;
-  const showFullFunnel = isPipeline && (!isKanban || !usesDesktopPipelineLayout || state.pipelineKanbanFunnelExpanded);
   const showMetricsShell = isPipeline || (isDashboard && !isSalesmanRole());
   els.metricsShell?.classList.toggle("hidden", !showMetricsShell);
   els.dashboardView.classList.toggle("hidden", !isDashboard);
   els.pipelineWorkspace?.classList.toggle("hidden", !isPipeline);
   els.pipelineWorkspace?.classList.toggle("pipeline-workspace-list", isPipeline && !isKanban);
   els.pipelineWorkspace?.classList.toggle("pipeline-workspace-kanban", isPipeline && isKanban);
-  els.pipelineWorkspace?.classList.toggle("is-funnel-expanded", Boolean(isKanban && state.pipelineKanbanFunnelExpanded));
-  els.pipelineFunnelPanel?.classList.toggle("hidden", !showFullFunnel);
-  els.pipelineFunnelSummaryStrip?.classList.toggle("hidden", !showKanbanSummary);
-  els.pipelineFunnelCollapse?.classList.toggle("hidden", !(isPipeline && isKanban && state.pipelineKanbanFunnelExpanded));
   els.pipelineToolbar.classList.toggle("hidden", !isPipeline);
   els.pipelineView.classList.toggle("hidden", !isPipeline);
   els.pipelineView?.classList.toggle("kanban-mode", isPipeline && isKanban);
@@ -10173,6 +10166,8 @@ function applyView() {
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
   document.body.classList.toggle("activity-mode", isActivity);
   document.body.classList.toggle("pipeline-compact-mode", isPipeline);
+  document.body.classList.toggle("pipeline-admin-mode", Boolean(isPipeline && !isSalesmanRole()));
+  document.body.classList.toggle("pipeline-salesman-mode", Boolean(isPipeline && isSalesmanRole()));
   document.body.classList.toggle("salesmen-mode", currentView === "salesmen" && state.currentUser?.role === "admin");
   document.body.classList.toggle("salesman-dashboard-mode", Boolean(isDashboard && isSalesmanRole()));
   document.body.classList.toggle("admin-dashboard-mode", Boolean(isDashboard && !isSalesmanRole()));

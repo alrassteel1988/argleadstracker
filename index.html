@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=pipeline-rebalanced-columns-1">
+  <link rel="stylesheet" href="styles.css?v=pipeline-fullwidth-no-funnel-1">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -551,33 +551,8 @@
         </section>
 
         <section class="pipeline-workspace hidden" id="pipelineWorkspace">
-          <section class="panel pipeline-funnel-panel hidden" id="pipelineFunnelPanel">
-            <div class="panel-header">
-              <div>
-                <h2>Pipeline Funnel</h2>
-                <span>Track lead conversion progress by salesman</span>
-              </div>
-              <div class="pipeline-funnel-header-actions">
-                <span id="pipelineFunnelBadge">0 visible leads</span>
-                <button class="ghost-button hidden" id="pipelineFunnelCollapse" type="button">Collapse &#9650;</button>
-              </div>
-            </div>
-            <div class="pipeline-funnel-body" id="pipelineFunnelBody"></div>
-          </section>
-
-          <section class="pipeline-funnel-summary-strip hidden" id="pipelineFunnelSummaryStrip" aria-label="Pipeline funnel summary">
-            <strong>Pipeline funnel</strong>
-            <div class="pipeline-funnel-summary-donut" id="pipelineFunnelSummaryDonut" role="img" aria-label="Contacted lead percentage">
-              <span id="pipelineFunnelSummaryTotal">0</span>
-            </div>
-            <div class="pipeline-funnel-summary-stats">
-              <span>Assigned <b id="pipelineFunnelSummaryAssigned">0</b></span>
-              <span>Contacted <b id="pipelineFunnelSummaryContacted">0</b></span>
-              <span>Won <b id="pipelineFunnelSummaryWon">0</b></span>
-            </div>
-            <button class="ghost-button" id="pipelineFunnelExpand" type="button">Expand &#9660;</button>
-          </section>
-
+          <!-- Funnel analytics remain available to Dashboard and shared code. The
+               Admin comparison belongs on Salesmen in a dedicated follow-up. -->
           <div class="pipeline-worklist-column">
             <section class="toolbar hidden" id="pipelineToolbar">
           <label class="search-box">
@@ -1433,7 +1408,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="client.js?v=pipeline-rebalanced-columns-1"></script>
+    <script src="client.js?v=pipeline-fullwidth-no-funnel-1"></script>
   </body>
 </html>
 

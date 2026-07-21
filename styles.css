@@ -24813,3 +24813,288 @@ body.lead-detail-mode .topbar :is(.ghost-button, .primary-button, .sync-status-p
     white-space: nowrap;
   }
 }
+
+/* Activity readability: flat semantic caps and high-contrast light surfaces. */
+body.activity-mode .activity-panel-cap,
+body.activity-mode .activity-reminders-panel > .activity-panel-cap {
+  background-color: var(--activity-cap-color);
+  background-image: none;
+}
+
+body.activity-mode .activity-panel-cap h2,
+body.activity-mode .activity-reminders-panel > .activity-panel-cap h2 {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+body.activity-mode .activity-panel-cap span,
+body.activity-mode .activity-panel-cap .activity-weekly-subheading,
+body.activity-mode .activity-reminders-panel > .activity-panel-cap span {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 1;
+}
+
+body.activity-mode .activity-log-panel > .activity-panel-cap .activity-count-pill,
+body.activity-mode .activity-card-header.activity-panel-cap--red .activity-count-pill {
+  color: #4a1414;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+body.activity-mode .activity-kpi-card small {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 1;
+}
+
+body.activity-mode :is(
+  .activity-date-filter > span,
+  .activity-filter-right label > span,
+  .activity-filter-secondary label > span,
+  .date-range-inputs label,
+  .activity-reminders-filter-label,
+  .reminder-stack-header,
+  .activity-reminders-links-head h3,
+  .activity-reminders-links-head span,
+  .calendar-legend,
+  .activity-results-summary
+) {
+  color: #1a1a1a;
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 1;
+}
+
+body.activity-mode .activity-filter-bar :is(input, select) {
+  color: #4a4a4a;
+  font-weight: 400;
+}
+
+body.activity-mode .date-presets button,
+body.activity-mode .activity-shortcut-chips button {
+  border: 1px solid var(--bauhaus-border-soft);
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+body.activity-mode .date-presets button.active,
+body.activity-mode .activity-shortcut-chips button.active {
+  border-color: #14141c;
+  background: #14141c;
+  color: #fff;
+}
+
+body.activity-mode .activity-weekly-card .activity-day-chip,
+body.activity-mode .activity-weekly-card .activity-day-chip strong,
+body.activity-mode .activity-weekly-card .activity-day-chip span {
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+body.activity-mode .activity-log-panel .activity-feed-body strong {
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+body.activity-mode .activity-log-panel .activity-feed-body p,
+body.activity-mode .activity-log-panel .activity-feed-body .meta-label,
+body.activity-mode .activity-log-panel .timeline-divider,
+body.activity-mode .activity-day-detail,
+body.activity-mode .activity-day-event :is(span, strong, em) {
+  color: #1a1a1a;
+  font-size: 10px;
+  opacity: 1;
+}
+
+body.activity-mode .activity-log-panel .activity-feed-body p,
+body.activity-mode .activity-log-panel .activity-feed-body .meta-label {
+  font-weight: 400;
+}
+
+body.activity-mode .activity-reminders-panel .reminder-card.upcoming,
+body.activity-mode .activity-reminders-panel .reminder-stack-header .count-chip.upcoming,
+body.activity-mode .activity-reminders-panel .activity-quick-link .count-chip.success {
+  color: #1e3210;
+}
+
+body.activity-mode .activity-reminders-panel .reminder-card.overdue,
+body.activity-mode .activity-reminders-panel .reminder-stack-header .count-chip.overdue {
+  color: #4a1414;
+}
+
+body.activity-mode .activity-reminders-panel .reminder-card :is(strong, p, .meta-label) {
+  color: inherit;
+  font-size: 10px;
+  opacity: 1;
+}
+
+/* Pipeline worklist-first layout. Funnel analytics remain in shared code for
+   Dashboard and a future Salesmen-page home. */
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.pipeline-compact-mode #pipelineWorkspace:is(.pipeline-workspace-list, .pipeline-workspace-kanban) {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    height: clamp(320px, calc(100dvh - 292px), 560px);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode #pipelineWorkspace .pipeline-worklist-column {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode #pipelineToolbar {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: minmax(260px, 2fr) repeat(4, minmax(100px, 1fr)) auto;
+    gap: 10px;
+    align-items: end;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 10px 12px;
+  }
+
+  body.pipeline-salesman-mode #pipelineToolbar {
+    grid-template-columns: minmax(260px, 2fr) repeat(3, minmax(100px, 1fr)) auto;
+  }
+
+  body.pipeline-compact-mode #pipelineToolbar > label,
+  body.pipeline-compact-mode #pipelineToolbar .view-toggle {
+    min-width: 0;
+  }
+
+  body.pipeline-compact-mode #pipelineToolbar > label > span,
+  body.pipeline-compact-mode #pipelineToolbar .view-toggle > span {
+    color: #4a4a4a;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.25px;
+    text-transform: uppercase;
+  }
+
+  body.pipeline-compact-mode #pipelineToolbar :is(input, select, button) {
+    min-height: 34px;
+    height: 34px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+  }
+
+  body.pipeline-compact-mode #overduePipelineFilter {
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0;
+  }
+
+  body.pipeline-compact-mode #pipelineView {
+    display: grid;
+    flex: 1 1 auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode #pipelineListPanel,
+  body.pipeline-compact-mode #kanbanPanel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode #pipelineListPanel > .panel-header,
+  body.pipeline-compact-mode #kanbanPanel > .panel-header {
+    flex: 0 0 auto;
+    padding: 12px 16px;
+  }
+
+  body.pipeline-compact-mode #leadList.lead-table-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 16px 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list .live-lead-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    font-size: 11px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list .live-lead-table th {
+    padding: 7px 8px;
+    color: #4a4a4a;
+    font-size: 9px;
+    font-weight: 700;
+    white-space: normal;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list .live-lead-table td {
+    min-width: 0;
+    padding: 8px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list .lead-table-company strong {
+    font-size: 11px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list .lead-table-company small,
+  body.pipeline-compact-mode .pipeline-workspace-list .lead-table-badge {
+    font-size: 9px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban .kanban-board {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 8px;
+    width: 100%;
+    min-height: 0;
+    padding: 10px 12px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban .kanban-column {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 180px;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban .kanban-card-list {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
