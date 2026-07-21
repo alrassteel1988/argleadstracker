@@ -57,6 +57,7 @@ const state = {
   overduePipelineOnly: false,
   performanceStage: "all",
   marketSnapshotSalesman: "all",
+  marketSnapshotTab: "location",
   salesmanLeadsViewer: null,
   actionPlanCollapsed: {},
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
@@ -221,6 +222,10 @@ const els = {
   dashboardUserName: document.querySelector("#dashboardUserName"),
   dashboardSubline: document.querySelector("#dashboardSubline"),
   metricsShell: document.querySelector("#metricsShell"),
+  sharedDashboardTopSlot: document.querySelector("#sharedDashboardTopSlot"),
+  adminDashboardOverviewSlot: document.querySelector("#adminDashboardOverviewSlot"),
+  adminDashboardTriageRow: document.querySelector("#adminDashboardTriageRow"),
+  adminDashboardAnalyticsRow: document.querySelector("#adminDashboardAnalyticsRow"),
   metricsPanel: document.querySelector("#metricsPanel"),
   dashboardView: document.querySelector("#dashboardView"),
   salesmanSimplifiedDashboard: document.querySelector("#salesmanSimplifiedDashboard"),
@@ -4288,6 +4293,95 @@ function pipelineFunnelChartMarkup(
   `;
 }
 
+function pipelineFunnelComparisonTableRowsMarkup(rows) {
+  return rows.map(row => `
+    <tr>
+      <td data-label="Salesman">${escapeHtml(row.salesmanName)}</td>
+      <td data-label="Assigned Leads">${escapeHtml(String(row.totalAssignedLeads))}</td>
+      <td data-label="Contacted">${escapeHtml(String(row.contactedLeads))}</td>
+      <td data-label="Open Pipeline">${escapeHtml(String(row.openPipelineLeads))}</td>
+      <td data-label="Won">${escapeHtml(String(row.wonDeals))}</td>
+      <td data-label="Lost">${escapeHtml(String(row.lostDeals))}</td>
+      <td data-label="Conversion Rate"><span class="chip ${row.conversionRate >= 35 ? "green" : row.conversionRate >= 15 ? "warm" : ""}">${escapeHtml(String(row.conversionRate))}%</span></td>
+    </tr>
+  `).join("");
+}
+
+function dashboardPipelineFunnelCompactMarkup(leads) {
+  const metrics = pipelineFunnelMetricsForLeads(leads);
+  const stages = pipelineFunnelStageRows(metrics).filter(stage => ["contacted", "open"].includes(stage.key));
+  const rows = pipelineFunnelComparisonRows(leads);
+  const leader = rows.find(row => row.totalAssignedLeads > 0) || rows[0];
+  const activeOpen = Math.min(metrics.totalAssignedLeads, Math.max(0, metrics.openPipelineLeads));
+  const contactedBase = Math.max(0, metrics.totalAssignedLeads - activeOpen);
+  const activePercent = percentOf(activeOpen, metrics.totalAssignedLeads);
+  const donutBackground = metrics.totalAssignedLeads
+    ? `conic-gradient(var(--bauhaus-amber) 0 ${activePercent}%, var(--bauhaus-blue) ${activePercent}% 100%)`
+    : "#e2e8f0";
+  const leaderSummary = leader
+    ? `${leader.salesmanName} leads at ${leader.totalAssignedLeads} assigned`
+    : "No assigned leads in the current filters";
+
+  return `
+    <div class="dashboard-funnel-compact">
+      <div class="dashboard-funnel-visual" role="img" aria-label="${escapeHtml(`${metrics.totalAssignedLeads} assigned leads, ${metrics.contactedLeads} contacted, ${metrics.openPipelineLeads} active or open`)}">
+        <div class="dashboard-funnel-donut" style="background:${donutBackground}">
+          <span><strong>${escapeHtml(String(metrics.totalAssignedLeads))}</strong><small>Assigned</small></span>
+        </div>
+        <div class="dashboard-funnel-legend">
+          <span><i class="contacted"></i>Contacted <strong>${escapeHtml(String(contactedBase))}</strong></span>
+          <span><i class="open"></i>Active/Open <strong>${escapeHtml(String(activeOpen))}</strong></span>
+        </div>
+      </div>
+      <div class="dashboard-funnel-stages">
+        ${stages.map(pipelineFunnelStageMarkup).join("")}
+      </div>
+    </div>
+    <div class="dashboard-funnel-comparison-summary">
+      <span><strong>Salesman comparison (${escapeHtml(String(rows.length))})</strong> &mdash; ${escapeHtml(leaderSummary)}</span>
+      <button class="ghost-button" type="button" data-dashboard-funnel-table-open>View table</button>
+    </div>
+    <dialog class="dashboard-funnel-dialog" data-dashboard-funnel-dialog aria-labelledby="dashboardFunnelDialogTitle">
+      <div class="dialog-header">
+        <div>
+          <span class="meta-label">Salesman comparison</span>
+          <h2 id="dashboardFunnelDialogTitle">Conversion by owner</h2>
+        </div>
+        <button class="ghost-button" type="button" data-dashboard-funnel-table-close aria-label="Close salesman comparison">Close</button>
+      </div>
+      <div class="pipeline-funnel-table-wrap">
+        <table class="pipeline-funnel-table">
+          <thead>
+            <tr>
+              <th>Salesman</th>
+              <th>Assigned Leads</th>
+              <th>Contacted</th>
+              <th>Open Pipeline</th>
+              <th>Won</th>
+              <th>Lost</th>
+              <th>Conversion Rate</th>
+            </tr>
+          </thead>
+          <tbody>${pipelineFunnelComparisonTableRowsMarkup(rows)}</tbody>
+        </table>
+      </div>
+    </dialog>
+  `;
+}
+
+function bindDashboardFunnelDialog() {
+  const dialog = els.dashboardPipelineFunnelBody?.querySelector("[data-dashboard-funnel-dialog]");
+  if (!dialog) return;
+  els.dashboardPipelineFunnelBody.querySelector("[data-dashboard-funnel-table-open]")?.addEventListener("click", () => {
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  });
+  dialog.querySelector("[data-dashboard-funnel-table-close]")?.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog) dialog.close();
+  });
+}
+
 function pipelineFunnelMarkup(
   leads,
   {
@@ -4390,17 +4484,7 @@ function pipelineFunnelMarkup(
                   </tr>
                 </thead>
                 <tbody>
-                  ${rows.map(row => `
-                    <tr>
-                      <td data-label="Salesman">${escapeHtml(row.salesmanName)}</td>
-                      <td data-label="Assigned Leads">${escapeHtml(String(row.totalAssignedLeads))}</td>
-                      <td data-label="Contacted">${escapeHtml(String(row.contactedLeads))}</td>
-                      <td data-label="Open Pipeline">${escapeHtml(String(row.openPipelineLeads))}</td>
-                      <td data-label="Won">${escapeHtml(String(row.wonDeals))}</td>
-                      <td data-label="Lost">${escapeHtml(String(row.lostDeals))}</td>
-                      <td data-label="Conversion Rate"><span class="chip ${row.conversionRate >= 35 ? "green" : row.conversionRate >= 15 ? "warm" : ""}">${escapeHtml(String(row.conversionRate))}%</span></td>
-                    </tr>
-                  `).join("")}
+                  ${pipelineFunnelComparisonTableRowsMarkup(rows)}
                 </tbody>
               </table>
             </div>
@@ -4496,7 +4580,7 @@ function renderDashboardPipelineFunnel() {
   }
   if (state.leadsLoading && !state.leadsLoaded) {
     els.dashboardPipelineFunnelBadge.textContent = "Loading lead conversion";
-    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "dashboardFunnelCompactView");
     els.dashboardPipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-skeleton">
         <span></span>
@@ -4509,26 +4593,19 @@ function renderDashboardPipelineFunnel() {
   }
   try {
     if (admin) {
-      const selectedSalesman = state.marketSnapshotSalesman || "all";
       const leads = marketSnapshotLeads();
-      const view = pipelineFunnelMarkup(leads, {
-        selectedSalesman,
-        forceSingleSalesman: false,
-        includeComparison: true,
-        includeSummary: false
-      });
-      const chart = pipelineFunnelChartMarkup(pipelineFunnelMetricsForLeads(leads));
-      els.dashboardPipelineFunnelBadge.textContent = view.badge.replace("visible", "tracked");
-      els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelSingleView");
-      els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelGrid", "pipelineFunnelAdminTwoUp");
-      els.dashboardPipelineFunnelBody.innerHTML = `${view.html}${chart}`;
+      els.dashboardPipelineFunnelBadge.textContent = `${leads.length} tracked lead${leads.length === 1 ? "" : "s"}`;
+      els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
+      els.dashboardPipelineFunnelBody.classList.add("dashboardFunnelCompactView");
+      els.dashboardPipelineFunnelBody.innerHTML = dashboardPipelineFunnelCompactMarkup(leads);
+      bindDashboardFunnelDialog();
       return;
     }
 
     const leads = [...state.leads];
     if (!leads.length) {
       els.dashboardPipelineFunnelBadge.textContent = "0 assigned leads";
-      els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelAdminTwoUp");
+      els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelAdminTwoUp", "dashboardFunnelCompactView");
       els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelSingleView");
       els.dashboardPipelineFunnelBody.innerHTML = `
         <div class="pipeline-funnel-empty">
@@ -4547,12 +4624,12 @@ function renderDashboardPipelineFunnel() {
     });
     const chart = pipelineFunnelChartMarkup(metrics);
     els.dashboardPipelineFunnelBadge.textContent = `${leads.length} assigned lead${leads.length === 1 ? "" : "s"}`;
-    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelAdminTwoUp");
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelAdminTwoUp", "dashboardFunnelCompactView");
     els.dashboardPipelineFunnelBody.classList.add("pipelineFunnelSingleView");
     els.dashboardPipelineFunnelBody.innerHTML = `${view.html}${chart}`;
   } catch (error) {
     els.dashboardPipelineFunnelBadge.textContent = "Funnel unavailable";
-    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp");
+    els.dashboardPipelineFunnelBody.classList.remove("pipelineFunnelGrid", "pipelineFunnelSingleView", "pipelineFunnelAdminTwoUp", "dashboardFunnelCompactView");
     els.dashboardPipelineFunnelBody.innerHTML = `
       <div class="pipeline-funnel-empty error">
         <strong>Could not load dashboard funnel.</strong>
@@ -5276,6 +5353,14 @@ function renderMarketSnapshotPanel() {
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   renderSnapshotPie(els.marketLocationPie, els.marketLocationLegend, locationEntries, "locations");
   renderSnapshotPie(els.marketSectorPie, els.marketSectorLegend, sectorEntries, "sectors");
+  els.marketSnapshotPanel.querySelectorAll("[data-market-snapshot-tab]").forEach(button => {
+    const active = button.dataset.marketSnapshotTab === state.marketSnapshotTab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  els.marketSnapshotPanel.querySelectorAll("[data-market-snapshot-view]").forEach(view => {
+    view.classList.toggle("hidden", view.dataset.marketSnapshotView !== state.marketSnapshotTab);
+  });
 }
 
 function renderLossReasonsAnalytics() {
@@ -5437,6 +5522,42 @@ function renderSalesmanDashboard() {
     return;
   }
   renderSalesmanSimplifiedDashboard();
+}
+
+function arrangeAdminDashboardLayout() {
+  if (!els.dashboardView || !els.metricsShell || !els.overdueBanner) return;
+  const isAdminDashboard = currentView === "dashboard" && !isSalesmanRole();
+
+  if (isAdminDashboard) {
+    els.adminDashboardOverviewSlot?.appendChild(els.metricsShell);
+    [els.overdueBanner, els.marketIntelPanel, els.needsAttentionPanel].forEach(panel => {
+      if (panel) els.adminDashboardTriageRow?.appendChild(panel);
+    });
+    [els.marketSnapshotPanel, els.dashboardPipelineFunnelPanel].forEach(panel => {
+      if (panel) els.adminDashboardAnalyticsRow?.appendChild(panel);
+    });
+    return;
+  }
+
+  if (els.metricsShell.parentElement !== els.sharedDashboardTopSlot) {
+    els.sharedDashboardTopSlot?.appendChild(els.metricsShell);
+  }
+  if (!isSalesmanRole() && els.overdueBanner.parentElement !== els.sharedDashboardTopSlot) {
+    els.sharedDashboardTopSlot?.insertBefore(els.overdueBanner, els.sharedDashboardTopSlot.firstChild);
+  }
+
+  const dashboardAnchor = els.actionPlanPanel || els.dashboardView.firstElementChild;
+  [
+    els.marketIntelPanel,
+    els.needsAttentionPanel,
+    els.adminTaskPanel,
+    els.marketSnapshotPanel,
+    els.dashboardPipelineFunnelPanel
+  ].forEach(panel => {
+    if (panel && panel.parentElement !== els.dashboardView) {
+      els.dashboardView.insertBefore(panel, dashboardAnchor);
+    }
+  });
 }
 
 function salesmanDashboardLeads() {
@@ -9987,6 +10108,7 @@ function applyView() {
   document.body.classList.toggle("admin-dashboard-mode", Boolean(isDashboard && !isSalesmanRole()));
   document.body.classList.toggle("tasks-mode", isTasks);
   document.body.classList.toggle("admin-tasks-mode", Boolean(isTasks && !isSalesmanRole()));
+  arrangeAdminDashboardLayout();
 }
 
 function closeMobileMenu() {
@@ -10348,6 +10470,14 @@ els.performanceStageFilter?.addEventListener("change", event => {
 
 els.marketSnapshotSalesmanFilter?.addEventListener("change", event => {
   state.marketSnapshotSalesman = event.target.value;
+  renderMarketSnapshotPanel();
+  renderDashboardPipelineFunnel();
+});
+
+els.marketSnapshotPanel?.addEventListener("click", event => {
+  const tab = event.target.closest("[data-market-snapshot-tab]");
+  if (!tab) return;
+  state.marketSnapshotTab = tab.dataset.marketSnapshotTab === "sector" ? "sector" : "location";
   renderMarketSnapshotPanel();
 });
 

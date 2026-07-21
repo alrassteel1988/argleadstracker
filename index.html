@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=pipeline-funnel-220">
+    <link rel="stylesheet" href="styles.css?v=admin-dashboard-layout-1">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -149,7 +149,8 @@
           </div>
         </header>
 
-        <section class="overdue-banner hidden" id="overdueBanner" aria-live="polite"></section>
+        <div class="shared-dashboard-top-slot" id="sharedDashboardTopSlot">
+          <section class="overdue-banner hidden" id="overdueBanner" aria-live="polite"></section>
 
         <div class="salesman-dashboard-priority-row">
           <div class="salesman-simplified-hero">
@@ -166,7 +167,7 @@
           </div>
         </div>
 
-        <section class="panel metrics-shell" id="metricsShell">
+          <section class="panel metrics-shell" id="metricsShell">
           <div class="panel-header">
             <div>
               <h2>Dashboard Overview</h2>
@@ -194,9 +195,13 @@
               <small id="metricDueSub">0 overdue</small>
             </article>
           </section>
-        </section>
+          </section>
+        </div>
 
         <section class="dashboard-view" id="dashboardView">
+          <div class="admin-dashboard-overview-slot" id="adminDashboardOverviewSlot"></div>
+          <div class="admin-dashboard-triage-row" id="adminDashboardTriageRow"></div>
+          <div class="admin-dashboard-analytics-row" id="adminDashboardAnalyticsRow"></div>
           <div class="panel salesman-simplified-dashboard dashboard-grid hidden" id="salesmanSimplifiedDashboard">
             <div class="salesman-simplified-metrics" id="salesmanSimplifiedMetrics"></div>
             <section class="salesman-simplified-block salesman-dashboard-top-actions">
@@ -423,15 +428,19 @@
                 </select>
               </label>
             </div>
+            <div class="market-snapshot-tabs" role="tablist" aria-label="Market snapshot dimension">
+              <button class="market-snapshot-tab active" type="button" role="tab" aria-selected="true" data-market-snapshot-tab="location">Location</button>
+              <button class="market-snapshot-tab" type="button" role="tab" aria-selected="false" data-market-snapshot-tab="sector">Sector</button>
+            </div>
             <div class="market-snapshot-grid">
-              <article class="snapshot-card">
+              <article class="snapshot-card" data-market-snapshot-view="location">
                 <p class="sp-section-label">Leads by Location</p>
                 <div class="snapshot-visual">
                   <div class="portfolio-pie" id="marketLocationPie" role="img" aria-label="Lead distribution by location"></div>
                   <div class="snapshot-legend" id="marketLocationLegend"></div>
                 </div>
               </article>
-              <article class="snapshot-card">
+              <article class="snapshot-card hidden" data-market-snapshot-view="sector">
                 <p class="sp-section-label">Leads by Sector Type</p>
                 <div class="snapshot-visual">
                   <div class="portfolio-pie" id="marketSectorPie" role="img" aria-label="Lead distribution by sector type"></div>
@@ -1428,7 +1437,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-    <script src="client.js"></script>
+    <script src="client.js?v=admin-dashboard-layout-1"></script>
   </body>
 </html>
 

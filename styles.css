@@ -21676,3 +21676,518 @@ body.tasks-mode:not(.admin-tasks-mode) .tasks-blockers-card .tasks-checklist li:
   height: 5px;
   background: var(--bauhaus-red);
 }
+
+/* Admin Dashboard executive layout: compact triage and analytics rows. */
+.admin-dashboard-overview-slot:empty,
+.admin-dashboard-triage-row:empty,
+.admin-dashboard-analytics-row:empty {
+  display: none;
+}
+
+body.admin-dashboard-mode .shared-dashboard-top-slot {
+  display: contents;
+}
+
+body.admin-dashboard-mode .dashboard-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-triage-row,
+  .admin-dashboard-analytics-row
+) {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot {
+  display: block;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 10px;
+}
+
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-triage-row,
+  .admin-dashboard-analytics-row
+) > .panel,
+body.admin-dashboard-mode .admin-dashboard-triage-row > .overdue-banner {
+  grid-column: auto;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border-radius: 8px;
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.admin-dashboard-mode #adminTaskPanel {
+  display: none !important;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell {
+  border: 2px solid var(--panel-border-primary);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell > .panel-header,
+body.admin-dashboard-mode .admin-dashboard-triage-row > .panel > .panel-header,
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .panel-header {
+  border-bottom: 1px solid var(--bauhaus-border-soft);
+  border-radius: 6px 6px 0 0;
+  background: var(--bauhaus-surface);
+  color: var(--arg-text);
+  box-shadow: none;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell > .panel-header h2,
+body.admin-dashboard-mode .admin-dashboard-triage-row > .panel > .panel-header h2,
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .panel-header h2 {
+  color: var(--arg-text);
+  font-weight: 500;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell > .panel-header span,
+body.admin-dashboard-mode .admin-dashboard-triage-row > .panel > .panel-header span,
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .panel-header span {
+  color: var(--arg-text-secondary);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell .dashboard-collapsible-body-inner {
+  padding: 8px 10px 10px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article {
+  min-height: 54px;
+  padding: 8px 10px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article::after {
+  display: none;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article > span {
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article > strong {
+  margin-top: 2px;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article > small {
+  margin-top: 1px;
+  font-size: 8px;
+  line-height: 1.1;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > :is(.overdue-banner, .panel) {
+  min-height: 94px;
+  max-height: 126px;
+  overflow: hidden;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > .overdue-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-copy {
+  min-width: 0;
+  padding: 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-copy strong {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-copy div,
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-pill {
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-actions {
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-action {
+  min-height: 24px;
+  padding: 5px 7px;
+  font-size: 8px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > .panel > .panel-header {
+  min-height: 50px;
+  padding: 8px 10px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > .panel > .panel-header h2 {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > .panel > .panel-header > div > span {
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .dashboard-collapsible-body-inner {
+  max-height: 62px;
+  padding: 6px 10px 8px;
+  overflow: hidden;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(.market-intel-feed, .needs-attention-list) {
+  display: block;
+  max-height: 48px;
+  overflow: hidden;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(.empty-copy, .intel-item, .attention-flag-card) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .panel-collapse-toggle {
+  min-height: 22px;
+  padding: 4px 7px;
+  font-size: 8px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .panel-collapse-label {
+  display: none;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .panel-header :is(.ghost-button, .attention-count) {
+  min-height: 22px;
+  padding: 4px 7px;
+  font-size: 7px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > #marketSnapshotPanel {
+  border: 2px solid var(--panel-border-new);
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > #dashboardPipelineFunnelPanel {
+  border: 2px solid var(--panel-border-info);
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .panel-header {
+  min-height: 58px;
+  padding: 8px 10px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel {
+  height: 100%;
+  margin: 0 !important;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-header {
+  align-items: center;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-header .panel-header-actions {
+  display: flex;
+  align-items: center;
+  flex-flow: row nowrap;
+  gap: 6px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-filter {
+  min-width: 132px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-filter select {
+  min-height: 30px;
+  padding-block: 5px;
+  font-size: 9px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .panel-header h2 {
+  font-size: 13px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .panel-header > div > span {
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .dashboard-collapsible-body-inner {
+  padding: 0;
+}
+
+body.admin-dashboard-mode .market-snapshot-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px 0;
+}
+
+body.admin-dashboard-mode .market-snapshot-tab {
+  min-height: 24px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: #EEF1F4;
+  color: var(--arg-text-secondary);
+  font-size: 9px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+body.admin-dashboard-mode .market-snapshot-tab.active {
+  background: var(--bauhaus-ink);
+  color: #FFFFFF;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-grid {
+  display: block;
+  padding: 8px 10px 10px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .snapshot-card {
+  min-width: 0;
+  padding: 8px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .snapshot-card.hidden {
+  display: none;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .snapshot-visual {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-panel .portfolio-pie {
+  width: 70px;
+  height: 70px;
+  min-width: 70px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-panel .portfolio-pie::after {
+  inset: 15px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-panel .portfolio-pie span {
+  font-size: 13px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-panel .portfolio-pie small,
+body.admin-dashboard-mode .admin-dashboard-analytics-row .snapshot-legend span,
+body.admin-dashboard-mode .admin-dashboard-analytics-row .snapshot-legend strong {
+  font-size: 9px;
+}
+
+body.admin-dashboard-mode #dashboardPipelineFunnelBody.dashboardFunnelCompactView {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px 10px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-compact {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-visual {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut {
+  position: relative;
+  display: grid;
+  width: 70px;
+  height: 70px;
+  place-items: center;
+  border-radius: 50%;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut::after {
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  background: var(--bauhaus-surface);
+  content: "";
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut > span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut strong {
+  color: var(--bauhaus-ink);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut small {
+  color: var(--arg-text-secondary);
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 8px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--arg-text-secondary);
+  font-size: 8px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-legend i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-legend i.contacted {
+  background: var(--bauhaus-blue);
+}
+
+body.admin-dashboard-mode .dashboard-funnel-legend i.open {
+  background: var(--bauhaus-amber);
+}
+
+body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-stage {
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-stage-head strong,
+body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-stage-stats span {
+  font-size: 10px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-stage-stats small {
+  font-size: 8px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-track {
+  height: 5px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-comparison-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bauhaus-border-soft);
+  color: var(--arg-text-secondary);
+  font-size: 9px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-comparison-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-comparison-summary .ghost-button {
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 4px 8px;
+  font-size: 8px;
+}
+
+.dashboard-funnel-dialog {
+  width: min(900px, calc(100vw - 32px));
+  max-height: min(680px, calc(100dvh - 32px));
+  padding: 16px;
+  border: 2px solid var(--panel-border-info);
+  border-radius: 8px;
+  background: var(--bauhaus-surface);
+  color: var(--bauhaus-ink);
+}
+
+.dashboard-funnel-dialog::backdrop {
+  background: rgba(20, 20, 28, 0.48);
+}
+
+.dashboard-funnel-dialog .pipeline-funnel-table-wrap {
+  max-height: calc(100dvh - 150px);
+  overflow: auto;
+}
+
+@media (max-width: 1024px) {
+  body.admin-dashboard-mode .admin-dashboard-triage-row,
+  body.admin-dashboard-mode .admin-dashboard-analytics-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-triage-row > :is(.overdue-banner, .panel) {
+    max-height: none;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-triage-row .dashboard-collapsible-body-inner,
+  body.admin-dashboard-mode .admin-dashboard-triage-row :is(.market-intel-feed, .needs-attention-list) {
+    max-height: none;
+  }
+}
+
+@media (max-width: 639px) {
+  body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-analytics-row .snapshot-visual,
+  body.admin-dashboard-mode .dashboard-funnel-compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin-dashboard-mode .dashboard-funnel-comparison-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
