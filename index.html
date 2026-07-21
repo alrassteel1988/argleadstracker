@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=tasks-subsection-blue-caps-1">
+    <link rel="stylesheet" href="styles.css?v=salesmen-rebalanced-heights-3">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -419,7 +419,7 @@
             <div class="panel-header market-snapshot-header">
               <div>
                 <h2>Pipeline Market Snapshot</h2>
-                <span>Visual view of potential customers by location and sector type</span>
+                <span>Potential customers by location and sector type</span>
               </div>
               <label class="market-snapshot-filter">
                 <span>Salesman</span>
@@ -434,18 +434,10 @@
             </div>
             <div class="market-snapshot-grid">
               <article class="snapshot-card" data-market-snapshot-view="location">
-                <p class="sp-section-label">Leads by Location</p>
-                <div class="snapshot-visual">
-                  <div class="portfolio-pie" id="marketLocationPie" role="img" aria-label="Lead distribution by location"></div>
-                  <div class="snapshot-legend" id="marketLocationLegend"></div>
-                </div>
+                <div class="market-snapshot-bars" id="marketLocationBars" role="img" aria-label="Lead distribution by location"></div>
               </article>
               <article class="snapshot-card hidden" data-market-snapshot-view="sector">
-                <p class="sp-section-label">Leads by Sector Type</p>
-                <div class="snapshot-visual">
-                  <div class="portfolio-pie" id="marketSectorPie" role="img" aria-label="Lead distribution by sector type"></div>
-                  <div class="snapshot-legend" id="marketSectorLegend"></div>
-                </div>
+                <div class="market-snapshot-bars" id="marketSectorBars" role="img" aria-label="Lead distribution by sector type"></div>
               </article>
             </div>
           </div>
@@ -690,44 +682,46 @@
                 <div class="sp-leader-grid" id="performanceLeaderboard"></div>
               </section>
 
-              <div class="sp-card sp-chart-card">
-                <p class="sp-section-label">Team activity comparison</p>
-                <div class="sp-legend" aria-label="Chart legend">
-                  <span class="sp-legend-item"><i style="background:#2E6DA4"></i>Assigned</span>
-                  <span class="sp-legend-item"><i style="background:#6B9A3E"></i>Activities</span>
-                  <span class="sp-legend-item"><i style="background:#D68A2C"></i>Follow-ups</span>
-                  <span class="sp-legend-item"><i style="background:#8291A3"></i>Stage leads</span>
-                </div>
-                <div class="sp-chart-scroll">
-                  <div class="sp-chart-frame">
-                    <canvas id="performanceChart" role="img" aria-label="Grouped bar chart comparing assigned leads, activities, follow-ups, and stage leads per salesman."></canvas>
+              <div class="sp-analysis-row">
+                <div class="sp-card sp-chart-card">
+                  <p class="sp-section-label">Team activity comparison</p>
+                  <div class="sp-legend" aria-label="Chart legend">
+                    <span class="sp-legend-item"><i style="background:#2E6DA4"></i>Assigned</span>
+                    <span class="sp-legend-item"><i style="background:#6B9A3E"></i>Activities</span>
+                    <span class="sp-legend-item"><i style="background:#D68A2C"></i>Follow-ups</span>
+                    <span class="sp-legend-item"><i style="background:#8291A3"></i>Stage</span>
+                  </div>
+                  <div class="sp-chart-scroll">
+                    <div class="sp-chart-frame">
+                      <canvas id="performanceChart" role="img" aria-label="Grouped bar chart comparing assigned leads, activities, follow-ups, and stage leads per salesman."></canvas>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div class="sp-two-col">
-                <div class="sp-card">
-                  <p class="sp-section-label">Performance heatmap</p>
-                  <table class="sp-hm-table">
-                    <thead>
-                      <tr>
-                        <th>Salesman</th>
-                        <th>Leads</th>
-                        <th>Act.</th>
-                        <th>F-ups</th>
-                        <th>Score</th>
-                      </tr>
-                    </thead>
-                    <tbody id="performanceTable"></tbody>
-                  </table>
+                <div class="sp-card sp-performance-card">
+                  <p class="sp-section-label">Performance table</p>
+                  <div class="sp-table-scroll">
+                    <table class="sp-hm-table">
+                      <thead>
+                        <tr>
+                          <th>Salesman</th>
+                          <th>Leads</th>
+                          <th>Act.</th>
+                          <th>F-ups</th>
+                          <th>Score</th>
+                        </tr>
+                      </thead>
+                      <tbody id="performanceTable"></tbody>
+                    </table>
+                  </div>
                 </div>
 
-                <div class="sp-card">
+                <div class="sp-card sp-recent-card">
                   <p class="sp-section-label">Recent activity</p>
                   <div class="sp-feed" id="performanceFeed"></div>
                 </div>
               </div>
-              <details class="sp-card sp-lead-summary-details">
+              <details class="sp-card sp-lead-summary-details" open>
                 <summary>
                   <span>Salesman Lead Summary</span>
                   <span id="salesmenSummary">0 salesmen</span>
@@ -1437,7 +1431,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-    <script src="client.js?v=tasks-subsection-blue-caps-1"></script>
+    <script src="client.js?v=market-snapshot-bars-1"></script>
   </body>
 </html>
 

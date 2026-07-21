@@ -294,10 +294,8 @@ const els = {
   performanceFeed: document.querySelector("#performanceFeed"),
   marketSnapshotPanel: document.querySelector("#marketSnapshotPanel"),
   marketSnapshotSalesmanFilter: document.querySelector("#marketSnapshotSalesmanFilter"),
-  marketLocationPie: document.querySelector("#marketLocationPie"),
-  marketLocationLegend: document.querySelector("#marketLocationLegend"),
-  marketSectorPie: document.querySelector("#marketSectorPie"),
-  marketSectorLegend: document.querySelector("#marketSectorLegend"),
+  marketLocationBars: document.querySelector("#marketLocationBars"),
+  marketSectorBars: document.querySelector("#marketSectorBars"),
   dashboardPipelineFunnelPanel: document.querySelector("#dashboardPipelineFunnelPanel"),
   dashboardPipelineFunnelBadge: document.querySelector("#dashboardPipelineFunnelBadge"),
   dashboardPipelineFunnelBody: document.querySelector("#dashboardPipelineFunnelBody"),
@@ -5014,10 +5012,10 @@ function renderPerformanceChart(rows) {
     data: {
       labels: rows.map(row => chartLabelName(row.name)),
       datasets: [
-        { label: "Assigned leads", data: rows.map(row => row.totalAssigned), backgroundColor: "#2E6DA4", borderRadius: 4, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 24 },
-        { label: "Activities logged", data: rows.map(row => row.activitiesLogged), backgroundColor: "#6B9A3E", borderRadius: 4, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 24 },
-        { label: "Follow-ups", data: rows.map(row => row.followupsCompleted), backgroundColor: "#D68A2C", borderRadius: 4, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 24 },
-        { label: "Stage leads", data: rows.map(row => row.filteredStageCount), backgroundColor: "#8291A3", borderRadius: 4, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 24 }
+        { label: "Assigned leads", data: rows.map(row => row.totalAssigned), backgroundColor: "#2E6DA4", borderRadius: 3, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 6 },
+        { label: "Activities logged", data: rows.map(row => row.activitiesLogged), backgroundColor: "#6B9A3E", borderRadius: 3, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 6 },
+        { label: "Follow-ups", data: rows.map(row => row.followupsCompleted), backgroundColor: "#D68A2C", borderRadius: 3, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 6 },
+        { label: "Stage leads", data: rows.map(row => row.filteredStageCount), backgroundColor: "#8291A3", borderRadius: 3, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 6 }
       ]
     },
     options: {
@@ -5037,7 +5035,7 @@ function renderPerformanceChart(rows) {
           grid: { display: false },
           offset: true,
           ticks: {
-            font: { size: 11, weight: "600" },
+            font: { size: 8, weight: "600" },
             color: "#334155",
             maxRotation: 0,
             minRotation: 0,
@@ -5047,7 +5045,7 @@ function renderPerformanceChart(rows) {
         },
         y: {
           grid: { color: "rgba(148,163,184,0.22)" },
-          ticks: { font: { size: 10, weight: "600" }, color: "#64748B", stepSize: 1, precision: 0 },
+          ticks: { font: { size: 8, weight: "600" }, color: "#64748B", stepSize: 1, precision: 0 },
           beginAtZero: true
         }
       }
@@ -5329,15 +5327,48 @@ function marketSnapshotLeads() {
   return state.leads.filter(lead => leadMatchesSalesman(lead, person));
 }
 
-function renderSnapshotPie(target, legend, entries, totalLabel) {
-  if (!target || !legend) return;
-  const slices = pieSlices(entries);
-  target.style.background = slices.length
-    ? `conic-gradient(${slices.map(slice => `${slice.color} ${slice.start}% ${slice.end}%`).join(", ")})`
-    : "#edf2f7";
-  target.innerHTML = `<span>${entries.reduce((sum, [, count]) => sum + count, 0)}<small>${escapeHtml(totalLabel)}</small></span>`;
-  legend.innerHTML = slices.length
-    ? slices.map(slice => `<span><i style="background:${slice.color}"></i>${escapeHtml(slice.label)} <strong>${slice.count}</strong></span>`).join("")
+const MARKET_SNAPSHOT_BAR_COLORS = [
+  { solid: "#1D9E75", rgb: "29, 158, 117" },
+  { solid: "#2E6DA4", rgb: "46, 109, 164" },
+  { solid: "#D68A2C", rgb: "214, 138, 44" },
+  { solid: "#7F77DD", rgb: "127, 119, 221" }
+];
+
+function marketSnapshotBarColor(index) {
+  const base = MARKET_SNAPSHOT_BAR_COLORS[index % MARKET_SNAPSHOT_BAR_COLORS.length];
+  if (index < MARKET_SNAPSHOT_BAR_COLORS.length) return base.solid;
+  const mutedCycle = Math.floor(index / MARKET_SNAPSHOT_BAR_COLORS.length) - 1;
+  const opacity = Math.max(0.36, 0.68 - (mutedCycle * 0.12));
+  return `rgba(${base.rgb}, ${opacity.toFixed(2)})`;
+}
+
+function renderSnapshotBars(target, entries, dimensionLabel) {
+  if (!target) return;
+  const rows = [...entries].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const total = rows.reduce((sum, [, count]) => sum + count, 0);
+  target.setAttribute("aria-label", `${total} total leads grouped by ${dimensionLabel}`);
+  target.innerHTML = rows.length
+    ? `
+      <p class="market-snapshot-total"><strong>${total}</strong> total ${total === 1 ? "lead" : "leads"}</p>
+      <div class="market-snapshot-bar-list">
+        ${rows.map(([label, count], index) => {
+          const percentage = total ? (count / total) * 100 : 0;
+          const displayPercentage = Math.round(percentage);
+          const color = marketSnapshotBarColor(index);
+          return `
+            <div class="market-snapshot-bar-row">
+              <div class="market-snapshot-bar-meta">
+                <span>${escapeHtml(label)}</span>
+                <span><strong>${count}</strong> · <small>${displayPercentage}%</small></span>
+              </div>
+              <div class="market-snapshot-bar-track" aria-hidden="true">
+                <i style="width:${percentage.toFixed(2)}%;background:${color}"></i>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `
     : `<p class="empty-copy">No leads match this filter yet.</p>`;
 }
 
@@ -5351,8 +5382,8 @@ function renderMarketSnapshotPanel() {
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const sectorEntries = Object.entries(countBy(leads, leadSectorLabel))
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  renderSnapshotPie(els.marketLocationPie, els.marketLocationLegend, locationEntries, "locations");
-  renderSnapshotPie(els.marketSectorPie, els.marketSectorLegend, sectorEntries, "sectors");
+  renderSnapshotBars(els.marketLocationBars, locationEntries, "location");
+  renderSnapshotBars(els.marketSectorBars, sectorEntries, "sector");
   els.marketSnapshotPanel.querySelectorAll("[data-market-snapshot-tab]").forEach(button => {
     const active = button.dataset.marketSnapshotTab === state.marketSnapshotTab;
     button.classList.toggle("active", active);
@@ -7865,7 +7896,7 @@ function renderSalesmenView() {
           <span><strong>${owned.length}</strong> Companies</span>
           <span><strong>${money.format(value)}</strong> Open value</span>
           <span><strong>${hot}</strong> Hot</span>
-          <span><strong>${overdue}</strong> Overdue</span>
+          <span><strong class="${overdue ? "is-overdue" : ""}">${overdue}</strong> Overdue</span>
         </div>
       </article>
     `;
@@ -10109,6 +10140,7 @@ function applyView() {
   document.body.classList.toggle("admin-dashboard-mode", Boolean(isDashboard && !isSalesmanRole()));
   document.body.classList.toggle("tasks-mode", isTasks);
   document.body.classList.toggle("admin-tasks-mode", Boolean(isTasks && !isSalesmanRole()));
+  document.body.classList.toggle("lead-detail-mode", isLead);
   arrangeAdminDashboardLayout();
 }
 
