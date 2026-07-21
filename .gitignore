@@ -2,6 +2,7 @@
 .vercel/
 node_modules/
 *.log
+.codex-server-*.err
 data/db.json
 scripts/push-github-api.ps1
 arg leads tracker web/
