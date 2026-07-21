@@ -239,6 +239,8 @@ const els = {
   salesmanSimplifiedFirstTouch: document.querySelector("#salesmanSimplifiedFirstTouch"),
   salesmanSimplifiedLossPrompts: document.querySelector("#salesmanSimplifiedLossPrompts"),
   salesmanSimplifiedPipeline: document.querySelector("#salesmanSimplifiedPipeline"),
+  salesmanDashboardLeadCount: document.querySelector("#salesmanDashboardLeadCount"),
+  salesmanDashboardLeadList: document.querySelector("#salesmanDashboardLeadList"),
   dashboardQuickActions: document.querySelector("#dashboardQuickActions"),
   dashboardFirstTouchList: document.querySelector("#dashboardFirstTouchList"),
   dashboardQuickLogActivity: document.querySelector("#dashboardQuickLogActivity"),
@@ -5763,6 +5765,19 @@ function renderSalesmanSimplifiedDashboard() {
     `).join("");
   }
 
+  if (els.salesmanDashboardLeadCount) {
+    els.salesmanDashboardLeadCount.textContent = `${leads.length} record${leads.length === 1 ? "" : "s"}`;
+  }
+  if (els.salesmanDashboardLeadList) {
+    const dashboardLeads = [...leads].sort((a, b) => {
+      const aDue = String(a.next_action_date || "9999-12-31").slice(0, 10);
+      const bDue = String(b.next_action_date || "9999-12-31").slice(0, 10);
+      return aDue.localeCompare(bDue) || compareNewestLeadFirst(a, b);
+    });
+    els.salesmanDashboardLeadList.innerHTML = dashboardLeadTableMarkup(dashboardLeads);
+    bindLeadTableRows(els.salesmanDashboardLeadList, "data-dashboard-lead-id", openLeadDrawer);
+  }
+
   document.querySelectorAll("[data-salesman-queue-open]").forEach(button => {
     button.addEventListener("click", () => openLeadDrawer(button.dataset.salesmanQueueOpen));
   });
@@ -6507,7 +6522,7 @@ function renderNeedsAttentionPanel() {
   });
 }
 
-function leadTableRowMarkup(lead, { idAttribute = "data-lead-id", selectedId = "" } = {}) {
+function leadTablePresentation(lead) {
   const plan = leadActionPlanState(lead);
   const dueDate = String(lead.next_action_date || "").slice(0, 10);
   const overdueDays = dueDate ? Math.max(0, -daysUntil(dueDate)) : null;
@@ -6526,6 +6541,11 @@ function leadTableRowMarkup(lead, { idAttribute = "data-lead-id", selectedId = "
       : /(green|cold|low)/.test(normalizedPriority) ? "green" : "neutral";
   const stageKey = normalizeStageKey(lead.stage).toLowerCase();
   const companyMeta = [inferEmirate(lead), daysAgoLabel(lead.last_activity)].filter(Boolean).join(" - ");
+  return { plan, dueDate, overdueTone, overdueLabel, priorityLabel, priorityTone, stageKey, companyMeta };
+}
+
+function leadTableRowMarkup(lead, { idAttribute = "data-lead-id", selectedId = "" } = {}) {
+  const { plan, dueDate, overdueTone, overdueLabel, priorityLabel, priorityTone, stageKey, companyMeta } = leadTablePresentation(lead);
   return `
     <tr class="lead-table-row ${lead.id === selectedId ? "active" : ""}" ${idAttribute}="${escapeHtml(lead.id)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
       <td class="lead-table-company">
@@ -6540,6 +6560,62 @@ function leadTableRowMarkup(lead, { idAttribute = "data-lead-id", selectedId = "
       <td><span class="lead-table-badge lead-table-priority-${priorityTone}">${escapeHtml(priorityLabel)}</span></td>
       <td class="lead-table-territory">${escapeHtml(lead.territory || inferEmirate(lead) || "Not set")}</td>
     </tr>
+  `;
+}
+
+function primaryLeadContact(lead) {
+  const contacts = Array.isArray(lead.contacts) ? lead.contacts : [];
+  const contact = contacts.find(item => item?.is_default || item?.is_primary || item?.default)
+    || contacts[0]
+    || {};
+  return {
+    name: contact.name || contact.contact_person || lead.contact_person || "",
+    phone: contact.phone || contact.mobile || lead.phone || "",
+    email: contact.email || lead.email || ""
+  };
+}
+
+function dashboardLeadTableRowMarkup(lead) {
+  const { plan, overdueTone, overdueLabel, stageKey, companyMeta } = leadTablePresentation(lead);
+  const contact = primaryLeadContact(lead);
+  const dashboardOverdueLabel = overdueLabel === "Not set" ? "Not overdue" : overdueLabel;
+  return `
+    <tr class="lead-table-row" data-dashboard-lead-id="${escapeHtml(lead.id)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
+      <td class="lead-table-company">
+        <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+        ${companyMeta ? `<small>${escapeHtml(companyMeta)}</small>` : ""}
+      </td>
+      <td class="lead-table-contact ${contact.name ? "" : "is-empty"}">${escapeHtml(contact.name || "Not added")}</td>
+      <td class="lead-table-contact-link">${contact.phone
+        ? `<a href="tel:${escapeHtml(contact.phone)}" aria-label="Call ${escapeHtml(contact.name || lead.company_name || "contact")}">${escapeHtml(contact.phone)}</a>`
+        : `<span class="is-empty">&mdash;</span>`}</td>
+      <td class="lead-table-contact-link">${contact.email
+        ? `<a href="mailto:${escapeHtml(contact.email)}" aria-label="Email ${escapeHtml(contact.name || lead.company_name || "contact")}">${escapeHtml(contact.email)}</a>`
+        : `<span class="is-empty">&mdash;</span>`}</td>
+      <td class="lead-table-next-action">${escapeHtml(plan.action)}</td>
+      <td><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(dashboardOverdueLabel)}</span></td>
+      <td><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
+    </tr>
+  `;
+}
+
+function dashboardLeadTableMarkup(leads) {
+  const rows = leads.map(dashboardLeadTableRowMarkup).join("");
+  return `
+    <table class="live-lead-table dashboard-live-lead-table">
+      <thead>
+        <tr>
+          <th scope="col">Company Name</th>
+          <th scope="col">Contact Person</th>
+          <th scope="col">Phone</th>
+          <th scope="col">Email</th>
+          <th scope="col">Next Action</th>
+          <th scope="col">Days Overdue</th>
+          <th scope="col">Stage</th>
+        </tr>
+      </thead>
+      <tbody>${rows || `<tr class="lead-table-empty"><td colspan="7">No assigned leads found.</td></tr>`}</tbody>
+    </table>
   `;
 }
 
@@ -6567,8 +6643,12 @@ function leadTableMarkup(leads, { idAttribute = "data-lead-id", selectedId = "",
 function bindLeadTableRows(container, idAttribute, onOpen) {
   container.querySelectorAll(`.lead-table-row[${idAttribute}]`).forEach(row => {
     const openRow = () => onOpen(row.getAttribute(idAttribute));
-    row.addEventListener("click", openRow);
+    row.addEventListener("click", event => {
+      if (event.target.closest("a, button")) return;
+      openRow();
+    });
     row.addEventListener("keydown", event => {
+      if (event.target.closest("a, button")) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       openRow();
@@ -6927,13 +7007,20 @@ function drawerSkeleton() {
 }
 
 function detailField(label, value, options = {}) {
-  if (!value) value = "Not added";
+  const empty = !value;
+  if (empty) value = "Not added";
   const auto = options.auto ? `<span class="auto-tag">Auto</span>` : "";
   const safeValue = escapeHtml(String(value));
   const content = options.href
     ? `<a class="drawer-field-value" href="${escapeHtml(options.href)}" title="${safeValue}" ${options.external ? 'target="_blank" rel="noopener"' : ""}>${safeValue}</a>`
     : `<span class="drawer-field-value" title="${safeValue}">${safeValue}</span>`;
-  return `<article class="drawer-field ${options.overdue ? "overdue" : ""}"><span>${escapeHtml(label)}${auto}</span><strong>${content}</strong></article>`;
+  const classes = [
+    "drawer-field",
+    options.overdue ? "overdue" : "",
+    empty ? "is-empty" : "",
+    options.linkTone === "blue" ? "is-link-blue" : ""
+  ].filter(Boolean).join(" ");
+  return `<article class="${classes}"><span>${escapeHtml(label)}${auto}</span><strong>${content}</strong></article>`;
 }
 
 function drawerSummaryMetric(label, value, options = {}) {
@@ -7145,13 +7232,13 @@ function renderLossDetails(lead) {
 
 function renderDrawerOverview(lead) {
   const overdue = lead.next_action_date && lead.next_action_date < today();
-  const primaryContact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ") || "Not added";
+  const primaryContact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ");
   const secondaryContact = [lead.secondary_contact_name, lead.secondary_contact_title].filter(Boolean).join(" - ");
   const locationLine = [lead.location, lead.country_emirate, lead.address].filter(Boolean).join(" - ");
   const lastActivity = lead.last_activity ? `${daysAgoLabel(lead.last_activity)}` : "No activity yet";
   const estimatedValue = formatAED(lead.estimated_value);
   const overviewSnapshot = `
-    <section class="drawer-section drawer-overview-hero">
+    <section class="drawer-section drawer-overview-hero drawer-overview-panel drawer-overview-panel--snapshot">
       <div class="drawer-tab-heading">
         <div>
           <h3>Lead Snapshot</h3>
@@ -7159,8 +7246,8 @@ function renderDrawerOverview(lead) {
         </div>
       </div>
       <div class="drawer-summary-grid">
-        ${drawerSummaryMetric("Next Action", lead.next_action ? normalizeNextActionPlan(lead.next_action) : "Not set", { tone: overdue ? "overdue" : "" })}
-        ${drawerSummaryMetric("Due Date", lead.next_action_date ? `${lead.next_action_date}${overdue ? " - overdue" : ""}` : "Not set", { tone: overdue ? "overdue" : "" })}
+        ${drawerSummaryMetric("Next Action", lead.next_action ? normalizeNextActionPlan(lead.next_action) : "Not set", { tone: "next-action" })}
+        ${drawerSummaryMetric("Due Date", lead.next_action_date ? `${lead.next_action_date}${overdue ? " - overdue" : ""}` : "Not set")}
         ${drawerSummaryMetric("Estimated Value", estimatedValue)}
         ${drawerSummaryMetric("Last Activity", lastActivity)}
       </div>
@@ -7175,7 +7262,7 @@ function renderDrawerOverview(lead) {
   return `
     ${autoEnrichmentBanner(lead)}
     ${overviewSnapshot}
-    <section class="drawer-section">
+    <section class="drawer-section drawer-overview-panel drawer-overview-panel--contact">
       <div class="drawer-tab-heading">
         <div>
           <h3>Contact Essentials</h3>
@@ -7184,15 +7271,15 @@ function renderDrawerOverview(lead) {
       </div>
       <div class="drawer-field-grid">
         ${detailField("Primary contact", primaryContact, { auto: autoField(lead, "key_personnel") })}
-        ${detailField("Phone", lead.phone, lead.phone ? { href: `tel:${lead.phone}` } : {})}
-        ${detailField("Email", lead.email, lead.email ? { href: `mailto:${lead.email}` } : {})}
+        ${detailField("Phone", lead.phone, lead.phone ? { href: `tel:${lead.phone}`, linkTone: "blue" } : {})}
+        ${detailField("Email", lead.email, lead.email ? { href: `mailto:${lead.email}`, linkTone: "blue" } : {})}
         ${detailField("Website", lead.website, lead.website ? { href: lead.website, external: true } : {})}
         ${detailField("Google Maps", lead.google_maps_url ? "Open map" : "", lead.google_maps_url ? { href: lead.google_maps_url, external: true } : {})}
         ${detailField("Assigned salesman", lead.assigned_salesman)}
         ${detailField("Location", locationLine)}
       </div>
     </section>
-    <details class="drawer-disclosure" open>
+    <details class="drawer-disclosure drawer-overview-panel drawer-overview-panel--commercial" open>
       <summary>
         <span>Commercial Details</span>
         <small>Stage context, value, and what the customer is interested in.</small>
@@ -7208,7 +7295,7 @@ function renderDrawerOverview(lead) {
         </div>
       </div>
     </details>
-    <details class="drawer-disclosure">
+    <details class="drawer-disclosure drawer-overview-panel drawer-overview-panel--company">
       <summary>
         <span>Additional Company Details</span>
         <small>Legal, location, and enrichment-backed company profile data.</small>
@@ -7224,7 +7311,7 @@ function renderDrawerOverview(lead) {
         </div>
       </div>
     </details>
-    <details class="drawer-disclosure">
+    <details class="drawer-disclosure drawer-overview-panel drawer-overview-panel--secondary">
       <summary>
         <span>Secondary Contacts & Notes</span>
         <small>Optional relationship details, tags, and sales remarks.</small>
@@ -10165,6 +10252,7 @@ function applyView() {
   });
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
   document.body.classList.toggle("activity-mode", isActivity);
+  document.body.classList.toggle("activity-admin-mode", Boolean(isActivity && !isSalesmanRole()));
   document.body.classList.toggle("pipeline-compact-mode", isPipeline);
   document.body.classList.toggle("pipeline-admin-mode", Boolean(isPipeline && !isSalesmanRole()));
   document.body.classList.toggle("pipeline-salesman-mode", Boolean(isPipeline && isSalesmanRole()));

@@ -1,8 +1,10 @@
-const CACHE_VERSION = "arg-pwa-v2-activity-layout";
+const CACHE_VERSION = "arg-pwa-v6-activity-admin-contrast";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
+  "/salesman-dashboard-live-leads.css",
+  "/lead-detail-readability.css",
   "/client.js",
   "/favicon.svg",
   "/manifest.json",

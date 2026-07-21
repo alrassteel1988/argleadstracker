@@ -15,7 +15,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=pipeline-fullwidth-no-funnel-1">
+  <link rel="stylesheet" href="styles.css?v=salesman-dashboard-live-leads-1">
+  <link rel="stylesheet" href="salesman-dashboard-live-leads.css?v=1">
+  <link rel="stylesheet" href="lead-detail-readability.css?v=2">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -204,6 +206,15 @@
           <div class="admin-dashboard-analytics-row" id="adminDashboardAnalyticsRow"></div>
           <div class="panel salesman-simplified-dashboard dashboard-grid hidden" id="salesmanSimplifiedDashboard">
             <div class="salesman-simplified-metrics" id="salesmanSimplifiedMetrics"></div>
+            <section class="salesman-simplified-block salesman-dashboard-pipeline">
+              <div class="panel-header">
+                <div>
+                  <h2>My pipeline</h2>
+                  <span>New, contacted, negotiation, and won counts for your own book.</span>
+                </div>
+              </div>
+              <div class="salesman-simplified-pipeline-strip" id="salesmanSimplifiedPipeline"></div>
+            </section>
             <section class="salesman-simplified-block salesman-dashboard-top-actions">
                 <div class="panel-header">
                   <div>
@@ -225,6 +236,16 @@
                 </div>
                 <div class="salesman-simplified-queue" id="salesmanSimplifiedQueue"></div>
             </section>
+            <section class="salesman-simplified-block salesman-dashboard-live-leads">
+              <div class="panel-header">
+                <div>
+                  <h2>Live Lead List</h2>
+                  <span>Your assigned leads with primary contact details and the next move.</span>
+                </div>
+                <span class="salesman-live-lead-count" id="salesmanDashboardLeadCount">0 records</span>
+              </div>
+              <div class="salesman-dashboard-lead-table lead-table-scroll" id="salesmanDashboardLeadList"></div>
+            </section>
             <section class="salesman-simplified-block salesman-dashboard-first-touch">
                 <div class="panel-header">
                   <div>
@@ -242,15 +263,6 @@
                   </div>
                 </div>
                 <div class="salesman-loss-prompts-list" id="salesmanSimplifiedLossPrompts"></div>
-            </section>
-            <section class="salesman-simplified-block salesman-dashboard-pipeline">
-              <div class="panel-header">
-                <div>
-                  <h2>My pipeline</h2>
-                  <span>New, contacted, negotiation, and won counts for your own book.</span>
-                </div>
-              </div>
-              <div class="salesman-simplified-pipeline-strip" id="salesmanSimplifiedPipeline"></div>
             </section>
           </div>
           <div class="panel dashboard-quick-actions" id="dashboardQuickActions">
@@ -1408,7 +1420,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-    <script src="client.js?v=pipeline-fullwidth-no-funnel-1"></script>
+    <script src="client.js?v=activity-admin-contrast-1"></script>
   </body>
 </html>
 
