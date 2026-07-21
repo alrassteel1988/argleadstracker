@@ -6500,37 +6500,84 @@ function renderNeedsAttentionPanel() {
   });
 }
 
+function leadTableRowMarkup(lead, { idAttribute = "data-lead-id", selectedId = "" } = {}) {
+  const plan = leadActionPlanState(lead);
+  const dueDate = String(lead.next_action_date || "").slice(0, 10);
+  const overdueDays = dueDate ? Math.max(0, -daysUntil(dueDate)) : null;
+  const overdueTone = overdueDays === null || overdueDays === 0
+    ? "neutral"
+    : overdueDays >= 35 ? "red" : "amber";
+  const overdueLabel = overdueDays === null
+    ? "Not set"
+    : overdueDays === 0 ? "Not overdue" : `${overdueDays} day${overdueDays === 1 ? "" : "s"}`;
+  const priorityLabel = String(lead.priority || lead.health?.label || "Not set").trim();
+  const normalizedPriority = priorityLabel.toLowerCase();
+  const priorityTone = /(red|hot|high|at risk|overdue)/.test(normalizedPriority)
+    ? "red"
+    : /(amber|warm|medium|orange)/.test(normalizedPriority)
+      ? "amber"
+      : /(green|cold|low)/.test(normalizedPriority) ? "green" : "neutral";
+  const stageKey = normalizeStageKey(lead.stage).toLowerCase();
+  const companyMeta = [inferEmirate(lead), daysAgoLabel(lead.last_activity)].filter(Boolean).join(" - ");
+  return `
+    <tr class="lead-table-row ${lead.id === selectedId ? "active" : ""}" ${idAttribute}="${escapeHtml(lead.id)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
+      <td class="lead-table-company">
+        <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+        ${companyMeta ? `<small>${escapeHtml(companyMeta)}</small>` : ""}
+      </td>
+      <td class="lead-table-next-action">${escapeHtml(plan.action)}</td>
+      <td><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(overdueLabel)}</span></td>
+      <td>${escapeHtml(dueDate ? formatPlanDate(dueDate) : "Not set")}</td>
+      <td>${escapeHtml(lead.assigned_salesman || "Unassigned")}</td>
+      <td><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
+      <td><span class="lead-table-badge lead-table-priority-${priorityTone}">${escapeHtml(priorityLabel)}</span></td>
+      <td class="lead-table-territory">${escapeHtml(lead.territory || inferEmirate(lead) || "Not set")}</td>
+    </tr>
+  `;
+}
+
+function leadTableMarkup(leads, { idAttribute = "data-lead-id", selectedId = "", emptyText = "No leads match the current filters." } = {}) {
+  const rows = leads.map(lead => leadTableRowMarkup(lead, { idAttribute, selectedId })).join("");
+  return `
+    <table class="live-lead-table">
+      <thead>
+        <tr>
+          <th scope="col">Company Name</th>
+          <th scope="col">Next Action</th>
+          <th scope="col">Days Overdue</th>
+          <th scope="col">Due Date</th>
+          <th scope="col">Salesman</th>
+          <th scope="col">Stage</th>
+          <th scope="col">Priority</th>
+          <th scope="col">Territory</th>
+        </tr>
+      </thead>
+      <tbody>${rows || `<tr class="lead-table-empty"><td colspan="8">${escapeHtml(emptyText)}</td></tr>`}</tbody>
+    </table>
+  `;
+}
+
+function bindLeadTableRows(container, idAttribute, onOpen) {
+  container.querySelectorAll(`.lead-table-row[${idAttribute}]`).forEach(row => {
+    const openRow = () => onOpen(row.getAttribute(idAttribute));
+    row.addEventListener("click", openRow);
+    row.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openRow();
+    });
+  });
+}
+
 function renderLeadList() {
   const leads = filteredLeads();
   els.leadCount.textContent = `${leads.length} record${leads.length === 1 ? "" : "s"}${state.importedAfter ? " from latest import" : ""}`;
-  els.leadList.innerHTML = leads.map(lead => {
-    const origin = leadOriginForCurrentUser(lead, state.currentUser);
-    return `
-    <button class="lead-card ${lead.id === state.selectedId ? "active" : ""}" data-lead-id="${escapeHtml(lead.id)}">
-      <div class="lead-title">
-        <span class="priority-dot ${priorityClass(lead.priority)}"></span>
-        <strong>${escapeHtml(lead.company_name)}</strong>
-        <span class="lead-chevron">&rsaquo;</span>
-      </div>
-      <p>${escapeHtml([inferEmirate(lead), daysAgoLabel(lead.last_activity)].filter(Boolean).join(" - "))}</p>
-      ${leadActionPlanMarkup(lead)}
-      <div class="chip-row">
-        <span class="stage-badge ${drawerStageClass(lead.stage)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span>
-        <span class="chip ${healthClass(lead.health)}">${escapeHtml(lead.health?.label || "AMBER")}</span>
-        <span class="chip">${escapeHtml(lead.territory)}</span>
-        <span class="chip ${leadOriginChipClass(origin)}">${escapeHtml(origin)}</span>
-        <span class="chip">${escapeHtml(lead.assigned_salesman)}</span>
-      </div>
-    </button>
-    `;
-  }).join("");
+  els.leadList.innerHTML = leadTableMarkup(leads, { selectedId: state.selectedId });
 
-  document.querySelectorAll(".lead-card").forEach(card => {
-    card.addEventListener("click", () => {
-      state.selectedId = card.dataset.leadId;
-      openLeadDrawer(card.dataset.leadId);
-      render();
-    });
+  bindLeadTableRows(els.leadList, "data-lead-id", leadId => {
+    state.selectedId = leadId;
+    openLeadDrawer(leadId);
+    render();
   });
 }
 
@@ -7933,33 +7980,17 @@ function renderSalesmanLeadsViewer() {
     <span><strong>${leads.length}</strong> companies</span>
     <span><strong>${money.format(value)}</strong> open value</span>
     <span><strong>${hot}</strong> hot</span>
-    <span><strong>${overdue}</strong> overdue</span>
+    <span><strong class="${overdue ? "is-overdue" : ""}">${overdue}</strong> overdue</span>
   `;
-  els.salesmanLeadsList.innerHTML = leads.map(lead => {
-    const plan = leadActionPlanState(lead);
-    const recent = leadRecentTimestamp(lead);
-    const recentLabel = recent ? formatDisplayDate(String(recent).slice(0, 10)) : "No recent activity";
-    return `
-      <button class="salesman-lead-row" type="button" data-salesman-view-lead="${escapeHtml(lead.id)}">
-        <div class="salesman-lead-copy">
-          <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
-          <p>${escapeHtml(plan.action || lead.stage || "No task set")}</p>
-          <small>${escapeHtml(recentLabel)}</small>
-        </div>
-        <div class="salesman-lead-meta">
-          <span class="chip ${priorityClass(lead.stage)}">${escapeHtml(lead.stage || "Prospect")}</span>
-          <span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span>
-        </div>
-      </button>
-    `;
-  }).join("") || `<div class="timeline-empty"><strong>No leads found for this salesman.</strong><span>There are no assigned or generated leads to review yet.</span></div>`;
-  els.salesmanLeadsList.querySelectorAll("[data-salesman-view-lead]").forEach(button => {
-    button.addEventListener("click", () => {
-      state.selectedId = button.dataset.salesmanViewLead;
-      closeSalesmanLeadsViewer();
-      openLeadDrawer(button.dataset.salesmanViewLead);
-      render();
-    });
+  els.salesmanLeadsList.innerHTML = leadTableMarkup(leads, {
+    idAttribute: "data-salesman-view-lead",
+    emptyText: "No assigned or generated leads to review yet."
+  });
+  bindLeadTableRows(els.salesmanLeadsList, "data-salesman-view-lead", leadId => {
+    state.selectedId = leadId;
+    closeSalesmanLeadsViewer();
+    openLeadDrawer(leadId);
+    render();
   });
 }
 

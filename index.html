@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=salesmen-rebalanced-heights-3">
+  <link rel="stylesheet" href="styles.css?v=salesman-leads-table-1">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -470,33 +470,35 @@
             </div>
             <div class="loss-reasons-chart" id="lossReasonsChart"></div>
           </div>
-          <div class="panel" id="relationshipFocusPanel">
-            <div class="panel-header">
-              <div>
-                <span>Needs Attention</span>
-                <h2>Cold relationships</h2>
+          <div class="admin-dashboard-bottom-row" id="adminDashboardBottomRow">
+            <div class="panel" id="relationshipFocusPanel">
+              <div class="panel-header">
+                <div>
+                  <span>Needs Attention</span>
+                  <h2>Cold relationships</h2>
+                </div>
+                <strong class="panel-icon">!</strong>
               </div>
-              <strong class="panel-icon">!</strong>
+              <div class="dashboard-activity-feed dashboard-focus-list" id="dashboardFocus"></div>
             </div>
-            <div class="dashboard-activity-feed dashboard-focus-list" id="dashboardFocus"></div>
-          </div>
-          <div class="panel" id="dashboardActivityPanel">
-            <div class="panel-header">
-              <div>
-                <span>Activity Feed</span>
-                <h2>Latest interactions</h2>
+            <div class="panel" id="dashboardActivityPanel">
+              <div class="panel-header">
+                <div>
+                  <span>Activity Feed</span>
+                  <h2>Latest interactions</h2>
+                </div>
               </div>
+              <div class="dashboard-activity-feed" id="dashboardActivityFeed"></div>
             </div>
-            <div class="dashboard-activity-feed" id="dashboardActivityFeed"></div>
-          </div>
-          <div class="panel" id="pipelineHealthPanel">
-            <div class="panel-header">
-              <div>
-                <h2>Pipeline Health</h2>
-                <span>By status</span>
+            <div class="panel" id="pipelineHealthPanel">
+              <div class="panel-header">
+                <div>
+                  <h2>Pipeline Health</h2>
+                  <span>By status</span>
+                </div>
               </div>
+              <div class="status-grid" id="dashboardStatus"></div>
             </div>
-            <div class="status-grid" id="dashboardStatus"></div>
           </div>
           <div class="panel agent-panel" id="agentPanel">
             <div class="agent-collapsed">
@@ -628,7 +630,7 @@
                   <h2>Live Lead List</h2>
                   <span id="leadCount">0 records</span>
                 </div>
-                <div class="lead-list" id="leadList"></div>
+                <div class="lead-list lead-table-scroll" id="leadList"></div>
               </div>
 
               <div class="panel kanban-panel hidden" id="kanbanPanel">
@@ -1431,7 +1433,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-    <script src="client.js?v=market-snapshot-bars-1"></script>
+  <script src="client.js?v=salesman-leads-table-1"></script>
   </body>
 </html>
 
