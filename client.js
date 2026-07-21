@@ -9011,9 +9011,10 @@ async function loadWeeklyReportWorkspace(force = false) {
   }
 }
 
-function weeklyReportCard(title, subtitle, body, tone = "") {
+function weeklyReportCard(title, subtitle, body, tone = "", headerCap = "") {
+  const headerCapClass = headerCap ? ` tasks-section-card--${headerCap}-cap` : "";
   return `
-    <section class="tasks-section-card ${tone}">
+    <section class="tasks-section-card ${tone}${headerCapClass}">
       <div class="tasks-section-head">
         <div>
           <h3>${escapeHtml(title)}</h3>
@@ -9318,10 +9319,10 @@ function renderWeeklySalesmanView() {
           <span>Weekly summary</span>
           <textarea rows="5" data-weekly-field="summary" placeholder="What actually happened this week, in plain sales language?">${escapeHtml(report.summary || "")}</textarea>
         </label>
-      `)}
-      ${weeklyReportCard("Secured orders", "ERP facts should appear here already. Only explain the flagged exceptions.", securedMarkup)}
-      ${weeklyReportCard("Expected orders", "Confirm what is still likely and what could stop it.", expectedMarkup)}
-      ${weeklyReportCard("Problematic accounts", "Every system-flagged issue must be reported or dismissed with a reason.", problemMarkup)}
+      `, "", "blue")}
+      ${weeklyReportCard("Secured orders", "ERP facts should appear here already. Only explain the flagged exceptions.", securedMarkup, "", "blue")}
+      ${weeklyReportCard("Expected orders", "Confirm what is still likely and what could stop it.", expectedMarkup, "", "blue")}
+      ${weeklyReportCard("Problematic accounts", "Every system-flagged issue must be reported or dismissed with a reason.", problemMarkup, "", "blue")}
       ${weeklyReportCard("Market intelligence overlay", "Capture the tacit market signal the system cannot infer.", marketIntelMarkup)}
       ${weeklyReportCard("Next week plan", "Tell management what you will do next, not just what happened.", `
         <label>

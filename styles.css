@@ -20234,6 +20234,241 @@ body.admin-dashboard-mode .overdue-action {
   }
 }
 
+/* Admin Activity readability and reusable semantic panel caps. */
+body.activity-mode {
+  --activity-title-ink: #1a1a1a;
+  --activity-meta-ink: #4a4a4a;
+  --activity-blue-ink: #10364f;
+  --activity-green-ink: #2c4318;
+  --activity-red-ink: #611f1f;
+  --activity-amber-ink: #5a390e;
+}
+
+body.activity-mode .activity-panel-cap {
+  --activity-cap-color: var(--panel-border-info);
+  --activity-cap-subtitle: #e6f0f7;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--activity-cap-color);
+}
+
+body.activity-mode .activity-panel-cap--teal {
+  --activity-cap-color: var(--panel-border-new);
+  --activity-cap-subtitle: #e4f7f0;
+}
+
+body.activity-mode .activity-panel-cap--red {
+  --activity-cap-color: var(--panel-border-urgent);
+  --activity-cap-subtitle: #fbe2e2;
+}
+
+body.activity-mode .activity-panel-cap--amber {
+  --activity-cap-color: var(--panel-border-action);
+  --activity-cap-subtitle: #fbebd4;
+}
+
+body.activity-mode .activity-reminders-panel > .activity-panel-cap {
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--activity-cap-color);
+}
+
+body.activity-mode .activity-panel-cap h2,
+body.activity-mode .activity-reminders-panel > .activity-panel-cap h2 {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+body.activity-mode .activity-panel-cap span,
+body.activity-mode .activity-panel-cap .activity-weekly-subheading,
+body.activity-mode .activity-reminders-panel > .activity-panel-cap span {
+  color: var(--activity-cap-subtitle);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+body.activity-mode .activity-panel-cap--red .activity-count-pill,
+body.activity-mode .activity-card-header.activity-panel-cap--red .activity-count-pill {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+  color: #7a2e2e;
+  font-size: 8px;
+  font-weight: 600;
+}
+
+body.activity-mode :is(
+  .activity-day-detail-head,
+  .activity-day-event strong,
+  .activity-feed-body strong,
+  .reminder-stack-header,
+  .activity-reminders-links-head h3,
+  .activity-quick-link-copy strong
+) {
+  color: var(--activity-title-ink);
+  font-weight: 600;
+}
+
+body.activity-mode :is(
+  .calendar-legend,
+  .activity-day-event span,
+  .activity-day-event em,
+  .activity-feed-body p,
+  .activity-feed-body .meta-label,
+  .timeline-divider,
+  .activity-date-filter > span,
+  .activity-filter-right label > span,
+  .activity-filter-secondary label > span,
+  .date-range-inputs label,
+  .activity-results-summary,
+  .activity-reminders-filter-label,
+  .activity-reminders-links-head span
+) {
+  color: var(--activity-meta-ink);
+}
+
+body.activity-mode .activity-filter-bar :is(input, select),
+body.activity-mode .date-presets button:not(.active),
+body.activity-mode .activity-shortcut-chips button:not(.active) {
+  color: var(--activity-meta-ink);
+  font-weight: 500;
+}
+
+body.activity-mode .activity-day-chip {
+  color: var(--activity-title-ink);
+}
+
+body.activity-mode .activity-day-chip.overdue,
+body.activity-mode .activity-feed-item.is-urgent .activity-feed-footer .chip-row > .chip:first-child,
+body.activity-mode .activity-feed-footer .chip.hot,
+body.activity-mode .reminder-stack-header .count-chip.overdue,
+body.activity-mode .reminder-card.overdue {
+  color: var(--activity-red-ink);
+}
+
+body.activity-mode .activity-day-chip.upcoming,
+body.activity-mode .activity-quick-link .count-chip.danger,
+body.activity-mode .activity-quick-link .count-chip.warning {
+  color: var(--activity-amber-ink);
+}
+
+body.activity-mode .activity-feed-footer .chip-row > .chip:first-child {
+  color: var(--activity-blue-ink);
+}
+
+body.activity-mode .reminder-stack-header .count-chip.upcoming,
+body.activity-mode .reminder-card.upcoming,
+body.activity-mode .activity-quick-link .count-chip.success {
+  color: var(--activity-green-ink);
+}
+
+body.activity-mode .reminder-card strong {
+  color: inherit;
+  font-weight: 600;
+}
+
+body.activity-mode .reminder-card p,
+body.activity-mode .reminder-card .meta-label {
+  color: inherit;
+  font-weight: 500;
+}
+
+body.activity-mode .calendar-nav-button,
+body.activity-mode .calendar-range-pill {
+  color: var(--activity-title-ink);
+  font-weight: 600;
+}
+
+/* Generated Activity content has legacy selectors with higher specificity. */
+body.activity-mode .activity-log-panel .activity-feed-body strong {
+  color: var(--activity-title-ink);
+  font-weight: 600;
+}
+
+body.activity-mode .activity-log-panel .activity-feed-body p,
+body.activity-mode .activity-log-panel .activity-feed-body .meta-label,
+body.activity-mode .activity-log-panel .timeline-divider {
+  color: var(--activity-meta-ink);
+}
+
+body.activity-mode .activity-log-panel > .activity-panel-cap .activity-count-pill {
+  flex-shrink: 0;
+  border: 0;
+  background: #fff;
+  color: #7a2e2e;
+  font-weight: 600;
+}
+
+body.activity-mode .activity-log-panel .activity-feed-footer .chip-row > .chip:first-child {
+  color: var(--activity-blue-ink);
+}
+
+body.activity-mode .activity-log-panel .activity-feed-item.is-urgent .activity-feed-footer .chip-row > .chip:first-child,
+body.activity-mode .activity-log-panel .activity-feed-footer .chip.hot {
+  color: var(--activity-red-ink);
+}
+
+body.activity-mode .activity-reminders-panel .reminder-card.upcoming,
+body.activity-mode .activity-reminders-panel .reminder-stack-header .count-chip.upcoming,
+body.activity-mode .activity-reminders-panel .activity-quick-link .count-chip.success {
+  color: var(--activity-green-ink);
+}
+
+body.activity-mode .activity-reminders-panel .reminder-card.overdue,
+body.activity-mode .activity-reminders-panel .reminder-stack-header .count-chip.overdue {
+  color: var(--activity-red-ink);
+}
+
+body.activity-mode .activity-reminders-panel .activity-quick-link .count-chip.danger,
+body.activity-mode .activity-reminders-panel .activity-quick-link .count-chip.warning {
+  color: var(--activity-amber-ink);
+}
+
+body.activity-mode .activity-reminders-panel .reminder-card :is(strong, p, .meta-label) {
+  color: inherit;
+}
+
+/* Shared Salesman Tasks subsection cap; main Tasks header remains navy. */
+body.tasks-mode:not(.admin-tasks-mode) .tasks-section-card--blue-cap {
+  overflow: hidden;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-section-card--blue-cap > .tasks-section-head {
+  min-height: 0;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--bauhaus-blue);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-section-card--blue-cap > .tasks-section-head h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-section-card--blue-cap > .tasks-section-head p {
+  margin: 1px 0 0;
+  color: #d6e8f5;
+  font-size: 8px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-section-card--blue-cap > .tasks-section-body {
+  background: var(--bauhaus-surface);
+}
+
 @media (max-width: 1024px), (max-height: 599px) {
   body.pipeline-compact-mode #pipelineWorkspace {
     display: block;
@@ -22189,5 +22424,84 @@ body.admin-dashboard-mode .dashboard-funnel-comparison-summary .ghost-button {
   body.admin-dashboard-mode .dashboard-funnel-comparison-summary {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* Pipeline list workspace: equal-height analytical and working panels. */
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.pipeline-compact-mode #pipelineWorkspace.pipeline-workspace-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+    height: clamp(300px, calc(100dvh - 292px), 480px);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list > #pipelineFunnelPanel,
+  body.pipeline-compact-mode .pipeline-workspace-list > .pipeline-worklist-column {
+    align-self: stretch;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list > #pipelineFunnelPanel,
+  body.pipeline-compact-mode .pipeline-workspace-list > .pipeline-worklist-column,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineListPanel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel > .panel-header,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineListPanel > .panel-header,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineToolbar,
+  body.pipeline-compact-mode .pipeline-workspace-list #overduePipelineFilter {
+    flex: 0 0 auto;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelBody {
+    display: block;
+    flex: 1 1 auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineView {
+    display: grid;
+    flex: 1 1 auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineListPanel {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #leadList {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
   }
 }
