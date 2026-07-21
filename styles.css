@@ -20923,8 +20923,16 @@ body.salesman-dashboard-mode .salesman-triage-detail {
 
 @media (min-width: 1025px) {
   body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
-    grid-template-rows: 70px 220px 88px 58px;
+    grid-template-rows: 70px 220px 114px 124px;
     align-content: start;
+  }
+
+  body.salesman-dashboard-mode :is(.salesman-first-touch-list, .salesman-loss-prompts-list) {
+    padding: 4px 12px 8px;
+  }
+
+  body.salesman-dashboard-mode :is(.salesman-first-touch-list, .salesman-loss-prompts-list) > .empty-copy {
+    padding: 4px 8px;
   }
 
   body.salesman-dashboard-mode :is(.salesman-dashboard-top-actions, .salesman-dashboard-call-queue) {
@@ -20979,7 +20987,7 @@ body.salesman-dashboard-mode .salesman-triage-detail {
 
 @media (min-width: 1025px) and (min-height: 850px) {
   body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
-    grid-template-rows: 70px 252px 88px 58px;
+    grid-template-rows: 70px 252px 124px 124px;
   }
 }
 
@@ -20989,7 +20997,7 @@ body.salesman-dashboard-mode .salesman-triage-detail {
   }
 
   body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
-    grid-template-rows: 64px minmax(180px, 1fr) 82px 52px;
+    grid-template-rows: 64px minmax(180px, 1fr) 96px 110px;
     align-content: start;
   }
 
@@ -21353,4 +21361,318 @@ body.tasks-mode.admin-tasks-mode .topbar-copy p {
   font-size: 12px;
   font-weight: 400;
   line-height: 1.25;
+}
+
+/* Activity content Bauhaus pass. The shared header, alert banner, and sidebar
+   intentionally remain governed by their existing cross-page styles. */
+body.activity-mode .activity-kpi-card {
+  padding: 9px 11px 12px;
+}
+
+body.activity-mode .activity-kpi-card small {
+  margin-top: 3px;
+  font-size: 8px;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+body.activity-mode .activity-kpi-card:nth-child(1) small {
+  color: #C7DCEA;
+}
+
+body.activity-mode .activity-kpi-card:nth-child(2) small {
+  color: #F5CFCF;
+}
+
+body.activity-mode .activity-kpi-card:nth-child(3) small {
+  color: #F8E3C4;
+}
+
+body.activity-mode .activity-kpi-card:nth-child(4) small {
+  color: #D9E9C5;
+}
+
+body.activity-mode .activity-weekly-card {
+  border: 2px solid var(--panel-border-new);
+}
+
+body.activity-mode .calendar-legend {
+  color: #4B5563;
+}
+
+body.activity-mode .legend-swatch.overdue {
+  background: var(--bauhaus-red);
+}
+
+body.activity-mode .legend-swatch.upcoming {
+  background: var(--bauhaus-amber);
+}
+
+body.activity-mode .legend-swatch.neutral {
+  background: #7D8794;
+}
+
+body.activity-mode .activity-card-header .activity-count-pill {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bauhaus-blue-label);
+  color: #17415F;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+body.activity-mode .timeline-card,
+body.activity-mode .activity-feed-item {
+  border: 0;
+  border-left: 3px solid #A7B0BC;
+  border-radius: 0 6px 6px 0;
+  background: #F7F8FA;
+}
+
+body.activity-mode .timeline-card.is-urgent,
+body.activity-mode .activity-feed-item.is-urgent {
+  border-left-color: var(--bauhaus-red);
+}
+
+body.activity-mode .activity-feed-footer .chip-row > .chip:first-child {
+  border: 0;
+  border-radius: 6px;
+  background: var(--bauhaus-blue-label);
+  color: #17415F;
+  font-size: 8px;
+  padding: 2px 6px;
+}
+
+body.activity-mode .activity-feed-item.is-urgent .activity-feed-footer .chip-row > .chip:first-child,
+body.activity-mode .activity-feed-footer .chip.hot {
+  background: var(--bauhaus-red-tint);
+  color: var(--bauhaus-red-text);
+}
+
+body.activity-mode .activity-feed-body strong,
+body.activity-mode .reminder-stack-header,
+body.activity-mode .activity-reminders-links-head h3,
+body.activity-mode .activity-quick-link-copy strong {
+  color: var(--bauhaus-ink);
+}
+
+body.activity-mode .activity-feed-body p,
+body.activity-mode .activity-feed-body .meta-label,
+body.activity-mode .timeline-divider,
+body.activity-mode .activity-reminders-filter-label,
+body.activity-mode .activity-reminders-links-head span {
+  color: #5B6472;
+}
+
+body.activity-mode .reminder-stack-header .count-chip {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+body.activity-mode .reminder-stack-header .count-chip.upcoming {
+  background: var(--bauhaus-green-tint);
+  color: var(--bauhaus-green-text);
+}
+
+body.activity-mode .reminder-stack-header .count-chip.overdue {
+  background: var(--bauhaus-red-tint);
+  color: var(--bauhaus-red-text);
+}
+
+body.activity-mode .reminder-card.upcoming {
+  background: var(--bauhaus-green-tint);
+  color: var(--bauhaus-green-text);
+}
+
+body.activity-mode .reminder-card.overdue {
+  background: var(--bauhaus-red-tint);
+  color: var(--bauhaus-red-text);
+}
+
+body.activity-mode .activity-quick-link .count-chip.danger,
+body.activity-mode .activity-quick-link .count-chip.warning {
+  background: var(--bauhaus-amber-tint);
+  color: var(--bauhaus-amber-text);
+}
+
+body.activity-mode .activity-quick-link .count-chip.success {
+  background: var(--bauhaus-green-tint);
+  color: var(--bauhaus-green-text);
+}
+
+body.activity-mode .activity-quick-link .count-chip.neutral {
+  background: #EEF1F4;
+  color: #4B5563;
+}
+
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.activity-mode .activity-main-column {
+    grid-template-rows: 72px auto minmax(0, 1fr);
+  }
+
+  body.activity-mode .activity-feed,
+  body.activity-mode .activity-reminders-panel #activityReminders {
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #8D99A8 transparent;
+  }
+}
+
+/* Salesman Weekly Sales Report readability and Bauhaus status hierarchy.
+   Admin review content and the shared Tasks page header are intentionally excluded. */
+body.tasks-mode:not(.admin-tasks-mode) .tasks-shell {
+  border: 2px solid var(--panel-border-pending);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-header-meta #tasksWeekLabel {
+  border: 0;
+  border-radius: 10px;
+  background: var(--badge-tint-blue);
+  color: var(--badge-tint-blue-text);
+  font-weight: 500;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-header-meta #tasksStatusBadge,
+body.tasks-mode:not(.admin-tasks-mode) .tasks-status-card > .chip {
+  border: 0;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) :is(
+  .tasks-header-meta #tasksStatusBadge,
+  .tasks-status-card > .chip
+):is(.plan-missing, .plan-soon, .warm) {
+  background: var(--bauhaus-amber-tint);
+  color: var(--bauhaus-amber-text);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) :is(
+  .tasks-header-meta #tasksStatusBadge,
+  .tasks-status-card > .chip
+):is(.plan-upcoming, .success) {
+  background: var(--bauhaus-green-tint);
+  color: var(--bauhaus-green-text);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-status-card {
+  border: 2px solid var(--panel-border-info);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-status-card .tasks-kicker {
+  color: var(--bauhaus-blue);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-progress-meter {
+  height: 6px;
+  border-radius: 3px;
+  background: #F1F3F5;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-progress-fill {
+  border-radius: 3px;
+  background: var(--bauhaus-green);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-progress-copy {
+  flex-wrap: nowrap;
+  color: var(--bauhaus-ink);
+  font-size: 10px;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-progress-copy strong {
+  margin-left: auto;
+  color: var(--bauhaus-ink);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-section-card,
+body.tasks-mode:not(.admin-tasks-mode) .tasks-row-card {
+  color: var(--bauhaus-ink);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-expected-order-card {
+  border: var(--bauhaus-border);
+  border-left: 4px solid var(--bauhaus-amber);
+  background: var(--bauhaus-surface);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-expected-order-card.is-complete {
+  border-left-color: var(--bauhaus-green);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-expected-order-card .chip.plan-missing {
+  border: 0;
+  border-radius: 8px;
+  background: var(--bauhaus-amber-tint);
+  color: var(--bauhaus-amber-text);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-expected-order-card .chip.success {
+  border: 0;
+  border-radius: 8px;
+  background: var(--bauhaus-green-tint);
+  color: var(--bauhaus-green-text);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-section-card .tasks-section-body :is(select, textarea, input),
+body.tasks-mode:not(.admin-tasks-mode) .tasks-expected-order-card :is(select, textarea, input) {
+  border: var(--bauhaus-border);
+  border-radius: 6px;
+  background: #F7F8FA;
+  color: var(--bauhaus-ink);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-expected-order-card select {
+  border-radius: 5px;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) :is(
+  .tasks-expected-order-card textarea,
+  .tasks-expected-order-card input,
+  .tasks-section-card .tasks-section-body textarea,
+  .tasks-section-card .tasks-section-body input
+)::placeholder {
+  color: #657182;
+  opacity: 1;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-voice-button {
+  border: 0;
+  border-radius: 6px;
+  background: var(--bauhaus-blue);
+  color: var(--bauhaus-solid-text);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-blockers-card {
+  border: 2px solid var(--panel-border-urgent);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-blockers-card .tasks-section-body {
+  max-height: 190px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #9AA4B2 transparent;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-blockers-card .tasks-checklist li {
+  color: var(--bauhaus-ink);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-blockers-card .tasks-checklist li::before {
+  width: 5px;
+  height: 5px;
+  background: var(--bauhaus-red);
 }
