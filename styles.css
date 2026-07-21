@@ -1327,6 +1327,506 @@ body.salesmen-mode .sp-lead-summary-details .salesman-open-button {
   }
 }
 
+/* Authoritative admin Tasks overrides after all legacy task layers. */
+body.tasks-mode.admin-tasks-mode .topbar {
+  border: 0;
+  border-radius: var(--bauhaus-radius);
+  background: var(--dashboard-header-blue);
+  box-shadow: none;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar-copy h1 {
+  color: #FFFFFF;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar-copy p {
+  color: #A9C6DA;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar :is(.smart-search-field, .ghost-button) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  color: #E4F0F9;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar .smart-search-field :is(input, input::placeholder) {
+  color: #E4F0F9;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar .primary-button {
+  border: 0;
+  background: var(--bauhaus-ink);
+  color: #FFFFFF;
+}
+
+body.tasks-mode.admin-tasks-mode .overdue-banner {
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 2px solid var(--panel-border-urgent);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.tasks-mode.admin-tasks-mode .overdue-banner-icon {
+  width: 7px;
+  height: 7px;
+  margin: 0;
+}
+
+body.tasks-mode.admin-tasks-mode .overdue-banner-copy {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.tasks-mode.admin-tasks-mode .overdue-banner-copy :is(strong, div) {
+  color: var(--arg-text);
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-shell {
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header {
+  min-height: 58px;
+  padding: 9px 14px;
+  border: 2px solid var(--panel-border-pending);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header h2 {
+  color: var(--arg-text);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header > div > span {
+  color: var(--arg-text-secondary);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header-meta :is(.activity-count-pill, .chip, .attention-count) {
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-message {
+  margin: 0;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-layout {
+  gap: 8px;
+  padding: 0;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-review-empty {
+  height: 100%;
+  min-height: 190px;
+  align-content: center;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-submitted-panel {
+  border: 2px solid var(--panel-border-summary);
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel {
+  border: 2px solid var(--panel-border-urgent);
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) {
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  overflow: hidden;
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-head {
+  min-height: 0;
+  padding: 9px 12px 5px;
+  border: 0;
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-body {
+  padding: 5px 12px 10px;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning li {
+  width: fit-content;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-red-tint);
+  color: var(--bauhaus-red-text);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning li::before {
+  display: none;
+}
+
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.tasks-mode.admin-tasks-mode .tasks-layout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr);
+  }
+}
+
+@media (max-width: 1024px), (max-height: 599px) {
+  body.tasks-mode.admin-tasks-mode .tasks-layout {
+    grid-template-columns: 1fr;
+  }
+
+  body.tasks-mode.admin-tasks-mode .tasks-sidebar {
+    order: 0;
+  }
+}
+
+/* Pipeline funnel focal chart: larger donut with an explicit inline legend. */
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-chart-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin: 16px auto;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie {
+  width: min(220px, 100%);
+  max-width: 220px;
+  max-height: 220px;
+  margin-inline: auto;
+  box-shadow: none;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie::after {
+  inset: 15.91%;
+  background: var(--bauhaus-surface);
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-center strong {
+  font-size: 40px;
+  font-weight: 500;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-center span {
+  color: var(--arg-text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 20px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-legend span {
+  gap: 6px;
+  width: auto;
+  color: var(--arg-text);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-legend strong {
+  margin-left: 0;
+  color: var(--arg-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-legend i {
+  width: 10px;
+  height: 10px;
+}
+
+@media (max-width: 1024px), (max-height: 599px) {
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-chart-visual {
+    margin-block: 12px;
+  }
+
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie {
+    width: min(220px, 74vw);
+  }
+}
+
+/* Admin Tasks consistency pass: compact Bauhaus review workspace. */
+body.admin-tasks-mode .topbar {
+  border: 0;
+  border-radius: var(--bauhaus-radius);
+  background: var(--dashboard-header-blue);
+  box-shadow: none;
+}
+
+body.admin-tasks-mode .topbar-copy h1 {
+  color: #FFFFFF;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+body.admin-tasks-mode .topbar-copy p {
+  color: #A9C6DA;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+body.admin-tasks-mode .topbar .smart-search-field,
+body.admin-tasks-mode .topbar .ghost-button {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  color: #E4F0F9;
+}
+
+body.admin-tasks-mode .topbar .smart-search-field input,
+body.admin-tasks-mode .topbar .smart-search-field input::placeholder {
+  color: #E4F0F9;
+}
+
+body.admin-tasks-mode .topbar .primary-button {
+  border: 0;
+  background: var(--bauhaus-ink);
+  color: #FFFFFF;
+}
+
+body.admin-tasks-mode .overdue-banner {
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 2px solid var(--panel-border-urgent);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.admin-tasks-mode .overdue-banner-icon {
+  width: 7px;
+  height: 7px;
+  margin: 0;
+}
+
+body.admin-tasks-mode .overdue-banner-copy {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.admin-tasks-mode .overdue-banner-copy strong,
+body.admin-tasks-mode .overdue-banner-copy div {
+  color: var(--arg-text);
+}
+
+body.admin-tasks-mode .tasks-shell {
+  gap: 8px;
+  border: 0;
+  background: transparent;
+}
+
+body.admin-tasks-mode .tasks-header {
+  min-height: 58px;
+  padding: 9px 14px;
+  border: 2px solid var(--panel-border-pending);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.admin-tasks-mode .tasks-header h2 {
+  color: var(--arg-text);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+body.admin-tasks-mode .tasks-header > div > span {
+  color: var(--arg-text-secondary);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+body.admin-tasks-mode .tasks-header-meta {
+  gap: 6px;
+}
+
+body.admin-tasks-mode .tasks-header-meta .activity-count-pill,
+body.admin-tasks-mode .tasks-header-meta .chip,
+body.admin-tasks-mode .tasks-header-meta .attention-count {
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+body.admin-tasks-mode .tasks-message {
+  margin: 0;
+}
+
+body.admin-tasks-mode .tasks-layout {
+  gap: 8px;
+  padding: 0;
+}
+
+body.admin-tasks-mode .tasks-primary,
+body.admin-tasks-mode .tasks-sidebar,
+body.admin-tasks-mode .tasks-sidebar-stack,
+body.admin-tasks-mode .tasks-review-shell {
+  gap: 8px;
+}
+
+body.admin-tasks-mode .tasks-review-empty {
+  width: 100%;
+  height: 100%;
+  min-height: 190px;
+  align-content: center;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.admin-tasks-mode .tasks-review-empty strong {
+  color: var(--arg-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+body.admin-tasks-mode .tasks-review-empty span {
+  color: var(--arg-text-secondary);
+  font-size: 11px;
+}
+
+body.admin-tasks-mode .tasks-submitted-panel {
+  border: 2px solid var(--panel-border-summary);
+}
+
+body.admin-tasks-mode .tasks-missing-panel {
+  border: 2px solid var(--panel-border-urgent);
+}
+
+body.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) {
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  overflow: hidden;
+}
+
+body.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-head {
+  min-height: 0;
+  padding: 9px 12px 5px;
+  border: 0;
+}
+
+body.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-head h3 {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+body.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-head p {
+  margin-top: 2px;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+body.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-body {
+  padding: 5px 12px 10px;
+}
+
+body.admin-tasks-mode .tasks-submitted-panel .tasks-review-list,
+body.admin-tasks-mode .tasks-missing-panel .tasks-section-body {
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+body.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning li {
+  width: fit-content;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-red-tint);
+  color: var(--bauhaus-red-text);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+body.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning li::before {
+  display: none;
+}
+
+body.admin-tasks-mode .tasks-review-card {
+  padding: 7px 9px;
+}
+
+body.admin-tasks-mode .tasks-review-card strong {
+  font-size: 11px;
+}
+
+body.admin-tasks-mode .tasks-review-card :is(p, small) {
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.admin-tasks-mode .tasks-layout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr);
+  }
+
+  body.admin-tasks-mode .tasks-sidebar-stack {
+    align-content: start;
+  }
+}
+
+@media (max-width: 1024px), (max-height: 599px) {
+  body.admin-tasks-mode .tasks-layout {
+    grid-template-columns: 1fr;
+  }
+
+  body.admin-tasks-mode .tasks-sidebar {
+    order: 0;
+  }
+}
+
 /* Dashboard header alignment and reusable section caps. */
 body:is(.admin-dashboard-mode, .salesman-dashboard-mode) .brand {
   min-width: 0;
@@ -19187,40 +19687,61 @@ body.admin-dashboard-mode :is(#metricsShell, .dashboard-view > .panel) > .panel-
 }
 
 body.admin-dashboard-mode .panel-header .panel-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   min-height: 28px;
-  padding: 5px 10px;
-  border: 1px solid var(--bauhaus-border-soft);
-  border-radius: 6px;
-  background: #FFFFFF;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--bauhaus-ink);
   box-shadow: none;
-  color: var(--bauhaus-ink);
+  color: #FFFFFF;
+  font-size: 10px;
   font-weight: 500;
+  line-height: 1;
   opacity: 1;
+  white-space: nowrap;
 }
 
 body.admin-dashboard-mode .panel-header .panel-collapse-toggle:hover,
 body.admin-dashboard-mode .panel-header .panel-collapse-toggle:focus-visible {
-  border-color: var(--panel-border-primary);
-  background: #F7FAFC;
-  color: var(--panel-border-primary);
+  border: 0;
+  background: #252532;
+  color: #FFFFFF;
+}
+
+body.admin-dashboard-mode .panel-header .panel-collapse-icon {
+  flex: 0 0 auto;
+  font-size: 8px;
+  line-height: 1;
+  transform: none;
+}
+
+body.admin-dashboard-mode .collapsible-enabled.is-collapsed .panel-collapse-icon {
+  transform: none;
 }
 
 body.admin-dashboard-mode .panel-header :is(.ghost-button, .small-action, .action-plan-toolbar-button):not(.panel-collapse-toggle) {
   min-height: 28px;
-  padding: 5px 10px;
+  padding: 6px 10px;
   border: 0;
-  border-radius: 6px;
-  background: rgba(27, 75, 107, 0.1);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.06);
   box-shadow: none;
-  color: var(--panel-border-primary);
+  color: var(--arg-text);
+  font-size: 9px;
   font-weight: 500;
+  line-height: 1;
   opacity: 1;
+  white-space: nowrap;
 }
 
 body.admin-dashboard-mode .panel-header :is(.ghost-button, .small-action, .action-plan-toolbar-button):not(.panel-collapse-toggle):hover,
 body.admin-dashboard-mode .panel-header :is(.ghost-button, .small-action, .action-plan-toolbar-button):not(.panel-collapse-toggle):focus-visible {
-  background: rgba(27, 75, 107, 0.18);
-  color: var(--panel-border-primary);
+  background: rgba(0, 0, 0, 0.11);
+  color: var(--arg-text);
 }
 
 body.admin-dashboard-mode .panel-header .attention-count,
@@ -19729,5 +20250,485 @@ body.admin-dashboard-mode .overdue-action {
   body.pipeline-compact-mode #pipelineToolbar,
   body.pipeline-compact-mode #pipelineView {
     margin-bottom: 12px;
+  }
+}
+
+/* Final admin Tasks review theme, intentionally after all legacy task rules. */
+body.tasks-mode.admin-tasks-mode .topbar {
+  border: 0;
+  border-radius: var(--bauhaus-radius);
+  background: var(--dashboard-header-blue);
+  box-shadow: none;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar-copy h1 {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar-copy p {
+  color: #a9c6da;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar :is(.smart-search-field, .ghost-button) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  color: #e4f0f9;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar .smart-search-field :is(input, input::placeholder) {
+  color: #e4f0f9;
+}
+
+body.tasks-mode.admin-tasks-mode .topbar .primary-button {
+  border: 0;
+  background: var(--bauhaus-ink);
+  color: #fff;
+}
+
+body.tasks-mode.admin-tasks-mode .overdue-banner {
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 2px solid var(--panel-border-urgent);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.tasks-mode.admin-tasks-mode .overdue-banner-icon {
+  width: 7px;
+  height: 7px;
+  margin: 0;
+}
+
+body.tasks-mode.admin-tasks-mode .overdue-banner-copy {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.tasks-mode.admin-tasks-mode .overdue-banner-copy :is(strong, div) {
+  color: var(--arg-text);
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-shell {
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header {
+  min-height: 58px;
+  padding: 9px 14px;
+  border: 2px solid var(--panel-border-pending);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header h2 {
+  color: var(--arg-text);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header > div > span {
+  color: var(--arg-text-secondary);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header-meta {
+  gap: 6px;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-header-meta :is(.activity-count-pill, .chip, .attention-count) {
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-message {
+  margin: 0;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-layout {
+  gap: 8px;
+  padding: 0;
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-primary, .tasks-sidebar, .tasks-sidebar-stack, .tasks-review-shell) {
+  gap: 8px;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-review-empty {
+  width: 100%;
+  height: 100%;
+  min-height: 190px;
+  align-content: center;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-review-empty strong {
+  color: var(--arg-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-review-empty span {
+  color: var(--arg-text-secondary);
+  font-size: 11px;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-submitted-panel {
+  border: 2px solid var(--panel-border-summary);
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel {
+  border: 2px solid var(--panel-border-urgent);
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) {
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  overflow: hidden;
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-head {
+  min-height: 0;
+  padding: 9px 12px 5px;
+  border: 0;
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-head h3 {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-head p {
+  margin-top: 2px;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+body.tasks-mode.admin-tasks-mode :is(.tasks-submitted-panel, .tasks-missing-panel) .tasks-section-body {
+  padding: 5px 12px 10px;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-submitted-panel .tasks-review-list,
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel .tasks-section-body {
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning li {
+  width: fit-content;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-red-tint);
+  color: var(--bauhaus-red-text);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-missing-panel .tasks-checklist.warning li::before {
+  display: none;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-review-card {
+  padding: 7px 9px;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-review-card strong {
+  font-size: 11px;
+}
+
+body.tasks-mode.admin-tasks-mode .tasks-review-card :is(p, small) {
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.tasks-mode.admin-tasks-mode .tasks-layout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr);
+  }
+
+  body.tasks-mode.admin-tasks-mode .tasks-sidebar-stack {
+    align-content: start;
+  }
+}
+
+@media (max-width: 1024px), (max-height: 599px) {
+  body.tasks-mode.admin-tasks-mode .tasks-layout {
+    grid-template-columns: 1fr;
+  }
+
+  body.tasks-mode.admin-tasks-mode .tasks-sidebar {
+    order: 0;
+  }
+}
+
+/* Authoritative Pipeline funnel chart sizing after all compact legacy layers. */
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-chart-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin: 16px auto;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie {
+  width: min(220px, 100%);
+  max-width: 220px;
+  max-height: 220px;
+  margin-inline: auto;
+  box-shadow: none;
+}
+
+body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-pie {
+  width: min(220px, 100%);
+  max-width: 220px;
+  max-height: 220px;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie::after {
+  inset: 15.91%;
+  background: var(--bauhaus-surface);
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-center strong {
+  font-size: 40px;
+  font-weight: 500;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-center span {
+  color: var(--arg-text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 20px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-legend span {
+  gap: 6px;
+  width: auto;
+  color: var(--arg-text);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-legend strong {
+  margin-left: 0;
+  color: var(--arg-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie-legend i {
+  width: 10px;
+  height: 10px;
+}
+
+@media (max-width: 1024px), (max-height: 599px) {
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-chart-visual {
+    margin-block: 12px;
+  }
+
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-pie {
+    width: min(220px, 74vw);
+  }
+}
+
+/* Pipeline funnel containment: content defines the card, workspace owns overflow. */
+body.pipeline-compact-mode #pipelineWorkspace.pipeline-workspace-list {
+  align-items: start;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel,
+body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineFunnelPanel {
+  align-self: start;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelBody,
+body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineFunnelBody {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(
+  .pipeline-funnel-detail,
+  .pipeline-funnel-layout,
+  .pipeline-funnel-chart-card,
+  .pipeline-funnel-chart-layout,
+  .pipeline-funnel-chart-stack,
+  .pipeline-funnel-stages
+) {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-detail {
+  gap: 0;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-detail > .pipeline-funnel-summary-card {
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--surface-2, #f4f7fa);
+  box-shadow: none;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-detail .pipeline-funnel-copy {
+  gap: 2px;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-detail .pipeline-funnel-micro-kpis {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-detail .pipeline-funnel-micro-kpis article {
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-detail .pipeline-funnel-micro-kpis span {
+  font-size: 8px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-detail .pipeline-funnel-micro-kpis strong {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(.pipeline-funnel-stages, .pipeline-funnel-chart-stack) {
+  gap: 0;
+  padding: 0 0 6px;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(.pipeline-funnel-stage, .pipeline-funnel-chart-stage) {
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(.pipeline-funnel-stage-head, .pipeline-funnel-chart-meta) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(.pipeline-funnel-stage strong, .pipeline-funnel-chart-meta strong) {
+  display: block;
+  min-width: 0;
+  color: var(--arg-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(.pipeline-funnel-stage-stats, .pipeline-funnel-chart-numbers) {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 3px;
+  color: var(--arg-text);
+  text-align: right;
+  white-space: nowrap;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(
+  .pipeline-funnel-stage-stats span,
+  .pipeline-funnel-chart-numbers b
+) {
+  color: var(--arg-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(
+  .pipeline-funnel-stage-stats small,
+  .pipeline-funnel-chart-numbers small
+) {
+  color: var(--arg-text-secondary);
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(.pipeline-funnel-track, .pipeline-funnel-chart-progress) {
+  height: 6px;
+  border-radius: 3px;
+}
+
+body.pipeline-compact-mode #pipelineFunnelPanel :is(.pipeline-funnel-fill, .pipeline-funnel-chart-progress i) {
+  border-radius: 3px;
+}
+
+@media (max-width: 760px) {
+  body.pipeline-compact-mode #pipelineFunnelPanel .pipeline-funnel-detail .pipeline-funnel-micro-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

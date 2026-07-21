@@ -4199,19 +4199,14 @@ function pipelineFunnelComparisonRows(leads) {
 function pipelineFunnelStageMarkup(stage) {
   const width = Math.max(0, Math.min(100, stage.percentage));
   const fillWidth = stage.count > 0 ? Math.max(width, 10) : 0;
-  const dropoffMarkup = stage.dropoff == null
-    ? `<span class="pipeline-funnel-meta">Baseline</span>`
-    : `<span class="pipeline-funnel-meta">Drop-off ${stage.dropoff}% from previous stage</span>`;
+  const dropoffLabel = stage.dropoff == null ? "Baseline stage" : `Drop-off ${stage.dropoff}% from previous stage`;
   return `
-    <article class="pipeline-funnel-stage ${stage.tone}">
+    <article class="pipeline-funnel-stage ${stage.tone}" aria-label="${escapeHtml(`${stage.label}: ${stage.count}, ${stage.percentage}% of assigned. ${dropoffLabel}`)}">
       <div class="pipeline-funnel-stage-head">
-        <div>
-          <strong>${escapeHtml(stage.label)}</strong>
-          ${dropoffMarkup}
-        </div>
+        <strong>${escapeHtml(stage.label)}</strong>
         <div class="pipeline-funnel-stage-stats">
           <span>${escapeHtml(String(stage.count))}</span>
-          <small>${escapeHtml(String(stage.percentage))}% of assigned</small>
+          <small>&middot; ${escapeHtml(String(stage.percentage))}%</small>
         </div>
       </div>
       <div class="pipeline-funnel-track" aria-hidden="true">
@@ -4231,14 +4226,11 @@ function pipelineFunnelChartMarkup(
 ) {
   const stages = pipelineFunnelStageRows(metrics);
   const totalAssigned = Math.max(0, Number(metrics.totalAssignedLeads || 0));
-  const contactedOnly = Math.max(0, Number(metrics.contactedLeads || 0) - Number(metrics.openPipelineLeads || 0) - Number(metrics.wonDeals || 0) - Number(metrics.lostDeals || 0));
-  const uncontacted = Math.max(0, totalAssigned - Number(metrics.contactedLeads || 0));
+  const activeOpen = Math.min(totalAssigned, Math.max(0, Number(metrics.openPipelineLeads || 0)));
+  const contactedBaseline = Math.max(0, totalAssigned - activeOpen);
   const outcomeSlices = [
-    { label: "Uncontacted", count: uncontacted, color: "#cbd5e1" },
-    { label: "Contacted", count: contactedOnly, color: "#3b82f6" },
-    { label: "Active / Open", count: Number(metrics.openPipelineLeads || 0), color: "#f59e0b" },
-    { label: "Won", count: Number(metrics.wonDeals || 0), color: "#10b981" },
-    { label: "Lost", count: Number(metrics.lostDeals || 0), color: "#ef4444" }
+    { label: "Contacted", count: contactedBaseline, color: "var(--bauhaus-blue)" },
+    { label: "Active / Open", count: activeOpen, color: "var(--bauhaus-amber)" }
   ].filter(slice => slice.count > 0);
   const totalSlices = outcomeSlices.reduce((sum, slice) => sum + slice.count, 0);
   let cursor = 0;
@@ -4275,15 +4267,12 @@ function pipelineFunnelChartMarkup(
             ${stages.map(stage => {
               const dropoffLabel = stage.dropoff == null ? "Baseline stage" : `Drop-off ${stage.dropoff}% from previous stage`;
               return `
-                <article class="pipeline-funnel-chart-stage ${stage.tone}">
+                <article class="pipeline-funnel-chart-stage ${stage.tone}" aria-label="${escapeHtml(`${stage.label}: ${stage.count}, ${stage.percentage}% of assigned. ${dropoffLabel}`)}">
                   <div class="pipeline-funnel-chart-meta">
-                    <div>
-                      <strong>${escapeHtml(stage.label)}</strong>
-                      <span>${escapeHtml(dropoffLabel)}</span>
-                    </div>
+                    <strong>${escapeHtml(stage.label)}</strong>
                     <div class="pipeline-funnel-chart-numbers">
                       <b>${escapeHtml(String(stage.count))}</b>
-                      <small>${escapeHtml(String(stage.percentage))}% of assigned</small>
+                      <small>&middot; ${escapeHtml(String(stage.percentage))}%</small>
                     </div>
                   </div>
                   <div class="pipeline-funnel-chart-progress">
@@ -5126,6 +5115,8 @@ function updateDashboardCollapsibleButton(section) {
   button.setAttribute("title", collapsed ? "Expand section" : "Collapse section");
   const label = button.querySelector(".panel-collapse-label");
   if (label) label.textContent = collapsed ? "Expand section" : "Collapse section";
+  const icon = button.querySelector(".panel-collapse-icon");
+  if (icon) icon.textContent = collapsed ? "\u25bc" : "\u25b2";
 }
 
 function setDashboardSectionCollapsed(section, collapsed, options = {}) {
@@ -5159,7 +5150,7 @@ function setupDashboardCollapsible(definition) {
     button.className = "panel-collapse-toggle";
     button.innerHTML = `
       <span class="panel-collapse-label">Collapse section</span>
-      <span class="panel-collapse-icon" aria-hidden="true">▾</span>
+      <span class="panel-collapse-icon" aria-hidden="true">\u25b2</span>
     `;
     button.addEventListener("click", event => {
       event.preventDefault();
@@ -9349,7 +9340,7 @@ function renderWeeklyReviewView() {
       ` : `<p class="empty-copy">No immutable events were recorded yet.</p>`)}
     </div>
   ` : `
-    <div class="timeline-empty">
+    <div class="timeline-empty tasks-review-empty">
       <strong>No submitted weekly reports yet.</strong>
       <span>Once a salesman submits, the review detail will appear here.</span>
     </div>
@@ -9357,7 +9348,7 @@ function renderWeeklyReviewView() {
 
   els.tasksSidebar.innerHTML = `
     <div class="tasks-sidebar-stack">
-      <section class="tasks-section-card">
+      <section class="tasks-section-card tasks-submitted-panel">
         <div class="tasks-section-head">
           <div>
             <h3>Submitted reports</h3>
@@ -9383,7 +9374,7 @@ function renderWeeklyReviewView() {
           </div>
         </div>
       </section>
-      <section class="tasks-section-card">
+      <section class="tasks-section-card tasks-missing-panel">
         <div class="tasks-section-head">
           <div>
             <h3>Missing submissions</h3>
@@ -9979,6 +9970,7 @@ function applyView() {
   document.body.classList.toggle("salesman-dashboard-mode", Boolean(isDashboard && isSalesmanRole()));
   document.body.classList.toggle("admin-dashboard-mode", Boolean(isDashboard && !isSalesmanRole()));
   document.body.classList.toggle("tasks-mode", isTasks);
+  document.body.classList.toggle("admin-tasks-mode", Boolean(isTasks && !isSalesmanRole()));
 }
 
 function closeMobileMenu() {
