@@ -119,6 +119,11 @@
   --panel-border-new: #1D9E75;
   --panel-border-pending: #7F77DD;
   --panel-border-summary: #6B9A3E;
+  --panel-border-neutral: var(--bauhaus-border-soft);
+  --badge-tint-green: #E9F4DC;
+  --badge-tint-green-text: #3F5C24;
+  --badge-tint-blue: #DCEBFA;
+  --badge-tint-blue-text: #17415F;
   --font-sans: var(--font-body);
   --text-page: 32px;
   --text-section: 24px;
@@ -19091,5 +19096,638 @@ body.pipeline-compact-mode :is(.lead-card > p, .lead-meta, .kanban-card-meta) {
   body.pipeline-compact-mode .topbar-actions .smart-search-shell {
     flex-basis: 100%;
     max-width: none;
+  }
+}
+
+/* Admin Dashboard semantic panel differentiation and readable controls. */
+body.admin-dashboard-mode .topbar {
+  background: var(--dashboard-header-blue);
+  border-color: var(--dashboard-header-blue);
+}
+
+body.admin-dashboard-mode #metricsShell,
+body.admin-dashboard-mode .dashboard-view > .panel {
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.admin-dashboard-mode #metricsShell {
+  border: 2px solid var(--panel-border-primary);
+}
+
+body.admin-dashboard-mode #marketIntelPanel,
+body.admin-dashboard-mode #dashboardPipelineFunnelPanel {
+  border: 2px solid var(--panel-border-info);
+}
+
+body.admin-dashboard-mode #needsAttentionPanel,
+body.admin-dashboard-mode #relationshipFocusPanel,
+body.admin-dashboard-mode #lossReasonsPanel {
+  border: 2px solid var(--panel-border-urgent);
+}
+
+body.admin-dashboard-mode #adminTaskPanel {
+  border: 2px solid var(--panel-border-action);
+}
+
+body.admin-dashboard-mode #marketSnapshotPanel,
+body.admin-dashboard-mode #dashboardActivityPanel {
+  border: 2px solid var(--panel-border-new);
+}
+
+body.admin-dashboard-mode #actionPlanPanel {
+  border: 2px solid var(--panel-border-pending);
+}
+
+body.admin-dashboard-mode #pipelineHealthPanel {
+  border: 2px solid var(--panel-border-summary);
+}
+
+body.admin-dashboard-mode #agentPanel,
+body.admin-dashboard-mode #configAgentPanel {
+  border: 2px solid var(--panel-border-neutral);
+}
+
+body.admin-dashboard-mode #metricsShell > .panel-header,
+body.admin-dashboard-mode .dashboard-view > .panel > .panel-header,
+body.admin-dashboard-mode #agentPanel .agent-body > .panel-header {
+  border-bottom: 1px solid var(--bauhaus-border-soft);
+  border-radius: 6px 6px 0 0;
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.admin-dashboard-mode :is(#metricsShell, .dashboard-view > .panel) > .panel-header h2,
+body.admin-dashboard-mode #agentPanel .agent-body > .panel-header h2 {
+  color: var(--arg-text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+body.admin-dashboard-mode :is(#metricsShell, .dashboard-view > .panel) > .panel-header > div > span,
+body.admin-dashboard-mode #agentPanel .agent-body > .panel-header > div > span {
+  color: var(--arg-text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+body.admin-dashboard-mode :is(#metricsShell, .dashboard-view > .panel) > .panel-header > div > span:first-child,
+body.admin-dashboard-mode #agentPanel .agent-body > .panel-header > div > span:first-child {
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+body.admin-dashboard-mode :is(#metricsShell, .dashboard-view > .panel) > .panel-header > div > h2:first-child + span {
+  margin-top: 2px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.admin-dashboard-mode .panel-header .panel-collapse-toggle {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--bauhaus-border-soft);
+  border-radius: 6px;
+  background: #FFFFFF;
+  box-shadow: none;
+  color: var(--bauhaus-ink);
+  font-weight: 500;
+  opacity: 1;
+}
+
+body.admin-dashboard-mode .panel-header .panel-collapse-toggle:hover,
+body.admin-dashboard-mode .panel-header .panel-collapse-toggle:focus-visible {
+  border-color: var(--panel-border-primary);
+  background: #F7FAFC;
+  color: var(--panel-border-primary);
+}
+
+body.admin-dashboard-mode .panel-header :is(.ghost-button, .small-action, .action-plan-toolbar-button):not(.panel-collapse-toggle) {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(27, 75, 107, 0.1);
+  box-shadow: none;
+  color: var(--panel-border-primary);
+  font-weight: 500;
+  opacity: 1;
+}
+
+body.admin-dashboard-mode .panel-header :is(.ghost-button, .small-action, .action-plan-toolbar-button):not(.panel-collapse-toggle):hover,
+body.admin-dashboard-mode .panel-header :is(.ghost-button, .small-action, .action-plan-toolbar-button):not(.panel-collapse-toggle):focus-visible {
+  background: rgba(27, 75, 107, 0.18);
+  color: var(--panel-border-primary);
+}
+
+body.admin-dashboard-mode .panel-header .attention-count,
+body.admin-dashboard-mode #dashboardPipelineFunnelBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--badge-tint-blue);
+  box-shadow: none;
+  color: var(--badge-tint-blue-text);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 1;
+  white-space: nowrap;
+}
+
+body.admin-dashboard-mode #dashboardPipelineFunnelPanel .panel-header #dashboardPipelineFunnelBadge {
+  color: var(--badge-tint-blue-text);
+}
+
+body.admin-dashboard-mode .panel-header .attention-count.attention-count-success {
+  background: var(--badge-tint-green);
+  color: var(--badge-tint-green-text);
+}
+
+body.admin-dashboard-mode .panel-header .attention-count.attention-count-danger {
+  background: var(--bauhaus-red-tint);
+  color: var(--bauhaus-red-text);
+}
+
+body.admin-dashboard-mode .panel-header .panel-icon {
+  color: var(--arg-text-secondary);
+}
+
+body.admin-dashboard-mode .overdue-banner {
+  border: 2px solid var(--panel-border-urgent);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  box-shadow: none;
+}
+
+body.admin-dashboard-mode .overdue-banner-icon {
+  width: 8px;
+  height: 8px;
+  margin-left: 0;
+  border-radius: 50%;
+}
+
+body.admin-dashboard-mode .overdue-banner-copy {
+  margin-left: 0;
+  padding-inline: 8px;
+  border: 0;
+  background: transparent;
+}
+
+body.admin-dashboard-mode .overdue-banner-copy strong,
+body.admin-dashboard-mode .overdue-banner-copy div {
+  color: var(--arg-text);
+}
+
+body.admin-dashboard-mode .overdue-action {
+  border: 0;
+  border-radius: 6px;
+  background: var(--bauhaus-red);
+  color: #FFFFFF;
+  font-weight: 500;
+}
+
+/* Salesman Dashboard equal-width action rows. */
+@media (min-width: 1025px) {
+  body.salesman-dashboard-mode .salesman-simplified-dashboard.dashboard-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  body.salesman-dashboard-mode :is(
+    .salesman-dashboard-top-actions,
+    .salesman-dashboard-call-queue,
+    .salesman-dashboard-first-touch,
+    .salesman-dashboard-loss-reasons
+  ) {
+    grid-column: span 6;
+    min-width: 0;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-actions {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-actions > .salesman-triage-card {
+    flex: 1 1 0;
+    gap: 2px;
+    min-width: 0;
+    padding: 6px 8px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-actions .salesman-triage-kicker {
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-actions .salesman-triage-card strong,
+  body.salesman-dashboard-mode .salesman-simplified-actions .salesman-triage-card p {
+    display: block;
+    max-width: 100%;
+    overflow: visible;
+    color: inherit;
+    font-size: 10px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    -webkit-line-clamp: unset;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-actions .salesman-triage-card small {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: 9px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+}
+
+/* Pipeline view-mode workspace: analytical split for List, full-width workboard for Kanban. */
+.pipeline-workspace,
+.pipeline-worklist-column {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pipeline-worklist-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pipeline-funnel-header-actions,
+.pipeline-funnel-summary-strip,
+.pipeline-funnel-summary-stats {
+  display: flex;
+  align-items: center;
+}
+
+.pipeline-funnel-header-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pipeline-funnel-summary-strip {
+  width: 100%;
+  min-height: 52px;
+  gap: 12px;
+  padding: 7px 12px;
+  border: 2px solid var(--panel-border-info);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  color: var(--arg-text);
+}
+
+.pipeline-funnel-summary-strip > strong {
+  flex: 0 0 auto;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.pipeline-funnel-summary-donut {
+  --pipeline-summary-progress: 0%;
+  display: grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--bauhaus-blue) var(--pipeline-summary-progress), #dce6ef 0);
+}
+
+.pipeline-funnel-summary-donut::before {
+  grid-area: 1 / 1;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bauhaus-surface);
+  content: "";
+}
+
+.pipeline-funnel-summary-donut span {
+  z-index: 1;
+  grid-area: 1 / 1;
+  color: var(--arg-text);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.pipeline-funnel-summary-stats {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  min-width: 0;
+}
+
+.pipeline-funnel-summary-stats span {
+  color: var(--arg-text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pipeline-funnel-summary-stats b {
+  margin-left: 3px;
+  color: var(--arg-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pipeline-funnel-summary-strip .ghost-button,
+.pipeline-funnel-header-actions .ghost-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.pipeline-compact-mode #pipelineWorkspace {
+    flex: 1 1 auto;
+    height: auto;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode #pipelineWorkspace.pipeline-workspace-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel,
+  body.pipeline-compact-mode .pipeline-workspace-list .pipeline-worklist-column {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel {
+    display: flex;
+    flex-direction: column;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel > .panel-header {
+    flex: 0 0 44px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelBody {
+    display: block;
+    flex: 1 1 auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    padding: 9px 11px 11px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelBody > *,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-chart-card,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-summary-card,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-table-card {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-chart-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-chart-visual {
+    align-items: center;
+    width: 100%;
+    margin: 6px auto 14px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-pie {
+    width: 118px;
+    max-width: 118px;
+    max-height: 118px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-chart-stack,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-stages {
+    width: 100%;
+    max-height: none;
+    gap: 7px;
+    padding: 0;
+    overflow: visible;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-chart-stage,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-stage {
+    gap: 4px;
+    padding: 3px 0;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-chart-progress,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel .pipeline-funnel-track {
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineFunnelPanel :is(.pipeline-funnel-chart-progress i, .pipeline-funnel-fill) {
+    border-radius: 3px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineToolbar {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px 8px;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 7px 8px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineToolbar .search-box {
+    grid-column: span 2;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineToolbar :is(input, select, button) {
+    height: 28px;
+    min-height: 28px;
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineToolbar > label > span,
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineToolbar .view-toggle > span {
+    font-size: 8px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #overduePipelineFilter {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineView {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #pipelineListPanel {
+    height: 100%;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list #leadList {
+    overflow-y: auto;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list .lead-title strong {
+    font-size: 11px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-list :is(.lead-card > p, .lead-meta) {
+    font-size: 9px;
+  }
+
+  body.pipeline-compact-mode #pipelineWorkspace.pipeline-workspace-kanban {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban .pipeline-funnel-summary-strip {
+    flex: 0 0 52px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineFunnelPanel {
+    display: flex;
+    flex: 0 0 230px;
+    flex-direction: column;
+    width: 100%;
+    height: 230px;
+    max-height: 230px;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineFunnelBody {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban .pipeline-worklist-column {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineToolbar {
+    display: grid;
+    flex: 0 0 52px;
+    grid-template-columns: minmax(170px, 1.5fr) repeat(4, minmax(82px, 1fr)) minmax(112px, auto);
+    gap: 6px;
+    width: 100%;
+    height: 52px;
+    min-height: 52px;
+    margin: 0;
+    padding: 5px 7px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineToolbar :is(input, select, button) {
+    height: 28px;
+    min-height: 28px;
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineToolbar > label > span,
+  body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineToolbar .view-toggle > span {
+    font-size: 8px;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban #overduePipelineFilter {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban #pipelineView {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban #kanbanPanel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban .kanban-board {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 8px;
+    width: 100%;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban .kanban-column {
+    flex: 1 0 150px;
+    width: auto;
+    height: 100%;
+    min-width: 150px;
+    min-height: 0;
+    max-width: none;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  body.pipeline-compact-mode .pipeline-workspace-kanban .kanban-card-list {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 1024px), (max-height: 599px) {
+  body.pipeline-compact-mode #pipelineWorkspace {
+    display: block;
+    width: 100%;
+    overflow: visible;
+  }
+
+  body.pipeline-compact-mode #pipelineFunnelPanel,
+  body.pipeline-compact-mode .pipeline-worklist-column {
+    width: 100%;
+  }
+
+  body.pipeline-compact-mode #pipelineFunnelPanel,
+  body.pipeline-compact-mode #pipelineToolbar,
+  body.pipeline-compact-mode #pipelineView {
+    margin-bottom: 12px;
   }
 }

@@ -61,6 +61,7 @@ const state = {
   actionPlanCollapsed: {},
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
   pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
+  pipelineKanbanFunnelExpanded: false,
   kanbanStage: localStorage.getItem("arg_kanban_stage") || "NEW",
   draggedLeadId: "",
   importLeads: null,
@@ -326,9 +327,18 @@ const els = {
   configAgentResult: document.querySelector("#configAgentResult"),
   configAgentAudit: document.querySelector("#configAgentAudit"),
   configAgentMessage: document.querySelector("#configAgentMessage"),
+  pipelineWorkspace: document.querySelector("#pipelineWorkspace"),
   pipelineFunnelPanel: document.querySelector("#pipelineFunnelPanel"),
   pipelineFunnelBadge: document.querySelector("#pipelineFunnelBadge"),
   pipelineFunnelBody: document.querySelector("#pipelineFunnelBody"),
+  pipelineFunnelSummaryStrip: document.querySelector("#pipelineFunnelSummaryStrip"),
+  pipelineFunnelSummaryDonut: document.querySelector("#pipelineFunnelSummaryDonut"),
+  pipelineFunnelSummaryTotal: document.querySelector("#pipelineFunnelSummaryTotal"),
+  pipelineFunnelSummaryAssigned: document.querySelector("#pipelineFunnelSummaryAssigned"),
+  pipelineFunnelSummaryContacted: document.querySelector("#pipelineFunnelSummaryContacted"),
+  pipelineFunnelSummaryWon: document.querySelector("#pipelineFunnelSummaryWon"),
+  pipelineFunnelExpand: document.querySelector("#pipelineFunnelExpand"),
+  pipelineFunnelCollapse: document.querySelector("#pipelineFunnelCollapse"),
   pipelineToolbar: document.querySelector("#pipelineToolbar"),
   overdueBanner: document.querySelector("#overdueBanner"),
   overduePipelineFilter: document.querySelector("#overduePipelineFilter"),
@@ -4466,6 +4476,22 @@ function renderPipelineFunnel() {
   }
 }
 
+function renderPipelineFunnelSummary() {
+  if (!els.pipelineFunnelSummaryStrip) return;
+  const leads = state.leadsLoading && !state.leadsLoaded ? [] : filteredLeads();
+  const metrics = pipelineFunnelMetricsForLeads(leads);
+  const contactedPercent = percentOf(metrics.contactedLeads, metrics.totalAssignedLeads);
+  els.pipelineFunnelSummaryTotal.textContent = String(metrics.totalAssignedLeads);
+  els.pipelineFunnelSummaryAssigned.textContent = String(metrics.totalAssignedLeads);
+  els.pipelineFunnelSummaryContacted.textContent = String(metrics.contactedLeads);
+  els.pipelineFunnelSummaryWon.textContent = String(metrics.wonDeals);
+  els.pipelineFunnelSummaryDonut?.style.setProperty("--pipeline-summary-progress", `${contactedPercent}%`);
+  els.pipelineFunnelSummaryDonut?.setAttribute(
+    "aria-label",
+    `${contactedPercent}% contacted: ${metrics.contactedLeads} of ${metrics.totalAssignedLeads} assigned leads`
+  );
+}
+
 function renderDashboardPipelineFunnel() {
   if (!els.dashboardPipelineFunnelPanel || !els.dashboardPipelineFunnelBody || !els.dashboardPipelineFunnelBadge) return;
   const role = String(state.currentUser?.role || "").toLowerCase();
@@ -4608,6 +4634,7 @@ function openOverduePipeline() {
   state.overduePipelineOnly = true;
   state.filters = { ...state.filters, search: "", stage: "all", priority: "all", territory: "all", salesman: "all" };
   state.pipelineViewMode = "list";
+  state.pipelineKanbanFunnelExpanded = false;
   localStorage.setItem("arg_pipeline_view_mode", state.pipelineViewMode);
   state.lastNonLeadView = "pipeline";
   currentView = "pipeline";
@@ -6273,7 +6300,11 @@ function renderNeedsAttentionPanel() {
   els.needsAttentionPanel.classList.toggle("hidden", !admin);
   if (!admin) return;
   const open = (state.attentionFlags || []).filter(flag => String(flag.status || "open") === "open");
-  if (els.needsAttentionCount) els.needsAttentionCount.textContent = `${open.length} open`;
+  if (els.needsAttentionCount) {
+    els.needsAttentionCount.textContent = `${open.length} open`;
+    els.needsAttentionCount.classList.toggle("attention-count-success", open.length === 0);
+    els.needsAttentionCount.classList.toggle("attention-count-danger", open.length > 0);
+  }
   els.needsAttentionList.innerHTML = open.length
     ? open.map(attentionFlagCard).join("")
     : `<p class="empty-copy">No open director alerts.</p>`;
@@ -9881,6 +9912,7 @@ function render() {
   renderMetrics();
   renderOverdueBanner();
   renderPipelineFunnel();
+  renderPipelineFunnelSummary();
   renderSidebarIdentity();
   renderTopbar();
   renderSmartSearch();
@@ -9910,10 +9942,19 @@ function applyView() {
   const isTasks = currentView === "tasks";
   const isLead = currentView === "lead";
   const isKanban = state.pipelineViewMode === "kanban";
+  const usesDesktopPipelineLayout = window.matchMedia("(min-width: 1025px) and (min-height: 600px)").matches;
+  const showKanbanSummary = isPipeline && isKanban && usesDesktopPipelineLayout && !state.pipelineKanbanFunnelExpanded;
+  const showFullFunnel = isPipeline && (!isKanban || !usesDesktopPipelineLayout || state.pipelineKanbanFunnelExpanded);
   const showMetricsShell = isPipeline || (isDashboard && !isSalesmanRole());
   els.metricsShell?.classList.toggle("hidden", !showMetricsShell);
   els.dashboardView.classList.toggle("hidden", !isDashboard);
-  els.pipelineFunnelPanel?.classList.toggle("hidden", !isPipeline);
+  els.pipelineWorkspace?.classList.toggle("hidden", !isPipeline);
+  els.pipelineWorkspace?.classList.toggle("pipeline-workspace-list", isPipeline && !isKanban);
+  els.pipelineWorkspace?.classList.toggle("pipeline-workspace-kanban", isPipeline && isKanban);
+  els.pipelineWorkspace?.classList.toggle("is-funnel-expanded", Boolean(isKanban && state.pipelineKanbanFunnelExpanded));
+  els.pipelineFunnelPanel?.classList.toggle("hidden", !showFullFunnel);
+  els.pipelineFunnelSummaryStrip?.classList.toggle("hidden", !showKanbanSummary);
+  els.pipelineFunnelCollapse?.classList.toggle("hidden", !(isPipeline && isKanban && state.pipelineKanbanFunnelExpanded));
   els.pipelineToolbar.classList.toggle("hidden", !isPipeline);
   els.pipelineView.classList.toggle("hidden", !isPipeline);
   els.pipelineView?.classList.toggle("kanban-mode", isPipeline && isKanban);
@@ -10348,9 +10389,24 @@ els.clearOverdueFilter?.addEventListener("click", () => {
 document.querySelectorAll("[data-pipeline-mode]").forEach(button => {
   button.addEventListener("click", () => {
     state.pipelineViewMode = button.dataset.pipelineMode;
+    if (state.pipelineViewMode === "kanban") state.pipelineKanbanFunnelExpanded = false;
     localStorage.setItem("arg_pipeline_view_mode", state.pipelineViewMode);
     render();
   });
+});
+
+els.pipelineFunnelExpand?.addEventListener("click", () => {
+  state.pipelineKanbanFunnelExpanded = true;
+  render();
+});
+
+els.pipelineFunnelCollapse?.addEventListener("click", () => {
+  state.pipelineKanbanFunnelExpanded = false;
+  render();
+});
+
+window.matchMedia("(min-width: 1025px) and (min-height: 600px)").addEventListener?.("change", () => {
+  if (currentView === "pipeline") render();
 });
 
 els.activityFilterToggle?.addEventListener("click", () => {

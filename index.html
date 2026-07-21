@@ -544,18 +544,36 @@
           </div>
         </section>
 
-        <section class="panel pipeline-funnel-panel hidden" id="pipelineFunnelPanel">
-          <div class="panel-header">
-            <div>
-              <h2>Pipeline Funnel</h2>
-              <span>Track lead conversion progress by salesman</span>
+        <section class="pipeline-workspace hidden" id="pipelineWorkspace">
+          <section class="panel pipeline-funnel-panel hidden" id="pipelineFunnelPanel">
+            <div class="panel-header">
+              <div>
+                <h2>Pipeline Funnel</h2>
+                <span>Track lead conversion progress by salesman</span>
+              </div>
+              <div class="pipeline-funnel-header-actions">
+                <span id="pipelineFunnelBadge">0 visible leads</span>
+                <button class="ghost-button hidden" id="pipelineFunnelCollapse" type="button">Collapse &#9650;</button>
+              </div>
             </div>
-            <span id="pipelineFunnelBadge">0 visible leads</span>
-          </div>
-          <div class="pipeline-funnel-body" id="pipelineFunnelBody"></div>
-        </section>
+            <div class="pipeline-funnel-body" id="pipelineFunnelBody"></div>
+          </section>
 
-        <section class="toolbar hidden" id="pipelineToolbar">
+          <section class="pipeline-funnel-summary-strip hidden" id="pipelineFunnelSummaryStrip" aria-label="Pipeline funnel summary">
+            <strong>Pipeline funnel</strong>
+            <div class="pipeline-funnel-summary-donut" id="pipelineFunnelSummaryDonut" role="img" aria-label="Contacted lead percentage">
+              <span id="pipelineFunnelSummaryTotal">0</span>
+            </div>
+            <div class="pipeline-funnel-summary-stats">
+              <span>Assigned <b id="pipelineFunnelSummaryAssigned">0</b></span>
+              <span>Contacted <b id="pipelineFunnelSummaryContacted">0</b></span>
+              <span>Won <b id="pipelineFunnelSummaryWon">0</b></span>
+            </div>
+            <button class="ghost-button" id="pipelineFunnelExpand" type="button">Expand &#9660;</button>
+          </section>
+
+          <div class="pipeline-worklist-column">
+            <section class="toolbar hidden" id="pipelineToolbar">
           <label class="search-box">
             <span>Search</span>
             <input id="searchInput" type="search" placeholder="Company, contact, product, territory">
@@ -591,41 +609,43 @@
               <button class="toggle-button" type="button" data-pipeline-mode="kanban">Kanban</button>
             </div>
           </div>
-        </section>
-        <section class="pipeline-filter-notice hidden" id="overduePipelineFilter">
-          <div>
-            <strong>Showing overdue follow-ups only</strong>
-            <span id="overduePipelineCount">0 overdue records</span>
-          </div>
-          <button class="small-action" id="clearOverdueFilter" type="button">Clear overdue filter</button>
-        </section>
-
-        <section class="content-grid hidden" id="pipelineView">
-          <div class="panel leads-panel" id="pipelineListPanel">
-            <div class="panel-header">
-              <h2>Live Lead List</h2>
-              <span id="leadCount">0 records</span>
-            </div>
-            <div class="lead-list" id="leadList"></div>
-          </div>
-
-          <div class="panel kanban-panel hidden" id="kanbanPanel">
-            <div class="panel-header kanban-panel-header">
+            </section>
+            <section class="pipeline-filter-notice hidden" id="overduePipelineFilter">
               <div>
-                <h2>Kanban Pipeline</h2>
-                <span>Drag leads between stages to update pipeline status</span>
+                <strong>Showing overdue follow-ups only</strong>
+                <span id="overduePipelineCount">0 overdue records</span>
               </div>
-              <span id="kanbanSummary">0 records</span>
-            </div>
-            <div class="kanban-mobile-tabs" id="kanbanMobileStages" aria-label="Kanban stage selector"></div>
-            <div class="kanban-board" id="kanbanBoard"></div>
-          </div>
+              <button class="small-action" id="clearOverdueFilter" type="button">Clear overdue filter</button>
+            </section>
 
-          <div class="panel detail-panel" id="detailPanel">
-            <div class="empty-state">
-              <strong>Select a lead</strong>
-              <span>Open any record to view details, update stage, and log activity.</span>
-            </div>
+            <section class="content-grid hidden" id="pipelineView">
+              <div class="panel leads-panel" id="pipelineListPanel">
+                <div class="panel-header">
+                  <h2>Live Lead List</h2>
+                  <span id="leadCount">0 records</span>
+                </div>
+                <div class="lead-list" id="leadList"></div>
+              </div>
+
+              <div class="panel kanban-panel hidden" id="kanbanPanel">
+                <div class="panel-header kanban-panel-header">
+                  <div>
+                    <h2>Kanban Pipeline</h2>
+                    <span>Drag leads between stages to update pipeline status</span>
+                  </div>
+                  <span id="kanbanSummary">0 records</span>
+                </div>
+                <div class="kanban-mobile-tabs" id="kanbanMobileStages" aria-label="Kanban stage selector"></div>
+                <div class="kanban-board" id="kanbanBoard"></div>
+              </div>
+
+              <div class="panel detail-panel" id="detailPanel">
+                <div class="empty-state">
+                  <strong>Select a lead</strong>
+                  <span>Open any record to view details, update stage, and log activity.</span>
+                </div>
+              </div>
+            </section>
           </div>
         </section>
 
