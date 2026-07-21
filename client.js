@@ -5410,6 +5410,14 @@ function renderPortfolioAnalytics() {
 
 function renderSalesmanDashboard() {
   const salesman = isSalesmanRole() && currentView === "dashboard";
+  const priorityRow = document.querySelector(".salesman-dashboard-priority-row");
+  if (priorityRow && els.overdueBanner && els.metricsShell) {
+    if (salesman && els.overdueBanner.parentElement !== priorityRow) {
+      priorityRow.prepend(els.overdueBanner);
+    } else if (!salesman && els.overdueBanner.parentElement === priorityRow) {
+      els.metricsShell.parentElement?.insertBefore(els.overdueBanner, els.metricsShell);
+    }
+  }
   els.salesmanSimplifiedDashboard?.classList.toggle("hidden", !salesman);
   els.dashboardQuickActions?.classList.add("hidden");
   els.dailyAiPanel?.classList.add("hidden");
@@ -5504,6 +5512,7 @@ function renderSalesmanSimplifiedDashboard() {
         <span class="salesman-triage-kicker">${escapeHtml(item.kicker)}</span>
         <strong>${escapeHtml(item.title)}</strong>
         <p>${escapeHtml(item.body)}</p>
+        <span class="salesman-triage-detail">${escapeHtml(item.detail || "")}</span>
         <small>${escapeHtml(item.cta)}</small>
       </button>
     `).join("");
@@ -5675,6 +5684,7 @@ function salesmanPriorityActions() {
       kicker: "Overdue",
       title: `Clear ${overdueFollowups.length} overdue follow-up${overdueFollowups.length === 1 ? "" : "s"}`,
       body: `Oldest: ${overdueFollowups[0].company_name || "Lead"} - ${daysOverdueLabel(overdueFollowups[0].due_date)}`,
+      detail: `Next move: ${overdueFollowups[0].activity_required || overdueFollowups[0].reminder_type || "Complete the follow-up"}`,
       cta: "Review queue"
     });
   } else if (todayFollowups.length) {
@@ -5684,6 +5694,7 @@ function salesmanPriorityActions() {
       kicker: "Due today",
       title: `${todayFollowups.length} follow-up${todayFollowups.length === 1 ? "" : "s"} scheduled for today`,
       body: `Start with ${todayFollowups[0].company_name || "your next lead"} and keep the day moving.`,
+      detail: `Next move: ${todayFollowups[0].activity_required || todayFollowups[0].reminder_type || "Complete today's follow-up"}`,
       cta: "Open today queue"
     });
   }
@@ -5695,6 +5706,7 @@ function salesmanPriorityActions() {
       kicker: "First touch",
       title: `${firstTouches.length} lead${firstTouches.length === 1 ? "" : "s"} still need the first contact`,
       body: `${firstTouches[0].company_name || "Newest lead"} is still waiting for its opening call or visit.`,
+      detail: `Contact: ${firstTouches[0].contact_person || firstTouches[0].location || firstTouches[0].territory || "Open the lead for contact details"}`,
       cta: "Start first touch"
     });
   }
@@ -5706,6 +5718,7 @@ function salesmanPriorityActions() {
       kicker: "3-day deadline",
       title: `${lossReasonPrompts.length} lost lead${lossReasonPrompts.length === 1 ? "" : "s"} still need a reason`,
       body: `${lossReasonPrompts[0].company_name || "A lost lead"} has crossed the reason-capture deadline.`,
+      detail: "Capture the decision context while the customer conversation is still fresh.",
       cta: "Capture reason"
     });
   }
@@ -5717,6 +5730,7 @@ function salesmanPriorityActions() {
       kicker: "Coverage gap",
       title: `${neglectedCount} account${neglectedCount === 1 ? "" : "s"} are past expected contact frequency`,
       body: "Use the queue and your next actions to revive the quiet relationships before they cool down.",
+      detail: "Start with the account that has gone longest without a logged interaction.",
       cta: "See neglected accounts",
       aiAction: "neglected"
     });
@@ -5733,6 +5747,7 @@ function salesmanPriorityActions() {
         kicker: "Next up",
         title: `Prepare ${nextReminder.company_name || "the next account"} before it slips`,
         body: `${formatPlanDate(nextReminder.due_date)} - ${nextReminder.next_action || nextReminder.activity_type || "Follow up"}`,
+        detail: `Due in ${daysUntil(nextReminder.due_date)} day${daysUntil(nextReminder.due_date) === 1 ? "" : "s"}; review the last interaction before contacting them.`,
         cta: "Review upcoming queue"
       });
     }
@@ -5745,6 +5760,7 @@ function salesmanPriorityActions() {
       kicker: "Capture",
       title: "Log today's field activity before it gets missed",
       body: "Record the latest call, visit, or quotation follow-up while the details are still fresh.",
+      detail: "Include the outcome and next action date so tomorrow's queue stays accurate.",
       cta: "Log activity"
     });
   }
