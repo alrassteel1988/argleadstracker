@@ -182,7 +182,7 @@ body.salesman-dashboard-mode .dashboard-live-lead-table .is-empty {
   }
 
   body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
-    grid-template-rows: auto auto auto 50dvh auto;
+    grid-template-rows: max-content max-content max-content 50dvh max-content;
     grid-auto-rows: max-content;
     row-gap: var(--salesman-dashboard-section-gap);
     column-gap: var(--salesman-dashboard-section-gap);
@@ -287,9 +287,10 @@ body.salesman-dashboard-mode .dashboard-live-lead-table .is-empty {
     flex-direction: column;
     align-self: stretch;
     height: auto;
-    min-height: 0;
+    min-height: max-content;
+    max-height: none;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
   }
 
   body.salesman-dashboard-mode :is(.salesman-dashboard-top-actions, .salesman-dashboard-call-queue) > .panel-header {
@@ -308,7 +309,7 @@ body.salesman-dashboard-mode .dashboard-live-lead-table .is-empty {
 
   body.salesman-dashboard-mode .salesman-simplified-actions {
     flex: 0 0 auto;
-    min-height: 0;
+    min-height: 160px;
     padding: 6px var(--salesman-dashboard-card-padding) 16px;
     overflow: visible;
   }
@@ -320,9 +321,9 @@ body.salesman-dashboard-mode .dashboard-live-lead-table .is-empty {
   }
 
   body.salesman-dashboard-mode .salesman-dashboard-call-queue .salesman-simplified-queue {
-    flex: 1 1 auto;
-    min-height: 0;
-    max-height: 220px;
+    flex: 0 1 auto;
+    min-height: 180px;
+    max-height: 280px;
     padding: 6px var(--salesman-dashboard-card-padding) 16px;
     overflow-y: auto;
     scrollbar-width: thin;

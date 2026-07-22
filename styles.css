@@ -22518,6 +22518,42 @@ body.tasks-mode:not(.admin-tasks-mode) :is(
   opacity: 1;
 }
 
+body.tasks-mode:not(.admin-tasks-mode) .tasks-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .tasks-field-label.is-required::after {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--bauhaus-amber);
+  content: "";
+}
+
+body.tasks-mode:not(.admin-tasks-mode) :is(select, textarea).field--required-empty {
+  border: 1.5px solid var(--bauhaus-amber);
+  background: var(--bauhaus-amber-tint);
+  color: var(--bauhaus-amber-text);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) :is(select, textarea).field--filled {
+  border: 1.5px solid var(--bauhaus-green);
+  background: var(--bauhaus-green-tint);
+  color: var(--bauhaus-green-text);
+}
+
+body.tasks-mode:not(.admin-tasks-mode) :is(select, textarea).field--required-empty:focus,
+body.tasks-mode:not(.admin-tasks-mode) :is(select, textarea).field--filled:focus,
+body.tasks-mode:not(.admin-tasks-mode) :is(select, textarea).field--required-empty:focus-visible,
+body.tasks-mode:not(.admin-tasks-mode) :is(select, textarea).field--filled:focus-visible {
+  outline: 3px solid rgba(46, 109, 164, 0.34);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
 body.tasks-mode:not(.admin-tasks-mode) .tasks-voice-button {
   border: 0;
   border-radius: 6px;

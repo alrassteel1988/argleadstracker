@@ -8967,6 +8967,44 @@ function weeklySpecificEnough(value, options = {}) {
   return true;
 }
 
+function weeklyExpectedOrderCompletion(item = {}) {
+  const likelihoodComplete = WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || ""));
+  const timingComplete = WEEKLY_TIMING_OPTIONS.includes(String(item.timing || ""));
+  const blockersRequired = true;
+  const blockersComplete = weeklySpecificEnough(item.blockers, { minLength: 16 });
+  return {
+    likelihoodComplete,
+    timingComplete,
+    blockersRequired,
+    blockersComplete,
+    complete: likelihoodComplete && timingComplete && blockersComplete
+  };
+}
+
+function weeklyRequiredFieldState(report, path) {
+  if (path === "summary") {
+    return { required: true, complete: weeklySpecificEnough(report?.summary, { minLength: 24 }) };
+  }
+  const match = String(path || "").match(/^expected_orders\.(\d+)\.(likelihood|timing|blockers)$/);
+  if (!match) return { required: false, complete: false };
+  const item = report?.expected_orders?.[Number(match[1])] || {};
+  const state = weeklyExpectedOrderCompletion(item);
+  if (match[2] === "likelihood") return { required: true, complete: state.likelihoodComplete };
+  if (match[2] === "timing") return { required: true, complete: state.timingComplete };
+  return { required: state.blockersRequired, complete: state.blockersComplete };
+}
+
+function weeklyRequiredFieldClass(report, path) {
+  const state = weeklyRequiredFieldState(report, path);
+  if (!state.required) return "";
+  return state.complete ? "field--filled" : "field--required-empty";
+}
+
+function weeklyRequiredLabel(label, report, path) {
+  const state = weeklyRequiredFieldState(report, path);
+  return `<span class="tasks-field-label ${state.required ? "is-required" : ""}">${escapeHtml(label)}</span>`;
+}
+
 function weeklyClientBlockers(wrapper) {
   const report = wrapper?.report || {};
   const blockers = [];
@@ -8979,10 +9017,11 @@ function weeklyClientBlockers(wrapper) {
   });
   if (!(report.expected_orders || []).length && !report.no_expected_orders_confirmed) blockers.push("Confirm explicitly if there were no expected orders to review this week.");
   (report.expected_orders || []).forEach(item => {
-    if (!WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || ""))) blockers.push(`Choose the likelihood for ${item.account_name || "an expected order"}.`);
-    if (!WEEKLY_TIMING_OPTIONS.includes(String(item.timing || ""))) blockers.push(`Choose the timing window for ${item.account_name || "an expected order"}.`);
-    if (["Good chance", "Almost certain"].includes(String(item.likelihood || "")) && !weeklySpecificEnough(item.blockers, { minLength: 12 })) {
-      blockers.push(`Describe what could stop ${item.account_name || "this expected order"} because it is marked high probability.`);
+    const state = weeklyExpectedOrderCompletion(item);
+    if (!state.likelihoodComplete) blockers.push(`Choose the likelihood for ${item.account_name || "an expected order"}.`);
+    if (!state.timingComplete) blockers.push(`Choose the timing window for ${item.account_name || "an expected order"}.`);
+    if (!state.blockersComplete) {
+      blockers.push(`Describe what could stop ${item.account_name || "this expected order"}.`);
     }
   });
   if (!(report.problematic_accounts || []).length && !report.no_problematic_accounts_confirmed) blockers.push("Confirm explicitly if there were zero problematic accounts this week.");
@@ -9034,7 +9073,7 @@ function weeklyCompletionSnapshot(wrapper) {
   const checks = [
     weeklySpecificEnough(report.summary, { minLength: 24 }),
     expected.length ? true : Boolean(report.no_expected_orders_confirmed),
-    !expected.length || expected.every(item => WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || "")) && WEEKLY_TIMING_OPTIONS.includes(String(item.timing || ""))),
+    !expected.length || expected.every(item => weeklyExpectedOrderCompletion(item).complete),
     problems.length ? true : Boolean(report.no_problematic_accounts_confirmed),
     !problems.length || problems.every(item => ["report", "dismiss"].includes(String(item.disposition || "").toLowerCase())),
     (report.secured_orders || []).length ? true : Boolean(report.no_secured_orders_confirmed),
@@ -9051,6 +9090,48 @@ function weeklyCompletionSnapshot(wrapper) {
     total,
     percent: Math.round((completed / total) * 100)
   };
+}
+
+function syncWeeklyRequiredFieldStates() {
+  const wrapper = state.weeklyReports.current;
+  const report = wrapper?.report || {};
+  els.tasksPrimary.querySelectorAll("[data-weekly-completion-field]").forEach(field => {
+    const fieldState = weeklyRequiredFieldState(report, field.dataset.weeklyField);
+    field.classList.toggle("field--required-empty", fieldState.required && !fieldState.complete);
+    field.classList.toggle("field--filled", fieldState.required && fieldState.complete);
+    if (fieldState.required) field.setAttribute("aria-required", "true");
+    else field.removeAttribute("aria-required");
+    field.closest("label")?.querySelector(".tasks-field-label")?.classList.toggle("is-required", fieldState.required);
+  });
+
+  els.tasksPrimary.querySelectorAll("[data-weekly-expected-card]").forEach(card => {
+    const item = report.expected_orders?.[Number(card.dataset.weeklyExpectedCard)] || {};
+    const itemState = weeklyExpectedOrderCompletion(item);
+    card.classList.toggle("is-complete", itemState.complete);
+    card.classList.toggle("needs-input", !itemState.complete);
+    const badge = card.querySelector("[data-weekly-account-status]");
+    if (badge) {
+      badge.textContent = itemState.complete ? "Complete" : "Needs input";
+      badge.classList.toggle("success", itemState.complete);
+      badge.classList.toggle("plan-missing", !itemState.complete);
+    }
+  });
+
+  const completion = weeklyCompletionSnapshot(wrapper);
+  const fill = els.tasksSidebar.querySelector("[data-weekly-progress-fill]");
+  const copy = els.tasksSidebar.querySelector("[data-weekly-progress-copy]");
+  const percent = els.tasksSidebar.querySelector("[data-weekly-progress-percent]");
+  if (fill) fill.style.width = `${completion.percent}%`;
+  if (copy) copy.textContent = `${completion.completed}/${completion.total} checkpoints complete`;
+  if (percent) percent.textContent = `${completion.percent}%`;
+
+  const blockersBody = els.tasksSidebar.querySelector("[data-weekly-blockers-body]");
+  if (blockersBody) {
+    const blockers = weeklyClientBlockers(wrapper);
+    blockersBody.innerHTML = blockers.length
+      ? `<ul class="tasks-checklist">${blockers.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+      : `<p class="empty-copy">No blockers left. This report is ready to submit.</p>`;
+  }
 }
 
 function weeklySetValue(target, path, value) {
@@ -9242,33 +9323,36 @@ function renderWeeklySalesmanView() {
     `;
 
   const expectedMarkup = (report.expected_orders || []).length
-    ? report.expected_orders.map((item, index) => `
-      <article class="tasks-row-card tasks-expected-order-card ${WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || "")) && WEEKLY_TIMING_OPTIONS.includes(String(item.timing || "")) ? "is-complete" : "needs-input"}">
+    ? report.expected_orders.map((item, index) => {
+      const fieldBase = `expected_orders.${index}`;
+      const itemCompletion = weeklyExpectedOrderCompletion(item);
+      return `
+      <article class="tasks-row-card tasks-expected-order-card ${itemCompletion.complete ? "is-complete" : "needs-input"}" data-weekly-expected-card="${index}">
         <div class="tasks-row-head">
           <div>
             <strong>${escapeHtml(item.account_name || "Unnamed account")}</strong>
             <p>${escapeHtml(formatAED(item.expected_value || 0))}${item.order_scope ? ` · ${escapeHtml(item.order_scope)}` : ""}</p>
           </div>
-          ${WEEKLY_LIKELIHOOD_OPTIONS.includes(String(item.likelihood || "")) && WEEKLY_TIMING_OPTIONS.includes(String(item.timing || ""))
-            ? `<span class="chip success">${escapeHtml(item.likelihood)}</span>`
-            : `<span class="chip plan-missing">Needs input</span>`}
+          ${itemCompletion.complete
+            ? `<span class="chip success" data-weekly-account-status>Complete</span>`
+            : `<span class="chip plan-missing" data-weekly-account-status>Needs input</span>`}
         </div>
         <div class="tasks-inline-grid">
           <label>
-            <span>Likelihood</span>
-            <select data-weekly-field="expected_orders.${index}.likelihood">
+            ${weeklyRequiredLabel("Likelihood", report, `${fieldBase}.likelihood`)}
+            <select class="${weeklyRequiredFieldClass(report, `${fieldBase}.likelihood`)}" data-weekly-completion-field data-weekly-field="${fieldBase}.likelihood" aria-required="true">
               ${weeklySelectMarkup(WEEKLY_LIKELIHOOD_OPTIONS, item.likelihood || "", "Choose")}
             </select>
           </label>
           <label>
-            <span>Timing</span>
-            <select data-weekly-field="expected_orders.${index}.timing">
+            ${weeklyRequiredLabel("Timing", report, `${fieldBase}.timing`)}
+            <select class="${weeklyRequiredFieldClass(report, `${fieldBase}.timing`)}" data-weekly-completion-field data-weekly-field="${fieldBase}.timing" aria-required="true">
               ${weeklySelectMarkup(WEEKLY_TIMING_OPTIONS, item.timing || "", "Choose")}
             </select>
           </label>
           <label class="tasks-full-span">
-            <span>What could stop it?</span>
-            <textarea rows="3" id="weeklyExpectedBlockers${index}" data-weekly-field="expected_orders.${index}.blockers" placeholder="If this is a good chance, name the blocker or next dependency.">${escapeHtml(item.blockers || "")}</textarea>
+            ${weeklyRequiredLabel("What could stop it?", report, `${fieldBase}.blockers`)}
+            <textarea class="${weeklyRequiredFieldClass(report, `${fieldBase}.blockers`)}" rows="3" id="weeklyExpectedBlockers${index}" data-weekly-completion-field data-weekly-field="${fieldBase}.blockers" aria-required="true" placeholder="Name the blocker or next dependency that could stop this order.">${escapeHtml(item.blockers || "")}</textarea>
           </label>
           <div class="tasks-voice-row tasks-full-span">
             <button
@@ -9286,7 +9370,8 @@ function renderWeeklySalesmanView() {
           </div>
         </div>
       </article>
-    `).join("")
+    `;
+    }).join("")
     : `
       <label class="tasks-checkline">
         <input type="checkbox" data-weekly-field="no_expected_orders_confirmed" ${report.no_expected_orders_confirmed ? "checked" : ""}>
@@ -9468,8 +9553,8 @@ function renderWeeklySalesmanView() {
       ` : ""}
       ${weeklyReportCard("Week overview", "Summarize the week once, with specifics.", `
         <label>
-          <span>Weekly summary</span>
-          <textarea rows="5" data-weekly-field="summary" placeholder="What actually happened this week, in plain sales language?">${escapeHtml(report.summary || "")}</textarea>
+          ${weeklyRequiredLabel("Weekly summary", report, "summary")}
+          <textarea class="${weeklyRequiredFieldClass(report, "summary")}" rows="5" data-weekly-completion-field data-weekly-field="summary" aria-required="true" placeholder="What actually happened this week, in plain sales language?">${escapeHtml(report.summary || "")}</textarea>
         </label>
       `, "", "blue")}
       ${weeklyReportCard("Secured orders", "ERP facts should appear here already. Only explain the flagged exceptions.", securedMarkup, "", "blue")}
@@ -9496,11 +9581,11 @@ function renderWeeklySalesmanView() {
         <strong class="chip ${status.chipClass}">${escapeHtml(status.label)}</strong>
         <p>${escapeHtml(weeklyWeekLabel(wrapper))}</p>
         <div class="tasks-progress-meter">
-          <div class="tasks-progress-fill" style="width:${completion.percent}%"></div>
+          <div class="tasks-progress-fill" data-weekly-progress-fill style="width:${completion.percent}%"></div>
         </div>
         <div class="tasks-progress-copy">
-          <span>${completion.completed}/${completion.total} checkpoints complete</span>
-          <strong>${completion.percent}%</strong>
+          <span data-weekly-progress-copy>${completion.completed}/${completion.total} checkpoints complete</span>
+          <strong data-weekly-progress-percent>${completion.percent}%</strong>
         </div>
         <div class="tasks-status-notes">
           <span>${escapeHtml(report.updated_at ? `Last updated ${formatDateTime(report.updated_at)}` : "Not saved yet")}</span>
@@ -9515,7 +9600,7 @@ function renderWeeklySalesmanView() {
             <p>These are the gaps stopping clean submission.</p>
           </div>
         </div>
-        <div class="tasks-section-body">
+        <div class="tasks-section-body" data-weekly-blockers-body>
           ${blockers.length ? `<ul class="tasks-checklist">${blockers.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<p class="empty-copy">No blockers left. This report is ready to submit.</p>`}
         </div>
       </section>
@@ -9734,6 +9819,7 @@ function bindWeeklySalesmanEvents() {
       const value = field.type === "checkbox" ? field.checked : field.value;
       weeklySetValue(state.weeklyReports.current.report, field.dataset.weeklyField, value);
       if (shouldRerender) renderTasksView();
+      else syncWeeklyRequiredFieldStates();
     };
     field.addEventListener("input", () => applyValue(false));
     field.addEventListener("change", () => applyValue(field.tagName === "SELECT" || field.type === "checkbox"));

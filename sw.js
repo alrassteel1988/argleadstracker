@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v9-salesman-dashboard-flow";
+const CACHE_VERSION = "arg-pwa-v12-weekly-required-field-states";
 const APP_SHELL = [
   "/",
   "/index.html",

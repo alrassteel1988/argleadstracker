@@ -3055,8 +3055,8 @@ function weeklyReportBlockers(report, context) {
   (report?.expected_orders || []).forEach(item => {
     if (!WEEKLY_REPORT_LIKELIHOOD.includes(String(item.likelihood || ""))) blockers.push(`Choose the likelihood for ${item.account_name}.`);
     if (!WEEKLY_REPORT_TIMING.includes(String(item.timing || ""))) blockers.push(`Choose the timing window for ${item.account_name}.`);
-    if (["Good chance", "Almost certain"].includes(String(item.likelihood || "")) && !minSpecificEnough(item.blockers)) {
-      blockers.push(`Describe what could stop ${item.account_name} because it is marked high probability.`);
+    if (!minSpecificEnough(item.blockers)) {
+      blockers.push(`Describe what could stop ${item.account_name}.`);
     }
   });
   if (!context.problematic_accounts.length && !report?.no_problematic_accounts_confirmed) {

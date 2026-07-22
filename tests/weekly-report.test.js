@@ -1,4 +1,6 @@
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 const server = require("../server");
 
 const salesman = {
@@ -64,5 +66,33 @@ draft.no_problematic_accounts_confirmed = true;
 blockers = server.weeklyReportBlockers(draft, { ...context, expected_orders: [], problematic_accounts: [] });
 assert.equal(blockers.some(item => /expected orders/i.test(item)), false);
 assert.equal(blockers.some(item => /zero problematic accounts/i.test(item)), false);
+
+const expectedOrderDraft = {
+  ...draft,
+  no_expected_orders_confirmed: false,
+  expected_orders: [{
+    lead_id: "lead-1",
+    account_name: "ACA Steel Constructions Contracting LLC",
+    likelihood: "Low chance",
+    timing: "Next week",
+    blockers: ""
+  }]
+};
+blockers = server.weeklyReportBlockers(expectedOrderDraft, { ...context, expected_orders: leads, problematic_accounts: [] });
+assert(blockers.some(item => /Describe what could stop ACA Steel/i.test(item)));
+expectedOrderDraft.expected_orders[0].blockers = "Customer approval and final pricing could delay award.";
+blockers = server.weeklyReportBlockers(expectedOrderDraft, { ...context, expected_orders: leads, problematic_accounts: [] });
+assert.equal(blockers.some(item => /Describe what could stop ACA Steel/i.test(item)), false);
+
+const clientSource = fs.readFileSync(path.join(__dirname, "..", "client.js"), "utf8");
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+assert.match(clientSource, /function weeklyExpectedOrderCompletion/);
+assert.match(clientSource, /const blockersRequired = true/);
+assert.match(clientSource, /expected\.every\(item => weeklyExpectedOrderCompletion\(item\)\.complete\)/);
+assert.match(clientSource, /data-weekly-completion-field/);
+assert.match(clientSource, /syncWeeklyRequiredFieldStates\(\)/);
+assert.match(stylesSource, /field--required-empty/);
+assert.match(stylesSource, /field--filled/);
+assert.match(stylesSource, /tasks-field-label\.is-required::after/);
 
 console.log("PASS weekly report workflow rules");
