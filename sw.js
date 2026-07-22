@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v6-activity-admin-contrast";
+const CACHE_VERSION = "arg-pwa-v7-salesman-dashboard-half-height-leads";
 const APP_SHELL = [
   "/",
   "/index.html",

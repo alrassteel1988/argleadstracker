@@ -6589,9 +6589,6 @@ function dashboardLeadTableRowMarkup(lead) {
       <td class="lead-table-contact-link">${contact.phone
         ? `<a href="tel:${escapeHtml(contact.phone)}" aria-label="Call ${escapeHtml(contact.name || lead.company_name || "contact")}">${escapeHtml(contact.phone)}</a>`
         : `<span class="is-empty">&mdash;</span>`}</td>
-      <td class="lead-table-contact-link">${contact.email
-        ? `<a href="mailto:${escapeHtml(contact.email)}" aria-label="Email ${escapeHtml(contact.name || lead.company_name || "contact")}">${escapeHtml(contact.email)}</a>`
-        : `<span class="is-empty">&mdash;</span>`}</td>
       <td class="lead-table-next-action">${escapeHtml(plan.action)}</td>
       <td><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(dashboardOverdueLabel)}</span></td>
       <td><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
@@ -6608,13 +6605,12 @@ function dashboardLeadTableMarkup(leads) {
           <th scope="col">Company Name</th>
           <th scope="col">Contact Person</th>
           <th scope="col">Phone</th>
-          <th scope="col">Email</th>
           <th scope="col">Next Action</th>
           <th scope="col">Days Overdue</th>
           <th scope="col">Stage</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr class="lead-table-empty"><td colspan="7">No assigned leads found.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr class="lead-table-empty"><td colspan="6">No assigned leads found.</td></tr>`}</tbody>
     </table>
   `;
 }
