@@ -1,29 +1,75 @@
-/* Shared Lead Detail contrast fix for Admin and Salesman accounts. */
+/* Shared Lead Detail identity treatment for Admin and Salesman accounts. */
+body.lead-detail-mode .lead-detail-view .lead-detail-page-toolbar,
+body.lead-detail-mode .lead-detail-view .lead-page-header,
+body.lead-detail-mode .lead-detail-view .lead-detail-tabs {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--dashboard-header-blue);
+}
+
+body.lead-detail-mode .lead-detail-view .lead-detail-back-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--dashboard-header-subtitle);
+}
+
+body.lead-detail-mode .lead-detail-view .lead-detail-back-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+body.lead-detail-mode .lead-detail-view .lead-detail-back-button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 body.lead-detail-mode .lead-detail-view .drawer-title-copy h2 {
-  color: #16407a;
+  color: #fff;
   font-weight: 700;
 }
 
-body.lead-detail-mode .lead-detail-view .drawer-tabs {
-  border-bottom: 1px solid var(--border, var(--line));
+body.lead-detail-mode .lead-detail-view .lead-page-header .drawer-title-copy p {
+  color: var(--dashboard-header-subtitle);
+}
+
+body.lead-detail-mode .lead-detail-view .lead-page-header .drawer-avatar {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+body.lead-detail-mode .lead-detail-view .lead-page-header .chip {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  box-shadow: none;
 }
 
 body.lead-detail-mode .lead-detail-view .drawer-tabs button {
   padding-bottom: 7px;
   border: 0;
   border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-radius: 4px 4px 0 0;
   background: transparent;
-  color: #16407a;
+  color: var(--dashboard-header-subtitle);
   font-weight: 600;
 }
 
 body.lead-detail-mode .lead-detail-view .drawer-tabs button.active {
   border-color: transparent;
-  border-bottom-color: #16407a;
-  background: transparent;
-  color: #16407a;
+  border-bottom-color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
   font-weight: 700;
+}
+
+body.lead-detail-mode .lead-detail-view .drawer-tabs button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+body.lead-detail-mode .lead-detail-view .drawer-tabs button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
 /* Overview panels share one visual system; modifier classes supply semantics. */

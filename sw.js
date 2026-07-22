@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v15-salesmen-bauhaus-headers";
+const CACHE_VERSION = "arg-pwa-v16-lead-detail-navy-tabs";
 const APP_SHELL = [
   "/",
   "/index.html",
