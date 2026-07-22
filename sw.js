@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v19-tasks-bauhaus-flat";
+const CACHE_VERSION = "arg-pwa-v23-global-bauhaus";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "/salesman-dashboard-live-leads.css",
   "/lead-detail-readability.css",
   "/tasks-bauhaus-flat.css",
+  "/bauhaus-global.css",
   "/client.js",
   "/favicon.svg",
   "/manifest.json",

@@ -9,6 +9,7 @@
     { "src": "salesman-dashboard-live-leads.css", "use": "@vercel/static" },
     { "src": "lead-detail-readability.css", "use": "@vercel/static" },
     { "src": "tasks-bauhaus-flat.css", "use": "@vercel/static" },
+    { "src": "bauhaus-global.css", "use": "@vercel/static" },
     { "src": "sw.js", "use": "@vercel/static" }
   ],
   "routes": [
@@ -19,6 +20,7 @@
     { "src": "/salesman-dashboard-live-leads.css", "dest": "/salesman-dashboard-live-leads.css" },
     { "src": "/lead-detail-readability.css", "dest": "/lead-detail-readability.css" },
     { "src": "/tasks-bauhaus-flat.css", "dest": "/tasks-bauhaus-flat.css" },
+    { "src": "/bauhaus-global.css", "dest": "/bauhaus-global.css" },
     { "src": "/sw.js", "dest": "/sw.js" },
     { "src": "/(.*)", "dest": "server.js" }
   ],

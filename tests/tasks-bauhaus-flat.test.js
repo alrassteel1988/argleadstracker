@@ -14,7 +14,7 @@ const leadStyleIndex = html.indexOf('href="lead-detail-readability.css');
 const tasksStyleIndex = html.indexOf('href="tasks-bauhaus-flat.css');
 assert.ok(sharedStyleIndex >= 0, "Shared stylesheet must be linked");
 assert.ok(leadStyleIndex > sharedStyleIndex, "Lead Detail overrides must load after shared styles");
-assert.ok(tasksStyleIndex > leadStyleIndex, "Tasks Bauhaus overrides must load last");
+assert.ok(tasksStyleIndex > leadStyleIndex, "Tasks Bauhaus overrides must load after Lead Detail styles");
 assert.match(serviceWorker, /"\/tasks-bauhaus-flat\.css"/, "Tasks Bauhaus stylesheet must be cached for the PWA shell");
 assert.match(vercelConfig, /"src": "tasks-bauhaus-flat\.css"/, "Vercel must build the Tasks Bauhaus stylesheet as a static asset");
 assert.match(vercelConfig, /"src": "\/tasks-bauhaus-flat\.css", "dest": "\/tasks-bauhaus-flat\.css"/, "Vercel must route the Tasks Bauhaus stylesheet directly");

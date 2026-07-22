@@ -1,0 +1,1262 @@
+/* Shared flat Bauhaus system for every authenticated Admin and Salesman view. */
+:root {
+  --bauhaus-navy: #06283d;
+  --bauhaus-deep-navy: #041f31;
+  --bauhaus-blue: #1f6aa5;
+  --bauhaus-light-blue: #dceaf6;
+  --bauhaus-red: #d94a48;
+  --bauhaus-light-red: #fae4e2;
+  --bauhaus-yellow: #e6a933;
+  --bauhaus-light-yellow: #f8edce;
+  --bauhaus-orange: #de8b20;
+  --bauhaus-light-orange: #faead4;
+  --bauhaus-green: #6d9f3d;
+  --bauhaus-light-green: #e6f0d8;
+  --bauhaus-violet: #7657c8;
+  --bauhaus-background: #f7f5ef;
+  --bauhaus-surface: #ffffff;
+  --bauhaus-muted: #eef1f4;
+  --bauhaus-border: #17324d;
+  --bauhaus-border-light: #cbd5df;
+  --bauhaus-text: #151515;
+  --bauhaus-text-muted: #586575;
+  --bauhaus-danger: #c93636;
+  --bauhaus-success: #4f8a2f;
+  --bauhaus-warning: #c77a12;
+  --bauhaus-radius-small: 2px;
+  --bauhaus-radius: 4px;
+  --bauhaus-radius-large: 6px;
+  --bauhaus-shadow-hard: 3px 3px 0 #cbd5df;
+
+  /* Rebind legacy presentation tokens to opaque shared values. */
+  --blue-sidebar: var(--bauhaus-navy);
+  --blue-sidebar-hover: #0b4569;
+  --blue-active: var(--bauhaus-blue);
+  --blue-primary: var(--bauhaus-blue);
+  --blue-primary-hover: #15547f;
+  --blue-bg: var(--bauhaus-background);
+  --blue-card: var(--bauhaus-surface);
+  --blue-border: var(--bauhaus-border-light);
+  --blue-input: var(--bauhaus-muted);
+  --blue-table-header: var(--bauhaus-muted);
+  --blue-text-main: var(--bauhaus-text);
+  --blue-text-muted: var(--bauhaus-text-muted);
+  --section-header-baltic: var(--bauhaus-navy);
+  --section-header-baltic-deep: var(--bauhaus-navy);
+  --section-header-title: #ffffff;
+  --section-header-subtitle: #ffffff;
+  --section-header-meta: var(--bauhaus-text-muted);
+  --section-header-control-bg: var(--bauhaus-surface);
+  --section-header-control-border: var(--bauhaus-border-light);
+  --section-header-control-text: var(--bauhaus-navy);
+  --color-bg-header: var(--bauhaus-navy);
+  --color-bg-body: var(--bauhaus-background);
+  --color-bg-card: var(--bauhaus-surface);
+  --color-background-primary: var(--bauhaus-surface);
+  --color-background-secondary: var(--bauhaus-muted);
+  --color-border: var(--bauhaus-border-light);
+  --color-border-tertiary: var(--bauhaus-border-light);
+  --color-text-body: var(--bauhaus-text);
+  --color-text-secondary: var(--bauhaus-text-muted);
+  --color-text-muted: var(--bauhaus-text-muted);
+  --panel-glass: var(--bauhaus-surface);
+  --panel-glass-strong: var(--bauhaus-surface);
+  --panel-glass-soft: var(--bauhaus-muted);
+  --surface-highlight: var(--bauhaus-surface);
+  --glass-stroke: var(--bauhaus-border-light);
+  --line: var(--bauhaus-border-light);
+  --line-strong: var(--bauhaus-border);
+  --panel: var(--bauhaus-surface);
+  --bg: var(--bauhaus-background);
+  --ink: var(--bauhaus-text);
+  --muted: var(--bauhaus-text-muted);
+  --accent: var(--bauhaus-blue);
+  --accent-strong: #15547f;
+  --danger: var(--bauhaus-red);
+  --warning: var(--bauhaus-orange);
+  --info: var(--bauhaus-blue);
+  --shadow: none;
+  --shadow-card: none;
+  --shadow-soft: none;
+  --shadow-elevated: none;
+  --radius: var(--bauhaus-radius);
+  --radius-card: var(--bauhaus-radius);
+  --radius-input: var(--bauhaus-radius);
+  --border-radius-lg: var(--bauhaus-radius-large);
+  --bauhaus-blue-soft: var(--bauhaus-light-blue);
+  --bauhaus-red-soft: var(--bauhaus-light-red);
+  --bauhaus-yellow-soft: var(--bauhaus-light-yellow);
+  --bauhaus-green-soft: var(--bauhaus-light-green);
+  --bauhaus-blue-tint: var(--bauhaus-light-blue);
+  --bauhaus-red-tint: var(--bauhaus-light-red);
+  --bauhaus-amber-tint: var(--bauhaus-light-yellow);
+  --bauhaus-green-tint: var(--bauhaus-light-green);
+  --bauhaus-border-soft: var(--bauhaus-border-light);
+  --dashboard-header-blue: var(--bauhaus-navy);
+  --dashboard-header-subtitle: #ffffff;
+  --panel-border-primary: var(--bauhaus-navy);
+  --panel-border-urgent: var(--bauhaus-red);
+  --panel-border-info: var(--bauhaus-blue);
+  --panel-border-action: var(--bauhaus-orange);
+  --panel-border-new: var(--bauhaus-green);
+  --panel-border-pending: var(--bauhaus-violet);
+  --panel-border-summary: var(--bauhaus-green);
+  --panel-border-neutral: var(--bauhaus-border-light);
+}
+
+html,
+body {
+  background-color: var(--bauhaus-background) !important;
+  background-image: none !important;
+  color: var(--bauhaus-text);
+}
+
+/* Remove every rendered glass, blur, glow, and soft-depth effect. */
+body *,
+body *::before,
+body *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Visibility is functional state, not presentation. Keep this utility final. */
+.hidden,
+[hidden] {
+  display: none !important;
+}
+
+body :is(
+  .auth-screen,
+  .auth-hero,
+  .auth-card,
+  .app-shell,
+  .main,
+  .sidebar,
+  .topbar,
+  [class*="header"],
+  [class*="toolbar"],
+  [class*="banner"],
+  [class*="hero"],
+  [class*="panel"],
+  [class*="card"],
+  [class*="dialog"],
+  [class*="drawer"],
+  [class*="sheet"],
+  [class*="menu"],
+  [class*="popover"],
+  [class*="toast"],
+  [class*="filter"],
+  [class*="field"],
+  [class*="badge"],
+  [class*="pill"],
+  [class*="chip"]
+) {
+  background-image: none !important;
+}
+
+.app-shell {
+  background-color: var(--bauhaus-background) !important;
+}
+
+.main {
+  background-color: var(--bauhaus-background) !important;
+}
+
+.dashboard-view,
+.pipeline-view,
+.lead-detail-view,
+.activity-dashboard,
+.tasks-view,
+.content-grid,
+.detail-body,
+.lead-detail-page-body {
+  background-color: transparent !important;
+}
+
+/* Sidebar and role navigation share one opaque visual system. */
+.sidebar {
+  border-right: 2px solid var(--bauhaus-blue) !important;
+  background-color: var(--bauhaus-deep-navy) !important;
+  color: #ffffff;
+}
+
+.brand-mark,
+.sidebar-user-avatar,
+.drawer-avatar,
+.detail-avatar {
+  border: 1px solid var(--bauhaus-yellow) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-yellow) !important;
+  color: var(--bauhaus-deep-navy) !important;
+}
+
+.brand strong,
+.sidebar-tools-label,
+.sidebar-user-copy strong,
+.sidebar-user-trigger,
+.sidebar-tools-trigger {
+  color: #ffffff !important;
+}
+
+.brand span,
+.nav-group-label,
+.sidebar-user-copy span,
+.sidebar-user-chevron {
+  color: #cbd5df !important;
+}
+
+.nav-item {
+  border: 0 !important;
+  border-left: 4px solid var(--bauhaus-deep-navy) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+.nav-item:hover,
+.nav-item:focus-visible {
+  border-left-color: var(--bauhaus-yellow) !important;
+  background-color: #0b4569 !important;
+}
+
+.nav-item.active {
+  border-left-color: var(--bauhaus-yellow) !important;
+  background-color: var(--bauhaus-blue) !important;
+  color: #ffffff !important;
+}
+
+.nav-item-icon {
+  border: 1px solid #47728e !important;
+  border-radius: var(--bauhaus-radius-small) !important;
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+.sidebar-tools-menu,
+.sidebar-user-dropdown,
+.sidebar-user-shell {
+  border-color: #31536a !important;
+  background-color: var(--bauhaus-deep-navy) !important;
+  color: #ffffff !important;
+}
+
+.user-menu-action {
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+/* Shared page header and global controls. */
+.topbar {
+  border: 2px solid var(--bauhaus-navy) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+.topbar-copy h1,
+.topbar-copy p,
+.topbar-title,
+.topbar .sync-status-pill {
+  color: #ffffff !important;
+}
+
+.smart-search-shell,
+.smart-search-field {
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.smart-search-field {
+  border: 1px solid var(--bauhaus-border-light) !important;
+}
+
+.smart-search-panel {
+  border: 2px solid var(--bauhaus-blue) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+.mobile-menu-button,
+.sidebar-close-button {
+  border: 1px solid #ffffff !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+/* Flat opaque surfaces for every shared and role-specific content primitive. */
+body :is(
+  .panel,
+  .view-panel,
+  [class~="card"],
+  [class$="-card"],
+  [class*="-card "],
+  [class$="-panel"],
+  [class*="-panel "],
+  [class$="-dialog"],
+  [class*="-dialog "],
+  [class$="-sheet"],
+  [class*="-sheet "],
+  [class$="-drawer"],
+  [class*="-drawer "]
+) {
+  border-color: var(--bauhaus-border-light) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+.view-panel,
+.lead-detail-page-panel,
+.pipeline-worklist-column,
+.salesman-dashboard-live-leads,
+.tasks-view {
+  border: 1px solid var(--bauhaus-border-light) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+/* One default section-title treatment; semantic variants override it below. */
+body :is(
+  .panel-header,
+  .compact-header,
+  .kanban-panel-header,
+  .lead-section-header,
+  .dialog-header,
+  .lead-detail-page-toolbar,
+  .lead-ai-toolbar,
+  .market-news-header,
+  .market-snapshot-header,
+  .pipeline-funnel-table-head
+) {
+  border: 0 !important;
+  border-bottom: 2px solid var(--bauhaus-border) !important;
+  border-radius: var(--bauhaus-radius) var(--bauhaus-radius) 0 0 !important;
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+body :is(
+  .panel-header,
+  .compact-header,
+  .kanban-panel-header,
+  .lead-section-header,
+  .dialog-header,
+  .lead-detail-page-toolbar,
+  .lead-ai-toolbar,
+  .market-news-header,
+  .market-snapshot-header,
+  .pipeline-funnel-table-head
+) :is(h1, h2, h3, h4, strong, span, p, small, label) {
+  color: #ffffff !important;
+}
+
+.activity-panel-cap--teal {
+  background-color: var(--bauhaus-navy) !important;
+}
+
+.activity-panel-cap--red,
+.activity-panel-cap--amber {
+  border-bottom-color: var(--bauhaus-border) !important;
+  background-color: var(--bauhaus-yellow) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+.activity-panel-cap--red :is(h2, span, p, strong),
+.activity-panel-cap--amber :is(h2, span, p, strong) {
+  color: var(--bauhaus-text) !important;
+}
+
+.sp-analysis-header--bauhaus-blue {
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+.sp-analysis-header--bauhaus-red {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.sp-analysis-header--bauhaus-yellow {
+  background-color: #eab308 !important;
+  color: var(--bauhaus-text) !important;
+}
+
+.sp-analysis-header--bauhaus-yellow :is(h2, h3, strong, span, p) {
+  color: var(--bauhaus-text) !important;
+}
+
+.tasks-section-card--blue-cap > .tasks-section-head {
+  border-bottom: 2px solid var(--bauhaus-border) !important;
+  border-radius: var(--bauhaus-radius) var(--bauhaus-radius) 0 0 !important;
+  background-color: var(--bauhaus-blue) !important;
+}
+
+.tasks-section-card--blue-cap > .tasks-section-head :is(h3, p, span) {
+  color: #ffffff !important;
+}
+
+/* Summary tiles use solid semantic colors with no separate border. */
+.metrics > article,
+.salesman-simplified-metric,
+.activity-kpi-card,
+.salesman-simplified-stage,
+.status-card {
+  border: 0 !important;
+  border-radius: var(--bauhaus-radius) !important;
+}
+
+.metric-open,
+.salesman-simplified-metric.tone-info,
+.activity-kpi-card:nth-child(1) {
+  background-color: var(--bauhaus-blue) !important;
+  color: #ffffff !important;
+}
+
+.metric-active,
+.activity-kpi-card:nth-child(4) {
+  background-color: var(--bauhaus-green) !important;
+  color: #ffffff !important;
+}
+
+.metric-risk,
+.salesman-simplified-metric.tone-danger,
+.activity-kpi-card:nth-child(2) {
+  background-color: var(--bauhaus-red) !important;
+  color: #ffffff !important;
+}
+
+.metric-due,
+.salesman-simplified-metric.tone-warm,
+.activity-kpi-card:nth-child(3) {
+  background-color: var(--bauhaus-orange) !important;
+  color: #ffffff !important;
+}
+
+.metrics > article :is(span, strong, small),
+.salesman-simplified-metric :is(span, strong, small),
+.activity-kpi-card :is(span, strong, small) {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+.metrics > article[data-summary-card] {
+  cursor: pointer;
+}
+
+.metrics > article[data-summary-card]:hover,
+.metrics > article[data-summary-card]:focus-visible {
+  outline: 2px solid var(--bauhaus-border) !important;
+  outline-offset: 2px;
+}
+
+.salesman-simplified-stage:nth-child(1) {
+  background-color: var(--bauhaus-green) !important;
+  color: #ffffff !important;
+}
+
+.salesman-simplified-stage:nth-child(2) {
+  background-color: var(--bauhaus-blue) !important;
+  color: #ffffff !important;
+}
+
+.salesman-simplified-stage:nth-child(3) {
+  background-color: var(--bauhaus-orange) !important;
+  color: #ffffff !important;
+}
+
+.salesman-simplified-stage:nth-child(4) {
+  background-color: var(--bauhaus-deep-navy) !important;
+  color: #ffffff !important;
+}
+
+.salesman-simplified-stage :is(span, strong) {
+  color: inherit !important;
+}
+
+/* Buttons and interactive controls. */
+button,
+.button,
+[role="button"] {
+  border: 1px solid var(--bauhaus-border) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-navy) !important;
+}
+
+button:hover,
+.button:hover,
+[role="button"]:hover {
+  background-color: var(--bauhaus-muted) !important;
+}
+
+.primary-button,
+.topbar .primary-button,
+.sheet-save,
+.summary-card-details-header .primary-button {
+  border-color: var(--bauhaus-yellow) !important;
+  background-color: var(--bauhaus-yellow) !important;
+  color: var(--bauhaus-deep-navy) !important;
+}
+
+.primary-button:hover,
+.topbar .primary-button:hover,
+.sheet-save:hover {
+  border-color: var(--bauhaus-orange) !important;
+  background-color: var(--bauhaus-orange) !important;
+}
+
+.ghost-button,
+.small-action,
+.text-button {
+  border-color: var(--bauhaus-border) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-navy) !important;
+}
+
+.topbar .ghost-button,
+.topbar .sync-status-pill {
+  border-color: #47728e !important;
+  background-color: var(--bauhaus-blue) !important;
+  color: #ffffff !important;
+}
+
+.danger-button,
+.overdue-banner .primary-button,
+.summary-card-details-shell.tone-red .summary-card-details-close {
+  border-color: var(--bauhaus-red) !important;
+  background-color: var(--bauhaus-red) !important;
+  color: #ffffff !important;
+}
+
+.voice-button,
+.tasks-voice-button,
+.salesman-open-button,
+.action-plan-toolbar-button {
+  border-color: var(--bauhaus-blue) !important;
+  background-color: var(--bauhaus-blue) !important;
+  color: #ffffff !important;
+}
+
+.panel-collapse-toggle,
+.toggle-button.active,
+.market-snapshot-tab.active {
+  border-color: var(--bauhaus-deep-navy) !important;
+  background-color: var(--bauhaus-deep-navy) !important;
+  color: #ffffff !important;
+}
+
+button:disabled,
+.button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  border-color: var(--bauhaus-border-light) !important;
+  background-color: var(--bauhaus-muted) !important;
+  color: #7a8592 !important;
+  opacity: 1 !important;
+}
+
+/* Shared fields and validation states. */
+input,
+select,
+textarea,
+.smart-search-field input,
+.activity-filter-shell input,
+.activity-filter-shell select,
+.activity-type-select-wrap select,
+.activity-salesman-filter select {
+  border: 1px solid #b9c5d1 !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+  background-image: none !important;
+  color: var(--bauhaus-text) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6c7785 !important;
+  opacity: 1 !important;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--bauhaus-blue);
+}
+
+body :is(button, [role="button"], a, input, select, textarea, summary, [tabindex]):focus-visible {
+  border-color: var(--bauhaus-blue) !important;
+  outline: 2px solid var(--bauhaus-blue) !important;
+  outline-offset: 1px !important;
+}
+
+.field--required-empty,
+.warning,
+.config-warning {
+  border-color: var(--bauhaus-warning) !important;
+  background-color: var(--bauhaus-light-yellow) !important;
+  color: #6a4308 !important;
+}
+
+.field--filled,
+.success,
+.import-complete {
+  border-color: var(--bauhaus-success) !important;
+  background-color: var(--bauhaus-light-green) !important;
+  color: #294b17 !important;
+}
+
+.error,
+.is-error,
+.lead-ai-error-state,
+.lead-ai-inline-error {
+  border-color: var(--bauhaus-danger) !important;
+  background-color: var(--bauhaus-light-red) !important;
+  color: #681d1d !important;
+}
+
+/* Badges, pills, tabs, and compact status controls. */
+body :is(
+  .chip,
+  .pill,
+  .badge,
+  .tag,
+  .source-badge,
+  .quote-ref-pill,
+  .type-pill,
+  .activity-count-pill,
+  .calendar-range-pill,
+  .drawer-stage-pill,
+  .tasks-context-pill,
+  .online-badge,
+  .lead-table-badge,
+  .summary-details-badge
+) {
+  border: 1px solid var(--bauhaus-border-light) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-muted) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+body :is(.overdue-pill, .is-overdue, .danger, .tone-red, .tone-danger) {
+  border-color: var(--bauhaus-red) !important;
+  background-color: var(--bauhaus-light-red) !important;
+  color: #681d1d !important;
+}
+
+body :is(.is-upcoming, .upcoming, .tone-amber, .tone-warm) {
+  border-color: var(--bauhaus-orange) !important;
+  background-color: var(--bauhaus-light-yellow) !important;
+  color: #68420a !important;
+}
+
+body :is(.tone-green, .tone-success, .complete, .active-customer) {
+  border-color: var(--bauhaus-green) !important;
+  background-color: var(--bauhaus-light-green) !important;
+  color: #294b17 !important;
+}
+
+body :is(.tone-blue, .tone-info, .info) {
+  border-color: var(--bauhaus-blue) !important;
+  background-color: var(--bauhaus-light-blue) !important;
+  color: #123f61 !important;
+}
+
+.drawer-tabs,
+.lead-detail-tabs,
+.mobile-tabs,
+.kanban-mobile-tabs,
+.market-snapshot-tabs {
+  border-bottom: 1px solid var(--bauhaus-border-light) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.drawer-tabs button,
+.lead-detail-tabs button,
+.mobile-tabs button,
+.kanban-stage-tab,
+.market-snapshot-tab,
+.toggle-button {
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-navy) !important;
+}
+
+.drawer-tabs button.active,
+.lead-detail-tabs button.active,
+.mobile-tabs button.active,
+.kanban-stage-tab.active,
+.market-snapshot-tab.active,
+.toggle-button.active {
+  border-bottom: 3px solid var(--bauhaus-blue) !important;
+  background-color: var(--bauhaus-light-blue) !important;
+  color: var(--bauhaus-navy) !important;
+}
+
+/* Alerts and notifications. */
+.overdue-banner {
+  border: 2px solid var(--bauhaus-red) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+.overdue-banner-icon,
+.activity-pin,
+.attention-marker {
+  background-color: var(--bauhaus-red) !important;
+  color: #ffffff !important;
+}
+
+.app-toast,
+.install-banner,
+.notification,
+.alert {
+  border: 2px solid var(--bauhaus-blue) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+.app-toast.error,
+.alert.error {
+  border-color: var(--bauhaus-red) !important;
+}
+
+/* Data tables, lists, progress, and charts. */
+table,
+.lead-table-scroll,
+.admin-task-table-wrap,
+.pipeline-funnel-table-wrap,
+.salesman-plan-table-wrap,
+.import-table-wrap,
+.sp-table-scroll {
+  background-color: var(--bauhaus-surface) !important;
+}
+
+thead,
+th {
+  background-color: var(--bauhaus-muted) !important;
+  color: var(--bauhaus-navy) !important;
+}
+
+th {
+  border-bottom: 2px solid var(--bauhaus-border) !important;
+}
+
+td {
+  border-bottom-color: var(--bauhaus-border-light) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+tr:hover td,
+.lead-table-row:hover td {
+  background-color: var(--bauhaus-light-blue) !important;
+}
+
+.tasks-progress-meter,
+.progress-track,
+.pipeline-funnel-track,
+.market-snapshot-bar-track {
+  border-radius: var(--bauhaus-radius-small) !important;
+  background-color: var(--bauhaus-muted) !important;
+}
+
+.tasks-progress-fill,
+.progress-fill {
+  border-radius: var(--bauhaus-radius-small) !important;
+  background-color: var(--bauhaus-green) !important;
+}
+
+.pipeline-funnel-progress,
+.market-snapshot-bar-fill {
+  border-radius: var(--bauhaus-radius-small) !important;
+}
+
+/* Pipeline working surfaces and stage colors. */
+.pipeline-worklist-column,
+.live-lead-table,
+.kanban-panel {
+  border: 2px solid var(--bauhaus-green) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.kanban-column,
+.kanban-card,
+.lead-card {
+  border: 1px solid var(--bauhaus-border-light) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.kanban-column-header {
+  border-bottom: 2px solid var(--bauhaus-border) !important;
+  border-radius: var(--bauhaus-radius) var(--bauhaus-radius) 0 0 !important;
+}
+
+.kanban-column-header.stage-prospect {
+  background-color: var(--bauhaus-light-blue) !important;
+}
+
+.kanban-column-header.stage-qualified {
+  background-color: #e8ddfa !important;
+}
+
+.kanban-column-header.stage-negotiation {
+  background-color: var(--bauhaus-light-yellow) !important;
+}
+
+.kanban-column-header.stage-won {
+  background-color: var(--bauhaus-light-green) !important;
+}
+
+.kanban-column-header.stage-lost {
+  background-color: var(--bauhaus-light-red) !important;
+}
+
+.kanban-column-header :is(h3, span, strong) {
+  color: var(--bauhaus-text) !important;
+}
+
+/* Consistent semantic panel boundaries. */
+.metrics-shell,
+.salesman-simplified-hero,
+.salesman-dashboard-pipeline {
+  border: 2px solid var(--bauhaus-navy) !important;
+}
+
+.market-snapshot-panel,
+.activity-weekly-card,
+.salesman-dashboard-live-leads,
+.drawer-overview-panel--contact,
+.drawer-overview-panel--secondary {
+  border: 2px solid var(--bauhaus-green) !important;
+}
+
+.pipeline-funnel-panel,
+.portfolio-panel,
+.lead-ai-summary-panel,
+.drawer-overview-panel--snapshot,
+.tasks-status-card {
+  border: 2px solid var(--bauhaus-blue) !important;
+}
+
+.needs-attention-panel,
+.attention-flag-card,
+.activity-log-panel,
+.tasks-blockers-card,
+.delete-approval-panel {
+  border: 2px solid var(--bauhaus-red) !important;
+}
+
+.action-plan-panel,
+.drawer-overview-panel--company {
+  border: 2px solid var(--bauhaus-violet) !important;
+}
+
+.salesman-dashboard-top-actions,
+.activity-reminders-panel,
+.drawer-overview-panel--commercial {
+  border: 2px solid var(--bauhaus-orange) !important;
+}
+
+.salesman-dashboard-call-queue {
+  border: 2px solid var(--bauhaus-red) !important;
+}
+
+.salesman-dashboard-first-touch {
+  border: 2px solid var(--bauhaus-green) !important;
+}
+
+.salesman-dashboard-loss-reasons {
+  border: 2px solid var(--bauhaus-violet) !important;
+}
+
+/* AI and lead detail use opaque semantic tints. */
+.lead-ai-card.status,
+.lead-ai-card.intel {
+  border-left: 4px solid var(--bauhaus-blue) !important;
+  background-color: var(--bauhaus-light-blue) !important;
+}
+
+.lead-ai-card.engagement {
+  border-left: 4px solid var(--bauhaus-green) !important;
+  background-color: var(--bauhaus-light-green) !important;
+}
+
+.lead-ai-card.risk {
+  border-left: 4px solid var(--bauhaus-red) !important;
+  background-color: var(--bauhaus-light-red) !important;
+}
+
+.lead-ai-card.action {
+  border-left: 4px solid var(--bauhaus-orange) !important;
+  background-color: var(--bauhaus-light-yellow) !important;
+}
+
+.lead-ai-card.neutral,
+.lead-ai-card:not(.status):not(.intel):not(.engagement):not(.risk):not(.action) {
+  border-left: 4px solid #7d8792 !important;
+  background-color: var(--bauhaus-muted) !important;
+}
+
+.lead-ai-card :is(h3, p, li, span, strong) {
+  color: var(--bauhaus-text) !important;
+}
+
+.lead-detail-page-toolbar,
+.drawer-overview-hero,
+.drawer-header {
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+.lead-detail-page-toolbar :is(h1, h2, h3, p, span, strong, a),
+.drawer-overview-hero :is(h1, h2, h3, p, span, strong, a),
+.drawer-header :is(h1, h2, h3, p, span, strong, a) {
+  color: #ffffff !important;
+}
+
+.drawer-field,
+.drawer-summary-card,
+.meta-box,
+.detail-field,
+.flag-snapshot-grid > * {
+  border: 1px solid var(--bauhaus-border-light) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-muted) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+/* Activity and reminders remain semantic but fully opaque. */
+.activity-feed-item,
+.activity-item,
+.activity-row {
+  border-left: 4px solid var(--bauhaus-border-light) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.activity-feed-item.is-overdue,
+.activity-item.is-overdue,
+.activity-row.is-overdue {
+  border-left-color: var(--bauhaus-red) !important;
+}
+
+.reminder-card.overdue,
+.reminder-card.is-overdue {
+  border-color: var(--bauhaus-red) !important;
+  background-color: var(--bauhaus-light-red) !important;
+  color: #681d1d !important;
+}
+
+.reminder-card.upcoming,
+.reminder-card.is-upcoming {
+  border-color: var(--bauhaus-green) !important;
+  background-color: var(--bauhaus-light-green) !important;
+  color: #294b17 !important;
+}
+
+.activity-day-chip,
+.activity-day-event,
+.activity-quick-link {
+  border: 1px solid var(--bauhaus-border-light) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+/* Weekly report states keep the same validation/completion logic. */
+.tasks-expected-order-card {
+  border-left: 4px solid var(--bauhaus-orange) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.tasks-expected-order-card.is-complete {
+  border-left-color: var(--bauhaus-green) !important;
+}
+
+.tasks-problematic-account-card {
+  border-left: 4px solid var(--bauhaus-red) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.tasks-audit-item,
+.tasks-review-block,
+.tasks-context-pill {
+  background-color: var(--bauhaus-muted) !important;
+}
+
+/* Modals, drawers, popovers, menus, and overlays. */
+dialog,
+.lead-drawer,
+.summary-card-details-shell,
+.quick-log-sheet,
+.ai-action-sheet,
+.smart-search-panel,
+.sidebar-user-dropdown {
+  border: 2px solid var(--bauhaus-border) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-text) !important;
+}
+
+dialog::backdrop {
+  background-color: var(--bauhaus-deep-navy) !important;
+}
+
+.lead-drawer-backdrop,
+.menu-backdrop {
+  background-color: var(--bauhaus-deep-navy) !important;
+}
+
+.summary-card-details-shell.tone-blue .summary-card-details-header {
+  background-color: var(--bauhaus-blue) !important;
+}
+
+.summary-card-details-shell.tone-green .summary-card-details-header {
+  background-color: var(--bauhaus-green) !important;
+}
+
+.summary-card-details-shell.tone-red .summary-card-details-header {
+  background-color: var(--bauhaus-red) !important;
+}
+
+.summary-card-details-shell.tone-amber .summary-card-details-header {
+  background-color: var(--bauhaus-orange) !important;
+}
+
+.summary-card-details-header :is(h2, p, span, strong, small) {
+  color: #ffffff !important;
+}
+
+.tooltip,
+[role="tooltip"] {
+  border: 1px solid var(--bauhaus-border) !important;
+  border-radius: var(--bauhaus-radius-small) !important;
+  background-color: var(--bauhaus-deep-navy) !important;
+  color: #ffffff !important;
+}
+
+button,
+.button,
+.btn,
+[role="button"] {
+  cursor: pointer;
+}
+
+button:active:not(:disabled),
+.button:active:not([aria-disabled="true"]),
+.btn:active:not(:disabled),
+[role="button"]:active:not([aria-disabled="true"]) {
+  transform: translate(1px, 1px) !important;
+}
+
+button:disabled,
+.button[aria-disabled="true"],
+.btn:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Loading, empty, and error states stay readable and structurally clear. */
+.empty-state,
+.table-empty-state,
+.lead-table-empty,
+.kanban-empty,
+.pipeline-funnel-empty,
+.activity-loading,
+.ai-loading,
+.drawer-skeleton {
+  border: 1px dashed var(--bauhaus-border-light) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-muted) !important;
+  color: var(--bauhaus-text-muted) !important;
+}
+
+.empty-state strong,
+.table-empty-state strong,
+.pipeline-funnel-empty strong {
+  color: var(--bauhaus-text) !important;
+}
+
+/* Sign-in is part of the same product, with no alternate glass theme. */
+.auth-screen {
+  background-color: var(--bauhaus-background) !important;
+}
+
+.auth-shell {
+  border: 2px solid var(--bauhaus-border) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.auth-hero {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+.auth-hero :is(h1, h2, h3, p, strong, span, em) {
+  color: #ffffff !important;
+}
+
+.auth-card {
+  border: 0 !important;
+  border-left: 2px solid var(--bauhaus-border) !important;
+  border-radius: 0 !important;
+  background-color: var(--bauhaus-surface) !important;
+}
+
+.auth-hero-kicker,
+.auth-form-kicker,
+.auth-stats article {
+  border: 1px solid var(--bauhaus-yellow) !important;
+  border-radius: var(--bauhaus-radius) !important;
+  background-color: var(--bauhaus-navy) !important;
+  color: #ffffff !important;
+}
+
+/* Preserve responsive behavior while keeping surfaces flat. */
+@media (max-width: 1024px) {
+  .sidebar {
+    border-right-width: 0 !important;
+    border-bottom: 2px solid var(--bauhaus-blue) !important;
+  }
+
+  .topbar {
+    border-radius: var(--bauhaus-radius) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar,
+  .panel,
+  .view-panel,
+  dialog,
+  .lead-drawer,
+  .auth-shell {
+    border-radius: var(--bauhaus-radius) !important;
+  }
+
+  .auth-card {
+    border-top: 2px solid var(--bauhaus-border) !important;
+    border-left: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Final legacy-style neutralizers: these selectors previously retained alpha
+   surfaces or gradients after the shared migration. */
+.sidebar-tools-trigger {
+  background: var(--bauhaus-deep-navy) !important;
+  border-color: #2f5068 !important;
+}
+
+.pipeline-funnel-stage,
+.pipeline-funnel-stage.contacted,
+.pipeline-funnel-stage.open {
+  background: var(--bauhaus-surface) !important;
+}
+
+.pipeline-funnel-fill,
+.pipeline-funnel-fill.contacted,
+.pipeline-funnel-fill.open,
+.ghost-button {
+  background-image: none !important;
+}
+
+.pipeline-funnel-fill.contacted {
+  background-color: var(--bauhaus-blue) !important;
+}
+
+.pipeline-funnel-fill.open {
+  background-color: var(--bauhaus-orange) !important;
+}
+
+/* Semantic metric tiles stay solid: the color fill is their boundary. */
+.metrics > article,
+.dashboard-overview-section .metric-card,
+[data-summary-card] {
+  border: 0 !important;
+  color: #ffffff !important;
+}
+
+.metric-open,
+.metric-card--info,
+[data-summary-card="openPipeline"] {
+  background: var(--bauhaus-blue) !important;
+}
+
+.metric-active,
+.metric-card--success,
+[data-summary-card="activeCustomers"] {
+  background: var(--bauhaus-green) !important;
+}
+
+.metric-risk,
+.metric-card--danger,
+[data-summary-card="atRisk"] {
+  background: var(--bauhaus-red) !important;
+}
+
+.metric-due,
+.metric-card--warning,
+[data-summary-card="tasksDue"] {
+  background: var(--bauhaus-orange) !important;
+}
+
+.metrics > article span,
+.metrics > article strong,
+.metrics > article small,
+[data-summary-card] span,
+[data-summary-card] strong,
+[data-summary-card] small {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+/* Activity and sales-team legacy sheets previously added glossy gradients and
+   alpha-only utility surfaces. Keep their meaning, but render them as flat UI. */
+.activity-dashboard,
+.activity-weekly-log {
+  background: var(--bauhaus-background) !important;
+  background-image: none !important;
+}
+
+.activity-dashboard .timeline-divider span,
+.activity-dashboard .small-action,
+.activity-type-icon,
+.calendar-link.icon-only {
+  background: var(--bauhaus-surface) !important;
+  background-image: none !important;
+  border-color: var(--bauhaus-border-light) !important;
+}
+
+.activity-type-icon,
+.calendar-link.icon-only {
+  background-color: var(--bauhaus-muted) !important;
+}
+
+.sp-state-badge {
+  background: var(--bauhaus-light-yellow) !important;
+  border: 1px solid var(--bauhaus-orange) !important;
+  color: #6e4a16 !important;
+}

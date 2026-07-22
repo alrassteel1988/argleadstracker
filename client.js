@@ -5386,7 +5386,7 @@ function renderPerformanceChart(rows) {
           }
         },
         y: {
-          grid: { color: "rgba(148,163,184,0.22)" },
+          grid: { color: "#D6DEE6" },
           ticks: { font: { size: 8, weight: "600" }, color: "#64748B", stepSize: 1, precision: 0 },
           beginAtZero: true
         }
@@ -5670,18 +5670,17 @@ function marketSnapshotLeads() {
 }
 
 const MARKET_SNAPSHOT_BAR_COLORS = [
-  { solid: "#1D9E75", rgb: "29, 158, 117" },
-  { solid: "#2E6DA4", rgb: "46, 109, 164" },
-  { solid: "#D68A2C", rgb: "214, 138, 44" },
-  { solid: "#7F77DD", rgb: "127, 119, 221" }
+  { solid: "#1D9E75", muted: ["#72BDA5", "#A8D8C8"] },
+  { solid: "#2E6DA4", muted: ["#79A6CA", "#ADC9DF"] },
+  { solid: "#D68A2C", muted: ["#E7B46D", "#F0D09F"] },
+  { solid: "#7F77DD", muted: ["#A9A3E9", "#CCC8F2"] }
 ];
 
 function marketSnapshotBarColor(index) {
   const base = MARKET_SNAPSHOT_BAR_COLORS[index % MARKET_SNAPSHOT_BAR_COLORS.length];
   if (index < MARKET_SNAPSHOT_BAR_COLORS.length) return base.solid;
   const mutedCycle = Math.floor(index / MARKET_SNAPSHOT_BAR_COLORS.length) - 1;
-  const opacity = Math.max(0.36, 0.68 - (mutedCycle * 0.12));
-  return `rgba(${base.rgb}, ${opacity.toFixed(2)})`;
+  return base.muted[Math.min(mutedCycle, base.muted.length - 1)];
 }
 
 function renderSnapshotBars(target, entries, dimensionLabel) {
