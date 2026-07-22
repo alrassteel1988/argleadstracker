@@ -7,6 +7,7 @@ const css = fs.readFileSync(path.join(root, "tasks-bauhaus-flat.css"), "utf8");
 const client = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+const vercelConfig = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
 const sharedStyleIndex = html.indexOf('href="styles.css');
 const leadStyleIndex = html.indexOf('href="lead-detail-readability.css');
@@ -15,6 +16,8 @@ assert.ok(sharedStyleIndex >= 0, "Shared stylesheet must be linked");
 assert.ok(leadStyleIndex > sharedStyleIndex, "Lead Detail overrides must load after shared styles");
 assert.ok(tasksStyleIndex > leadStyleIndex, "Tasks Bauhaus overrides must load last");
 assert.match(serviceWorker, /"\/tasks-bauhaus-flat\.css"/, "Tasks Bauhaus stylesheet must be cached for the PWA shell");
+assert.match(vercelConfig, /"src": "tasks-bauhaus-flat\.css"/, "Vercel must build the Tasks Bauhaus stylesheet as a static asset");
+assert.match(vercelConfig, /"src": "\/tasks-bauhaus-flat\.css", "dest": "\/tasks-bauhaus-flat\.css"/, "Vercel must route the Tasks Bauhaus stylesheet directly");
 
 assert.match(css, /body\.tasks-mode:not\(\.admin-tasks-mode\)/, "Bauhaus styling must be scoped to the Salesman Tasks page");
 assert.doesNotMatch(css, /body\.tasks-mode\.admin-tasks-mode/, "Admin Tasks review must not receive Salesman-only styling");
