@@ -25094,6 +25094,39 @@ body.activity-admin-mode .activity-shortcut-chips button.active {
   color: #fff;
 }
 
+/* Admin Activity: align calendar and reminder caps with the page header. */
+body.activity-admin-mode .activity-panel-cap--teal,
+body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap--amber {
+  --activity-cap-color: #1b4b6b;
+  background-color: #1b4b6b;
+  background-image: none;
+}
+
+body.activity-admin-mode .activity-panel-cap--teal h2,
+body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap--amber h2 {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+body.activity-admin-mode .activity-panel-cap--teal .activity-weekly-subheading,
+body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap--amber > div > span {
+  color: #fff;
+  font-size: 12px;
+  opacity: 1;
+}
+
+body.activity-admin-mode .activity-panel-cap--teal .calendar-range-pill {
+  background: #fff;
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+body.activity-admin-mode .activity-panel-cap--teal .calendar-nav-button {
+  background: #fff;
+  color: #1a1a1a;
+}
+
 body.activity-mode .activity-weekly-card .activity-day-chip,
 body.activity-mode .activity-weekly-card .activity-day-chip strong,
 body.activity-mode .activity-weekly-card .activity-day-chip span {
