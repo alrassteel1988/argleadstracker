@@ -1,10 +1,11 @@
-const CACHE_VERSION = "arg-pwa-v16-lead-detail-navy-tabs";
+const CACHE_VERSION = "arg-pwa-v19-tasks-bauhaus-flat";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
   "/salesman-dashboard-live-leads.css",
   "/lead-detail-readability.css",
+  "/tasks-bauhaus-flat.css",
   "/client.js",
   "/favicon.svg",
   "/manifest.json",

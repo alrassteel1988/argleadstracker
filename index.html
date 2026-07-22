@@ -15,9 +15,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=lead-detail-navy-tabs-1">
+  <link rel="stylesheet" href="styles.css?v=dashboard-summary-modals-1">
   <link rel="stylesheet" href="salesman-dashboard-live-leads.css?v=4">
-  <link rel="stylesheet" href="lead-detail-readability.css?v=3">
+  <link rel="stylesheet" href="lead-detail-readability.css?v=4-bauhaus-flat">
+  <link rel="stylesheet" href="tasks-bauhaus-flat.css?v=1">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -177,21 +178,22 @@
             </div>
           </div>
           <section class="metrics" id="metricsPanel" aria-label="CRM metrics">
-            <article class="metric-open">
+            <article class="metric-open" data-summary-card="openPipeline">
               <span>Open Pipeline</span>
-              <strong id="metricValue">AED 0</strong>
+              <strong id="metricValue">0</strong>
+              <small id="metricValueSub">AED 0 pipeline value</small>
             </article>
-            <article class="metric-active">
+            <article class="metric-active" data-summary-card="activeCustomers">
               <span>Active Customers</span>
               <strong id="metricTotal">0</strong>
               <small id="metricTotalSub">of 0</small>
             </article>
-            <article class="metric-risk">
+            <article class="metric-risk" data-summary-card="atRisk">
               <span>At Risk</span>
               <strong id="metricHot">0</strong>
               <small>needs attention</small>
             </article>
-            <article class="metric-due">
+            <article class="metric-due" data-summary-card="tasksDue">
               <span>Tasks Due</span>
               <strong id="metricDue">0</strong>
               <small id="metricDueSub">0 overdue</small>
@@ -741,6 +743,26 @@
               <div class="salesman-leads-list" id="salesmanLeadsList"></div>
             </div>
           </form>
+        </dialog>
+
+        <dialog class="summary-card-details-dialog" id="summaryCardDetailsDialog" aria-modal="true" aria-labelledby="summaryCardDetailsTitle" aria-describedby="summaryCardDetailsDescription">
+          <section class="summary-card-details-shell" id="summaryCardDetailsShell">
+            <header class="summary-card-details-header">
+              <div>
+                <span class="summary-card-details-kicker">Dashboard details</span>
+                <h2 id="summaryCardDetailsTitle">Summary details</h2>
+                <p id="summaryCardDetailsDescription">Complete records represented by this dashboard card.</p>
+              </div>
+              <div class="summary-card-details-header-actions">
+                <strong id="summaryCardDetailsCount">0 records</strong>
+                <button class="summary-card-details-close" id="closeSummaryCardDetails" type="button" aria-label="Close summary details">&times;</button>
+              </div>
+            </header>
+            <div class="summary-card-details-filters" id="summaryCardDetailsFilters" aria-label="Summary record filters"></div>
+            <div class="summary-card-details-status" id="summaryCardDetailsStatus" aria-live="polite"></div>
+            <div class="summary-card-details-table-wrap" id="summaryCardDetailsTableWrap"></div>
+            <footer class="summary-card-details-pagination" id="summaryCardDetailsPagination"></footer>
+          </section>
         </dialog>
 
         <section class="view-panel hidden" id="tasksView">
@@ -1426,7 +1448,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="client.js?v=weekly-required-field-states-2"></script>
+  <script src="client.js?v=dashboard-summary-modals-1"></script>
   </body>
 </html>
 

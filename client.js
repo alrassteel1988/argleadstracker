@@ -128,7 +128,9 @@ const state = {
   lostReasonRequest: null,
   currentUser: null,
   leadsLoaded: false,
-  leadsLoading: false
+  leadsLoading: false,
+  leadsError: "",
+  summaryCardDetails: { type: "", search: "", filters: {}, page: 1, pageSize: 12, trigger: null }
 };
 
 const ADMIN_DASHBOARD_COLLAPSIBLES = [
@@ -214,6 +216,7 @@ const els = {
   metricTotal: document.querySelector("#metricTotal"),
   metricTotalSub: document.querySelector("#metricTotalSub"),
   metricValue: document.querySelector("#metricValue"),
+  metricValueSub: document.querySelector("#metricValueSub"),
   metricHot: document.querySelector("#metricHot"),
   metricDue: document.querySelector("#metricDue"),
   metricDueSub: document.querySelector("#metricDueSub"),
@@ -227,6 +230,16 @@ const els = {
   adminDashboardTriageRow: document.querySelector("#adminDashboardTriageRow"),
   adminDashboardAnalyticsRow: document.querySelector("#adminDashboardAnalyticsRow"),
   metricsPanel: document.querySelector("#metricsPanel"),
+  summaryCardDetailsDialog: document.querySelector("#summaryCardDetailsDialog"),
+  summaryCardDetailsShell: document.querySelector("#summaryCardDetailsShell"),
+  summaryCardDetailsTitle: document.querySelector("#summaryCardDetailsTitle"),
+  summaryCardDetailsDescription: document.querySelector("#summaryCardDetailsDescription"),
+  summaryCardDetailsCount: document.querySelector("#summaryCardDetailsCount"),
+  summaryCardDetailsFilters: document.querySelector("#summaryCardDetailsFilters"),
+  summaryCardDetailsStatus: document.querySelector("#summaryCardDetailsStatus"),
+  summaryCardDetailsTableWrap: document.querySelector("#summaryCardDetailsTableWrap"),
+  summaryCardDetailsPagination: document.querySelector("#summaryCardDetailsPagination"),
+  closeSummaryCardDetails: document.querySelector("#closeSummaryCardDetails"),
   dashboardView: document.querySelector("#dashboardView"),
   salesmanSimplifiedDashboard: document.querySelector("#salesmanSimplifiedDashboard"),
   salesmanSimplifiedGreeting: document.querySelector("#salesmanSimplifiedGreeting"),
@@ -4055,25 +4068,345 @@ function overdueBreakdown(items) {
   }, {});
 }
 
+function dashboardLeadIsAtRisk(lead) {
+  return lead.health?.label === "RED"
+    || normalizeStageKey(lead.stage) === "LOST"
+    || lead.priority === "At Risk";
+}
+
+function dashboardSummaryDatasets() {
+  const openPipeline = state.leads.filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage)));
+  const activeCustomers = state.leads.filter(lead => normalizeStageKey(lead.stage) === "WON");
+  const atRisk = state.leads.filter(dashboardLeadIsAtRisk);
+  const tasksDue = state.leads
+    .filter(isOverdue)
+    .sort((a, b) => String(a.next_action_date || "").localeCompare(String(b.next_action_date || "")));
+  return { openPipeline, activeCustomers, atRisk, tasksDue };
+}
+
+function summaryDetailsDateLabel(value) {
+  const raw = String(value || "").slice(0, 10);
+  if (!raw) return "Not set";
+  const parsed = new Date(`${raw}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString("en-AE", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function summaryDetailsRiskReason(lead) {
+  const reasons = [];
+  if (lead.health?.label === "RED") reasons.push(lead.health?.reason || "Relationship health is red");
+  if (normalizeStageKey(lead.stage) === "LOST") reasons.push("Lost opportunity");
+  if (lead.priority === "At Risk") reasons.push("Priority marked At Risk");
+  return [...new Set(reasons)].join("; ") || "Needs attention";
+}
+
+function summaryDetailsRecord(lead, type) {
+  const dueDate = String(lead.next_action_date || "").slice(0, 10);
+  const overdueDays = dueDate && dueDate < today() ? daysOverdue(dueDate) : 0;
+  const inactiveDays = lead.last_activity ? Math.max(0, daysSince(lead.last_activity)) : null;
+  const priority = String(lead.priority || lead.health?.label || "Not set").trim() || "Not set";
+  const nextAction = lead.next_action ? normalizeNextActionPlan(lead.next_action) : "Not set";
+  const riskReason = summaryDetailsRiskReason(lead);
+  const riskAge = overdueDays > 0
+    ? `${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue`
+    : inactiveDays === null ? "No activity recorded" : `${inactiveDays} day${inactiveDays === 1 ? "" : "s"} inactive`;
+  const taskStatus = dueDate < today() ? "Overdue" : "Due today";
+  const record = {
+    id: lead.id,
+    leadId: lead.id,
+    company: lead.company_name || "Unnamed company",
+    opportunity: lead.product_interest || lead.products_services_remarks || lead.industry || "Not added",
+    pipelineValue: Number(lead.estimated_value || 0),
+    salesman: lead.assigned_salesman || "Unassigned",
+    stage: stageDisplayLabel(lead.stage || "NEW"),
+    stageKey: normalizeStageKey(lead.stage || "NEW"),
+    priority,
+    nextAction,
+    dueDate,
+    territory: lead.territory || inferEmirate(lead) || "Not set",
+    mainContact: lead.contact_person || "Not added",
+    lastActivity: lead.last_activity ? daysAgoLabel(lead.last_activity) : "No activity yet",
+    customerStatus: "Active",
+    riskReason,
+    riskAge,
+    riskAgeDays: overdueDays || inactiveDays || 0,
+    highRisk: lead.health?.label === "RED" || lead.priority === "At Risk" || overdueDays >= 35,
+    task: nextAction,
+    taskType: normalizeActivityPurpose(lead.activity_purpose || lead.next_action || "Follow-up"),
+    daysOverdue: overdueDays,
+    taskStatus
+  };
+  record.searchText = Object.values(record).filter(value => typeof value === "string").join(" ").toLowerCase();
+  record.type = type;
+  return record;
+}
+
+function summaryDetailsStageTone(stageKey) {
+  if (stageKey === "WON") return "green";
+  if (stageKey === "LOST") return "red";
+  if (stageKey === "NEGOTIATION") return "amber";
+  return "blue";
+}
+
+function summaryDetailsPriorityTone(priority) {
+  const normalized = String(priority || "").toLowerCase();
+  if (/(red|hot|high|at risk|urgent)/.test(normalized)) return "red";
+  if (/(amber|warm|medium|orange)/.test(normalized)) return "amber";
+  if (/(green|cold|low)/.test(normalized)) return "green";
+  return "neutral";
+}
+
+function summaryDetailsBadge(value, tone = "neutral") {
+  return `<span class="summary-details-badge tone-${tone}">${escapeHtml(value || "Not set")}</span>`;
+}
+
+function summaryCardDetailsConfig(type) {
+  const datasets = dashboardSummaryDatasets();
+  const commonFilters = {
+    salesman: { key: "salesman", label: "Salesman" },
+    stage: { key: "stage", label: "Stage" },
+    priority: { key: "priority", label: "Priority" },
+    territory: { key: "territory", label: "Territory" }
+  };
+  const configurations = {
+    openPipeline: {
+      title: "Open Pipeline",
+      description: "Open opportunities currently moving through the pipeline.",
+      tone: "blue",
+      searchPlaceholder: "Search company or opportunity",
+      leads: datasets.openPipeline,
+      filters: [commonFilters.salesman, commonFilters.stage, commonFilters.priority, commonFilters.territory],
+      columns: [
+        { key: "company", label: "Company", className: "is-company" },
+        { key: "opportunity", label: "Opportunity or product" },
+        { key: "pipelineValue", label: "Pipeline value", render: record => formatAED(record.pipelineValue) },
+        { key: "salesman", label: "Salesman" },
+        { key: "stage", label: "Stage", render: record => summaryDetailsBadge(record.stage, summaryDetailsStageTone(record.stageKey)) },
+        { key: "priority", label: "Priority", render: record => summaryDetailsBadge(record.priority, summaryDetailsPriorityTone(record.priority)) },
+        { key: "nextAction", label: "Next action", className: "is-action" },
+        { key: "dueDate", label: "Due date", render: record => summaryDetailsDateLabel(record.dueDate) }
+      ]
+    },
+    activeCustomers: {
+      title: "Active Customers",
+      description: "Customers currently classified as active from won opportunities.",
+      tone: "green",
+      searchPlaceholder: "Search company or main contact",
+      leads: datasets.activeCustomers,
+      filters: [commonFilters.salesman, commonFilters.territory],
+      columns: [
+        { key: "company", label: "Company", className: "is-company" },
+        { key: "mainContact", label: "Main contact" },
+        { key: "salesman", label: "Salesman" },
+        { key: "territory", label: "Territory" },
+        { key: "lastActivity", label: "Last activity" },
+        { key: "nextAction", label: "Next action", className: "is-action" },
+        { key: "customerStatus", label: "Customer status", render: record => summaryDetailsBadge(record.customerStatus, "green") }
+      ]
+    },
+    atRisk: {
+      title: "At Risk",
+      description: "Records matching the dashboard's existing red-health, lost, or At Risk priority rule.",
+      tone: "red",
+      searchPlaceholder: "Search company or risk reason",
+      leads: datasets.atRisk,
+      filters: [commonFilters.salesman, commonFilters.priority, commonFilters.stage, commonFilters.territory, { key: "riskReason", label: "Risk reason" }],
+      columns: [
+        { key: "company", label: "Company", className: "is-company" },
+        { key: "salesman", label: "Salesman" },
+        { key: "riskReason", label: "Risk reason", className: "is-risk" },
+        { key: "riskAge", label: "Days inactive or overdue", render: record => summaryDetailsBadge(record.riskAge, record.highRisk ? "red" : "amber") },
+        { key: "priority", label: "Priority", render: record => summaryDetailsBadge(record.priority, summaryDetailsPriorityTone(record.priority)) },
+        { key: "stage", label: "Current stage", render: record => summaryDetailsBadge(record.stage, summaryDetailsStageTone(record.stageKey)) },
+        { key: "nextAction", label: "Next action", className: "is-action" },
+        { key: "dueDate", label: "Due date", render: record => summaryDetailsDateLabel(record.dueDate) }
+      ]
+    },
+    tasksDue: {
+      title: "Tasks Due",
+      description: "Open lead next actions due today or earlier, with overdue work shown first.",
+      tone: "amber",
+      searchPlaceholder: "Search task or company",
+      leads: datasets.tasksDue,
+      filters: [commonFilters.salesman, { key: "taskType", label: "Task type" }, commonFilters.priority, { key: "dueDate", label: "Due date", type: "date" }, { key: "taskStatus", label: "Status" }],
+      columns: [
+        { key: "task", label: "Task", className: "is-action" },
+        { key: "company", label: "Company", className: "is-company" },
+        { key: "salesman", label: "Assigned salesman" },
+        { key: "taskType", label: "Task type" },
+        { key: "priority", label: "Priority", render: record => summaryDetailsBadge(record.priority, summaryDetailsPriorityTone(record.priority)) },
+        { key: "dueDate", label: "Due date", render: record => summaryDetailsDateLabel(record.dueDate) },
+        { key: "daysOverdue", label: "Days overdue", render: record => record.daysOverdue ? summaryDetailsBadge(`${record.daysOverdue} day${record.daysOverdue === 1 ? "" : "s"}`, record.daysOverdue >= 35 ? "red" : "amber") : summaryDetailsBadge("Due today", "neutral") },
+        { key: "taskStatus", label: "Status", render: record => summaryDetailsBadge(record.taskStatus, record.taskStatus === "Overdue" ? "red" : "amber") }
+      ]
+    }
+  };
+  const config = configurations[type];
+  if (!config) return null;
+  config.records = config.leads.map(lead => summaryDetailsRecord(lead, type));
+  return config;
+}
+
+function summaryDetailsFilterOptions(records, key) {
+  return [...new Set(records.map(record => String(record[key] || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function summaryDetailsFiltersMarkup(config) {
+  const selected = state.summaryCardDetails.filters || {};
+  const controls = config.filters.map(filter => {
+    if (filter.type === "date") {
+      return `<label><span>${escapeHtml(filter.label)}</span><input type="date" data-summary-details-filter="${escapeHtml(filter.key)}" value="${escapeHtml(selected[filter.key] || "")}"></label>`;
+    }
+    const options = summaryDetailsFilterOptions(config.records, filter.key);
+    return `<label><span>${escapeHtml(filter.label)}</span><select data-summary-details-filter="${escapeHtml(filter.key)}"><option value="">All ${escapeHtml(filter.label.toLowerCase())}</option>${options.map(option => `<option value="${escapeHtml(option)}" ${selected[filter.key] === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
+  }).join("");
+  return `
+    <label class="summary-card-details-search"><span>Search</span><input type="search" data-summary-details-search value="${escapeHtml(state.summaryCardDetails.search || "")}" placeholder="${escapeHtml(config.searchPlaceholder)}" autocomplete="off"></label>
+    ${controls}
+    <button class="summary-card-details-reset" type="button" data-summary-details-reset>Reset filters</button>
+  `;
+}
+
+function summaryDetailsFilteredRecords(config) {
+  const query = String(state.summaryCardDetails.search || "").trim().toLowerCase();
+  const filters = state.summaryCardDetails.filters || {};
+  return config.records.filter(record => {
+    if (query && !record.searchText.includes(query)) return false;
+    return config.filters.every(filter => {
+      const expected = String(filters[filter.key] || "").trim().toLowerCase();
+      if (!expected) return true;
+      return String(record[filter.key] || "").trim().toLowerCase() === expected;
+    });
+  });
+}
+
+function renderSummaryCardDetailsResults() {
+  const config = summaryCardDetailsConfig(state.summaryCardDetails.type);
+  if (!config || !els.summaryCardDetailsTableWrap || !els.summaryCardDetailsStatus || !els.summaryCardDetailsPagination) return;
+  els.summaryCardDetailsTableWrap.setAttribute("aria-busy", state.leadsLoading ? "true" : "false");
+  if (state.leadsLoading && !state.leadsLoaded) {
+    els.summaryCardDetailsStatus.textContent = "Loading dashboard records...";
+    els.summaryCardDetailsTableWrap.innerHTML = `<div class="summary-card-details-state"><strong>Loading records</strong><span>Please wait while the CRM data is loaded.</span></div>`;
+    els.summaryCardDetailsPagination.innerHTML = "";
+    return;
+  }
+  if (state.leadsError) {
+    els.summaryCardDetailsStatus.textContent = "Dashboard records could not be loaded.";
+    els.summaryCardDetailsTableWrap.innerHTML = `<div class="summary-card-details-state is-error"><strong>Unable to load records</strong><span>${escapeHtml(state.leadsError)}</span></div>`;
+    els.summaryCardDetailsPagination.innerHTML = "";
+    return;
+  }
+  const records = summaryDetailsFilteredRecords(config);
+  const pageSize = state.summaryCardDetails.pageSize;
+  const pageCount = Math.max(1, Math.ceil(records.length / pageSize));
+  state.summaryCardDetails.page = Math.min(Math.max(1, state.summaryCardDetails.page), pageCount);
+  const start = (state.summaryCardDetails.page - 1) * pageSize;
+  const visible = records.slice(start, start + pageSize);
+  els.summaryCardDetailsStatus.textContent = `${records.length} of ${config.records.length} record${config.records.length === 1 ? "" : "s"} shown`;
+  if (!visible.length) {
+    els.summaryCardDetailsTableWrap.innerHTML = `<div class="summary-card-details-state"><strong>No matching records</strong><span>Adjust the search or filters to see more results.</span></div>`;
+  } else {
+    els.summaryCardDetailsTableWrap.innerHTML = `
+      <table class="summary-card-details-table">
+        <thead><tr>${config.columns.map(column => `<th scope="col">${escapeHtml(column.label)}</th>`).join("")}</tr></thead>
+        <tbody>${visible.map(record => `<tr class="summary-card-details-row ${record.highRisk ? "is-high-risk" : ""}" data-summary-details-lead="${escapeHtml(record.leadId)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(record.company)}">${config.columns.map(column => `<td data-label="${escapeHtml(column.label)}" class="${escapeHtml(column.className || "")}">${column.render ? column.render(record) : escapeHtml(record[column.key] || "Not set")}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    `;
+  }
+  els.summaryCardDetailsPagination.innerHTML = `
+    <span>Page ${state.summaryCardDetails.page} of ${pageCount}</span>
+    <div>
+      <button type="button" data-summary-details-page="${state.summaryCardDetails.page - 1}" ${state.summaryCardDetails.page <= 1 ? "disabled" : ""}>Previous</button>
+      <button type="button" data-summary-details-page="${state.summaryCardDetails.page + 1}" ${state.summaryCardDetails.page >= pageCount ? "disabled" : ""}>Next</button>
+    </div>
+  `;
+}
+
+function renderSummaryCardDetailsModal() {
+  const config = summaryCardDetailsConfig(state.summaryCardDetails.type);
+  if (!config || !els.summaryCardDetailsShell) return;
+  els.summaryCardDetailsShell.className = `summary-card-details-shell tone-${config.tone}`;
+  els.summaryCardDetailsTitle.textContent = config.title;
+  els.summaryCardDetailsDescription.textContent = config.description;
+  const overdueCount = config.records.filter(record => record.taskStatus === "Overdue").length;
+  els.summaryCardDetailsCount.textContent = config.tone === "amber"
+    ? `${config.records.length} due - ${overdueCount} overdue`
+    : `${config.records.length} record${config.records.length === 1 ? "" : "s"}`;
+  els.summaryCardDetailsFilters.innerHTML = summaryDetailsFiltersMarkup(config);
+  renderSummaryCardDetailsResults();
+}
+
+function openSummaryCardDetails(type, trigger) {
+  if (currentView !== "dashboard" || !isPrivilegedDashboardRole() || !summaryCardDetailsConfig(type)) return;
+  state.summaryCardDetails = { type, search: "", filters: {}, page: 1, pageSize: 12, trigger };
+  renderSummaryCardDetailsModal();
+  document.body.classList.add("summary-details-modal-open");
+  if (typeof els.summaryCardDetailsDialog?.showModal === "function") els.summaryCardDetailsDialog.showModal();
+  else els.summaryCardDetailsDialog?.setAttribute("open", "");
+  requestAnimationFrame(() => els.closeSummaryCardDetails?.focus());
+}
+
+function cleanupSummaryCardDetailsModal({ restoreFocus = true } = {}) {
+  document.body.classList.remove("summary-details-modal-open");
+  const trigger = state.summaryCardDetails.trigger;
+  state.summaryCardDetails.trigger = null;
+  if (restoreFocus && trigger?.isConnected) trigger.focus();
+}
+
+function closeSummaryCardDetails({ restoreFocus = true } = {}) {
+  if (!els.summaryCardDetailsDialog?.open) return;
+  if (!restoreFocus) state.summaryCardDetails.trigger = null;
+  els.summaryCardDetailsDialog.close();
+}
+
+function trapSummaryCardDetailsFocus(event) {
+  if (event.key !== "Tab" || !els.summaryCardDetailsDialog?.open) return;
+  const focusable = [...els.summaryCardDetailsDialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 function renderMetrics() {
-  const due = state.leads.filter(isOverdue).length;
-  const overdue = overdueItems().length;
-  const openValue = state.leads
-    .filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage)))
+  const datasets = dashboardSummaryDatasets();
+  const openValue = datasets.openPipeline
     .reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
-  const active = state.leads.filter(lead => normalizeStageKey(lead.stage) === "WON").length;
-  const atRisk = state.leads.filter(lead => lead.health?.label === "RED" || normalizeStageKey(lead.stage) === "LOST" || lead.priority === "At Risk").length;
+  const overdue = datasets.tasksDue.filter(lead => String(lead.next_action_date || "").slice(0, 10) < today()).length;
   renderHeaderSummary();
-  els.metricTotal.textContent = active;
+  els.metricTotal.textContent = datasets.activeCustomers.length;
   if (els.metricTotalSub) els.metricTotalSub.textContent = `of ${state.leads.length}`;
-  els.metricValue.textContent = money.format(openValue);
-  els.metricHot.textContent = atRisk;
-  els.metricDue.textContent = due;
+  els.metricValue.textContent = datasets.openPipeline.length;
+  if (els.metricValueSub) els.metricValueSub.textContent = `${money.format(openValue)} pipeline value`;
+  els.metricHot.textContent = datasets.atRisk.length;
+  els.metricDue.textContent = datasets.tasksDue.length;
   if (els.metricDueSub) els.metricDueSub.textContent = `${overdue} overdue`;
   if (els.quickTaskBadge) {
-    els.quickTaskBadge.textContent = due;
-    els.quickTaskBadge.classList.toggle("hidden", due === 0);
+    els.quickTaskBadge.textContent = datasets.tasksDue.length;
+    els.quickTaskBadge.classList.toggle("hidden", datasets.tasksDue.length === 0);
   }
+  const interactive = currentView === "dashboard" && isPrivilegedDashboardRole();
+  els.metricsPanel?.querySelectorAll("[data-summary-card]").forEach(card => {
+    const config = summaryCardDetailsConfig(card.dataset.summaryCard);
+    card.tabIndex = interactive ? 0 : -1;
+    if (interactive) {
+      card.setAttribute("role", "button");
+      card.setAttribute("aria-haspopup", "dialog");
+      card.setAttribute("aria-label", `Open ${config?.title || "summary"} details, ${config?.records.length || 0} records`);
+    } else {
+      card.removeAttribute("role");
+      card.removeAttribute("aria-haspopup");
+      card.removeAttribute("aria-label");
+    }
+  });
 }
 
 function hasLeadContactedActivity(lead) {
@@ -10375,6 +10708,7 @@ function setView(view) {
 
 async function loadLeads() {
   state.leadsLoading = true;
+  state.leadsError = "";
   if (currentView === "pipeline") renderPipelineFunnel();
   try {
     state.leads = await api("/api/leads");
@@ -10397,8 +10731,12 @@ async function loadLeads() {
     if (currentView === "lead" && state.selectedId) {
       loadLeadDetailData(state.selectedId);
     }
+  } catch (error) {
+    state.leadsError = error?.message || "The CRM records could not be loaded.";
+    throw error;
   } finally {
     state.leadsLoading = false;
+    if (els.summaryCardDetailsDialog?.open) renderSummaryCardDetailsResults();
   }
 }
 
@@ -10469,11 +10807,15 @@ async function fetchSalesmanAccounts() {
 }
 
 function showLogin(message = "") {
+  if (els.summaryCardDetailsDialog?.open) els.summaryCardDetailsDialog.close();
+  document.body.classList.remove("summary-details-modal-open");
   state.currentUser = null;
   state.userAccounts = [];
   state.marketNews = { items: [], disabled: false, loading: false, error: "", reason: "", fetched_at: "" };
   state.leadsLoaded = false;
   state.leadsLoading = false;
+  state.leadsError = "";
+  state.summaryCardDetails = { type: "", search: "", filters: {}, page: 1, pageSize: 12, trigger: null };
   state.overduePipelineOnly = false;
   if (overdueRefreshTimer) {
     clearInterval(overdueRefreshTimer);
@@ -10826,6 +11168,80 @@ els.activitySearchClear?.addEventListener("click", () => {
 });
 
 els.activityResetFilters?.addEventListener("click", resetActivityFilters);
+
+els.metricsPanel?.addEventListener("click", event => {
+  const card = event.target.closest("[data-summary-card]");
+  if (!card) return;
+  openSummaryCardDetails(card.dataset.summaryCard, card);
+});
+
+els.metricsPanel?.addEventListener("keydown", event => {
+  const card = event.target.closest("[data-summary-card]");
+  if (!card || !["Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  openSummaryCardDetails(card.dataset.summaryCard, card);
+});
+
+els.closeSummaryCardDetails?.addEventListener("click", () => closeSummaryCardDetails());
+els.summaryCardDetailsDialog?.addEventListener("click", event => {
+  if (event.target === els.summaryCardDetailsDialog) {
+    closeSummaryCardDetails();
+    return;
+  }
+  const reset = event.target.closest("[data-summary-details-reset]");
+  if (reset) {
+    state.summaryCardDetails.search = "";
+    state.summaryCardDetails.filters = {};
+    state.summaryCardDetails.page = 1;
+    renderSummaryCardDetailsModal();
+    requestAnimationFrame(() => els.summaryCardDetailsFilters?.querySelector("[data-summary-details-search]")?.focus());
+    return;
+  }
+  const pageButton = event.target.closest("[data-summary-details-page]");
+  if (pageButton && !pageButton.disabled) {
+    state.summaryCardDetails.page = Number(pageButton.dataset.summaryDetailsPage || 1);
+    renderSummaryCardDetailsResults();
+    els.summaryCardDetailsTableWrap?.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  const row = event.target.closest("[data-summary-details-lead]");
+  if (!row || event.target.closest("a, button, input, select")) return;
+  const leadId = row.dataset.summaryDetailsLead;
+  closeSummaryCardDetails({ restoreFocus: false });
+  openLeadDrawer(leadId);
+  render();
+});
+
+els.summaryCardDetailsDialog?.addEventListener("input", event => {
+  if (!event.target.matches("[data-summary-details-search]")) return;
+  state.summaryCardDetails.search = event.target.value;
+  state.summaryCardDetails.page = 1;
+  renderSummaryCardDetailsResults();
+});
+
+els.summaryCardDetailsDialog?.addEventListener("change", event => {
+  const key = event.target.dataset.summaryDetailsFilter;
+  if (!key) return;
+  state.summaryCardDetails.filters = { ...state.summaryCardDetails.filters, [key]: event.target.value };
+  state.summaryCardDetails.page = 1;
+  renderSummaryCardDetailsResults();
+});
+
+els.summaryCardDetailsDialog?.addEventListener("keydown", event => {
+  const row = event.target.closest("[data-summary-details-lead]");
+  if (row && ["Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    const leadId = row.dataset.summaryDetailsLead;
+    closeSummaryCardDetails({ restoreFocus: false });
+    openLeadDrawer(leadId);
+    render();
+    return;
+  }
+  trapSummaryCardDetailsFocus(event);
+});
+
+els.summaryCardDetailsDialog?.addEventListener("close", () => cleanupSummaryCardDetailsModal());
+
 els.closeSalesmanLeads?.addEventListener("click", closeSalesmanLeadsViewer);
 els.salesmanLeadsDialog?.addEventListener("close", () => {
   state.salesmanLeadsViewer = null;
