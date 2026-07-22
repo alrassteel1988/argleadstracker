@@ -25373,3 +25373,98 @@ body.activity-mode .activity-reminders-panel .reminder-card :is(strong, p, .meta
     overflow-y: auto;
   }
 }
+
+/* Activity: matched opaque work panels with a shared warning-yellow cap. */
+body.activity-mode {
+  --activity-work-panel-yellow: #F5C842;
+}
+
+body.activity-mode .activity-log-panel,
+body.activity-mode .activity-reminders-panel {
+  min-width: 0;
+  background-color: var(--bauhaus-surface);
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.activity-mode .activity-log-panel > .activity-panel-cap,
+body.activity-mode .activity-reminders-panel > .activity-panel-cap {
+  --activity-cap-color: var(--activity-work-panel-yellow);
+  background-color: var(--activity-work-panel-yellow);
+  background-image: none;
+  color: var(--bauhaus-ink);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.activity-mode .activity-log-panel > .activity-panel-cap h2,
+body.activity-mode .activity-log-panel > .activity-panel-cap > div > span:not(.activity-count-pill),
+body.activity-mode .activity-reminders-panel > .activity-panel-cap h2,
+body.activity-mode .activity-reminders-panel > .activity-panel-cap > div > span {
+  color: var(--bauhaus-ink);
+  opacity: 1;
+}
+
+body.activity-mode .activity-log-panel :is(.activity-filter-shell, .activity-feed),
+body.activity-mode .activity-reminders-panel :is(
+  .activity-reminders-filters,
+  #activityReminders,
+  .activity-reminders-links
+) {
+  background-color: var(--bauhaus-surface);
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (min-width: 1280px) {
+  body.activity-mode .activity-secondary-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+}
+
+/* Salesmen analytics: flat Bauhaus header caps for the three comparison panels. */
+body.salesmen-mode {
+  --salesmen-bauhaus-header-blue: #1D4ED8;
+  --salesmen-bauhaus-header-red: #DC2626;
+  --salesmen-bauhaus-header-yellow: #EAB308;
+  --salesmen-bauhaus-header-rule: #111111;
+}
+
+body.salesmen-mode .sp-analysis-row .sp-analysis-header {
+  flex: 0 0 auto;
+  margin: -8px -10px 6px;
+  padding: 7px 10px 6px;
+  border: 0;
+  border-bottom: 2px solid var(--salesmen-bauhaus-header-rule);
+  border-radius: 0;
+  background-image: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.salesmen-mode .sp-analysis-row .sp-analysis-header .sp-section-label {
+  margin: 0;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+body.salesmen-mode .sp-analysis-header--bauhaus-blue {
+  background-color: var(--salesmen-bauhaus-header-blue);
+  color: #FFFFFF;
+}
+
+body.salesmen-mode .sp-analysis-header--bauhaus-red {
+  background-color: var(--salesmen-bauhaus-header-red);
+  color: #FFFFFF;
+}
+
+body.salesmen-mode .sp-analysis-header--bauhaus-yellow {
+  background-color: var(--salesmen-bauhaus-header-yellow);
+  color: var(--salesmen-bauhaus-header-rule);
+}

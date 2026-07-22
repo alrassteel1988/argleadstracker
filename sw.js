@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v12-weekly-required-field-states";
+const CACHE_VERSION = "arg-pwa-v15-salesmen-bauhaus-headers";
 const APP_SHELL = [
   "/",
   "/index.html",
