@@ -1,0 +1,484 @@
+/* Admin Activity readability layer. Keep this scoped so shared CRM layouts stay unchanged. */
+body.activity-mode {
+  --activity-font-caption: 13px;
+  --activity-font-body: 14px;
+  --activity-font-body-lg: 16px;
+  --activity-font-heading-sm: 17px;
+  --activity-font-heading-md: 20px;
+  --activity-text-primary: #172b4d;
+  --activity-text-secondary: #475569;
+  --activity-text-muted: #5f6b7a;
+  --activity-text-link: #0757b5;
+  --activity-focus: #1f6aa5;
+  --activity-upcoming-text: #1e3210;
+  --activity-overdue-text: #4a1414;
+  color: var(--activity-text-primary);
+  font-size: var(--activity-font-body);
+  line-height: 1.5;
+}
+
+body.activity-mode #activityView,
+body.activity-mode #activityView :is(p, span, small, strong, label, button, input, select) {
+  line-height: 1.45;
+}
+
+body.activity-mode .topbar h1 {
+  font-size: clamp(20px, 1.4vw, 24px) !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+}
+
+body.activity-mode .topbar-subtitle {
+  font-size: var(--activity-font-caption) !important;
+  line-height: 1.45 !important;
+}
+
+/* The alert and metric row are the first scan targets. */
+body.activity-mode .overdue-banner-copy strong {
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-body) !important;
+  font-weight: 700 !important;
+}
+
+body.activity-mode .overdue-banner-copy :is(div, span) {
+  color: var(--activity-text-secondary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 600 !important;
+}
+
+body.activity-mode .overdue-banner :is(button, .overdue-owner-chip) {
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+}
+
+body.activity-mode .activity-kpi-card {
+  min-height: 72px;
+  padding: 6px 12px !important;
+}
+
+body.activity-mode .activity-kpi-card > span {
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+}
+
+body.activity-mode .activity-kpi-card > strong {
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  line-height: 1.05 !important;
+}
+
+body.activity-mode .activity-kpi-card > small {
+  color: #ffffff !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  opacity: 1 !important;
+}
+
+/* Panel headings stay on their established semantic colors with readable text. */
+body.activity-mode .activity-panel-cap {
+  min-height: 64px;
+  padding: 10px 14px !important;
+  gap: 12px;
+}
+
+body.activity-mode .activity-panel-cap h2,
+body.activity-mode .activity-reminders-panel > .activity-panel-cap h2 {
+  font-size: var(--activity-font-heading-sm) !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+}
+
+body.activity-mode .activity-panel-cap :is(.activity-weekly-subheading, div > span:not(.activity-count-pill)),
+body.activity-mode .activity-reminders-panel > .activity-panel-cap > div > span {
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0 !important;
+  opacity: 1 !important;
+}
+
+body.activity-mode .activity-log-panel > .activity-panel-cap .activity-count-pill {
+  min-height: 34px;
+  padding: 7px 11px;
+  color: var(--activity-overdue-text) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+}
+
+/* Weekly calendar controls and day chips. */
+body.activity-mode .calendar-toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.activity-mode .calendar-nav-button {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 !important;
+  color: var(--activity-text-primary) !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+}
+
+body.activity-mode #activityWeekRange.calendar-range-pill {
+  min-height: 40px;
+  padding: 9px 14px !important;
+  color: var(--activity-text-primary) !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  white-space: nowrap;
+}
+
+body.activity-mode .activity-weekly-card .activity-day-chip {
+  min-height: 42px;
+  padding: 9px 10px !important;
+}
+
+body.activity-mode .activity-weekly-card .activity-day-chip :is(strong, span),
+body.activity-mode .calendar-legend {
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+/* Filter labels, values, chips, and actions. */
+body.activity-mode .activity-filter-shell {
+  padding: 12px 14px !important;
+}
+
+body.activity-mode .activity-filter-bar {
+  gap: 12px !important;
+}
+
+body.activity-mode :is(
+  .activity-date-filter > span,
+  .activity-filter-right label > span,
+  .activity-filter-secondary label > span,
+  .date-range-inputs label,
+  .activity-reminders-filter-label,
+  .reminder-stack-header,
+  .activity-reminders-links-head h3,
+  .activity-reminders-links-head span,
+  .activity-results-summary
+) {
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0 !important;
+  opacity: 1 !important;
+}
+
+body.activity-mode .activity-filter-bar :is(input, select),
+body.activity-mode .search-with-clear input {
+  min-height: 42px !important;
+  padding: 9px 11px !important;
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-body) !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+}
+
+body.activity-mode .activity-filter-bar input::placeholder,
+body.activity-mode .search-with-clear input::placeholder {
+  color: var(--activity-text-muted) !important;
+  opacity: 1 !important;
+}
+
+body.activity-mode :is(.date-presets, .activity-shortcut-chips) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px !important;
+}
+
+body.activity-mode .date-presets button {
+  min-height: 36px !important;
+  padding: 7px 11px !important;
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+}
+
+body.activity-mode .activity-shortcut-chips button {
+  min-height: 32px !important;
+  padding: 6px 9px !important;
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  white-space: normal;
+}
+
+body.activity-mode .date-presets button.active,
+body.activity-mode .activity-shortcut-chips button.active {
+  background: #14141c !important;
+  border-color: #14141c !important;
+  color: #ffffff !important;
+}
+
+body.activity-mode :is(#activityResetFilters, .activity-filter-toggle) {
+  min-height: 40px !important;
+  padding: 8px 12px !important;
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+}
+
+body.activity-mode .clear-search {
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  color: var(--activity-text-primary) !important;
+  font-size: 20px !important;
+}
+
+body.activity-mode .activity-results-summary {
+  padding: 9px 0 !important;
+  color: var(--activity-text-secondary) !important;
+  font-weight: 600 !important;
+}
+
+/* Activity timeline records. */
+body.activity-mode .activity-feed {
+  color: var(--activity-text-primary);
+}
+
+body.activity-mode .timeline-divider,
+body.activity-mode .timeline-divider span {
+  color: var(--activity-text-secondary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+}
+
+body.activity-mode .activity-feed-item {
+  padding: 14px !important;
+  color: var(--activity-text-primary) !important;
+}
+
+body.activity-mode .activity-feed-body > strong {
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-body-lg) !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+}
+
+body.activity-mode .activity-feed-body .activity-note {
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-body) !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+}
+
+body.activity-mode .activity-feed-body .meta-label {
+  color: var(--activity-text-secondary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+  line-height: 1.45 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+body.activity-mode .activity-type-icon {
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+}
+
+body.activity-mode .activity-feed-footer .chip,
+body.activity-mode .activity-footer-actions button,
+body.activity-mode .quote-ref-pill {
+  min-height: 34px !important;
+  padding: 7px 10px !important;
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+}
+
+body.activity-mode .activity-feed-footer .chip.hot {
+  color: var(--activity-overdue-text) !important;
+}
+
+/* Reminder records and quick links retain semantic fills with accessible text. */
+body.activity-mode .activity-reminders-filters {
+  padding: 6px 10px !important;
+}
+
+body.activity-mode .activity-reminders-filter-label {
+  margin-bottom: 4px !important;
+}
+
+body.activity-mode .reminder-stack-header {
+  min-height: 34px;
+  padding: 6px 0 !important;
+}
+
+body.activity-mode .reminder-stack-header .count-chip,
+body.activity-mode .activity-quick-link .count-chip {
+  min-height: 26px;
+  padding: 4px 8px !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+}
+
+body.activity-mode .reminder-card {
+  min-height: 72px;
+  padding: 11px 12px !important;
+  gap: 10px;
+}
+
+body.activity-mode .reminder-card.upcoming {
+  color: var(--activity-upcoming-text) !important;
+}
+
+body.activity-mode .reminder-card.overdue {
+  color: var(--activity-overdue-text) !important;
+}
+
+body.activity-mode .reminder-card strong {
+  color: inherit !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+}
+
+body.activity-mode .reminder-card p {
+  color: inherit !important;
+  font-size: var(--activity-font-body) !important;
+  font-weight: 600 !important;
+  line-height: 1.45 !important;
+}
+
+body.activity-mode .reminder-card .meta-label {
+  color: inherit !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 700 !important;
+  line-height: 1.45 !important;
+  letter-spacing: 0 !important;
+}
+
+body.activity-mode .reminder-card .calendar-link.icon-only {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  font-size: 18px !important;
+}
+
+body.activity-mode .activity-reminders-links {
+  padding: 6px 10px !important;
+}
+
+body.activity-mode .activity-reminders-links-head h3 {
+  font-size: var(--activity-font-body-lg) !important;
+}
+
+body.activity-mode .activity-reminders-links-head {
+  display: flex !important;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+}
+
+body.activity-mode .activity-reminders-links-head span {
+  color: var(--activity-text-secondary) !important;
+  font-size: var(--activity-font-caption) !important;
+  font-weight: 600 !important;
+}
+
+body.activity-mode .activity-quick-link {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 6px 9px !important;
+}
+
+body.activity-mode .activity-quick-link-copy strong {
+  color: var(--activity-text-primary) !important;
+  font-size: var(--activity-font-body) !important;
+  font-weight: 700 !important;
+}
+
+body.activity-mode .activity-reminders-panel {
+  grid-template-rows: auto auto minmax(60px, 1fr) auto !important;
+}
+
+body.activity-mode .activity-quick-links {
+  grid-auto-rows: 38px !important;
+}
+
+/* Strong, consistent keyboard indication without changing interaction logic. */
+body.activity-mode #activityView :is(button, a, input, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--activity-focus) !important;
+  outline-offset: 2px !important;
+}
+
+body.activity-mode #activityView :is(button, input, select):disabled {
+  color: var(--activity-text-muted) !important;
+  opacity: 0.72 !important;
+}
+
+@media (max-width: 1024px) {
+  body.activity-mode .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.activity-mode .main,
+  body.activity-mode #activityView,
+  body.activity-mode .activity-dashboard,
+  body.activity-mode .activity-main-column {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body.activity-mode .activity-panel-cap {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  body.activity-mode .calendar-toolbar {
+    width: 100%;
+  }
+
+  body.activity-mode .calendar-range-pill {
+    flex: 1 1 220px;
+    text-align: center;
+  }
+
+  body.activity-mode .activity-filter-main,
+  body.activity-mode .activity-filter-secondary,
+  body.activity-mode .activity-filter-right,
+  body.activity-mode .date-range-inputs {
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 680px) {
+  body.activity-mode .activity-kpi-card {
+    min-height: 104px;
+  }
+
+  body.activity-mode .activity-filter-right,
+  body.activity-mode .date-range-inputs {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  body.activity-mode .activity-feed-footer {
+    align-items: flex-start;
+  }
+}

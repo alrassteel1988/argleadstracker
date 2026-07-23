@@ -1,0 +1,70 @@
+/* Final scoped contrast guard for Lead Details badges on light surfaces. */
+body.lead-detail-mode .lead-ai-summary-page .lead-ai-toolbar .lead-ai-badge {
+  opacity: 1 !important;
+  -webkit-text-fill-color: currentColor;
+}
+
+body.lead-detail-mode .lead-ai-summary-page .lead-ai-toolbar .lead-ai-badge.confidence {
+  border-color: var(--lead-bauhaus-blue) !important;
+  background-color: #e7f0fa !important;
+  color: #0f3550 !important;
+  -webkit-text-fill-color: #0f3550;
+}
+
+body.lead-detail-mode .lead-ai-summary-page .lead-ai-toolbar .lead-ai-badge.freshness {
+  border-color: var(--lead-bauhaus-green) !important;
+  background-color: #e9f4dc !important;
+  color: #243912 !important;
+  -webkit-text-fill-color: #243912;
+}
+
+body.lead-detail-mode .lead-ai-summary-page .lead-ai-toolbar .lead-ai-badge.freshness.warm {
+  border-color: var(--lead-bauhaus-yellow) !important;
+  background-color: #fcf0dd !important;
+  color: #5a3709 !important;
+  -webkit-text-fill-color: #5a3709;
+}
+
+body.lead-detail-mode .lead-ai-summary-page .lead-ai-toolbar .lead-ai-badge.provider {
+  border-color: var(--lead-bauhaus-violet) !important;
+  background-color: #f1edff !important;
+  color: #3e2d78 !important;
+  -webkit-text-fill-color: #3e2d78;
+}
+
+body.lead-detail-mode .lead-detail-view :is(.drawer-stage-pill, .drawer-stage-select) {
+  border-color: var(--lead-bauhaus-green) !important;
+  background-color: #e9f4dc !important;
+  color: #243912 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #243912;
+}
+
+body.lead-detail-mode .lead-detail-view .drawer-stage-select option {
+  background-color: var(--lead-bauhaus-surface);
+  color: var(--lead-bauhaus-text);
+}
+
+body.lead-detail-mode .lead-detail-view .lead-page-header .chip:not(.hot):not(.warm) {
+  border-color: var(--lead-bauhaus-blue) !important;
+  background-color: #e7f0fa !important;
+  color: #0f3550 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #0f3550;
+}
+
+body.lead-detail-mode .lead-detail-view .lead-page-header .chip.hot {
+  border-color: var(--lead-bauhaus-red) !important;
+  background-color: #fbeaea !important;
+  color: #4f1515 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #4f1515;
+}
+
+body.lead-detail-mode .lead-detail-view .lead-page-header .chip.warm {
+  border-color: var(--lead-bauhaus-yellow) !important;
+  background-color: #fcf0dd !important;
+  color: #5a3709 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #5a3709;
+}

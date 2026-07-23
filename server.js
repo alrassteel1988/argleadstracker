@@ -1394,10 +1394,13 @@ function excelCell(value) {
   return `<Cell><Data ss:Type="${numeric ? "Number" : "String"}">${xmlEscape(value)}</Data></Cell>`;
 }
 
-function leadsExcelWorkbook(leads) {
+function leadsExcelWorkbook(leads, { worksheetName = "Leads Backup", reportTitle = "" } = {}) {
   const rows = exportLeadRows(leads);
   const header = LEAD_EXPORT_COLUMNS.map(([, label]) => excelCell(label)).join("");
   const body = rows.map(row => `<Row>${LEAD_EXPORT_COLUMNS.map(([key]) => excelCell(row[key] ?? "")).join("")}</Row>`).join("");
+  const titleRow = reportTitle
+    ? `<Row><Cell ss:MergeAcross="${LEAD_EXPORT_COLUMNS.length - 1}"><Data ss:Type="String">${xmlEscape(reportTitle)}</Data></Cell></Row>`
+    : "";
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
@@ -1406,13 +1409,15 @@ function leadsExcelWorkbook(leads) {
   xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
   <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
     <Author>ARG Leads Tracker</Author>
+    ${reportTitle ? `<Title>${xmlEscape(reportTitle)}</Title>` : ""}
     <Created>${new Date().toISOString()}</Created>
   </DocumentProperties>
   <Styles>
     <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Top"/><Font ss:FontName="Inter" ss:Size="10"/></Style>
   </Styles>
-  <Worksheet ss:Name="Leads Backup">
+  <Worksheet ss:Name="${xmlEscape(worksheetName)}">
     <Table>
+      ${titleRow}
       <Row>${header}</Row>
       ${body}
     </Table>
@@ -1445,7 +1450,7 @@ function pdfLine(text, x, y, size = 10) {
   return `BT /F1 ${size} Tf ${x} ${y} Td (${pdfEscape(text)}) Tj ET`;
 }
 
-function leadsPdfBuffer(leads) {
+function leadsPdfBuffer(leads, { title = "ARG Leads Tracker - Leads Backup", subtitle = "" } = {}) {
   const objects = [];
   const addObject = value => {
     objects.push(value);
@@ -1463,18 +1468,19 @@ function leadsPdfBuffer(leads) {
     pageLines = [];
   };
   const addLine = (text, size = 10) => {
-    if (!pageLines.length) pageLines.push({ text: "ARG Leads Tracker - Leads Backup", x: 42, y: 750, size: 15 });
+    if (!pageLines.length) pageLines.push({ text: title, x: 42, y: 750, size: 15 });
     const last = pageLines[pageLines.length - 1];
     const y = last.y - (size >= 12 ? 18 : 14);
     if (y < 52) {
       flushPage();
-      pageLines.push({ text: "ARG Leads Tracker - Leads Backup", x: 42, y: 750, size: 15 });
+      pageLines.push({ text: title, x: 42, y: 750, size: 15 });
       pageLines.push({ text, x: 42, y: 728, size });
     } else {
       pageLines.push({ text, x: 42, y, size });
     }
   };
   addLine(`Generated: ${new Date().toISOString()} | Leads: ${(leads || []).length}`, 10);
+  if (subtitle) addLine(subtitle, 10);
   exportLeadRows(leads).forEach((lead, index) => {
     addLine("", 8);
     addLine(`${index + 1}. ${lead.company_name || "Unnamed company"} | ${lead.stage || ""} | ${lead.assigned_salesman || ""}`, 12);
@@ -1518,6 +1524,54 @@ async function exportableLeadsForUser(user, supabaseEnabled, db) {
     return leads.map(fromSupabaseLead);
   }
   return db.leads.map(leadWithDerivedFields);
+}
+
+function normalizedReportDate(value) {
+  const date = String(value || "").trim();
+  if (!date) return "";
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)
+    || Number.isNaN(parsed.getTime())
+    || parsed.toISOString().slice(0, 10) !== date) {
+    const error = new Error("Report dates must use YYYY-MM-DD format.");
+    error.status = 400;
+    throw error;
+  }
+  return date;
+}
+
+async function pipelineReportLeadsForUser(payload, user, supabaseEnabled, db) {
+  const requestedIds = Array.isArray(payload?.lead_ids)
+    ? payload.lead_ids.map(value => String(value || "").trim()).filter(Boolean)
+    : [];
+  if (!requestedIds.length) {
+    const error = new Error("Select at least one Pipeline record to export.");
+    error.status = 400;
+    throw error;
+  }
+  if (requestedIds.length > 2000) {
+    const error = new Error("Pipeline exports are limited to 2,000 records.");
+    error.status = 400;
+    throw error;
+  }
+  const dateFrom = normalizedReportDate(payload?.date_from);
+  const dateTo = normalizedReportDate(payload?.date_to);
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    const error = new Error("From date must be on or before To date.");
+    error.status = 400;
+    throw error;
+  }
+  const authorizedLeads = await exportableLeadsForUser(user, supabaseEnabled, db);
+  const byId = new Map(authorizedLeads.map(lead => [String(lead.id), lead]));
+  const leads = [...new Set(requestedIds)]
+    .map(id => byId.get(id))
+    .filter(Boolean)
+    .filter(lead => {
+      const dueDate = String(lead.next_action_date || "").slice(0, 10);
+      return (!dateFrom || (dueDate && dueDate >= dateFrom))
+        && (!dateTo || (dueDate && dueDate <= dateTo));
+    });
+  return { leads, dateFrom, dateTo };
 }
 
 function prepareLeadPayloadForUser(payload, user, existing = null) {
@@ -3878,6 +3932,37 @@ async function handleApi(req, res, url) {
       reason: fetched.reason || "",
       items: matched
     });
+  }
+
+  const pipelineReportMatch = url.pathname.match(/^\/api\/exports\/pipeline-report\.(xls|pdf)$/);
+  if (req.method === "POST" && pipelineReportMatch) {
+    const payload = await readBody(req);
+    const { leads, dateFrom, dateTo } = await pipelineReportLeadsForUser(payload, user, supabaseEnabled, db);
+    const format = pipelineReportMatch[1];
+    const fromLabel = dateFrom || "Any";
+    const toLabel = dateTo || "Any";
+    const period = `Due date range: ${fromLabel} to ${toLabel}`;
+    const filenamePeriod = `${dateFrom || "any"}-to-${dateTo || "any"}`;
+    if (format === "xls") {
+      return sendDownload(
+        res,
+        "application/vnd.ms-excel; charset=utf-8",
+        `pipeline-live-leads-${filenamePeriod}-${exportTimestamp()}.xls`,
+        leadsExcelWorkbook(leads, {
+          worksheetName: "Pipeline Report",
+          reportTitle: `Pipeline Live Leads | ${period} | ${leads.length} records`
+        })
+      );
+    }
+    return sendDownload(
+      res,
+      "application/pdf",
+      `pipeline-live-leads-${filenamePeriod}-${exportTimestamp()}.pdf`,
+      leadsPdfBuffer(leads, {
+        title: "ARG Leads Tracker - Pipeline Live Leads",
+        subtitle: `${period} | ${leads.length} records`
+      })
+    );
   }
 
   if (req.method === "GET" && url.pathname === "/api/exports/leads.xls") {

@@ -17,9 +17,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=dashboard-summary-modals-1">
   <link rel="stylesheet" href="salesman-dashboard-live-leads.css?v=4">
-  <link rel="stylesheet" href="lead-detail-readability.css?v=4-bauhaus-flat">
+  <link rel="stylesheet" href="lead-detail-readability.css?v=7-badge-contrast">
+  <link rel="stylesheet" href="activity-readability.css?v=6-final">
   <link rel="stylesheet" href="tasks-bauhaus-flat.css?v=1">
   <link rel="stylesheet" href="bauhaus-global.css?v=4">
+  <link rel="stylesheet" href="salesmen-directory.css?v=7-solid-kpis">
+  <link rel="stylesheet" href="salesman-dashboard-summaries.css?v=2">
+  <link rel="stylesheet" href="pipeline-live-leads.css?v=4-report-export">
+  <link rel="stylesheet" href="tasks-contrast.css?v=1">
+  <link rel="stylesheet" href="lead-detail-contrast.css?v=1">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -569,43 +575,6 @@
           <!-- Funnel analytics remain available to Dashboard and shared code. The
                Admin comparison belongs on Salesmen in a dedicated follow-up. -->
           <div class="pipeline-worklist-column">
-            <section class="toolbar hidden" id="pipelineToolbar">
-          <label class="search-box">
-            <span>Search</span>
-            <input id="searchInput" type="search" placeholder="Company, contact, product, territory">
-          </label>
-          <label>
-            <span>Stage</span>
-            <select id="stageFilter">
-              <option value="all">All stages</option>
-            </select>
-          </label>
-          <label>
-            <span>Salesman</span>
-            <select id="salesmanFilter">
-              <option value="all">All salesmen</option>
-            </select>
-          </label>
-          <label>
-            <span>Priority</span>
-            <select id="priorityFilter">
-              <option value="all">All priorities</option>
-            </select>
-          </label>
-          <label>
-            <span>Territory</span>
-            <select id="territoryFilter">
-              <option value="all">All territories</option>
-            </select>
-          </label>
-          <div class="view-toggle" aria-label="Pipeline view mode">
-            <span>View</span>
-            <div>
-              <button class="toggle-button active" type="button" data-pipeline-mode="list">List</button>
-              <button class="toggle-button" type="button" data-pipeline-mode="kanban">Kanban</button>
-            </div>
-          </div>
-            </section>
             <section class="pipeline-filter-notice hidden" id="overduePipelineFilter">
               <div>
                 <strong>Showing overdue follow-ups only</strong>
@@ -616,23 +585,34 @@
 
             <section class="content-grid hidden" id="pipelineView">
               <div class="panel leads-panel" id="pipelineListPanel">
-                <div class="panel-header">
-                  <h2>Live Lead List</h2>
-                  <span id="leadCount">0 records</span>
-                </div>
-                <div class="lead-list lead-table-scroll" id="leadList"></div>
-              </div>
-
-              <div class="panel kanban-panel hidden" id="kanbanPanel">
-                <div class="panel-header kanban-panel-header">
+                <div class="panel-header pipeline-list-header">
                   <div>
-                    <h2>Kanban Pipeline</h2>
-                    <span>Drag leads between stages to update pipeline status</span>
+                    <h2>Live Leads List</h2>
+                    <span id="leadCount">0 records</span>
                   </div>
-                  <span id="kanbanSummary">0 records</span>
+                  <div class="pipeline-list-actions">
+                    <div class="pipeline-report-tools hidden" id="pipelineReportTools" aria-label="Pipeline report options">
+                      <div class="pipeline-report-range" role="group" aria-label="Filter report by due date range">
+                        <span>Report due date</span>
+                        <label>
+                          <span>From</span>
+                          <input id="pipelineReportDateFrom" type="date" aria-label="Report due date from">
+                        </label>
+                        <label>
+                          <span>To</span>
+                          <input id="pipelineReportDateTo" type="date" aria-label="Report due date to">
+                        </label>
+                      </div>
+                      <button class="ghost-button pipeline-export-button is-excel" id="exportPipelineExcel" type="button">Export Excel</button>
+                      <button class="ghost-button pipeline-export-button is-pdf" id="exportPipelinePdf" type="button">Export PDF</button>
+                    </div>
+                    <button class="ghost-button hidden" id="clearPipelineFilters" type="button">Clear all filters</button>
+                    <button class="ghost-button" id="refreshPipelineLeads" type="button" aria-label="Refresh live leads">Refresh</button>
+                  </div>
                 </div>
-                <div class="kanban-mobile-tabs" id="kanbanMobileStages" aria-label="Kanban stage selector"></div>
-                <div class="kanban-board" id="kanbanBoard"></div>
+                <div class="pipeline-list-status sr-only" id="pipelineListStatus" aria-live="polite"></div>
+                <div class="lead-list lead-table-scroll" id="leadList" aria-busy="false"></div>
+                <div class="pipeline-pagination" id="pipelinePagination"></div>
               </div>
 
               <div class="panel detail-panel" id="detailPanel">
@@ -656,77 +636,112 @@
 
         <section class="view-panel hidden" id="salesmenView">
           <div class="panel performance-panel hidden" id="performancePanel">
-            <div class="panel-header performance-header">
-              <div>
-                <h2>Salesman Performance Overview</h2>
-                <span>Lead ownership, activity, and follow-up productivity</span>
-              </div>
-              <label class="performance-filter">
-                <span>Stage</span>
-                <select id="performanceStageFilter">
-                  <option value="all">All Stages</option>
-                </select>
-              </label>
-            </div>
-            <div class="sp-wrap">
-              <section class="sp-leader-section">
-                <p class="sp-section-label">Team leaderboard</p>
-                <div class="sp-leader-grid" id="performanceLeaderboard"></div>
-              </section>
+            <section class="salesmen-metric-grid" aria-label="Salesmen summary">
+              <article class="salesmen-metric-card is-blue">
+                <div><span>Total salesmen</span><strong id="salesmenMetricTotal">0</strong><small>All salesman accounts</small></div>
+                <b aria-hidden="true">TEAM</b>
+              </article>
+              <article class="salesmen-metric-card is-green">
+                <div><span>Active territories</span><strong id="salesmenMetricTerritories">0</strong><small id="salesmenMetricTerritoriesMeta">of 0 total</small></div>
+                <b aria-hidden="true">PIN</b>
+              </article>
+              <article class="salesmen-metric-card is-orange">
+                <div><span>Overdue follow-ups</span><strong id="salesmenMetricOverdue">0</strong><small>Require immediate attention</small></div>
+                <b aria-hidden="true">!</b>
+              </article>
+              <article class="salesmen-metric-card is-red">
+                <div><span>Open leads assigned</span><strong id="salesmenMetricOpenLeads">0</strong><small>Across all salesmen</small></div>
+                <b aria-hidden="true">GOAL</b>
+              </article>
+            </section>
 
-              <div class="sp-analysis-row">
-                <div class="sp-card sp-chart-card">
-                  <div class="sp-analysis-header sp-analysis-header--bauhaus-blue">
-                    <p class="sp-section-label">Team activity comparison</p>
+            <section class="salesmen-filter-panel" aria-labelledby="salesmenFiltersTitle">
+              <h2 class="sr-only" id="salesmenFiltersTitle">Filter salesmen</h2>
+              <div class="salesmen-filter-grid">
+                <label class="salesmen-search-field">
+                  <span>Search</span>
+                  <input id="salesmenSearch" type="search" placeholder="Search salesman by name, email, or phone..." autocomplete="off">
+                </label>
+                <label>
+                  <span>Territory</span>
+                  <select id="salesmenTerritoryFilter"><option value="all">All territories</option></select>
+                </label>
+                <label>
+                  <span>Status</span>
+                  <select id="salesmenStatusFilter">
+                    <option value="all">All status</option>
+                    <option value="top-performer">Top Performer</option>
+                    <option value="active">Active</option>
+                    <option value="needs-attention">Needs Attention</option>
+                    <option value="on-leave">On Leave</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Stage</span>
+                  <select id="performanceStageFilter"><option value="all">All stages</option></select>
+                </label>
+                <label>
+                  <span>Sort by</span>
+                  <select id="salesmenSort">
+                    <option value="assigned-desc">Assigned Leads (High to Low)</option>
+                    <option value="name-asc">Name (A to Z)</option>
+                    <option value="overdue-desc">Overdue (High to Low)</option>
+                    <option value="conversion-desc">Conversion (High to Low)</option>
+                    <option value="recent-desc">Last Activity (Newest)</option>
+                  </select>
+                </label>
+                <fieldset class="salesmen-view-toggle">
+                  <legend>View</legend>
+                  <button class="active" type="button" data-salesmen-view="list" aria-pressed="true">List</button>
+                  <button type="button" data-salesmen-view="cards" aria-pressed="false">Cards</button>
+                </fieldset>
+              </div>
+              <div class="salesmen-filter-actions">
+                <button class="ghost-button" id="clearSalesmenFilters" type="button">Clear Filters</button>
+                <button class="primary-button" id="applySalesmenFilters" type="button">Apply Filters</button>
+              </div>
+            </section>
+
+            <section class="salesmen-directory-panel" aria-labelledby="salesmenDirectoryTitle">
+              <header>
+                <div>
+                  <h2 id="salesmenDirectoryTitle">Salesmen Directory</h2>
+                  <p id="salesmenDirectoryStatus" aria-live="polite">Loading salesman records...</p>
+                </div>
+                <div class="salesmen-directory-head-actions">
+                  <span id="salesmenSummary">0 records</span>
+                  <button class="ghost-button" id="exportSalesmenDirectory" type="button">Export CSV</button>
+                </div>
+              </header>
+              <div class="salesmen-directory-content" id="salesmenGrid" aria-live="polite"></div>
+              <footer class="salesmen-directory-footer" id="salesmenDirectoryPagination"></footer>
+            </section>
+
+            <section class="salesmen-snapshot-panel" aria-labelledby="salesmenSnapshotTitle">
+              <header>
+                <h2 id="salesmenSnapshotTitle">Salesman Performance Snapshot</h2>
+                <p>Lead ownership, conversion, and overdue workload from the current directory data.</p>
+              </header>
+              <div class="salesmen-snapshot-grid">
+                <article class="salesmen-chart-card">
+                  <h3>Assigned Leads by Salesman</h3>
+                  <div class="salesmen-chart-frame">
+                    <canvas id="performanceChart" role="img" aria-label="Horizontal bar chart of assigned leads by salesman."></canvas>
                   </div>
-                  <div class="sp-legend" aria-label="Chart legend">
-                    <span class="sp-legend-item"><i style="background:#2E6DA4"></i>Assigned</span>
-                    <span class="sp-legend-item"><i style="background:#6B9A3E"></i>Activities</span>
-                    <span class="sp-legend-item"><i style="background:#D68A2C"></i>Follow-ups</span>
-                    <span class="sp-legend-item"><i style="background:#8291A3"></i>Stage</span>
-                  </div>
-                  <div class="sp-chart-scroll">
-                    <div class="sp-chart-frame">
-                      <canvas id="performanceChart" role="img" aria-label="Grouped bar chart comparing assigned leads, activities, follow-ups, and stage leads per salesman."></canvas>
+                </article>
+                <article class="salesmen-chart-card salesmen-conversion-card">
+                  <h3>Conversion &amp; Overdue Summary</h3>
+                  <div class="salesmen-conversion-layout">
+                    <div class="salesmen-donut-frame">
+                      <canvas id="salesmenSummaryChart" role="img" aria-label="Doughnut chart comparing converted leads, open leads, overdue follow-ups, and tasks due."></canvas>
+                      <div class="salesmen-donut-label"><strong id="salesmenConversionRate">0%</strong><span>Overall conversion rate</span></div>
                     </div>
+                    <div class="salesmen-summary-legend" id="salesmenSummaryLegend"></div>
                   </div>
-                </div>
-
-                <div class="sp-card sp-performance-card">
-                  <div class="sp-analysis-header sp-analysis-header--bauhaus-red">
-                    <p class="sp-section-label">Performance table</p>
-                  </div>
-                  <div class="sp-table-scroll">
-                    <table class="sp-hm-table">
-                      <thead>
-                        <tr>
-                          <th>Salesman</th>
-                          <th>Leads</th>
-                          <th>Act.</th>
-                          <th>F-ups</th>
-                          <th>Score</th>
-                        </tr>
-                      </thead>
-                      <tbody id="performanceTable"></tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div class="sp-card sp-recent-card">
-                  <div class="sp-analysis-header sp-analysis-header--bauhaus-yellow">
-                    <p class="sp-section-label">Recent activity</p>
-                  </div>
-                  <div class="sp-feed" id="performanceFeed"></div>
-                </div>
+                </article>
               </div>
-              <details class="sp-card sp-lead-summary-details" open>
-                <summary>
-                  <span>Salesman Lead Summary</span>
-                  <span id="salesmenSummary">0 salesmen</span>
-                </summary>
-                <div class="salesmen-grid" id="salesmenGrid"></div>
-              </details>
-            </div>
+            </section>
           </div>
         </section>
 
@@ -1449,7 +1464,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="client.js?v=dashboard-summary-modals-1"></script>
+  <script src="client.js?v=pipeline-report-export-1"></script>
   </body>
 </html>
 

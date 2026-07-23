@@ -1,11 +1,17 @@
-const CACHE_VERSION = "arg-pwa-v23-global-bauhaus";
+const CACHE_VERSION = "arg-pwa-v44-pipeline-report-export";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
   "/salesman-dashboard-live-leads.css",
   "/lead-detail-readability.css",
+  "/activity-readability.css",
   "/tasks-bauhaus-flat.css",
+  "/salesmen-directory.css",
+  "/salesman-dashboard-summaries.css",
+  "/pipeline-live-leads.css",
+  "/tasks-contrast.css",
+  "/lead-detail-contrast.css",
   "/bauhaus-global.css",
   "/client.js",
   "/favicon.svg",

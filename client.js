@@ -53,16 +53,35 @@ const state = {
   selectedId: null,
   lastNonLeadView: "dashboard",
   filters: { search: "", stage: "all", salesman: "all", priority: "all", territory: "all" },
+  pipelineTable: {
+    nextAction: "all",
+    overdue: "all",
+    dueDate: "",
+    dateFrom: "",
+    dateTo: "",
+    sortKey: "daysOverdue",
+    sortDirection: "desc",
+    page: 1,
+    pageSize: 10
+  },
   importedAfter: "",
   overduePipelineOnly: false,
+  dueTodayPipelineOnly: false,
   performanceStage: "all",
+  salesmenDirectory: {
+    search: "",
+    territory: "all",
+    status: "all",
+    sort: "assigned-desc",
+    view: "list",
+    page: 1,
+    pageSize: 10
+  },
   marketSnapshotSalesman: "all",
   marketSnapshotTab: "location",
   salesmanLeadsViewer: null,
   actionPlanCollapsed: {},
   portfolioFilters: { reportView: "stage", stage: "all", country: "all", emirate: "all" },
-  pipelineViewMode: localStorage.getItem("arg_pipeline_view_mode") || "list",
-  pipelineKanbanFunnelExpanded: false,
   kanbanStage: localStorage.getItem("arg_kanban_stage") || "NEW",
   draggedLeadId: "",
   importLeads: null,
@@ -130,7 +149,16 @@ const state = {
   leadsLoaded: false,
   leadsLoading: false,
   leadsError: "",
-  summaryCardDetails: { type: "", search: "", filters: {}, page: 1, pageSize: 12, trigger: null }
+  summaryCardDetails: {
+    type: "",
+    search: "",
+    filters: {},
+    sortKey: "",
+    sortDirection: "asc",
+    page: 1,
+    pageSize: 7,
+    trigger: null
+  }
 };
 
 const ADMIN_DASHBOARD_COLLAPSIBLES = [
@@ -208,6 +236,15 @@ const els = {
   leadList: document.querySelector("#leadList"),
   detailPanel: document.querySelector("#detailPanel"),
   leadCount: document.querySelector("#leadCount"),
+  clearPipelineFilters: document.querySelector("#clearPipelineFilters"),
+  refreshPipelineLeads: document.querySelector("#refreshPipelineLeads"),
+  pipelineReportTools: document.querySelector("#pipelineReportTools"),
+  pipelineReportDateFrom: document.querySelector("#pipelineReportDateFrom"),
+  pipelineReportDateTo: document.querySelector("#pipelineReportDateTo"),
+  exportPipelineExcel: document.querySelector("#exportPipelineExcel"),
+  exportPipelinePdf: document.querySelector("#exportPipelinePdf"),
+  pipelineListStatus: document.querySelector("#pipelineListStatus"),
+  pipelinePagination: document.querySelector("#pipelinePagination"),
   searchInput: document.querySelector("#searchInput"),
   stageFilter: document.querySelector("#stageFilter"),
   salesmanFilter: document.querySelector("#salesmanFilter"),
@@ -305,6 +342,23 @@ const els = {
   performanceStageFilter: document.querySelector("#performanceStageFilter"),
   performanceLeaderboard: document.querySelector("#performanceLeaderboard"),
   performanceChart: document.querySelector("#performanceChart"),
+  salesmenSummaryChart: document.querySelector("#salesmenSummaryChart"),
+  salesmenSummaryLegend: document.querySelector("#salesmenSummaryLegend"),
+  salesmenConversionRate: document.querySelector("#salesmenConversionRate"),
+  salesmenMetricTotal: document.querySelector("#salesmenMetricTotal"),
+  salesmenMetricTerritories: document.querySelector("#salesmenMetricTerritories"),
+  salesmenMetricTerritoriesMeta: document.querySelector("#salesmenMetricTerritoriesMeta"),
+  salesmenMetricOverdue: document.querySelector("#salesmenMetricOverdue"),
+  salesmenMetricOpenLeads: document.querySelector("#salesmenMetricOpenLeads"),
+  salesmenSearch: document.querySelector("#salesmenSearch"),
+  salesmenTerritoryFilter: document.querySelector("#salesmenTerritoryFilter"),
+  salesmenStatusFilter: document.querySelector("#salesmenStatusFilter"),
+  salesmenSort: document.querySelector("#salesmenSort"),
+  applySalesmenFilters: document.querySelector("#applySalesmenFilters"),
+  clearSalesmenFilters: document.querySelector("#clearSalesmenFilters"),
+  exportSalesmenDirectory: document.querySelector("#exportSalesmenDirectory"),
+  salesmenDirectoryStatus: document.querySelector("#salesmenDirectoryStatus"),
+  salesmenDirectoryPagination: document.querySelector("#salesmenDirectoryPagination"),
   performanceTable: document.querySelector("#performanceTable"),
   performanceFeed: document.querySelector("#performanceFeed"),
   marketSnapshotPanel: document.querySelector("#marketSnapshotPanel"),
@@ -522,6 +576,7 @@ let quotationValidationTimer = null;
 let duplicateCheckTimer = null;
 let overdueRefreshTimer = null;
 let performanceChartInstance = null;
+let salesmenSummaryChartInstance = null;
 
 function isLeadRoutePath(pathname = window.location.pathname) {
   return /^\/leads\/[^/]+\/?$/.test(pathname);
@@ -1121,9 +1176,9 @@ function renderLeadAiSummaryPanel(lead, options = {}) {
       </div>
     </header>
     <div class="lead-ai-toolbar">
-      <span class="chip">${escapeHtml(confidence)} confidence</span>
-      <span class="chip ${summaryState.cached ? "warm" : ""}">${summaryState.cached ? "Cached summary" : "Live summary"}</span>
-      ${summaryState.provider ? `<span class="chip">${escapeHtml(summaryState.provider)}</span>` : ""}
+      <span class="chip lead-ai-badge confidence">${escapeHtml(confidence)} confidence</span>
+      <span class="chip lead-ai-badge freshness ${summaryState.cached ? "warm" : ""}">${summaryState.cached ? "Cached summary" : "Live summary"}</span>
+      ${summaryState.provider ? `<span class="chip lead-ai-badge provider">${escapeHtml(summaryState.provider)}</span>` : ""}
       <span class="lead-ai-generated">Generated on ${escapeHtml(leadAiGeneratedLabel(summaryState.generatedAt))}</span>
     </div>
     ${summaryState.error && summary ? `<div class="lead-ai-inline-error">${escapeHtml(summaryState.error)}</div>` : ""}
@@ -1376,10 +1431,16 @@ function clientId(prefix = "local") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-async function downloadExport(path, fallbackName) {
+async function downloadExport(path, fallbackName, options = {}) {
   const token = sessionStorage.getItem(SESSION_KEY);
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {})
+  };
   const response = await fetch(path, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
+    method: options.method || "GET",
+    headers,
+    body: options.body
   });
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
@@ -3708,10 +3769,19 @@ function filteredLeads() {
     ].map(value => String(value || "").trim().toLowerCase());
     const matchesTerritory = state.filters.territory === "all" || territoryOptions.includes(state.filters.territory.toLowerCase());
     const matchesOverdue = !state.overduePipelineOnly || leadHasOverdueFollowup(lead);
+    const matchesDueToday = !state.dueTodayPipelineOnly
+      || String(lead.next_action_date || "").slice(0, 10) === today();
     const importedAt = Date.parse(lead.imported_at || "");
     const importedAfter = Date.parse(state.importedAfter || "");
     const matchesImported = !state.importedAfter || (Number.isFinite(importedAt) && importedAt >= importedAfter);
-    return matchesQuery && matchesStage && matchesSalesman && matchesPriority && matchesTerritory && matchesOverdue && matchesImported;
+    return matchesQuery
+      && matchesStage
+      && matchesSalesman
+      && matchesPriority
+      && matchesTerritory
+      && matchesOverdue
+      && matchesDueToday
+      && matchesImported;
   });
 }
 
@@ -4120,6 +4190,7 @@ function summaryDetailsRecord(lead, type) {
     salesman: lead.assigned_salesman || "Unassigned",
     stage: stageDisplayLabel(lead.stage || "NEW"),
     stageKey: normalizeStageKey(lead.stage || "NEW"),
+    stageRaw: lead.stage || stageDisplayLabel(lead.stage || "NEW"),
     priority,
     nextAction,
     dueDate,
@@ -4162,11 +4233,15 @@ function summaryDetailsBadge(value, tone = "neutral") {
 
 function summaryCardDetailsConfig(type) {
   const datasets = dashboardSummaryDatasets();
+  const salesmanDatasets = salesmanDashboardSummaryDatasets();
   const commonFilters = {
-    salesman: { key: "salesman", label: "Salesman" },
-    stage: { key: "stage", label: "Stage" },
-    priority: { key: "priority", label: "Priority" },
-    territory: { key: "territory", label: "Territory" }
+    company: { key: "company", label: "Company / Lead", type: "text", placeholder: "Search company / lead..." },
+    salesman: { key: "salesman", label: "Owner", type: "select" },
+    stage: { key: "stage", label: "Stage", type: "select" },
+    priority: { key: "priority", label: "Priority", type: "select" },
+    territory: { key: "territory", label: "Territory", type: "select" },
+    nextAction: { key: "nextAction", label: "Next Action", type: "text", placeholder: "Search next action..." },
+    dueDate: { key: "dueDate", label: "Due Date", type: "date" }
   };
   const configurations = {
     openPipeline: {
@@ -4241,6 +4316,103 @@ function summaryCardDetailsConfig(type) {
       ]
     }
   };
+  const salesmanColumns = [
+    { key: "company", label: "Company / Lead", className: "is-company" },
+    { key: "stage", label: "Stage", render: record => summaryDetailsBadge(record.stage, summaryDetailsStageTone(record.stageKey)) },
+    { key: "nextAction", label: "Next Action", className: "is-action" },
+    { key: "dueDate", label: "Due Date", render: record => summaryDetailsDateLabel(record.dueDate) },
+    { key: "salesman", label: "Owner" }
+  ];
+  const salesmanFilters = [
+    commonFilters.company,
+    commonFilters.stage,
+    commonFilters.nextAction,
+    commonFilters.dueDate,
+    commonFilters.salesman
+  ];
+  Object.assign(configurations, {
+    salesmanMyLeads: {
+      title: "My Leads",
+      description: "All leads currently assigned to you.",
+      tone: "blue",
+      searchPlaceholder: "Search company, action, stage, or owner",
+      leads: salesmanDatasets.myLeads,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline" }
+    },
+    salesmanOverdueCalls: {
+      title: "Overdue Calls",
+      description: "Calls and follow-ups past their scheduled due date.",
+      tone: "red",
+      searchPlaceholder: "Search overdue company or next action",
+      leads: salesmanDatasets.overdueCalls,
+      filters: salesmanFilters,
+      columns: [
+        ...salesmanColumns.slice(0, 4),
+        {
+          key: "daysOverdue",
+          label: "Days Overdue",
+          render: record => summaryDetailsBadge(
+            `${record.daysOverdue} day${record.daysOverdue === 1 ? "" : "s"}`,
+            record.daysOverdue >= 35 ? "red" : "amber"
+          )
+        },
+        salesmanColumns[4]
+      ],
+      fullList: { view: "pipeline", overdueOnly: true }
+    },
+    salesmanDueToday: {
+      title: "Due Today",
+      description: "Calls and follow-ups scheduled for today.",
+      tone: "amber",
+      searchPlaceholder: "Search today's company or next action",
+      leads: salesmanDatasets.dueToday,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline", dueTodayOnly: true }
+    },
+    salesmanStageNew: {
+      title: "New Leads",
+      description: "Your leads currently in the New stage.",
+      tone: "green",
+      searchPlaceholder: "Search New-stage leads",
+      leads: salesmanDatasets.stageNew,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline", stageKey: "NEW" }
+    },
+    salesmanStageContacted: {
+      title: "Contacted Leads",
+      description: "Your leads currently in the Contacted stage.",
+      tone: "blue",
+      searchPlaceholder: "Search Contacted-stage leads",
+      leads: salesmanDatasets.stageContacted,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline", stageKey: "CONTACTED" }
+    },
+    salesmanStageNegotiation: {
+      title: "Negotiation Leads",
+      description: "Your leads currently in the Negotiation stage.",
+      tone: "amber",
+      searchPlaceholder: "Search Negotiation-stage leads",
+      leads: salesmanDatasets.stageNegotiation,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline", stageKey: "NEGOTIATION" }
+    },
+    salesmanStageWon: {
+      title: "Won Leads",
+      description: "Your leads currently in the Won stage.",
+      tone: "navy",
+      searchPlaceholder: "Search Won-stage leads",
+      leads: salesmanDatasets.stageWon,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline", stageKey: "WON" }
+    }
+  });
   const config = configurations[type];
   if (!config) return null;
   config.records = config.leads.map(lead => summaryDetailsRecord(lead, type));
@@ -4253,19 +4425,24 @@ function summaryDetailsFilterOptions(records, key) {
 }
 
 function summaryDetailsFiltersMarkup(config) {
-  const selected = state.summaryCardDetails.filters || {};
-  const controls = config.filters.map(filter => {
-    if (filter.type === "date") {
-      return `<label><span>${escapeHtml(filter.label)}</span><input type="date" data-summary-details-filter="${escapeHtml(filter.key)}" value="${escapeHtml(selected[filter.key] || "")}"></label>`;
-    }
-    const options = summaryDetailsFilterOptions(config.records, filter.key);
-    return `<label><span>${escapeHtml(filter.label)}</span><select data-summary-details-filter="${escapeHtml(filter.key)}"><option value="">All ${escapeHtml(filter.label.toLowerCase())}</option>${options.map(option => `<option value="${escapeHtml(option)}" ${selected[filter.key] === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
-  }).join("");
   return `
-    <label class="summary-card-details-search"><span>Search</span><input type="search" data-summary-details-search value="${escapeHtml(state.summaryCardDetails.search || "")}" placeholder="${escapeHtml(config.searchPlaceholder)}" autocomplete="off"></label>
-    ${controls}
-    <button class="summary-card-details-reset" type="button" data-summary-details-reset>Reset filters</button>
+    <label class="summary-card-details-search"><span>Search all records</span><input type="search" data-summary-details-search value="${escapeHtml(state.summaryCardDetails.search || "")}" placeholder="${escapeHtml(config.searchPlaceholder)}" autocomplete="off"></label>
+    <button class="summary-card-details-reset" type="button" data-summary-details-reset>Clear all filters</button>
   `;
+}
+
+function summaryDetailsColumnFilterMarkup(config, column) {
+  const filter = config.filters.find(item => item.key === column.key);
+  if (!filter) return '<span class="summary-column-filter-spacer" aria-hidden="true"></span>';
+  const value = state.summaryCardDetails.filters?.[filter.key] || "";
+  if (filter.type === "text") {
+    return `<label class="summary-column-filter"><span class="sr-only">Filter ${escapeHtml(filter.label)}</span><input type="search" data-summary-details-filter="${escapeHtml(filter.key)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(filter.placeholder || `Filter ${filter.label.toLowerCase()}`)}" autocomplete="off"></label>`;
+  }
+  if (filter.type === "date") {
+    return `<label class="summary-column-filter"><span class="sr-only">Filter ${escapeHtml(filter.label)}</span><input type="date" data-summary-details-filter="${escapeHtml(filter.key)}" value="${escapeHtml(value)}"></label>`;
+  }
+  const options = summaryDetailsFilterOptions(config.records, filter.key);
+  return `<label class="summary-column-filter"><span class="sr-only">Filter ${escapeHtml(filter.label)}</span><select data-summary-details-filter="${escapeHtml(filter.key)}"><option value="">All</option>${options.map(option => `<option value="${escapeHtml(option)}" ${value === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
 }
 
 function summaryDetailsFilteredRecords(config) {
@@ -4276,9 +4453,40 @@ function summaryDetailsFilteredRecords(config) {
     return config.filters.every(filter => {
       const expected = String(filters[filter.key] || "").trim().toLowerCase();
       if (!expected) return true;
-      return String(record[filter.key] || "").trim().toLowerCase() === expected;
+      const actual = String(record[filter.key] || "").trim().toLowerCase();
+      return filter.type === "text" ? actual.includes(expected) : actual === expected;
     });
   });
+}
+
+function summaryDetailsSortedRecords(records) {
+  const key = state.summaryCardDetails.sortKey;
+  if (!key) return records;
+  const direction = state.summaryCardDetails.sortDirection === "desc" ? -1 : 1;
+  return [...records].sort((a, b) => {
+    const aValue = a[key];
+    const bValue = b[key];
+    if (typeof aValue === "number" || typeof bValue === "number") {
+      return (Number(aValue || 0) - Number(bValue || 0)) * direction;
+    }
+    if (key.toLowerCase().includes("date")) {
+      return String(aValue || "9999-12-31").localeCompare(String(bValue || "9999-12-31")) * direction;
+    }
+    return String(aValue || "").localeCompare(String(bValue || ""), undefined, { numeric: true, sensitivity: "base" }) * direction;
+  });
+}
+
+function summaryDetailsSortIndicator(key) {
+  if (state.summaryCardDetails.sortKey !== key) return '<span aria-hidden="true">&updownarrow;</span>';
+  return state.summaryCardDetails.sortDirection === "desc"
+    ? '<span aria-hidden="true">&darr;</span>'
+    : '<span aria-hidden="true">&uarr;</span>';
+}
+
+function summaryDetailsPageNumbers(page, pageCount) {
+  const start = Math.max(1, Math.min(page - 2, pageCount - 4));
+  const end = Math.min(pageCount, start + 4);
+  return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index);
 }
 
 function renderSummaryCardDetailsResults() {
@@ -4293,11 +4501,11 @@ function renderSummaryCardDetailsResults() {
   }
   if (state.leadsError) {
     els.summaryCardDetailsStatus.textContent = "Dashboard records could not be loaded.";
-    els.summaryCardDetailsTableWrap.innerHTML = `<div class="summary-card-details-state is-error"><strong>Unable to load records</strong><span>${escapeHtml(state.leadsError)}</span></div>`;
+    els.summaryCardDetailsTableWrap.innerHTML = `<div class="summary-card-details-state is-error"><strong>Unable to load records</strong><span>${escapeHtml(state.leadsError)}</span><button type="button" data-summary-details-retry>Retry</button></div>`;
     els.summaryCardDetailsPagination.innerHTML = "";
     return;
   }
-  const records = summaryDetailsFilteredRecords(config);
+  const records = summaryDetailsSortedRecords(summaryDetailsFilteredRecords(config));
   const pageSize = state.summaryCardDetails.pageSize;
   const pageCount = Math.max(1, Math.ceil(records.length / pageSize));
   state.summaryCardDetails.page = Math.min(Math.max(1, state.summaryCardDetails.page), pageCount);
@@ -4305,20 +4513,42 @@ function renderSummaryCardDetailsResults() {
   const visible = records.slice(start, start + pageSize);
   els.summaryCardDetailsStatus.textContent = `${records.length} of ${config.records.length} record${config.records.length === 1 ? "" : "s"} shown`;
   if (!visible.length) {
-    els.summaryCardDetailsTableWrap.innerHTML = `<div class="summary-card-details-state"><strong>No matching records</strong><span>Adjust the search or filters to see more results.</span></div>`;
+    const emptyMessage = config.records.length
+      ? "Adjust the search or filters to see more results."
+      : config.emptyMessage || `No records are currently included in ${config.title}.`;
+    els.summaryCardDetailsTableWrap.innerHTML = `<div class="summary-card-details-state"><strong>${config.records.length ? "No matching records" : "Nothing here right now"}</strong><span>${escapeHtml(emptyMessage)}</span></div>`;
   } else {
     els.summaryCardDetailsTableWrap.innerHTML = `
       <table class="summary-card-details-table">
-        <thead><tr>${config.columns.map(column => `<th scope="col">${escapeHtml(column.label)}</th>`).join("")}</tr></thead>
+        <thead>
+          <tr>${config.columns.map(column => `
+            <th scope="col">
+              <button class="summary-sort-button" type="button" data-summary-details-sort="${escapeHtml(column.key)}" aria-label="Sort by ${escapeHtml(column.label)}">
+                ${escapeHtml(column.label)} ${summaryDetailsSortIndicator(column.key)}
+              </button>
+            </th>
+          `).join("")}</tr>
+          <tr class="summary-column-filters">${config.columns.map(column => `<th>${summaryDetailsColumnFilterMarkup(config, column)}</th>`).join("")}</tr>
+        </thead>
         <tbody>${visible.map(record => `<tr class="summary-card-details-row ${record.highRisk ? "is-high-risk" : ""}" data-summary-details-lead="${escapeHtml(record.leadId)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(record.company)}">${config.columns.map(column => `<td data-label="${escapeHtml(column.label)}" class="${escapeHtml(column.className || "")}">${column.render ? column.render(record) : escapeHtml(record[column.key] || "Not set")}</td>`).join("")}</tr>`).join("")}</tbody>
       </table>
     `;
   }
+  const firstResult = records.length ? start + 1 : 0;
+  const lastResult = Math.min(start + visible.length, records.length);
+  const pageButtons = summaryDetailsPageNumbers(state.summaryCardDetails.page, pageCount)
+    .map(pageNumber => `<button type="button" data-summary-details-page="${pageNumber}" class="${pageNumber === state.summaryCardDetails.page ? "is-current" : ""}" aria-label="Page ${pageNumber}" ${pageNumber === state.summaryCardDetails.page ? 'aria-current="page"' : ""}>${pageNumber}</button>`)
+    .join("");
   els.summaryCardDetailsPagination.innerHTML = `
-    <span>Page ${state.summaryCardDetails.page} of ${pageCount}</span>
-    <div>
-      <button type="button" data-summary-details-page="${state.summaryCardDetails.page - 1}" ${state.summaryCardDetails.page <= 1 ? "disabled" : ""}>Previous</button>
-      <button type="button" data-summary-details-page="${state.summaryCardDetails.page + 1}" ${state.summaryCardDetails.page >= pageCount ? "disabled" : ""}>Next</button>
+    <span>Showing ${firstResult} to ${lastResult} of ${records.length} result${records.length === 1 ? "" : "s"}</span>
+    <div class="summary-pagination-controls">
+      <label class="summary-page-size"><span class="sr-only">Results per page</span><select data-summary-details-page-size>
+        ${[7, 10, 20].map(size => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size} / page</option>`).join("")}
+      </select></label>
+      <button type="button" data-summary-details-page="${state.summaryCardDetails.page - 1}" aria-label="Previous page" ${state.summaryCardDetails.page <= 1 ? "disabled" : ""}>&lsaquo;</button>
+      ${pageButtons}
+      <button type="button" data-summary-details-page="${state.summaryCardDetails.page + 1}" aria-label="Next page" ${state.summaryCardDetails.page >= pageCount ? "disabled" : ""}>&rsaquo;</button>
+      <button class="summary-open-full-list" type="button" data-summary-details-open-full>Open full list <span aria-hidden="true">&nearr;</span></button>
     </div>
   `;
 }
@@ -4327,10 +4557,10 @@ function renderSummaryCardDetailsModal() {
   const config = summaryCardDetailsConfig(state.summaryCardDetails.type);
   if (!config || !els.summaryCardDetailsShell) return;
   els.summaryCardDetailsShell.className = `summary-card-details-shell tone-${config.tone}`;
-  els.summaryCardDetailsTitle.textContent = config.title;
+  els.summaryCardDetailsTitle.textContent = `${config.title} Summary (${config.records.length})`;
   els.summaryCardDetailsDescription.textContent = config.description;
   const overdueCount = config.records.filter(record => record.taskStatus === "Overdue").length;
-  els.summaryCardDetailsCount.textContent = config.tone === "amber"
+  els.summaryCardDetailsCount.textContent = state.summaryCardDetails.type === "tasksDue"
     ? `${config.records.length} due - ${overdueCount} overdue`
     : `${config.records.length} record${config.records.length === 1 ? "" : "s"}`;
   els.summaryCardDetailsFilters.innerHTML = summaryDetailsFiltersMarkup(config);
@@ -4338,8 +4568,21 @@ function renderSummaryCardDetailsModal() {
 }
 
 function openSummaryCardDetails(type, trigger) {
-  if (currentView !== "dashboard" || !isPrivilegedDashboardRole() || !summaryCardDetailsConfig(type)) return;
-  state.summaryCardDetails = { type, search: "", filters: {}, page: 1, pageSize: 12, trigger };
+  if (currentView !== "dashboard" || !summaryCardDetailsConfig(type)) return;
+  const allowed = isPrivilegedDashboardRole()
+    ? ["openPipeline", "activeCustomers", "atRisk", "tasksDue"].includes(type)
+    : isSalesmanRole() && type.startsWith("salesman");
+  if (!allowed) return;
+  state.summaryCardDetails = {
+    type,
+    search: "",
+    filters: {},
+    sortKey: type === "salesmanOverdueCalls" ? "daysOverdue" : "dueDate",
+    sortDirection: type === "salesmanOverdueCalls" ? "desc" : "asc",
+    page: 1,
+    pageSize: 7,
+    trigger
+  };
   renderSummaryCardDetailsModal();
   document.body.classList.add("summary-details-modal-open");
   if (typeof els.summaryCardDetailsDialog?.showModal === "function") els.summaryCardDetailsDialog.showModal();
@@ -4358,6 +4601,29 @@ function closeSummaryCardDetails({ restoreFocus = true } = {}) {
   if (!els.summaryCardDetailsDialog?.open) return;
   if (!restoreFocus) state.summaryCardDetails.trigger = null;
   els.summaryCardDetailsDialog.close();
+}
+
+function summaryStageFilterValue(stageKey) {
+  const matchingLead = state.leads.find(lead => normalizeStageKey(lead.stage) === stageKey);
+  return matchingLead?.stage || stageDisplayLabel(stageKey);
+}
+
+function openSummaryDetailsFullList() {
+  const type = state.summaryCardDetails.type;
+  const config = summaryCardDetailsConfig(type);
+  if (!config) return;
+  const fullList = config.fullList || {};
+  state.filters = { search: "", stage: "all", salesman: "all", priority: "all", territory: "all" };
+  state.importedAfter = "";
+  state.overduePipelineOnly = Boolean(fullList.overdueOnly || type === "tasksDue");
+  state.dueTodayPipelineOnly = Boolean(fullList.dueTodayOnly);
+  const adminStage = type === "activeCustomers" ? "WON" : "";
+  const stageKey = fullList.stageKey || adminStage;
+  if (stageKey) state.filters.stage = summaryStageFilterValue(stageKey);
+  state.pipelineTable.page = 1;
+  closeSummaryCardDetails({ restoreFocus: false });
+  setView("pipeline");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function trapSummaryCardDetailsFocus(event) {
@@ -5038,10 +5304,9 @@ function renderOverdueBanner() {
 
 function openOverduePipeline() {
   state.overduePipelineOnly = true;
+  state.dueTodayPipelineOnly = false;
   state.filters = { ...state.filters, search: "", stage: "all", priority: "all", territory: "all", salesman: "all" };
-  state.pipelineViewMode = "list";
-  state.pipelineKanbanFunnelExpanded = false;
-  localStorage.setItem("arg_pipeline_view_mode", state.pipelineViewMode);
+  state.pipelineTable.page = 1;
   state.lastNonLeadView = "pipeline";
   currentView = "pipeline";
   state.leadDrawerOpen = false;
@@ -5072,9 +5337,18 @@ function openOverdueActivityReport() {
 
 function renderPipelineFilterNotice() {
   if (!els.overduePipelineFilter) return;
-  const count = state.leads.filter(leadHasOverdueFollowup).length;
-  els.overduePipelineCount.textContent = `${count} overdue record${count === 1 ? "" : "s"}`;
-  els.overduePipelineFilter.classList.toggle("hidden", !(currentView === "pipeline" && state.overduePipelineOnly));
+  const showingDueToday = state.dueTodayPipelineOnly;
+  const showingOverdue = state.overduePipelineOnly;
+  const count = showingDueToday
+    ? state.leads.filter(lead => String(lead.next_action_date || "").slice(0, 10) === today()).length
+    : state.leads.filter(leadHasOverdueFollowup).length;
+  const label = showingDueToday ? "due today" : "overdue";
+  const title = els.overduePipelineFilter.querySelector("strong");
+  const clearButton = els.clearOverdueFilter;
+  if (title) title.textContent = showingDueToday ? "Showing follow-ups due today" : "Showing overdue follow-ups only";
+  els.overduePipelineCount.textContent = `${count} ${label} record${count === 1 ? "" : "s"}`;
+  if (clearButton) clearButton.textContent = "Clear summary filter";
+  els.overduePipelineFilter.classList.toggle("hidden", !(currentView === "pipeline" && (showingOverdue || showingDueToday)));
 }
 
 function normalizedUserTokens(person) {
@@ -5340,55 +5614,101 @@ function applyPerformanceChartWidth(rows) {
 
 function renderPerformanceChart(rows) {
   if (!els.performanceChart) return;
-  applyPerformanceChartWidth(rows);
   if (typeof Chart === "undefined") {
-    els.performanceChart.replaceWith(Object.assign(document.createElement("p"), {
-      className: "empty-copy",
-      textContent: "Chart.js is still loading. Performance data is available in the heatmap below."
-    }));
+    els.performanceChart.closest(".salesmen-chart-frame")?.insertAdjacentHTML("beforeend", `<p class="empty-copy">Chart unavailable. Assigned lead totals remain available in the directory.</p>`);
     return;
   }
   if (performanceChartInstance) performanceChartInstance.destroy();
   performanceChartInstance = new Chart(els.performanceChart, {
     type: "bar",
     data: {
-      labels: rows.map(row => chartLabelName(row.name)),
+      labels: rows.map(row => row.name),
       datasets: [
-        { label: "Assigned leads", data: rows.map(row => row.totalAssigned), backgroundColor: "#2E6DA4", borderRadius: 3, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 6 },
-        { label: "Activities logged", data: rows.map(row => row.activitiesLogged), backgroundColor: "#6B9A3E", borderRadius: 3, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 6 },
-        { label: "Follow-ups", data: rows.map(row => row.followupsCompleted), backgroundColor: "#D68A2C", borderRadius: 3, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 6 },
-        { label: "Stage leads", data: rows.map(row => row.filteredStageCount), backgroundColor: "#8291A3", borderRadius: 3, borderSkipped: false, barPercentage: 0.72, categoryPercentage: 0.62, maxBarThickness: 6 }
+        {
+          label: "Assigned leads",
+          data: rows.map(row => row.totalAssigned),
+          backgroundColor: "#1f6aa5",
+          borderColor: "#06283d",
+          borderWidth: 1,
+          borderRadius: 2,
+          borderSkipped: false,
+          maxBarThickness: 18
+        }
       ]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 2, right: 22, bottom: 0, left: 2 } },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { color: "#d8e0e8" },
+          beginAtZero: true,
+          ticks: { font: { size: 12, weight: "600" }, color: "#475569", precision: 0 },
+          title: { display: true, text: "Assigned leads", color: "#475569", font: { size: 12, weight: "600" } }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 12, weight: "600" }, color: "#172b4d", autoSkip: false }
+        }
+      }
+    }
+  });
+}
+
+function renderSalesmenSummaryChart(rows) {
+  if (!els.salesmenSummaryChart || !els.salesmenSummaryLegend || !els.salesmenConversionRate) return;
+  const totalAssigned = rows.reduce((sum, row) => sum + row.totalAssigned, 0);
+  const converted = rows.reduce((sum, row) => sum + row.activeCustomers, 0);
+  const open = rows.reduce((sum, row) => sum + row.openLeads, 0);
+  const overdue = rows.reduce((sum, row) => sum + row.overdueFollowups, 0);
+  const tasksDue = rows.reduce((sum, row) => sum + row.tasksDue, 0);
+  const conversionRate = percentOf(converted, totalAssigned);
+  const metrics = [
+    { label: "Converted leads", value: converted, color: "#6d9f3d" },
+    { label: "Open leads", value: open, color: "#1f6aa5" },
+    { label: "Overdue follow-ups", value: overdue, color: "#de8b20" },
+    { label: "Tasks due", value: tasksDue, color: "#d94a48" }
+  ];
+  els.salesmenConversionRate.textContent = `${conversionRate}%`;
+  els.salesmenSummaryLegend.innerHTML = metrics.map(metric => `
+    <div class="salesmen-summary-legend-row">
+      <i style="--legend-color:${metric.color}" aria-hidden="true"></i>
+      <span>${escapeHtml(metric.label)}</span>
+      <strong>${escapeHtml(String(metric.value))}</strong>
+      <small>${escapeHtml(String(percentOf(metric.value, totalAssigned)))}%</small>
+    </div>
+  `).join("");
+  const textEquivalent = metrics.map(metric => `${metric.label}: ${metric.value}`).join(", ");
+  els.salesmenSummaryChart.setAttribute("aria-label", `Overall conversion rate ${conversionRate} percent. ${textEquivalent}.`);
+  if (typeof Chart === "undefined") return;
+  if (salesmenSummaryChartInstance) salesmenSummaryChartInstance.destroy();
+  salesmenSummaryChartInstance = new Chart(els.salesmenSummaryChart, {
+    type: "doughnut",
+    data: {
+      labels: metrics.map(metric => metric.label),
+      datasets: [{
+        data: metrics.map(metric => metric.value),
+        backgroundColor: metrics.map(metric => metric.color),
+        borderColor: "#ffffff",
+        borderWidth: 2,
+        hoverOffset: 3
+      }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: {
-        padding: {
-          top: 6,
-          right: 16,
-          bottom: 0,
-          left: 6
-        }
-      },
-      plugins: { legend: { display: false } },
-      scales: {
-        x: {
-          grid: { display: false },
-          offset: true,
-          ticks: {
-            font: { size: 8, weight: "600" },
-            color: "#334155",
-            maxRotation: 0,
-            minRotation: 0,
-            autoSkip: false,
-            padding: 5
+      cutout: "68%",
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              return `${context.label}: ${context.raw}`;
+            }
           }
-        },
-        y: {
-          grid: { color: "#D6DEE6" },
-          ticks: { font: { size: 8, weight: "600" }, color: "#64748B", stepSize: 1, precision: 0 },
-          beginAtZero: true
         }
       }
     }
@@ -5605,23 +5925,7 @@ function initDashboardCollapsibles() {
 
 function renderPerformanceAnalytics() {
   if (!els.performancePanel || state.currentUser?.role !== "admin") return;
-  const rows = scoreSalesmanPerformanceRows(salesmanPerformanceRows());
-  renderPerformanceLeaderboard(rows);
-  if (!els.performancePanel.classList.contains("is-collapsed")) {
-    renderPerformanceChart(rows);
-  }
-  if (els.performanceTable) {
-    els.performanceTable.innerHTML = rows.map(row => `
-      <tr>
-        <td>${escapeHtml(row.name)}</td>
-        <td class="${heatmapClass(row.totalAssigned)}">${row.totalAssigned}</td>
-        <td class="${heatmapClass(row.activitiesLogged)}">${row.activitiesLogged}</td>
-        <td class="${heatmapClass(row.followupsCompleted)}">${row.followupsCompleted}</td>
-        <td class="${scoreHeatmapClass(row.performanceScore)}">${row.performanceScore}%</td>
-      </tr>
-    `).join("");
-  }
-  renderPerformanceFeed(rows);
+  if (currentView === "salesmen") renderSalesmenManagementDashboard();
 }
 
 function renderAdminTaskAccountsPanel() {
@@ -5968,17 +6272,50 @@ function actionableSalesmanLeads() {
     );
 }
 
+function salesmanDashboardSummaryDatasets() {
+  const myLeads = salesmanDashboardLeads();
+  const scheduled = actionableSalesmanLeads();
+  const overdueCalls = scheduled.filter(leadHasOverdueNextAction);
+  const dueToday = scheduled.filter(lead =>
+    String(lead.next_action_date || "").slice(0, 10) === today()
+  );
+  const byStage = stageKey => myLeads.filter(lead => normalizeStageKey(lead.stage) === stageKey);
+  return {
+    myLeads,
+    overdueCalls,
+    dueToday,
+    stageNew: byStage("NEW"),
+    stageContacted: byStage("CONTACTED"),
+    stageNegotiation: byStage("NEGOTIATION"),
+    stageWon: byStage("WON")
+  };
+}
+
+function salesmanDashboardSummaryIcon(type) {
+  const icons = {
+    myLeads: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>',
+    overdueCalls: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z"></path>',
+    dueToday: '<rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4"></path>',
+    stageNew: '<path d="M15 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8" cy="7" r="4"></circle><path d="M19 8v6M16 11h6"></path>',
+    stageContacted: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 10h.01M12 10h.01M16 10h.01"></path>',
+    stageNegotiation: '<path d="m8 11 4-4 4 4M12 7v10"></path><path d="M5 5 2 8l4 4M19 5l3 3-4 4"></path><path d="M7 19h10"></path>',
+    stageWon: '<path d="M8 21h8M12 17v4"></path><path d="M7 4h10v5a5 5 0 0 1-10 0z"></path><path d="M7 6H4a2 2 0 0 0 2 4h1M17 6h3a2 2 0 0 1-2 4h-1"></path>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[type] || icons.myLeads}</svg>`;
+}
+
 function renderSalesmanSimplifiedDashboard() {
   if (!els.salesmanSimplifiedDashboard) return;
-  const leads = salesmanDashboardLeads();
+  const datasets = salesmanDashboardSummaryDatasets();
+  const leads = datasets.myLeads;
   const queue = actionableSalesmanLeads();
-  const overdue = queue.filter(lead => leadHasOverdueNextAction(lead));
-  const dueToday = queue.filter(lead => String(lead.next_action_date || "").slice(0, 10) === today());
+  const overdue = datasets.overdueCalls;
+  const dueToday = datasets.dueToday;
   const pipelineCounts = {
-    NEW: leads.filter(lead => normalizeStageKey(lead.stage) === "NEW").length,
-    CONTACTED: leads.filter(lead => normalizeStageKey(lead.stage) === "CONTACTED").length,
-    NEGOTIATION: leads.filter(lead => normalizeStageKey(lead.stage) === "NEGOTIATION").length,
-    WON: leads.filter(lead => normalizeStageKey(lead.stage) === "WON").length
+    NEW: datasets.stageNew.length,
+    CONTACTED: datasets.stageContacted.length,
+    NEGOTIATION: datasets.stageNegotiation.length,
+    WON: datasets.stageWon.length
   };
 
   if (els.salesmanSimplifiedGreeting) {
@@ -5986,16 +6323,22 @@ function renderSalesmanSimplifiedDashboard() {
   }
 
   if (els.salesmanSimplifiedMetrics) {
+    const summaryLoading = state.leadsLoading && !state.leadsLoaded;
     els.salesmanSimplifiedMetrics.innerHTML = [
-      { label: "My leads", value: leads.length, meta: "Total assigned to you", tone: "info" },
-      { label: "Overdue calls", value: overdue.length, meta: overdue.length ? `${overdue[0].company_name || "Next lead"} first` : "Nothing overdue right now", tone: "danger" },
-      { label: "Due today", value: dueToday.length, meta: dueToday.length ? `${dueToday[0].company_name || "Next lead"} is due today` : "No calls due today", tone: "warm" }
+      { type: "salesmanMyLeads", icon: "myLeads", label: "My leads", value: leads.length, meta: "Total assigned to you", action: "View summary", tone: "info" },
+      { type: "salesmanOverdueCalls", icon: "overdueCalls", label: "Overdue calls", value: overdue.length, meta: overdue.length ? `${overdue[0].company_name || "Next lead"} first` : "Nothing overdue right now", action: "See details", tone: "danger" },
+      { type: "salesmanDueToday", icon: "dueToday", label: "Due today", value: dueToday.length, meta: dueToday.length ? `${dueToday[0].company_name || "Next lead"} is due today` : "No calls due today", action: "View today's list", tone: "warm" }
     ].map(card => `
-      <article class="salesman-simplified-metric tone-${escapeHtml(card.tone)}">
-        <span>${escapeHtml(card.label)}</span>
-        <strong>${escapeHtml(String(card.value))}</strong>
-        <small>${escapeHtml(card.meta)}</small>
-      </article>
+      <button class="salesman-simplified-metric tone-${escapeHtml(card.tone)} ${summaryLoading ? "is-loading" : ""}" type="button" data-summary-card="${escapeHtml(card.type)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" aria-label="${escapeHtml(`${card.label}, ${card.value}. ${card.action}`)}" title="${escapeHtml(`View ${card.label} breakdown`)}" aria-busy="${summaryLoading}" ${summaryLoading ? "disabled" : ""}>
+        <span class="salesman-summary-card-icon">${salesmanDashboardSummaryIcon(card.icon)}</span>
+        <span class="salesman-summary-card-copy">
+          <span class="salesman-summary-card-label">${escapeHtml(card.label)}</span>
+          <strong>${escapeHtml(String(card.value))}</strong>
+          <small>${escapeHtml(card.meta)}</small>
+          <span class="salesman-summary-card-action">${escapeHtml(card.action)} <span aria-hidden="true">&rarr;</span></span>
+        </span>
+        <span class="salesman-summary-card-chevron" aria-hidden="true">&rsaquo;</span>
+      </button>
     `).join("");
   }
 
@@ -6084,16 +6427,21 @@ function renderSalesmanSimplifiedDashboard() {
   }
 
   if (els.salesmanSimplifiedPipeline) {
+    const summaryLoading = state.leadsLoading && !state.leadsLoaded;
     els.salesmanSimplifiedPipeline.innerHTML = [
-      ["New", pipelineCounts.NEW],
-      ["Contacted", pipelineCounts.CONTACTED],
-      ["Negotiation", pipelineCounts.NEGOTIATION],
-      ["Won", pipelineCounts.WON]
-    ].map(([label, value]) => `
-      <article class="salesman-simplified-stage">
-        <span>${escapeHtml(label)}</span>
-        <strong>${escapeHtml(String(value))}</strong>
-      </article>
+      { label: "New", value: pipelineCounts.NEW, type: "salesmanStageNew", icon: "stageNew", tone: "new" },
+      { label: "Contacted", value: pipelineCounts.CONTACTED, type: "salesmanStageContacted", icon: "stageContacted", tone: "contacted" },
+      { label: "Negotiation", value: pipelineCounts.NEGOTIATION, type: "salesmanStageNegotiation", icon: "stageNegotiation", tone: "negotiation" },
+      { label: "Won", value: pipelineCounts.WON, type: "salesmanStageWon", icon: "stageWon", tone: "won" }
+    ].map(card => `
+      <button class="salesman-simplified-stage tone-${escapeHtml(card.tone)} ${summaryLoading ? "is-loading" : ""}" type="button" data-summary-card="${escapeHtml(card.type)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" aria-label="${escapeHtml(`${card.label} leads, ${card.value}. View summary`)}" title="${escapeHtml(`View ${card.label} leads breakdown`)}" aria-busy="${summaryLoading}" ${summaryLoading ? "disabled" : ""}>
+        <span class="salesman-stage-copy">
+          <span class="salesman-stage-label">${escapeHtml(card.label)}</span>
+          <strong>${escapeHtml(String(card.value))}</strong>
+          <span class="salesman-stage-action">View summary <span aria-hidden="true">&rarr;</span></span>
+        </span>
+        <span class="salesman-stage-icon">${salesmanDashboardSummaryIcon(card.icon)}</span>
+      </button>
     `).join("");
   }
 
@@ -6968,6 +7316,259 @@ function leadTableMarkup(leads, { idAttribute = "data-lead-id", selectedId = "",
   `;
 }
 
+function pipelineDaysOverdue(lead) {
+  const dueDate = String(lead?.next_action_date || "").slice(0, 10);
+  return dueDate ? Math.max(0, -daysUntil(dueDate)) : null;
+}
+
+function pipelineFilterOptions(values, selected, allLabel) {
+  const normalizedValues = [...new Set(values
+    .map(value => String(value || "").trim())
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  return [
+    `<option value="all" ${selected === "all" ? "selected" : ""}>${escapeHtml(allLabel)}</option>`,
+    ...normalizedValues.map(value => `<option value="${escapeHtml(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(value)}</option>`)
+  ].join("");
+}
+
+function pipelineFilterActiveCount() {
+  return [
+    state.filters.search,
+    state.filters.stage !== "all",
+    state.filters.salesman !== "all",
+    state.filters.priority !== "all",
+    state.filters.territory !== "all",
+    state.pipelineTable.nextAction !== "all",
+    state.pipelineTable.overdue !== "all",
+    state.pipelineTable.dueDate,
+    state.pipelineTable.dateFrom,
+    state.pipelineTable.dateTo,
+    state.overduePipelineOnly,
+    state.dueTodayPipelineOnly,
+    state.importedAfter
+  ].filter(Boolean).length;
+}
+
+function resetPipelineFilters() {
+  state.filters = { search: "", stage: "all", salesman: "all", priority: "all", territory: "all" };
+  state.pipelineTable.nextAction = "all";
+  state.pipelineTable.overdue = "all";
+  state.pipelineTable.dueDate = "";
+  state.pipelineTable.dateFrom = "";
+  state.pipelineTable.dateTo = "";
+  state.pipelineTable.page = 1;
+  state.overduePipelineOnly = false;
+  state.dueTodayPipelineOnly = false;
+  state.importedAfter = "";
+}
+
+function matchesPipelineOverdueRange(lead, range) {
+  if (range === "all") return true;
+  const days = pipelineDaysOverdue(lead);
+  if (range === "not-overdue") return !days;
+  if (days === null || days === 0) return false;
+  if (range === "1-7") return days <= 7;
+  if (range === "8-14") return days >= 8 && days <= 14;
+  if (range === "15-30") return days >= 15 && days <= 30;
+  if (range === "31-plus") return days > 30;
+  return true;
+}
+
+function pipelineSortValue(lead, key) {
+  const presentation = leadTablePresentation(lead);
+  const values = {
+    company: lead.company_name || lead.contact_person || "",
+    nextAction: presentation.plan.action || "",
+    daysOverdue: pipelineDaysOverdue(lead) ?? -1,
+    dueDate: String(lead.next_action_date || "").slice(0, 10),
+    salesman: lead.assigned_salesman || "",
+    stage: stageDisplayLabel(lead.stage),
+    priority: presentation.priorityLabel || "",
+    territory: lead.territory || inferEmirate(lead) || ""
+  };
+  return values[key] ?? "";
+}
+
+function pipelineFilteredAndSortedLeads() {
+  const nextAction = state.pipelineTable.nextAction;
+  const dueDate = state.pipelineTable.dueDate;
+  const dateFrom = state.pipelineTable.dateFrom;
+  const dateTo = state.pipelineTable.dateTo;
+  const direction = state.pipelineTable.sortDirection === "desc" ? -1 : 1;
+  const key = state.pipelineTable.sortKey;
+  return filteredLeads()
+    .filter(lead => {
+      const action = leadActionPlanState(lead).action;
+      const reportDueDate = String(lead.next_action_date || "").slice(0, 10);
+      return (nextAction === "all" || action === nextAction)
+        && matchesPipelineOverdueRange(lead, state.pipelineTable.overdue)
+        && (!dueDate || reportDueDate === dueDate)
+        && (!dateFrom || (reportDueDate && reportDueDate >= dateFrom))
+        && (!dateTo || (reportDueDate && reportDueDate <= dateTo));
+    })
+    .map((lead, index) => ({ lead, index }))
+    .sort((left, right) => {
+      const a = pipelineSortValue(left.lead, key);
+      const b = pipelineSortValue(right.lead, key);
+      const comparison = typeof a === "number" && typeof b === "number"
+        ? a - b
+        : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+      return comparison ? comparison * direction : left.index - right.index;
+    })
+    .map(item => item.lead);
+}
+
+function pipelineSortableHeader(key, label) {
+  const active = state.pipelineTable.sortKey === key;
+  const direction = active ? state.pipelineTable.sortDirection : "none";
+  const nextDirection = active && direction === "asc" ? "descending" : "ascending";
+  return `
+    <th scope="col" aria-sort="${active ? `${direction}ending` : "none"}">
+      <button class="pipeline-sort-button ${active ? "active" : ""}" type="button" data-pipeline-sort="${escapeHtml(key)}" aria-label="Sort ${escapeHtml(label)} ${nextDirection}">
+        <span>${escapeHtml(label)}</span>
+        <span class="pipeline-sort-indicator" aria-hidden="true">${active ? (direction === "asc" ? "▲" : "▼") : "↕"}</span>
+      </button>
+    </th>
+  `;
+}
+
+function pipelineLeadRowMarkup(lead) {
+  const { plan, dueDate, overdueTone, overdueLabel, priorityLabel, priorityTone, stageKey, companyMeta } = leadTablePresentation(lead);
+  return `
+    <tr class="lead-table-row ${lead.id === state.selectedId ? "active" : ""}" data-lead-id="${escapeHtml(lead.id)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
+      <td class="lead-table-company">
+        <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
+        ${companyMeta ? `<small>${escapeHtml(companyMeta)}</small>` : ""}
+      </td>
+      <td class="lead-table-next-action">${escapeHtml(plan.action)}</td>
+      <td><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(overdueLabel)}</span></td>
+      <td>${escapeHtml(dueDate ? formatPlanDate(dueDate) : "Not set")}</td>
+      <td>${escapeHtml(lead.assigned_salesman || "Unassigned")}</td>
+      <td><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
+      <td><span class="lead-table-badge lead-table-priority-${priorityTone}">${escapeHtml(priorityLabel)}</span></td>
+      <td class="lead-table-territory">${escapeHtml(lead.territory || inferEmirate(lead) || "Not set")}</td>
+      <td class="pipeline-row-actions">
+        <button class="pipeline-row-action" type="button" data-pipeline-open="${escapeHtml(lead.id)}" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">Open</button>
+      </td>
+    </tr>
+  `;
+}
+
+function pipelineFilterHeaderMarkup() {
+  const nextActions = state.leads.map(lead => leadActionPlanState(lead).action);
+  const stages = [...(state.settings.stages || []), ...state.leads.map(lead => lead.stage)];
+  const priorities = [...(state.settings.priorities || []), ...state.leads.map(lead => lead.priority)];
+  const territories = [...(state.settings.territories || []), ...state.leads.flatMap(lead => [lead.territory, inferEmirate(lead)])];
+  const salesmen = [...(state.settings.salesmen || []).map(salesmanName), ...state.leads.map(lead => lead.assigned_salesman)];
+  const salesmanControl = isSalesmanRole()
+    ? `<span class="pipeline-owner-scope" aria-label="Salesman scope">${escapeHtml(state.currentUser?.name || "My leads")}</span>`
+    : `<label><span class="sr-only">Filter by salesman</span><select class="${state.filters.salesman !== "all" ? "is-active" : ""}" data-pipeline-filter="salesman">${pipelineFilterOptions(salesmen, state.filters.salesman, "All salesmen")}</select></label>`;
+  return `
+    <tr class="pipeline-filter-row">
+      <th>
+        <label><span class="sr-only">Filter company or contact</span><input class="${state.filters.search ? "is-active" : ""}" type="search" data-pipeline-filter="search" value="${escapeHtml(state.filters.search)}" placeholder="Filter company / contact..."></label>
+      </th>
+      <th>
+        <label><span class="sr-only">Filter by next action</span><select class="${state.pipelineTable.nextAction !== "all" ? "is-active" : ""}" data-pipeline-filter="nextAction">${pipelineFilterOptions(nextActions, state.pipelineTable.nextAction, "All actions")}</select></label>
+      </th>
+      <th>
+        <label><span class="sr-only">Filter by days overdue</span><select class="${state.pipelineTable.overdue !== "all" ? "is-active" : ""}" data-pipeline-filter="overdue">
+          <option value="all" ${state.pipelineTable.overdue === "all" ? "selected" : ""}>All</option>
+          <option value="not-overdue" ${state.pipelineTable.overdue === "not-overdue" ? "selected" : ""}>Not overdue</option>
+          <option value="1-7" ${state.pipelineTable.overdue === "1-7" ? "selected" : ""}>1-7 days</option>
+          <option value="8-14" ${state.pipelineTable.overdue === "8-14" ? "selected" : ""}>8-14 days</option>
+          <option value="15-30" ${state.pipelineTable.overdue === "15-30" ? "selected" : ""}>15-30 days</option>
+          <option value="31-plus" ${state.pipelineTable.overdue === "31-plus" ? "selected" : ""}>More than 30 days</option>
+        </select></label>
+      </th>
+      <th>
+        <label><span class="sr-only">Filter by exact due date</span><input class="${state.pipelineTable.dueDate ? "is-active" : ""}" type="date" data-pipeline-filter="dueDate" value="${escapeHtml(state.pipelineTable.dueDate)}"></label>
+      </th>
+      <th>${salesmanControl}</th>
+      <th>
+        <label><span class="sr-only">Filter by stage</span><select class="${state.filters.stage !== "all" ? "is-active" : ""}" data-pipeline-filter="stage">${pipelineFilterOptions(stages, state.filters.stage, "All stages")}</select></label>
+      </th>
+      <th>
+        <label><span class="sr-only">Filter by priority</span><select class="${state.filters.priority !== "all" ? "is-active" : ""}" data-pipeline-filter="priority">${pipelineFilterOptions(priorities, state.filters.priority, "All priorities")}</select></label>
+      </th>
+      <th>
+        <label><span class="sr-only">Filter by territory</span><select class="${state.filters.territory !== "all" ? "is-active" : ""}" data-pipeline-filter="territory">${pipelineFilterOptions(territories, state.filters.territory, "All territories")}</select></label>
+      </th>
+      <th><span class="sr-only">Row actions</span></th>
+    </tr>
+  `;
+}
+
+function pipelineTableMarkup(leads) {
+  const rows = leads.map(pipelineLeadRowMarkup).join("");
+  return `
+    <table class="live-lead-table pipeline-lead-table">
+      <thead>
+        <tr class="pipeline-column-row">
+          ${pipelineSortableHeader("company", "Company / Contact")}
+          ${pipelineSortableHeader("nextAction", "Next Action")}
+          ${pipelineSortableHeader("daysOverdue", "Days Overdue")}
+          ${pipelineSortableHeader("dueDate", "Due Date")}
+          ${pipelineSortableHeader("salesman", "Salesman")}
+          ${pipelineSortableHeader("stage", "Stage")}
+          ${pipelineSortableHeader("priority", "Priority")}
+          ${pipelineSortableHeader("territory", "Territory")}
+          <th scope="col">Actions</th>
+        </tr>
+        ${pipelineFilterHeaderMarkup()}
+      </thead>
+      <tbody>${rows || `
+        <tr class="lead-table-empty">
+          <td colspan="9">
+            <div class="pipeline-empty-state">
+              <strong>No leads match the selected filters.</strong>
+              <button class="ghost-button" type="button" data-pipeline-clear>Clear all filters</button>
+            </div>
+          </td>
+        </tr>`}
+      </tbody>
+    </table>
+  `;
+}
+
+function pipelineLoadingMarkup() {
+  return `
+    <div class="pipeline-loading-state" role="status" aria-label="Loading live leads">
+      ${Array.from({ length: 6 }, (_, index) => `<span style="--skeleton-index:${index}"></span>`).join("")}
+    </div>
+  `;
+}
+
+function pipelineErrorMarkup(message) {
+  return `
+    <div class="pipeline-error-state" role="alert">
+      <strong>Live leads could not be loaded.</strong>
+      <span>${escapeHtml(message || "Please try again.")}</span>
+      <button class="primary-button" type="button" data-pipeline-retry>Retry</button>
+    </div>
+  `;
+}
+
+function pipelinePaginationMarkup(total, page, pageSize) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const start = total ? ((page - 1) * pageSize) + 1 : 0;
+  const end = Math.min(total, page * pageSize);
+  return `
+    <div class="pipeline-pagination-summary">Showing ${start}-${end} of ${total} result${total === 1 ? "" : "s"}</div>
+    <div class="pipeline-pagination-controls">
+      <label>Rows
+        <select data-pipeline-page-size>
+          ${[10, 20, 50].map(size => `<option value="${size}" ${pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
+        </select>
+      </label>
+      <button class="ghost-button" type="button" data-pipeline-page="${page - 1}" ${page <= 1 ? "disabled" : ""} aria-label="Previous page">Previous</button>
+      <span>Page ${page} of ${pages}</span>
+      <button class="ghost-button" type="button" data-pipeline-page="${page + 1}" ${page >= pages ? "disabled" : ""} aria-label="Next page">Next</button>
+    </div>
+  `;
+}
+
 function bindLeadTableRows(container, idAttribute, onOpen) {
   container.querySelectorAll(`.lead-table-row[${idAttribute}]`).forEach(row => {
     const openRow = () => onOpen(row.getAttribute(idAttribute));
@@ -6984,15 +7585,131 @@ function bindLeadTableRows(container, idAttribute, onOpen) {
   });
 }
 
-function renderLeadList() {
-  const leads = filteredLeads();
-  els.leadCount.textContent = `${leads.length} record${leads.length === 1 ? "" : "s"}${state.importedAfter ? " from latest import" : ""}`;
-  els.leadList.innerHTML = leadTableMarkup(leads, { selectedId: state.selectedId });
+function restorePipelineFilterFocus(filter, selectionStart, selectionEnd) {
+  if (!filter) return;
+  const control = els.leadList.querySelector(`[data-pipeline-filter="${filter}"]`);
+  if (!control) return;
+  control.focus();
+  if (typeof control.setSelectionRange === "function" && Number.isInteger(selectionStart)) {
+    control.setSelectionRange(selectionStart, selectionEnd);
+  }
+}
+
+function renderLeadList({ focusFilter = "", selectionStart, selectionEnd } = {}) {
+  if (!els.leadList) return;
+  const canExportPipeline = state.currentUser?.role === "admin";
+  const activeFilters = pipelineFilterActiveCount();
+  els.pipelineReportTools?.classList.toggle("hidden", !canExportPipeline);
+  if (els.pipelineReportDateFrom && document.activeElement !== els.pipelineReportDateFrom) {
+    els.pipelineReportDateFrom.value = state.pipelineTable.dateFrom;
+  }
+  if (els.pipelineReportDateTo && document.activeElement !== els.pipelineReportDateTo) {
+    els.pipelineReportDateTo.value = state.pipelineTable.dateTo;
+  }
+  els.clearPipelineFilters?.classList.toggle("hidden", activeFilters === 0);
+  els.leadList.setAttribute("aria-busy", String(state.leadsLoading));
+
+  if (state.leadsLoading && !state.leadsLoaded) {
+    [els.exportPipelineExcel, els.exportPipelinePdf].forEach(button => {
+      if (button) button.disabled = true;
+    });
+    els.leadCount.textContent = "Loading records";
+    els.leadList.innerHTML = pipelineLoadingMarkup();
+    if (els.pipelinePagination) els.pipelinePagination.innerHTML = "";
+    return;
+  }
+  if (state.leadsError) {
+    [els.exportPipelineExcel, els.exportPipelinePdf].forEach(button => {
+      if (button) button.disabled = true;
+    });
+    els.leadCount.textContent = "Records unavailable";
+    els.leadList.innerHTML = pipelineErrorMarkup(state.leadsError);
+    if (els.pipelinePagination) els.pipelinePagination.innerHTML = "";
+    bindPipelineTableEvents();
+    return;
+  }
+
+  const filtered = pipelineFilteredAndSortedLeads();
+  [els.exportPipelineExcel, els.exportPipelinePdf].forEach(button => {
+    if (button) button.disabled = !canExportPipeline || filtered.length === 0;
+  });
+  const total = state.leads.length;
+  const pages = Math.max(1, Math.ceil(filtered.length / state.pipelineTable.pageSize));
+  state.pipelineTable.page = Math.min(Math.max(1, state.pipelineTable.page), pages);
+  const start = (state.pipelineTable.page - 1) * state.pipelineTable.pageSize;
+  const leads = filtered.slice(start, start + state.pipelineTable.pageSize);
+  els.leadCount.textContent = activeFilters
+    ? `Showing ${filtered.length} of ${total} leads`
+    : `${total} lead${total === 1 ? "" : "s"}`;
+  if (els.pipelineListStatus) {
+    els.pipelineListStatus.textContent = `${filtered.length} lead${filtered.length === 1 ? "" : "s"} shown${activeFilters ? ` with ${activeFilters} active filter${activeFilters === 1 ? "" : "s"}` : ""}.`;
+  }
+  els.leadList.innerHTML = pipelineTableMarkup(leads);
+  if (els.pipelinePagination) {
+    els.pipelinePagination.innerHTML = pipelinePaginationMarkup(filtered.length, state.pipelineTable.page, state.pipelineTable.pageSize);
+  }
 
   bindLeadTableRows(els.leadList, "data-lead-id", leadId => {
     state.selectedId = leadId;
     openLeadDrawer(leadId);
     render();
+  });
+  bindPipelineTableEvents();
+  restorePipelineFilterFocus(focusFilter, selectionStart, selectionEnd);
+}
+
+function updatePipelineFilter(filter, value) {
+  if (["search", "stage", "salesman", "priority", "territory"].includes(filter)) {
+    state.filters[filter] = value;
+  } else if (["nextAction", "overdue", "dueDate", "dateFrom", "dateTo"].includes(filter)) {
+    state.pipelineTable[filter] = value;
+  }
+  state.pipelineTable.page = 1;
+  state.importedAfter = "";
+}
+
+function bindPipelineTableEvents() {
+  if (!els.leadList) return;
+  els.leadList.querySelectorAll("[data-pipeline-filter]").forEach(control => {
+    const eventName = control.matches('input[type="search"]') ? "input" : "change";
+    control.addEventListener(eventName, event => {
+      const target = event.currentTarget;
+      updatePipelineFilter(target.dataset.pipelineFilter, target.value);
+      renderLeadList({
+        focusFilter: target.dataset.pipelineFilter,
+        selectionStart: target.selectionStart,
+        selectionEnd: target.selectionEnd
+      });
+    });
+  });
+  els.leadList.querySelectorAll("[data-pipeline-sort]").forEach(button => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.pipelineSort;
+      if (state.pipelineTable.sortKey === key) {
+        state.pipelineTable.sortDirection = state.pipelineTable.sortDirection === "asc" ? "desc" : "asc";
+      } else {
+        state.pipelineTable.sortKey = key;
+        state.pipelineTable.sortDirection = "asc";
+      }
+      state.pipelineTable.page = 1;
+      renderLeadList();
+    });
+  });
+  els.leadList.querySelectorAll("[data-pipeline-open]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      state.selectedId = button.dataset.pipelineOpen;
+      openLeadDrawer(button.dataset.pipelineOpen);
+    });
+  });
+  els.leadList.querySelectorAll("[data-pipeline-clear]").forEach(button => {
+    button.addEventListener("click", () => {
+      resetPipelineFilters();
+      render();
+    });
+  });
+  els.leadList.querySelectorAll("[data-pipeline-retry]").forEach(button => {
+    button.addEventListener("click", () => loadLeads().catch(error => setToast(error.message, "error")));
   });
 }
 
@@ -8337,44 +9054,356 @@ async function moveKanbanLead(leadId, stage) {
   }
 }
 
-function renderSalesmenView() {
-  if (state.currentUser?.role !== "admin") {
-    els.salesmenSummary.textContent = "My workspace";
-    els.salesmenGrid.innerHTML = `<p class="empty-copy">Salesman accounts are visible to administrators only.</p>`;
-    return;
-  }
-  const salesmen = analyticsSalesmen().filter(person => salesmanName(person) !== "Unassigned");
-  els.salesmenSummary.textContent = `${salesmen.length} ${salesmen.length === 1 ? "salesman" : "salespeople"}`;
-  els.salesmenGrid.innerHTML = salesmen.map(person => {
-    const name = typeof person === "string" ? person : person.name;
-    const owned = state.leads.filter(lead => leadMatchesSalesman(lead, person)).sort(compareLeadRecentFirst);
-    const value = owned.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
-    const overdue = owned.filter(isOverdue).length;
-    const hot = owned.filter(lead => lead.priority === "Hot").length;
-    const territory = (typeof person === "string" ? "" : person.territory) || "Territory not set";
-    return `
-      <article class="salesman-card">
-        <div class="salesman-card-head">
-          <div>
-          <h2>${escapeHtml(name)}</h2>
-            <p>${escapeHtml(territory)}</p>
-          </div>
-          <button class="ghost-button salesman-open-button" type="button" data-open-salesman-leads="${escapeHtml(name)}">Jump to Leads</button>
+function salesmenDirectoryPeople() {
+  const accounts = (state.userAccounts || [])
+    .filter(person => String(person.role || "salesman").toLowerCase() === "salesman");
+  const analytics = analyticsSalesmen().filter(person => salesmanName(person) !== "Unassigned");
+  const analyticsByName = new Map(analytics.map(person => [salesmanName(person).toLowerCase(), person]));
+  const source = accounts.length ? accounts : analytics;
+  const seen = new Set();
+  return source.map(person => {
+    const name = salesmanName(person);
+    const enriched = analyticsByName.get(name.toLowerCase());
+    const merged = typeof enriched === "object" ? { ...enriched, ...person } : person;
+    return { person: merged, name };
+  }).filter(item => {
+    const key = item.name.toLowerCase();
+    if (!key || key === "unassigned" || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function directoryLatestActivity(ownedLeads) {
+  const values = ownedLeads.flatMap(lead => [
+    lead.last_activity,
+    ...(Array.isArray(lead.activities) ? lead.activities
+      .filter(activity => !activity.delete_request)
+      .map(activity => activity.activity_date || activity.at || activity.created_at) : [])
+  ]).map(value => String(value || "").trim()).filter(Boolean);
+  return values.sort((a, b) => b.localeCompare(a))[0] || "";
+}
+
+function salesmenDirectoryRows() {
+  const performanceRows = scoreSalesmanPerformanceRows(salesmanPerformanceRows());
+  const performanceByName = new Map(performanceRows.map((row, index) => [row.name.toLowerCase(), { ...row, rank: index + 1 }]));
+  const dueItems = overdueItems();
+  return salesmenDirectoryPeople().map(({ person, name }) => {
+    const ownedLeads = state.leads.filter(lead => leadMatchesSalesman(lead, person));
+    const openLeads = ownedLeads.filter(activeLeadForOverdue);
+    const activeCustomers = ownedLeads.filter(lead => normalizeStageKey(lead.stage) === "WON").length;
+    const overdueFollowups = dueItems.filter(item => normalizedUserTokens(person).includes(String(item.assigned_salesman || "").trim().toLowerCase())).length;
+    const tasksDue = ownedLeads.filter(isOverdue).length;
+    const lastActivity = directoryLatestActivity(ownedLeads);
+    const performance = performanceByName.get(name.toLowerCase()) || {
+      performanceScore: 0,
+      rank: Number.MAX_SAFE_INTEGER,
+      activitiesLogged: 0,
+      followupsCompleted: 0
+    };
+    const accountStatus = String(typeof person === "string" ? "active" : person.status || "active").toLowerCase();
+    const stageLeadCount = state.performanceStage === "all"
+      ? ownedLeads.length
+      : ownedLeads.filter(lead => String(lead.stage || "").toLowerCase() === String(state.performanceStage || "").toLowerCase()).length;
+    let statusKey = "active";
+    let statusLabel = "Active";
+    if (["inactive", "disabled"].includes(accountStatus)) {
+      statusKey = "inactive";
+      statusLabel = "Inactive";
+    } else if (["on_leave", "on leave", "leave"].includes(accountStatus)) {
+      statusKey = "on-leave";
+      statusLabel = "On Leave";
+    } else if (performance.rank === 1 && ownedLeads.length) {
+      statusKey = "top-performer";
+      statusLabel = "Top Performer";
+    } else if (performance.performanceScore < 35 || overdueFollowups >= Math.max(3, Math.ceil(ownedLeads.length / 2))) {
+      statusKey = "needs-attention";
+      statusLabel = "Needs Attention";
+    }
+    return {
+      person,
+      name,
+      email: typeof person === "string" ? "" : person.email || "",
+      phone: typeof person === "string" ? "" : person.phone || person.mobile || "",
+      territory: (typeof person === "string" ? "" : person.territory) || "",
+      accountStatus,
+      statusKey,
+      statusLabel,
+      totalAssigned: ownedLeads.length,
+      stageLeadCount,
+      activeCustomers,
+      overdueFollowups,
+      tasksDue,
+      openLeads: openLeads.length,
+      wonLeads: activeCustomers,
+      conversionRate: percentOf(activeCustomers, ownedLeads.length),
+      lastActivity,
+      performanceScore: performance.performanceScore,
+      activitiesLogged: performance.activitiesLogged,
+      followupsCompleted: performance.followupsCompleted,
+      searchText: [name, typeof person === "string" ? "" : person.email, typeof person === "string" ? "" : person.phone, typeof person === "string" ? "" : person.mobile, typeof person === "string" ? "" : person.territory].join(" ").toLowerCase()
+    };
+  });
+}
+
+function filteredSalesmenDirectoryRows(rows) {
+  const filters = state.salesmenDirectory;
+  const search = filters.search.trim().toLowerCase();
+  const filtered = rows.filter(row => {
+    if (search && !row.searchText.includes(search)) return false;
+    if (filters.territory !== "all" && row.territory !== filters.territory) return false;
+    if (filters.status !== "all" && row.statusKey !== filters.status) return false;
+    if (state.performanceStage !== "all" && row.stageLeadCount === 0) return false;
+    return true;
+  });
+  return filtered.sort((a, b) => {
+    if (filters.sort === "name-asc") return a.name.localeCompare(b.name);
+    if (filters.sort === "overdue-desc") return b.overdueFollowups - a.overdueFollowups || a.name.localeCompare(b.name);
+    if (filters.sort === "conversion-desc") return b.conversionRate - a.conversionRate || b.totalAssigned - a.totalAssigned;
+    if (filters.sort === "recent-desc") return String(b.lastActivity || "").localeCompare(String(a.lastActivity || "")) || a.name.localeCompare(b.name);
+    return b.totalAssigned - a.totalAssigned || b.performanceScore - a.performanceScore || a.name.localeCompare(b.name);
+  });
+}
+
+function directoryActivityMarkup(value) {
+  if (!value) return `<span class="salesmen-last-activity">&mdash;<small>Not available</small></span>`;
+  const date = String(value).slice(0, 10);
+  const time = String(value).includes("T")
+    ? new Date(value).toLocaleTimeString("en-AE", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  return `<span class="salesmen-last-activity">${escapeHtml(formatDisplayDate(date))}${time ? `<small>${escapeHtml(time)}</small>` : ""}</span>`;
+}
+
+function salesmenRowActionsMarkup(row) {
+  return `
+    <div class="salesmen-row-actions">
+      <button type="button" data-salesmen-action="profile" data-salesman-name="${escapeHtml(row.name)}">View Profile</button>
+      <button type="button" data-salesmen-action="assign" data-salesman-name="${escapeHtml(row.name)}">Assign Leads</button>
+      <details>
+        <summary aria-label="More actions for ${escapeHtml(row.name)}">&hellip;</summary>
+        <div class="salesmen-row-menu">
+          <button type="button" data-salesmen-action="profile" data-salesman-name="${escapeHtml(row.name)}">Jump to Leads</button>
+          <button type="button" data-salesmen-action="pipeline" data-salesman-name="${escapeHtml(row.name)}">Filter Pipeline</button>
         </div>
-        <div class="mini-metrics">
-          <span><strong>${owned.length}</strong> Companies</span>
-          <span><strong>${money.format(value)}</strong> Open value</span>
-          <span><strong>${hot}</strong> Hot</span>
-          <span><strong class="${overdue ? "is-overdue" : ""}">${overdue}</strong> Overdue</span>
-        </div>
-      </article>
-    `;
-  }).join("") || `<p class="empty-copy">No salesman accounts found.</p>`;
-  els.salesmenGrid.querySelectorAll("[data-open-salesman-leads]").forEach(button => {
-    button.addEventListener("click", () => {
-      openSalesmanLeadsViewer(button.dataset.openSalesmanLeads);
+      </details>
+    </div>
+  `;
+}
+
+function salesmenDirectoryTableMarkup(rows) {
+  return `
+    <table class="salesmen-directory-table">
+      <thead><tr>
+        <th scope="col">Salesman</th><th scope="col">Territory</th><th scope="col">Assigned Leads</th>
+        <th scope="col">Active Customers</th><th scope="col">Overdue Follow-ups</th><th scope="col">Tasks Due</th>
+        <th scope="col">Conversion Rate</th><th scope="col">Last Activity</th><th scope="col">Status</th><th scope="col">Actions</th>
+      </tr></thead>
+      <tbody>${rows.map(row => `
+        <tr>
+          <td><div class="salesmen-person-cell"><span class="salesmen-avatar" aria-hidden="true">${escapeHtml(salesmanInitials(row.name))}</span><div><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.email || "Email not available")}</small></div></div></td>
+          <td>${escapeHtml(row.territory || "—")}</td>
+          <td class="salesmen-number">${escapeHtml(String(row.totalAssigned))}</td>
+          <td class="salesmen-number">${escapeHtml(String(row.activeCustomers))}</td>
+          <td class="salesmen-number ${row.overdueFollowups ? "is-alert" : ""}">${escapeHtml(String(row.overdueFollowups))}</td>
+          <td class="salesmen-number ${row.tasksDue ? "is-alert" : ""}">${escapeHtml(String(row.tasksDue))}</td>
+          <td class="salesmen-number">${escapeHtml(String(row.conversionRate))}%</td>
+          <td>${directoryActivityMarkup(row.lastActivity)}</td>
+          <td><span class="salesmen-status-badge is-${escapeHtml(row.statusKey)}">${escapeHtml(row.statusLabel)}</span></td>
+          <td>${salesmenRowActionsMarkup(row)}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+  `;
+}
+
+function salesmenDirectoryCardsMarkup(rows) {
+  return `<div class="salesmen-card-grid">${rows.map(row => `
+    <article class="salesmen-directory-card">
+      <div class="salesmen-directory-card-head">
+        <div class="salesmen-person-cell"><span class="salesmen-avatar" aria-hidden="true">${escapeHtml(salesmanInitials(row.name))}</span><div><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.email || row.territory || "Account details unavailable")}</small></div></div>
+        <span class="salesmen-status-badge is-${escapeHtml(row.statusKey)}">${escapeHtml(row.statusLabel)}</span>
+      </div>
+      <div class="salesmen-directory-card-metrics">
+        <span><strong>${row.totalAssigned}</strong>Assigned</span><span><strong>${row.activeCustomers}</strong>Customers</span>
+        <span><strong>${row.overdueFollowups}</strong>Overdue</span><span><strong>${row.conversionRate}%</strong>Conversion</span>
+      </div>
+      <div class="salesmen-directory-card-actions">${salesmenRowActionsMarkup(row)}</div>
+    </article>
+  `).join("")}</div>`;
+}
+
+function bindSalesmenDirectoryActions() {
+  els.salesmenGrid?.querySelectorAll("[data-salesmen-action]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      const name = button.dataset.salesmanName;
+      if (button.dataset.salesmenAction === "profile") {
+        openSalesmanLeadsViewer(name);
+        return;
+      }
+      if (button.dataset.salesmenAction === "assign") {
+        resetLeadFormForNewLead();
+        if (els.formSalesman) els.formSalesman.value = name;
+        els.leadDialog.showModal();
+        return;
+      }
+      if (button.dataset.salesmenAction === "pipeline") {
+        state.filters.salesman = name;
+        if (els.salesmanFilter) els.salesmanFilter.value = name;
+        setView("pipeline");
+      }
     });
   });
+}
+
+function renderSalesmenPagination(total) {
+  if (!els.salesmenDirectoryPagination) return;
+  const { pageSize } = state.salesmenDirectory;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  state.salesmenDirectory.page = Math.min(state.salesmenDirectory.page, pageCount);
+  const page = state.salesmenDirectory.page;
+  const start = total ? (page - 1) * pageSize + 1 : 0;
+  const end = Math.min(total, page * pageSize);
+  els.salesmenDirectoryPagination.innerHTML = `
+    <span>Showing ${start} to ${end} of ${total} results</span>
+    <div class="salesmen-pagination-controls">
+      <button type="button" data-salesmen-page="first" ${page === 1 ? "disabled" : ""} aria-label="First page">&laquo;</button>
+      <button type="button" data-salesmen-page="previous" ${page === 1 ? "disabled" : ""} aria-label="Previous page">&lsaquo;</button>
+      <button class="active" type="button" aria-current="page">${page}</button>
+      <button type="button" data-salesmen-page="next" ${page === pageCount ? "disabled" : ""} aria-label="Next page">&rsaquo;</button>
+      <button type="button" data-salesmen-page="last" ${page === pageCount ? "disabled" : ""} aria-label="Last page">&raquo;</button>
+      <select data-salesmen-page-size aria-label="Rows per page">
+        ${[5, 10, 20].map(size => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size} / page</option>`).join("")}
+      </select>
+    </div>
+  `;
+  els.salesmenDirectoryPagination.querySelectorAll("[data-salesmen-page]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (button.dataset.salesmenPage === "first") state.salesmenDirectory.page = 1;
+      if (button.dataset.salesmenPage === "previous") state.salesmenDirectory.page = Math.max(1, page - 1);
+      if (button.dataset.salesmenPage === "next") state.salesmenDirectory.page = Math.min(pageCount, page + 1);
+      if (button.dataset.salesmenPage === "last") state.salesmenDirectory.page = pageCount;
+      renderSalesmenManagementDashboard();
+    });
+  });
+  els.salesmenDirectoryPagination.querySelector("[data-salesmen-page-size]")?.addEventListener("change", event => {
+    state.salesmenDirectory.pageSize = Number(event.target.value || 10);
+    state.salesmenDirectory.page = 1;
+    renderSalesmenManagementDashboard();
+  });
+}
+
+function syncSalesmenFilterControls(rows) {
+  const territories = [...new Set(rows.map(row => row.territory).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (els.salesmenTerritoryFilter) {
+    els.salesmenTerritoryFilter.innerHTML = `<option value="all">All territories</option>${territories.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
+    els.salesmenTerritoryFilter.value = territories.includes(state.salesmenDirectory.territory) ? state.salesmenDirectory.territory : "all";
+  }
+  if (els.salesmenSearch && document.activeElement !== els.salesmenSearch) els.salesmenSearch.value = state.salesmenDirectory.search;
+  if (els.salesmenStatusFilter) els.salesmenStatusFilter.value = state.salesmenDirectory.status;
+  if (els.salesmenSort) els.salesmenSort.value = state.salesmenDirectory.sort;
+  document.querySelectorAll("[data-salesmen-view]").forEach(button => {
+    const active = button.dataset.salesmenView === state.salesmenDirectory.view;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function renderSalesmenMetrics(rows) {
+  const activeRows = rows.filter(row => !["inactive", "on-leave"].includes(row.statusKey));
+  const activeTerritories = new Set(activeRows.map(row => row.territory).filter(Boolean));
+  const totalTerritories = new Set([...(state.settings.territories || []), ...rows.map(row => row.territory).filter(Boolean)]).size;
+  if (els.salesmenMetricTotal) els.salesmenMetricTotal.textContent = rows.length;
+  if (els.salesmenMetricTerritories) els.salesmenMetricTerritories.textContent = activeTerritories.size;
+  if (els.salesmenMetricTerritoriesMeta) els.salesmenMetricTerritoriesMeta.textContent = `of ${totalTerritories} total`;
+  if (els.salesmenMetricOverdue) els.salesmenMetricOverdue.textContent = rows.reduce((sum, row) => sum + row.overdueFollowups, 0);
+  if (els.salesmenMetricOpenLeads) els.salesmenMetricOpenLeads.textContent = rows.reduce((sum, row) => sum + row.openLeads, 0);
+}
+
+function renderSalesmenManagementDashboard() {
+  if (!els.performancePanel || !els.salesmenGrid || state.currentUser?.role !== "admin") return;
+  const allRows = salesmenDirectoryRows();
+  syncSalesmenFilterControls(allRows);
+  renderSalesmenMetrics(allRows);
+  const rows = filteredSalesmenDirectoryRows(allRows);
+  const pageCount = Math.max(1, Math.ceil(rows.length / state.salesmenDirectory.pageSize));
+  state.salesmenDirectory.page = Math.min(state.salesmenDirectory.page, pageCount);
+  const start = (state.salesmenDirectory.page - 1) * state.salesmenDirectory.pageSize;
+  const visibleRows = rows.slice(start, start + state.salesmenDirectory.pageSize);
+  if (els.salesmenSummary) els.salesmenSummary.textContent = `${rows.length} ${rows.length === 1 ? "record" : "records"}`;
+  if (els.salesmenDirectoryStatus) {
+    els.salesmenDirectoryStatus.textContent = rows.length
+      ? `${rows.length} salesman ${rows.length === 1 ? "account matches" : "accounts match"} the selected filters.`
+      : "No salesmen match the selected filters.";
+  }
+  els.salesmenGrid.innerHTML = visibleRows.length
+    ? state.salesmenDirectory.view === "cards" ? salesmenDirectoryCardsMarkup(visibleRows) : salesmenDirectoryTableMarkup(visibleRows)
+    : `<div class="salesmen-empty-state"><strong>No salesmen match the selected filters.</strong><span>Adjust the search, territory, status, or stage selection.</span><button class="ghost-button" type="button" data-salesmen-clear-empty>Clear Filters</button></div>`;
+  bindSalesmenDirectoryActions();
+  els.salesmenGrid.querySelector("[data-salesmen-clear-empty]")?.addEventListener("click", clearSalesmenDirectoryFilters);
+  renderSalesmenPagination(rows.length);
+  renderPerformanceChart(rows);
+  renderSalesmenSummaryChart(rows);
+}
+
+function renderSalesmenView() {
+  if (state.currentUser?.role !== "admin") {
+    if (els.salesmenSummary) els.salesmenSummary.textContent = "My workspace";
+    if (els.salesmenGrid) els.salesmenGrid.innerHTML = `<p class="empty-copy">Salesman accounts are visible to administrators only.</p>`;
+    return;
+  }
+  renderSalesmenManagementDashboard();
+}
+
+function applySalesmenDirectoryFilters() {
+  state.salesmenDirectory.search = String(els.salesmenSearch?.value || "").trim();
+  state.salesmenDirectory.territory = els.salesmenTerritoryFilter?.value || "all";
+  state.salesmenDirectory.status = els.salesmenStatusFilter?.value || "all";
+  state.salesmenDirectory.sort = els.salesmenSort?.value || "assigned-desc";
+  state.performanceStage = els.performanceStageFilter?.value || "all";
+  state.salesmenDirectory.page = 1;
+  renderSalesmenManagementDashboard();
+}
+
+function clearSalesmenDirectoryFilters() {
+  state.salesmenDirectory = {
+    ...state.salesmenDirectory,
+    search: "",
+    territory: "all",
+    status: "all",
+    sort: "assigned-desc",
+    page: 1
+  };
+  state.performanceStage = "all";
+  if (els.salesmenSearch) els.salesmenSearch.value = "";
+  if (els.salesmenTerritoryFilter) els.salesmenTerritoryFilter.value = "all";
+  if (els.salesmenStatusFilter) els.salesmenStatusFilter.value = "all";
+  if (els.salesmenSort) els.salesmenSort.value = "assigned-desc";
+  if (els.performanceStageFilter) els.performanceStageFilter.value = "all";
+  renderSalesmenManagementDashboard();
+}
+
+function exportSalesmenDirectoryCsv() {
+  const rows = filteredSalesmenDirectoryRows(salesmenDirectoryRows());
+  if (!rows.length) {
+    setToast("No salesman records match the selected filters.", "error");
+    return;
+  }
+  const headers = ["Salesman", "Email", "Territory", "Assigned Leads", "Active Customers", "Overdue Follow-ups", "Tasks Due", "Conversion Rate", "Last Activity", "Status"];
+  const body = rows.map(row => [
+    row.name,
+    row.email || "Not available",
+    row.territory || "Not available",
+    row.totalAssigned,
+    row.activeCustomers,
+    row.overdueFollowups,
+    row.tasksDue,
+    `${row.conversionRate}%`,
+    row.lastActivity || "Not available",
+    row.statusLabel
+  ]);
+  const csv = [headers, ...body].map(line => line.map(csvEscape).join(",")).join("\n");
+  downloadTextFile(`salesmen-directory-${today()}.csv`, csv);
 }
 
 function salesmanByViewerName(name) {
@@ -10617,7 +11646,6 @@ function render() {
   renderSmartSearch();
   renderDashboardView();
   renderLeadList();
-  renderKanbanView();
   renderDetail();
   renderLeadDrawer();
   renderSalesmenView();
@@ -10640,27 +11668,22 @@ function applyView() {
   const isActivity = currentView === "activity";
   const isTasks = currentView === "tasks";
   const isLead = currentView === "lead";
-  const isKanban = state.pipelineViewMode === "kanban";
   const showMetricsShell = isPipeline || (isDashboard && !isSalesmanRole());
   els.metricsShell?.classList.toggle("hidden", !showMetricsShell);
   els.dashboardView.classList.toggle("hidden", !isDashboard);
   els.pipelineWorkspace?.classList.toggle("hidden", !isPipeline);
-  els.pipelineWorkspace?.classList.toggle("pipeline-workspace-list", isPipeline && !isKanban);
-  els.pipelineWorkspace?.classList.toggle("pipeline-workspace-kanban", isPipeline && isKanban);
-  els.pipelineToolbar.classList.toggle("hidden", !isPipeline);
+  els.pipelineWorkspace?.classList.toggle("pipeline-workspace-list", isPipeline);
+  els.pipelineWorkspace?.classList.remove("pipeline-workspace-kanban");
   els.pipelineView.classList.toggle("hidden", !isPipeline);
-  els.pipelineView?.classList.toggle("kanban-mode", isPipeline && isKanban);
+  els.pipelineView?.classList.remove("kanban-mode");
   els.pipelineView?.classList.toggle("detail-routed", isPipeline);
-  els.pipelineListPanel?.classList.toggle("hidden", isKanban);
-  els.kanbanPanel?.classList.toggle("hidden", !isKanban);
+  els.pipelineListPanel?.classList.toggle("hidden", !isPipeline);
+  els.kanbanPanel?.classList.add("hidden");
   els.detailPanel?.classList.toggle("hidden", true);
   els.leadDetailView?.classList.toggle("hidden", !isLead);
   els.salesmenView.classList.toggle("hidden", currentView !== "salesmen");
   els.tasksView?.classList.toggle("hidden", !isTasks);
   els.activityView.classList.toggle("hidden", currentView !== "activity");
-  document.querySelectorAll("[data-pipeline-mode]").forEach(button => {
-    button.classList.toggle("active", button.dataset.pipelineMode === state.pipelineViewMode);
-  });
   document.querySelectorAll(".nav-item").forEach(item => {
     item.classList.toggle("active", item.dataset.view === currentView && !item.dataset.mobileAction);
   });
@@ -10708,7 +11731,7 @@ function setView(view) {
 async function loadLeads() {
   state.leadsLoading = true;
   state.leadsError = "";
-  if (currentView === "pipeline") renderPipelineFunnel();
+  if (currentView === "pipeline") renderLeadList();
   try {
     state.leads = await api("/api/leads");
     state.leadsLoaded = true;
@@ -10732,9 +11755,11 @@ async function loadLeads() {
     }
   } catch (error) {
     state.leadsError = error?.message || "The CRM records could not be loaded.";
+    if (currentView === "pipeline") renderLeadList();
     throw error;
   } finally {
     state.leadsLoading = false;
+    if (currentView === "pipeline") renderLeadList();
     if (els.summaryCardDetailsDialog?.open) renderSummaryCardDetailsResults();
   }
 }
@@ -10814,8 +11839,18 @@ function showLogin(message = "") {
   state.leadsLoaded = false;
   state.leadsLoading = false;
   state.leadsError = "";
-  state.summaryCardDetails = { type: "", search: "", filters: {}, page: 1, pageSize: 12, trigger: null };
+  state.summaryCardDetails = {
+    type: "",
+    search: "",
+    filters: {},
+    sortKey: "",
+    sortDirection: "asc",
+    page: 1,
+    pageSize: 7,
+    trigger: null
+  };
   state.overduePipelineOnly = false;
+  state.dueTodayPipelineOnly = false;
   if (overdueRefreshTimer) {
     clearInterval(overdueRefreshTimer);
     overdueRefreshTimer = null;
@@ -10914,9 +11949,6 @@ async function loadWorkspace() {
   const marketNewsPromise = !isSalesmanRole()
     ? Promise.resolve()
     : fetchMarketNews();
-  fillSelect(els.stageFilter, state.settings.stages, "All stages");
-  fillSelect(els.priorityFilter, state.settings.priorities || [], "All priorities");
-  fillSelect(els.territoryFilter, [...new Set([...(state.settings.territories || []), "UAE", "Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Ras Al Khaimah", "Fujairah", "Umm Al Quwain"])], "All territories");
   fillSelect(els.performanceStageFilter, state.settings.stages, "All Stages");
   els.performanceStageFilter.value = state.performanceStage;
   fillSelect(els.marketSnapshotSalesmanFilter, state.settings.salesmen || [], "All salesmen");
@@ -10926,7 +11958,6 @@ async function loadWorkspace() {
   els.portfolioStageFilter.value = state.portfolioFilters.stage;
   els.portfolioCountryFilter.value = state.portfolioFilters.country;
   els.portfolioEmirateFilter.value = state.portfolioFilters.emirate;
-  fillSelect(els.salesmanFilter, state.settings.salesmen, "All salesmen");
   fillSelect(els.formSalesman, state.settings.salesmen);
   if (!isAdminOrManager()) {
     els.formSalesman.value = state.currentUser.name;
@@ -10975,12 +12006,6 @@ window.addEventListener("popstate", event => {
   if (currentView === "lead" && state.selectedId) {
     loadLeadDetailData(state.selectedId);
   }
-});
-
-els.searchInput.addEventListener("input", event => {
-  state.importedAfter = "";
-  state.filters.search = event.target.value;
-  render();
 });
 
 els.smartSearchInput?.addEventListener("focus", () => {
@@ -11034,15 +12059,26 @@ document.addEventListener("click", event => {
   closeSmartSearch();
 });
 
-els.stageFilter.addEventListener("change", event => {
-  state.importedAfter = "";
-  state.filters.stage = event.target.value;
-  render();
-});
-
 els.performanceStageFilter?.addEventListener("change", event => {
   state.performanceStage = event.target.value;
-  renderPerformanceAnalytics();
+  state.salesmenDirectory.page = 1;
+  if (currentView === "salesmen") renderSalesmenManagementDashboard();
+});
+
+els.applySalesmenFilters?.addEventListener("click", applySalesmenDirectoryFilters);
+els.clearSalesmenFilters?.addEventListener("click", clearSalesmenDirectoryFilters);
+els.exportSalesmenDirectory?.addEventListener("click", exportSalesmenDirectoryCsv);
+els.salesmenSearch?.addEventListener("keydown", event => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  applySalesmenDirectoryFilters();
+});
+document.querySelectorAll("[data-salesmen-view]").forEach(button => {
+  button.addEventListener("click", () => {
+    state.salesmenDirectory.view = button.dataset.salesmenView === "cards" ? "cards" : "list";
+    state.salesmenDirectory.page = 1;
+    renderSalesmenManagementDashboard();
+  });
 });
 
 els.marketSnapshotSalesmanFilter?.addEventListener("change", event => {
@@ -11078,46 +12114,66 @@ els.portfolioEmirateFilter?.addEventListener("change", event => {
   renderPortfolioAnalytics();
 });
 
-els.salesmanFilter.addEventListener("change", event => {
-  state.importedAfter = "";
-  state.filters.salesman = event.target.value;
-  render();
-});
-
-els.priorityFilter?.addEventListener("change", event => {
-  state.importedAfter = "";
-  state.filters.priority = event.target.value;
-  render();
-});
-
-els.territoryFilter?.addEventListener("change", event => {
-  state.importedAfter = "";
-  state.filters.territory = event.target.value;
-  render();
-});
-
 els.clearOverdueFilter?.addEventListener("click", () => {
   state.overduePipelineOnly = false;
+  state.dueTodayPipelineOnly = false;
+  state.pipelineTable.page = 1;
   render();
 });
 
-document.querySelectorAll("[data-pipeline-mode]").forEach(button => {
-  button.addEventListener("click", () => {
-    state.pipelineViewMode = button.dataset.pipelineMode;
-    if (state.pipelineViewMode === "kanban") state.pipelineKanbanFunnelExpanded = false;
-    localStorage.setItem("arg_pipeline_view_mode", state.pipelineViewMode);
-    render();
-  });
-});
-
-els.pipelineFunnelExpand?.addEventListener("click", () => {
-  state.pipelineKanbanFunnelExpanded = true;
+els.clearPipelineFilters?.addEventListener("click", () => {
+  resetPipelineFilters();
   render();
 });
 
-els.pipelineFunnelCollapse?.addEventListener("click", () => {
-  state.pipelineKanbanFunnelExpanded = false;
-  render();
+els.refreshPipelineLeads?.addEventListener("click", () => {
+  loadLeads().catch(error => setToast(error.message, "error"));
+});
+
+function updatePipelineReportDate(filter, input) {
+  const previous = state.pipelineTable[filter];
+  state.pipelineTable[filter] = input.value;
+  const invalid = state.pipelineTable.dateFrom
+    && state.pipelineTable.dateTo
+    && state.pipelineTable.dateFrom > state.pipelineTable.dateTo;
+  if (invalid) {
+    state.pipelineTable[filter] = previous;
+    input.value = previous;
+    input.setCustomValidity("From date must be on or before To date.");
+    input.reportValidity();
+    input.setCustomValidity("");
+    return;
+  }
+  state.pipelineTable.page = 1;
+  state.importedAfter = "";
+  renderLeadList();
+}
+
+els.pipelineReportDateFrom?.addEventListener("change", event => {
+  updatePipelineReportDate("dateFrom", event.currentTarget);
+});
+
+els.pipelineReportDateTo?.addEventListener("change", event => {
+  updatePipelineReportDate("dateTo", event.currentTarget);
+});
+
+els.exportPipelineExcel?.addEventListener("click", () => exportPipelineReport("xls"));
+els.exportPipelinePdf?.addEventListener("click", () => exportPipelineReport("pdf"));
+
+els.pipelinePagination?.addEventListener("click", event => {
+  const button = event.target.closest("[data-pipeline-page]");
+  if (!button || button.disabled) return;
+  state.pipelineTable.page = Number(button.dataset.pipelinePage) || 1;
+  renderLeadList();
+  els.pipelineListPanel?.scrollIntoView({ block: "start", behavior: "smooth" });
+});
+
+els.pipelinePagination?.addEventListener("change", event => {
+  const select = event.target.closest("[data-pipeline-page-size]");
+  if (!select) return;
+  state.pipelineTable.pageSize = Number(select.value) || 10;
+  state.pipelineTable.page = 1;
+  renderLeadList();
 });
 
 window.matchMedia("(min-width: 1025px) and (min-height: 600px)").addEventListener?.("change", () => {
@@ -11181,6 +12237,12 @@ els.metricsPanel?.addEventListener("keydown", event => {
   openSummaryCardDetails(card.dataset.summaryCard, card);
 });
 
+els.salesmanSimplifiedDashboard?.addEventListener("click", event => {
+  const card = event.target.closest("[data-summary-card]");
+  if (!card) return;
+  openSummaryCardDetails(card.dataset.summaryCard, card);
+});
+
 els.closeSummaryCardDetails?.addEventListener("click", () => closeSummaryCardDetails());
 els.summaryCardDetailsDialog?.addEventListener("click", event => {
   if (event.target === els.summaryCardDetailsDialog) {
@@ -11203,6 +12265,29 @@ els.summaryCardDetailsDialog?.addEventListener("click", event => {
     els.summaryCardDetailsTableWrap?.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
+  const sortButton = event.target.closest("[data-summary-details-sort]");
+  if (sortButton) {
+    const key = sortButton.dataset.summaryDetailsSort;
+    state.summaryCardDetails.sortDirection = state.summaryCardDetails.sortKey === key
+      && state.summaryCardDetails.sortDirection === "asc" ? "desc" : "asc";
+    state.summaryCardDetails.sortKey = key;
+    state.summaryCardDetails.page = 1;
+    renderSummaryCardDetailsResults();
+    return;
+  }
+  if (event.target.closest("[data-summary-details-open-full]")) {
+    openSummaryDetailsFullList();
+    return;
+  }
+  if (event.target.closest("[data-summary-details-retry]")) {
+    state.leadsError = "";
+    loadLeads().catch(error => {
+      state.leadsError = error?.message || "The CRM records could not be loaded.";
+      renderSummaryCardDetailsResults();
+    });
+    renderSummaryCardDetailsResults();
+    return;
+  }
   const row = event.target.closest("[data-summary-details-lead]");
   if (!row || event.target.closest("a, button, input, select")) return;
   const leadId = row.dataset.summaryDetailsLead;
@@ -11212,13 +12297,37 @@ els.summaryCardDetailsDialog?.addEventListener("click", event => {
 });
 
 els.summaryCardDetailsDialog?.addEventListener("input", event => {
-  if (!event.target.matches("[data-summary-details-search]")) return;
-  state.summaryCardDetails.search = event.target.value;
+  let refocusFilter = "";
+  if (event.target.matches("[data-summary-details-search]")) {
+    state.summaryCardDetails.search = event.target.value;
+  } else if (event.target.matches('[data-summary-details-filter][type="search"]')) {
+    const key = event.target.dataset.summaryDetailsFilter;
+    state.summaryCardDetails.filters = { ...state.summaryCardDetails.filters, [key]: event.target.value };
+    refocusFilter = key;
+  } else {
+    return;
+  }
   state.summaryCardDetails.page = 1;
   renderSummaryCardDetailsResults();
+  if (refocusFilter) {
+    requestAnimationFrame(() => {
+      const replacement = els.summaryCardDetailsTableWrap?.querySelector(`[data-summary-details-filter="${CSS.escape(refocusFilter)}"]`);
+      replacement?.focus();
+      if (typeof replacement?.setSelectionRange === "function") {
+        const end = replacement.value.length;
+        replacement.setSelectionRange(end, end);
+      }
+    });
+  }
 });
 
 els.summaryCardDetailsDialog?.addEventListener("change", event => {
+  if (event.target.matches("[data-summary-details-page-size]")) {
+    state.summaryCardDetails.pageSize = Number(event.target.value || 7);
+    state.summaryCardDetails.page = 1;
+    renderSummaryCardDetailsResults();
+    return;
+  }
   const key = event.target.dataset.summaryDetailsFilter;
   if (!key) return;
   state.summaryCardDetails.filters = { ...state.summaryCardDetails.filters, [key]: event.target.value };
@@ -11227,6 +12336,11 @@ els.summaryCardDetailsDialog?.addEventListener("change", event => {
 });
 
 els.summaryCardDetailsDialog?.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSummaryCardDetails();
+    return;
+  }
   const row = event.target.closest("[data-summary-details-lead]");
   if (row && ["Enter", " "].includes(event.key)) {
     event.preventDefault();
@@ -11237,6 +12351,11 @@ els.summaryCardDetailsDialog?.addEventListener("keydown", event => {
     return;
   }
   trapSummaryCardDetailsFocus(event);
+});
+
+els.summaryCardDetailsDialog?.addEventListener("cancel", event => {
+  event.preventDefault();
+  closeSummaryCardDetails();
 });
 
 els.summaryCardDetailsDialog?.addEventListener("close", () => cleanupSummaryCardDetailsModal());
@@ -11529,6 +12648,53 @@ async function exportLeadsBackup(format) {
     setToast(`Lead backup exported as ${format.toUpperCase()}.`, "success");
   } catch (error) {
     window.alert(error.message);
+  }
+}
+
+function pipelineReportRangeSlug() {
+  const from = state.pipelineTable.dateFrom || "any";
+  const to = state.pipelineTable.dateTo || "any";
+  return `${from}-to-${to}`;
+}
+
+async function exportPipelineReport(format) {
+  if (state.currentUser?.role !== "admin") {
+    setToast("Admin access is required to export Pipeline reports.", "error");
+    return;
+  }
+  const records = pipelineFilteredAndSortedLeads();
+  if (!records.length) {
+    setToast("No Pipeline records match the selected filters.", "error");
+    return;
+  }
+  const button = format === "pdf" ? els.exportPipelinePdf : els.exportPipelineExcel;
+  const defaultText = format === "pdf" ? "Export PDF" : "Export Excel";
+  const endpoint = `/api/exports/pipeline-report.${format}`;
+  const filename = `pipeline-live-leads-${pipelineReportRangeSlug()}.${format}`;
+  try {
+    if (button) {
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      button.textContent = "Exporting...";
+    }
+    await downloadExport(endpoint, filename, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lead_ids: records.map(record => record.id),
+        date_from: state.pipelineTable.dateFrom,
+        date_to: state.pipelineTable.dateTo
+      })
+    });
+    setToast(`${records.length} Pipeline record${records.length === 1 ? "" : "s"} exported as ${format === "pdf" ? "PDF" : "Excel"}.`, "success");
+  } catch (error) {
+    setToast(error.message, "error");
+  } finally {
+    if (button) {
+      button.removeAttribute("aria-busy");
+      button.textContent = defaultText;
+    }
+    renderLeadList();
   }
 }
 

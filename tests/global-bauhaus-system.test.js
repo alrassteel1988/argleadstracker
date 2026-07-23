@@ -14,7 +14,7 @@ const globalStyleIndex = html.indexOf('href="bauhaus-global.css');
 assert.ok(tasksStyleIndex >= 0, "Tasks stylesheet must remain linked");
 assert.ok(globalStyleIndex > tasksStyleIndex, "The shared Bauhaus system must load after every page override");
 assert.match(serviceWorker, /"\/bauhaus-global\.css"/, "The PWA shell must cache the shared Bauhaus stylesheet");
-assert.match(serviceWorker, /arg-pwa-v23-global-bauhaus/, "The PWA cache must rotate for the global visual migration");
+assert.match(serviceWorker, /arg-pwa-v44-pipeline-report-export/, "The PWA cache must rotate for the Pipeline report export update");
 assert.match(vercelConfig, /"src": "bauhaus-global\.css"/, "Vercel must build the shared Bauhaus stylesheet");
 assert.match(vercelConfig, /"src": "\/bauhaus-global\.css", "dest": "\/bauhaus-global\.css"/, "Vercel must expose the shared Bauhaus stylesheet");
 

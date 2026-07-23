@@ -1,0 +1,45 @@
+/* Final scoped contrast guard for Salesman Weekly Sales Report header badges. */
+body.tasks-mode:not(.admin-tasks-mode) .panel-header.tasks-header .tasks-header-meta #tasksWeekLabel {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--tasks-bauhaus-blue) !important;
+  background-color: #e7f0fa !important;
+  color: #0f3550 !important;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #0f3550;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .panel-header.tasks-header .tasks-header-meta #tasksStatusBadge {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--tasks-bauhaus-yellow) !important;
+  background-color: #fcf0dd !important;
+  color: #5a3709 !important;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #5a3709;
+}
+
+body.tasks-mode:not(.admin-tasks-mode) .panel-header.tasks-header .tasks-header-meta #tasksStatusBadge:is(.success, .plan-upcoming) {
+  border-color: var(--tasks-bauhaus-green) !important;
+  background-color: #e9f4dc !important;
+  color: #243912 !important;
+  -webkit-text-fill-color: #243912;
+}
+
+@media (max-width: 640px) {
+  body.tasks-mode:not(.admin-tasks-mode) .panel-header.tasks-header .tasks-header-meta {
+    width: 100%;
+  }
+
+  body.tasks-mode:not(.admin-tasks-mode) .panel-header.tasks-header .tasks-header-meta :is(#tasksWeekLabel, #tasksStatusBadge) {
+    flex: 1 1 auto;
+    justify-content: center;
+    white-space: normal;
+  }
+}

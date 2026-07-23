@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const css = fs.readFileSync(path.join(root, "tasks-bauhaus-flat.css"), "utf8");
+const contrastCss = fs.readFileSync(path.join(root, "tasks-contrast.css"), "utf8");
 const client = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
@@ -12,12 +13,19 @@ const vercelConfig = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 const sharedStyleIndex = html.indexOf('href="styles.css');
 const leadStyleIndex = html.indexOf('href="lead-detail-readability.css');
 const tasksStyleIndex = html.indexOf('href="tasks-bauhaus-flat.css');
+const globalStyleIndex = html.indexOf('href="bauhaus-global.css');
+const tasksContrastStyleIndex = html.indexOf('href="tasks-contrast.css');
 assert.ok(sharedStyleIndex >= 0, "Shared stylesheet must be linked");
 assert.ok(leadStyleIndex > sharedStyleIndex, "Lead Detail overrides must load after shared styles");
 assert.ok(tasksStyleIndex > leadStyleIndex, "Tasks Bauhaus overrides must load after Lead Detail styles");
+assert.ok(tasksContrastStyleIndex > globalStyleIndex, "Tasks contrast guard must load after the shared navy panel-header rule");
 assert.match(serviceWorker, /"\/tasks-bauhaus-flat\.css"/, "Tasks Bauhaus stylesheet must be cached for the PWA shell");
+assert.match(serviceWorker, /"\/tasks-contrast\.css"/, "The PWA shell must cache the Tasks contrast guard");
 assert.match(vercelConfig, /"src": "tasks-bauhaus-flat\.css"/, "Vercel must build the Tasks Bauhaus stylesheet as a static asset");
+assert.match(vercelConfig, /"src": "tasks-contrast\.css"/, "Vercel must build the Tasks contrast guard as a static asset");
 assert.match(vercelConfig, /"src": "\/tasks-bauhaus-flat\.css", "dest": "\/tasks-bauhaus-flat\.css"/, "Vercel must route the Tasks Bauhaus stylesheet directly");
+assert.match(contrastCss, /#tasksWeekLabel\s*\{[^}]*color:\s*#0f3550\s*!important;[^}]*font-size:\s*13px;[^}]*-webkit-text-fill-color:\s*#0f3550/s, "Week date badge must use dark readable text");
+assert.match(contrastCss, /#tasksStatusBadge\s*\{[^}]*color:\s*#5a3709\s*!important;[^}]*font-size:\s*13px;[^}]*-webkit-text-fill-color:\s*#5a3709/s, "Not Started badge must use dark readable text");
 
 assert.match(css, /body\.tasks-mode:not\(\.admin-tasks-mode\)/, "Bauhaus styling must be scoped to the Salesman Tasks page");
 assert.doesNotMatch(css, /body\.tasks-mode\.admin-tasks-mode/, "Admin Tasks review must not receive Salesman-only styling");
