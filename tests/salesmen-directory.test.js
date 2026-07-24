@@ -41,6 +41,13 @@ assert.match(client, /function salesmenDirectoryRows\(\)/, "Directory metrics mu
 assert.match(client, /state\.userAccounts/, "The directory must reuse the existing account API result");
 assert.match(client, /state\.leads\.filter\(lead => leadMatchesSalesman/, "Lead ownership must reuse the existing matcher");
 assert.match(client, /function filteredSalesmenDirectoryRows\(rows\)/, "Search, filters, and sorting must share one data set");
+assert.match(client, /const SALESMAN_CARD_ACCENTS = \["blue", "yellow", "red", "green", "orange", "violet"\]/, "Card View needs the approved Bauhaus accent palette");
+assert.match(client, /function salesmanCardAccent\(row\)/, "Card accents must be assigned deterministically");
+assert.match(client, /data-card-accent="\$\{accent\}"/, "Each salesman card must expose its stable accent token");
+assert.match(client, /salesmen-card-identity-copy/, "Card View must render a structured identity block");
+assert.match(client, /mailto:\$\{escapeHtml\(row\.email\)\}/, "Card View email addresses must remain accessible");
+assert.match(client, /salesmen-card-meta/, "Tasks due, last activity, and territory must remain visible in Card View");
+assert.match(client, /salesmen-card-progress/, "Card View must retain the existing conversion value in a progress indicator");
 assert.match(client, /function exportSalesmenDirectoryCsv\(\)/, "The Export CSV control must be functional");
 assert.match(client, /openSalesmanLeadsViewer\(name\)/, "Existing Jump to Leads behavior must remain wired");
 assert.match(client, /resetLeadFormForNewLead\(\)/, "Assign Leads must use the existing lead workflow");
@@ -57,6 +64,11 @@ assert.match(css, /\.salesmen-metric-card\.is-red\s*\{[^}]*background-color:\s*v
 assert.match(css, /\.salesmen-metric-card span\s*\{[^}]*-webkit-text-fill-color:\s*#ffffff;[^}]*opacity:\s*1\s*!important;/s, "Metric labels must remain fully opaque white");
 assert.match(css, /\.salesmen-directory-table\s*\{[^}]*min-width:\s*1080px/s, "The directory table needs a scoped horizontal-scroll fallback");
 assert.match(css, /\.salesmen-directory-table th\s*\{[^}]*position:\s*sticky/s, "Directory headers should stay visible while scrolling");
+assert.match(css, /\.salesmen-card-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s, "Card View needs three large-screen columns");
+assert.match(css, /\.salesmen-directory-card\s*\{[^}]*background:\s*var\(--salesmen-surface\);[^}]*border:\s*2px solid var\(--salesmen-navy\);[^}]*border-top:\s*7px solid var\(--salesman-card-accent\)/s, "Cards need an opaque Bauhaus surface and structural accent");
+assert.match(css, /\.salesmen-directory-card\[data-card-accent="violet"\]/, "All deterministic accent variants must be styled");
+assert.match(css, /\.salesmen-directory-card-actions \.salesmen-row-actions\s*\{[^}]*grid-template-columns:\s*1fr 1fr auto/s, "Card actions must align consistently at the bottom");
+assert.match(css, /\.salesmen-directory-card a:focus-visible,[\s\S]*outline:\s*3px solid var\(--bauhaus-yellow/s, "Card actions and email links need visible keyboard focus");
 assert.match(css, /@media \(max-width: 1180px\)/, "Laptop and tablet layouts need a responsive breakpoint");
 assert.match(css, /@media \(max-width: 760px\)/, "Mobile layouts need a responsive breakpoint");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter|rgba\(/i, "The Salesmen redesign must stay flat and opaque");

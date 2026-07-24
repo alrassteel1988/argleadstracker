@@ -1,0 +1,1057 @@
+/* Admin Dashboard composition
+   Scoped to the admin dashboard so role-specific workflows and other routes
+   retain their existing presentation. */
+
+body.admin-dashboard-mode {
+  --admin-space-1: 4px;
+  --admin-space-2: 8px;
+  --admin-space-3: 12px;
+  --admin-space-4: 16px;
+  --admin-space-6: 24px;
+  --admin-radius: var(--bauhaus-radius, 4px);
+  --admin-navy: var(--bauhaus-navy, #06283d);
+  --admin-border: var(--bauhaus-border-light, #cbd5df);
+  --admin-text: var(--bauhaus-text, #151515);
+  --admin-muted: var(--bauhaus-text-muted, #586575);
+  --admin-surface: var(--bauhaus-surface, #fff);
+  --admin-page: var(--bauhaus-background, #f7f5ef);
+}
+
+body.admin-dashboard-mode .main {
+  min-width: 0;
+  background: var(--admin-page);
+}
+
+body.admin-dashboard-mode .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: var(--admin-space-4);
+  min-height: 72px;
+  margin-bottom: var(--admin-space-3);
+  padding: var(--admin-space-3) var(--admin-space-4);
+  border: 0;
+  border-radius: var(--admin-radius);
+  background: var(--admin-navy);
+  box-shadow: none;
+}
+
+body.admin-dashboard-mode .topbar-title {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+body.admin-dashboard-mode .topbar-copy h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(22px, 2vw, 28px);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+body.admin-dashboard-mode .topbar-copy p {
+  margin: var(--admin-space-1) 0 0;
+  color: #dceaf6;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+body.admin-dashboard-mode .topbar-actions {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: var(--admin-space-2);
+  min-width: 0;
+}
+
+body.admin-dashboard-mode .topbar-actions > * {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+body.admin-dashboard-mode .topbar-actions .smart-search-shell {
+  order: 1;
+  flex: 1 1 300px;
+  width: min(330px, 28vw);
+  max-width: 360px;
+}
+
+body.admin-dashboard-mode #openSalesmanForm { order: 2; }
+body.admin-dashboard-mode #openPlacesSearch { order: 3; }
+body.admin-dashboard-mode #openLeadForm { order: 4; }
+body.admin-dashboard-mode #logoutButton { order: 5; }
+
+body.admin-dashboard-mode .topbar-actions :is(.ghost-button, .primary-button) {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: var(--admin-radius);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+body.admin-dashboard-mode #openLeadForm {
+  border-color: var(--bauhaus-yellow, #e6a933);
+  background: var(--bauhaus-yellow, #e6a933);
+  color: var(--admin-text);
+}
+
+body.admin-dashboard-mode #logoutButton {
+  border-color: #fff;
+  background: #fff;
+  color: var(--admin-navy);
+}
+
+body.admin-dashboard-mode .dashboard-view {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--admin-space-3);
+  min-width: 0;
+}
+
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-triage-row,
+  .admin-dashboard-analytics-row,
+  #actionPlanPanel,
+  #agentPanel,
+  #configAgentPanel
+) {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-triage-row,
+  .admin-dashboard-analytics-row
+) > :is(.panel, .overdue-banner),
+body.admin-dashboard-mode #actionPlanPanel,
+body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel {
+  border-radius: var(--admin-radius);
+  background: var(--admin-surface);
+  box-shadow: none;
+}
+
+/* Shared dashboard panel header and controls */
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-triage-row,
+  .admin-dashboard-analytics-row,
+  #actionPlanPanel,
+  .admin-dashboard-bottom-row
+) .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-space-3);
+  min-height: 58px;
+  padding: var(--admin-space-3) var(--admin-space-4);
+  border: 0;
+  border-bottom: 1px solid var(--admin-border);
+  border-radius: calc(var(--admin-radius) - 1px) calc(var(--admin-radius) - 1px) 0 0;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+}
+
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-triage-row,
+  .admin-dashboard-analytics-row,
+  #actionPlanPanel,
+  .admin-dashboard-bottom-row
+) .panel-header > div:first-child {
+  min-width: 0;
+}
+
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-triage-row,
+  .admin-dashboard-analytics-row,
+  #actionPlanPanel,
+  .admin-dashboard-bottom-row
+) .panel-header h2 {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-triage-row,
+  .admin-dashboard-analytics-row,
+  #actionPlanPanel,
+  .admin-dashboard-bottom-row
+) .panel-header > div > span {
+  display: block;
+  margin-top: 2px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+body.admin-dashboard-mode .panel-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--admin-space-2);
+}
+
+body.admin-dashboard-mode .panel-header .panel-collapse-toggle {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: var(--admin-radius);
+  background: var(--admin-navy);
+  color: #fff;
+}
+
+body.admin-dashboard-mode :is(
+  .admin-dashboard-overview-slot,
+  .admin-dashboard-analytics-row,
+  #actionPlanPanel,
+  .admin-dashboard-bottom-row
+) .panel-header .panel-collapse-toggle.hidden {
+  display: flex !important;
+}
+
+body.admin-dashboard-mode .panel-header .panel-collapse-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body.admin-dashboard-mode .panel-header .panel-collapse-icon {
+  font-size: 11px;
+}
+
+body.admin-dashboard-mode .panel-header .panel-collapse-toggle:hover,
+body.admin-dashboard-mode .panel-header .panel-collapse-toggle:focus-visible {
+  background: var(--bauhaus-blue, #1f6aa5);
+  outline: 2px solid var(--bauhaus-yellow, #e6a933);
+  outline-offset: 2px;
+}
+
+body.admin-dashboard-mode .panel-header :is(
+  .ghost-button,
+  .small-action,
+  .action-plan-toolbar-button
+):not(.panel-collapse-toggle) {
+  min-height: 32px;
+  padding: 7px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: #fff;
+  color: var(--admin-navy);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+body.admin-dashboard-mode .panel-header :is(
+  .ghost-button,
+  .small-action,
+  .action-plan-toolbar-button
+):not(.panel-collapse-toggle):hover,
+body.admin-dashboard-mode .panel-header :is(
+  .ghost-button,
+  .small-action,
+  .action-plan-toolbar-button
+):not(.panel-collapse-toggle):focus-visible {
+  border-color: var(--bauhaus-blue, #1f6aa5);
+  background: var(--bauhaus-light-blue, #dceaf6);
+  color: var(--admin-navy);
+}
+
+body.admin-dashboard-mode .panel-header :is(.attention-count, #dashboardPipelineFunnelBadge) {
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid #9fc4dc;
+  border-radius: var(--admin-radius);
+  background: var(--bauhaus-light-blue, #dceaf6);
+  color: var(--admin-navy);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Overview metric block */
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell {
+  border: 1px solid var(--admin-border);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell > .panel-header {
+  min-height: 44px;
+  padding: 9px var(--admin-space-4);
+  border-bottom: 0;
+  background: var(--admin-navy);
+  color: #fff;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell > .panel-header h2 {
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell > .panel-header span {
+  color: #dceaf6;
+  font-size: 11px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot #metricsShell .dashboard-collapsible-body-inner {
+  padding: var(--admin-space-4);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--admin-space-4);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 102px;
+  padding: var(--admin-space-4);
+  border: 0;
+  border-radius: var(--admin-radius);
+  box-shadow: none;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metric-open {
+  background: var(--bauhaus-blue, #1f6aa5);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metric-active {
+  background: var(--bauhaus-green, #6d9f3d);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metric-risk {
+  background: var(--bauhaus-red, #d94a48);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metric-due {
+  background: var(--bauhaus-orange, #de8b20);
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article > span {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article > strong {
+  margin-top: var(--admin-space-1);
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article > small {
+  margin-top: var(--admin-space-2);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article:focus-visible {
+  outline: 3px solid var(--bauhaus-yellow, #e6a933);
+  outline-offset: 3px;
+}
+
+/* Attention required row */
+body.admin-dashboard-mode .admin-dashboard-triage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr);
+  align-items: stretch;
+  gap: var(--admin-space-3);
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > :is(.overdue-banner, .panel) {
+  width: 100%;
+  min-width: 0;
+  min-height: 158px;
+  max-height: none;
+  margin: 0;
+  overflow: hidden;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > .overdue-banner {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--admin-space-3);
+  padding: var(--admin-space-4);
+  border: 1px solid var(--bauhaus-red, #d94a48);
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-icon {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  background: var(--bauhaus-red, #d94a48);
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-copy {
+  display: grid;
+  gap: var(--admin-space-2);
+  min-width: 0;
+  padding: 0;
+}
+
+body.admin-dashboard-mode .overdue-banner-eyebrow {
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-copy > strong {
+  color: var(--admin-text);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+body.admin-dashboard-mode .overdue-banner-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--admin-space-4);
+}
+
+body.admin-dashboard-mode .overdue-banner-kpis span {
+  display: grid;
+  gap: 1px;
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+body.admin-dashboard-mode .overdue-banner-kpis b {
+  color: var(--admin-text);
+  font-size: 23px;
+  line-height: 1;
+}
+
+body.admin-dashboard-mode .overdue-banner-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--admin-space-1);
+  min-width: 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-pill {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid #f0b7b4;
+  border-radius: var(--admin-radius);
+  background: var(--bauhaus-light-red, #fae4e2);
+  color: #611f1f;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--admin-space-1);
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(.overdue-action, .overdue-dismiss) {
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: var(--admin-radius);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > .panel {
+  display: flex;
+  flex-direction: column;
+  border-width: 1px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row > .panel > .panel-header {
+  flex: 0 0 auto;
+  min-height: 58px;
+  padding: var(--admin-space-3);
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .dashboard-collapsible-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row .dashboard-collapsible-body-inner {
+  max-height: none;
+  padding: var(--admin-space-3);
+  overflow: visible;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(.market-intel-feed, .needs-attention-list) {
+  max-height: none;
+  overflow: visible;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(.empty-copy, .intel-item, .attention-flag-card) {
+  color: var(--admin-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Balanced analytics row */
+body.admin-dashboard-mode .admin-dashboard-analytics-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--admin-space-3);
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 332px;
+  height: 100%;
+  margin: 0;
+  border-width: 1px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .panel-header {
+  flex: 0 0 auto;
+  min-height: 68px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .dashboard-collapsible-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .dashboard-collapsible-body > .dashboard-collapsible-body-inner {
+  height: 100%;
+  padding: 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-header {
+  align-items: center;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-filter {
+  min-width: 148px;
+  color: var(--admin-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-filter select {
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: #fff;
+  color: var(--admin-text);
+  font-size: 12px;
+}
+
+body.admin-dashboard-mode .market-snapshot-tabs {
+  display: flex;
+  gap: var(--admin-space-1);
+  padding: var(--admin-space-3) var(--admin-space-4) 0;
+}
+
+body.admin-dashboard-mode .market-snapshot-tab {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: #fff;
+  color: var(--admin-navy);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+body.admin-dashboard-mode .market-snapshot-tab.active {
+  border-color: var(--admin-navy);
+  background: var(--admin-navy);
+  color: #fff;
+}
+
+body.admin-dashboard-mode .market-snapshot-tab:focus-visible {
+  outline: 2px solid var(--bauhaus-blue, #1f6aa5);
+  outline-offset: 2px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-grid {
+  display: block;
+  padding: var(--admin-space-3) var(--admin-space-4) var(--admin-space-4);
+}
+
+body.admin-dashboard-mode .admin-dashboard-analytics-row .snapshot-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.admin-dashboard-mode .market-snapshot-bar-list {
+  display: grid;
+  gap: var(--admin-space-3);
+}
+
+body.admin-dashboard-mode .market-snapshot-bar-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--admin-space-3);
+  color: var(--admin-text);
+  font-size: 12px;
+}
+
+body.admin-dashboard-mode .market-snapshot-bar-meta > span:first-child {
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+body.admin-dashboard-mode .market-snapshot-bar-meta > span:last-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+body.admin-dashboard-mode .market-snapshot-bar-track {
+  height: 8px;
+  border-radius: 0;
+  background: var(--bauhaus-muted, #eef1f4);
+}
+
+body.admin-dashboard-mode .market-snapshot-bar-track i {
+  border-radius: 0;
+}
+
+body.admin-dashboard-mode #dashboardPipelineFunnelBody.dashboardFunnelCompactView {
+  display: grid;
+  align-content: start;
+  gap: var(--admin-space-4);
+  height: 100%;
+  padding: var(--admin-space-4);
+}
+
+body.admin-dashboard-mode .dashboard-funnel-compact {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--admin-space-4);
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut {
+  width: 92px;
+  height: 92px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut::after {
+  inset: 19px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut strong {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-donut small,
+body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-stage-head strong,
+body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-stage-stats span {
+  color: var(--admin-text);
+  font-size: 12px;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-track {
+  height: 8px;
+  border-radius: 0;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-comparison-summary {
+  margin-top: auto;
+  padding-top: var(--admin-space-3);
+  border-top: 1px solid var(--admin-border);
+  color: var(--admin-text);
+  font-size: 12px;
+}
+
+/* Lead Action Plans and lower insights */
+body.admin-dashboard-mode #actionPlanPanel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--admin-border);
+}
+
+body.admin-dashboard-mode #actionPlanPanel > .panel-header {
+  min-height: 58px;
+  border-bottom: 0;
+  background: var(--admin-navy);
+  color: #fff;
+}
+
+body.admin-dashboard-mode #actionPlanPanel > .panel-header h2 {
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+
+body.admin-dashboard-mode #actionPlanPanel > .panel-header > div > span {
+  color: #dceaf6;
+  font-size: 11px;
+}
+
+body.admin-dashboard-mode #actionPlanPanel > .panel-header .attention-count {
+  border-color: #fff;
+  background: #fff;
+  color: var(--admin-navy);
+}
+
+body.admin-dashboard-mode #actionPlanPanel > .panel-header .panel-collapse-toggle {
+  border-color: #fff;
+  background: transparent;
+}
+
+body.admin-dashboard-mode #actionPlanPanel > .panel-header :is(
+  .ghost-button,
+  .small-action,
+  .action-plan-toolbar-button
+):not(.panel-collapse-toggle) {
+  border-color: #9fc4dc;
+  background: transparent;
+  color: #fff;
+}
+
+body.admin-dashboard-mode #actionPlanPanel > .dashboard-collapsible-body > .dashboard-collapsible-body-inner {
+  display: grid;
+  gap: var(--admin-space-3);
+  padding: 0;
+}
+
+body.admin-dashboard-mode #actionPlanPanel .action-plan-grid {
+  display: grid;
+  gap: var(--admin-space-2);
+  max-height: 270px;
+  padding: var(--admin-space-3) var(--admin-space-4) 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+body.admin-dashboard-mode #actionPlanPanel .salesman-plan-card {
+  padding: var(--admin-space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: #fff;
+}
+
+body.admin-dashboard-mode #actionPlanPanel .salesman-plan-head h3 {
+  color: var(--admin-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+body.admin-dashboard-mode #actionPlanPanel .salesman-plan-head p {
+  color: var(--admin-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--admin-space-3);
+  width: auto;
+  height: 300px;
+  min-width: 0;
+  margin: 0 var(--admin-space-4) var(--admin-space-4);
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel > .panel-header {
+  flex: 0 0 auto;
+  min-height: 62px;
+  padding: var(--admin-space-3);
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel > .panel-header h2 {
+  font-size: 15px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel > .panel-header > div > span {
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+  text-transform: uppercase;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel > .dashboard-collapsible-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel > .dashboard-collapsible-body > .dashboard-collapsible-body-inner {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
+  #dashboardFocus,
+  #dashboardActivityFeed,
+  #dashboardStatus
+) {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
+  #dashboardFocus,
+  #dashboardActivityFeed
+) {
+  padding: var(--admin-space-1) var(--admin-space-3) var(--admin-space-3);
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item {
+  min-height: 54px;
+  padding: var(--admin-space-2) 0;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item strong {
+  display: block;
+  color: var(--admin-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item p {
+  color: var(--admin-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-focus-item .stage-badge.compact {
+  min-height: 22px;
+  padding: 3px 6px;
+  border: 1px solid #9fc4dc;
+  border-radius: var(--admin-radius);
+  font-size: 10px;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: var(--admin-space-2);
+  padding: var(--admin-space-3);
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus .status-card {
+  padding: var(--admin-space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: var(--bauhaus-muted, #eef1f4);
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus .status-card .meta-label {
+  color: var(--admin-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus .status-card strong {
+  color: var(--admin-text);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+body.admin-dashboard-mode :is(
+  button,
+  input,
+  select,
+  [tabindex="0"]
+):focus-visible {
+  outline: 2px solid var(--bauhaus-blue, #1f6aa5);
+  outline-offset: 2px;
+}
+
+body.admin-dashboard-mode .collapsible-enabled.is-collapsed > .dashboard-collapsible-body {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  body.admin-dashboard-mode .topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  body.admin-dashboard-mode .topbar-actions {
+    flex: 1 1 100%;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  body.admin-dashboard-mode .topbar-actions .smart-search-shell {
+    flex: 1 1 320px;
+    width: auto;
+    max-width: none;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-triage-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-triage-row > .overdue-banner {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics,
+  body.admin-dashboard-mode .admin-dashboard-analytics-row,
+  body.admin-dashboard-mode .admin-dashboard-bottom-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel {
+    min-height: 300px;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-bottom-row {
+    height: auto;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel {
+    min-height: 260px;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-bottom-row > #pipelineHealthPanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  body.admin-dashboard-mode .topbar {
+    padding: var(--admin-space-3);
+  }
+
+  body.admin-dashboard-mode .topbar-title,
+  body.admin-dashboard-mode .topbar-actions,
+  body.admin-dashboard-mode .topbar-actions .smart-search-shell {
+    flex-basis: 100%;
+    width: 100%;
+    max-width: none;
+  }
+
+  body.admin-dashboard-mode .topbar-actions :is(.ghost-button, .primary-button) {
+    flex: 1 1 calc(50% - var(--admin-space-2));
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics,
+  body.admin-dashboard-mode .admin-dashboard-triage-row,
+  body.admin-dashboard-mode .admin-dashboard-analytics-row,
+  body.admin-dashboard-mode .admin-dashboard-bottom-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-triage-row > .overdue-banner,
+  body.admin-dashboard-mode .admin-dashboard-bottom-row > #pipelineHealthPanel {
+    grid-column: auto;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-triage-row > .overdue-banner {
+    grid-template-columns: 8px minmax(0, 1fr);
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-triage-row .overdue-banner-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-analytics-row .market-snapshot-filter {
+    width: 100%;
+  }
+
+  body.admin-dashboard-mode .dashboard-funnel-compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin-dashboard-mode #actionPlanPanel > .panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.admin-dashboard-mode #actionPlanPanel > .panel-header .panel-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-bottom-row {
+    margin-inline: var(--admin-space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.admin-dashboard-mode *,
+  body.admin-dashboard-mode *::before,
+  body.admin-dashboard-mode *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

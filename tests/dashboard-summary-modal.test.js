@@ -7,6 +7,7 @@ const client = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(root, "styles.css"), "utf8");
 const salesmanCss = fs.readFileSync(path.join(root, "salesman-dashboard-summaries.css"), "utf8");
+const salesmanLiveLeadsCss = fs.readFileSync(path.join(root, "salesman-dashboard-live-leads.css"), "utf8");
 
 for (const type of ["openPipeline", "activeCustomers", "atRisk", "tasksDue"]) {
   assert.match(html, new RegExp(`data-summary-card=["']${type}["']`), `${type} card must opt into the details modal`);
@@ -61,10 +62,18 @@ assert.match(client, /data-summary-details-sort=/, "summary columns must expose 
 assert.match(client, /data-summary-details-filter=/, "summary columns must expose filters");
 assert.match(client, /data-summary-details-open-full/, "modal must expose Open full list navigation");
 assert.match(client, /summaryDetailsPageNumbers/, "modal must render numbered pagination");
+assert.match(client, /const SUMMARY_DETAILS_DEFAULT_PAGE_SIZE = 10;/, "all summary windows must show at least ten records by default");
+assert.match(client, /const SUMMARY_DETAILS_PAGE_SIZES = \[10, 20, 50\];/, "summary pagination must not offer the under-filled seven-row option");
+assert.doesNotMatch(client, /pageSize:\s*7|value \|\| 7|\[7,\s*10,\s*20\]/, "summary windows must not fall back to seven rows");
 assert.match(client, /dueTodayPipelineOnly/, "Due Today full-list navigation must preserve its source scope");
 assert.match(css, /\.summary-card-details-table th\s*{[^}]*position:\s*sticky;/s, "table header must remain visible while scrolling");
 assert.match(css, /@media \(max-width: 639px\)[\s\S]*\.summary-card-details-dialog\s*{[^}]*width:\s*100vw;/, "modal must adapt to mobile screens");
 assert.match(salesmanCss, /grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/, "pipeline stage cards must be equal-width on desktop");
+assert.match(salesmanCss, /@media \(min-width:\s*821px\)[\s\S]*\.salesman-simplified-metric\s*{[^}]*min-height:\s*88px;[^}]*padding:\s*10px 14px;/, "desktop summary cards must use the compact readable height");
+assert.match(salesmanCss, /@media \(min-width:\s*821px\)[\s\S]*\.salesman-simplified-stage\s*{[^}]*min-height:\s*72px;[^}]*padding:\s*8px 12px;/, "desktop pipeline stages must use the compact readable height");
+assert.match(salesmanLiveLeadsCss, /--salesman-dashboard-section-gap:\s*12px;/, "major Salesman Dashboard sections must use a compact consistent gap");
+assert.match(salesmanLiveLeadsCss, /grid-template-rows:\s*max-content max-content max-content 56dvh max-content;/, "the Live Leads row must receive more laptop viewport height");
+assert.match(salesmanLiveLeadsCss, /\.salesman-dashboard-live-leads\s*{[^}]*height:\s*56dvh;[^}]*min-height:\s*340px;/s, "the Live Leads panel must provide a larger internally scrolling viewport");
 assert.match(salesmanCss, /@media \(max-width:\s*1100px\)[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/, "pipeline stage cards must use two columns at medium widths");
 assert.match(salesmanCss, /@media \(max-width:\s*820px\)[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/, "summary cards must stack on small screens");
 

@@ -47,6 +47,8 @@ assert.match(css, /min-width:\s*1120px/, "Table overflow must stay scoped to the
 assert.match(css, /overflow:\s*auto/, "The worklist must support scoped scrolling");
 assert.match(css, /outline:\s*2px solid var\(--bauhaus-blue\)/, "Pipeline controls must have visible keyboard focus");
 assert.match(css, /\.pipeline-report-tools/, "Pipeline report controls must use shared responsive toolbar styling");
+assert.match(css, /\.pipeline-report-range label > span\s*\{[\s\S]*color:\s*var\(--bauhaus-text\)\s*!important/, "Pipeline report date labels must override white panel-header text");
+assert.match(css, /\.pipeline-report-range input\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--bauhaus-text\)[\s\S]*color-scheme:\s*light/, "Pipeline report date values must remain dark in native date controls");
 assert.match(css, /\.pipeline-export-button\.is-excel[\s\S]*var\(--bauhaus-green\)/, "Excel export must have a clear green action style");
 assert.match(css, /\.pipeline-export-button\.is-pdf[\s\S]*var\(--bauhaus-red\)/, "PDF export must have a clear red action style");
 assert.match(server, /pipeline-report\\\.\(xls\|pdf\)/, "Server must expose Pipeline Excel and PDF report formats");

@@ -1,8 +1,8 @@
 /* Salesman Dashboard ordering and contact-rich live lead table. */
 body.salesman-dashboard-mode {
-  --salesman-dashboard-section-gap: 24px;
-  --salesman-dashboard-card-padding: 20px;
-  --salesman-dashboard-tile-padding: 8px 16px;
+  --salesman-dashboard-section-gap: 12px;
+  --salesman-dashboard-card-padding: 14px;
+  --salesman-dashboard-tile-padding: 8px 12px;
 }
 
 body.salesman-dashboard-mode .salesman-dashboard-live-leads {
@@ -182,7 +182,7 @@ body.salesman-dashboard-mode .dashboard-live-lead-table .is-empty {
   }
 
   body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
-    grid-template-rows: max-content max-content max-content 50dvh max-content;
+    grid-template-rows: max-content max-content max-content 56dvh max-content;
     grid-auto-rows: max-content;
     row-gap: var(--salesman-dashboard-section-gap);
     column-gap: var(--salesman-dashboard-section-gap);
@@ -332,9 +332,9 @@ body.salesman-dashboard-mode .dashboard-live-lead-table .is-empty {
   body.salesman-dashboard-mode .salesman-dashboard-live-leads { grid-row: 4; }
 
   body.salesman-dashboard-mode .salesman-dashboard-live-leads {
-    height: 50vh;
-    height: 50dvh;
-    min-height: 300px;
+    height: 56vh;
+    height: 56dvh;
+    min-height: 340px;
     max-height: none;
     margin-top: 0;
     align-self: start;

@@ -68,3 +68,25 @@ body.lead-detail-mode .lead-detail-view .lead-page-header .chip.warm {
   opacity: 1 !important;
   -webkit-text-fill-color: #5a3709;
 }
+
+/*
+ * The snapshot keeps a legacy dark-hero class for its header structure.
+ * Override that class's inherited white anchor color only for the light
+ * Call and Email actions shared by the Admin and Salesman Lead Details view.
+ */
+body.lead-detail-mode .lead-detail-view .drawer-overview-panel--snapshot .drawer-primary-actions > a.ghost-button,
+body.lead-detail-mode .lead-detail-view .drawer-overview-panel--snapshot .drawer-primary-actions > a.ghost-button:link,
+body.lead-detail-mode .lead-detail-view .drawer-overview-panel--snapshot .drawer-primary-actions > a.ghost-button:visited {
+  border-color: var(--lead-bauhaus-border) !important;
+  background-color: var(--lead-bauhaus-surface) !important;
+  color: var(--lead-bauhaus-navy) !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: var(--lead-bauhaus-navy) !important;
+}
+
+body.lead-detail-mode .lead-detail-view .drawer-overview-panel--snapshot .drawer-primary-actions > a.ghost-button:is(:hover, :focus-visible) {
+  border-color: var(--lead-bauhaus-blue) !important;
+  background-color: var(--lead-bauhaus-light-blue, #dceaf6) !important;
+  color: var(--lead-bauhaus-navy) !important;
+  -webkit-text-fill-color: var(--lead-bauhaus-navy) !important;
+}

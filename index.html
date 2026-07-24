@@ -16,16 +16,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=dashboard-summary-modals-1">
-  <link rel="stylesheet" href="salesman-dashboard-live-leads.css?v=4">
+  <link rel="stylesheet" href="salesman-dashboard-live-leads.css?v=5-compact">
   <link rel="stylesheet" href="lead-detail-readability.css?v=7-badge-contrast">
   <link rel="stylesheet" href="activity-readability.css?v=6-final">
   <link rel="stylesheet" href="tasks-bauhaus-flat.css?v=1">
   <link rel="stylesheet" href="bauhaus-global.css?v=4">
-  <link rel="stylesheet" href="salesmen-directory.css?v=7-solid-kpis">
-  <link rel="stylesheet" href="salesman-dashboard-summaries.css?v=2">
-  <link rel="stylesheet" href="pipeline-live-leads.css?v=4-report-export">
+  <link rel="stylesheet" href="salesmen-directory.css?v=9-bauhaus-cards-toggle">
+  <link rel="stylesheet" href="salesman-dashboard-summaries.css?v=3-compact">
+  <link rel="stylesheet" href="pipeline-live-leads.css?v=5-date-contrast">
   <link rel="stylesheet" href="tasks-contrast.css?v=1">
-  <link rel="stylesheet" href="lead-detail-contrast.css?v=1">
+  <link rel="stylesheet" href="activity-modal.css?v=1">
+  <link rel="stylesheet" href="activity-workflow.css?v=1">
+  <link rel="stylesheet" href="admin-dashboard-clean.css?v=2">
+  <link rel="stylesheet" href="lead-detail-contrast.css?v=2-action-buttons">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -210,9 +213,9 @@
         </div>
 
         <section class="dashboard-view" id="dashboardView">
-          <div class="admin-dashboard-overview-slot" id="adminDashboardOverviewSlot"></div>
-          <div class="admin-dashboard-triage-row" id="adminDashboardTriageRow"></div>
-          <div class="admin-dashboard-analytics-row" id="adminDashboardAnalyticsRow"></div>
+          <div class="admin-dashboard-overview-slot" id="adminDashboardOverviewSlot" aria-label="Dashboard overview"></div>
+          <div class="admin-dashboard-triage-row" id="adminDashboardTriageRow" aria-label="Attention required"></div>
+          <div class="admin-dashboard-analytics-row" id="adminDashboardAnalyticsRow" aria-label="Pipeline analytics"></div>
           <div class="panel salesman-simplified-dashboard dashboard-grid hidden" id="salesmanSimplifiedDashboard">
             <div class="salesman-simplified-metrics" id="salesmanSimplifiedMetrics"></div>
             <section class="salesman-simplified-block salesman-dashboard-pipeline">
@@ -491,7 +494,7 @@
             </div>
             <div class="loss-reasons-chart" id="lossReasonsChart"></div>
           </div>
-          <div class="admin-dashboard-bottom-row" id="adminDashboardBottomRow">
+          <div class="admin-dashboard-bottom-row" id="adminDashboardBottomRow" aria-label="Lead action plan insights">
             <div class="panel" id="relationshipFocusPanel">
               <div class="panel-header">
                 <div>
@@ -851,7 +854,11 @@
                       <h2>Activity log</h2>
                       <span>Calls, visits, emails, reminders, and review requests.</span>
                     </div>
-                    <span class="activity-count-pill" id="activitySummary">0 activities</span>
+                    <div class="activity-panel-actions">
+                      <span class="activity-count-pill" id="activitySummary">0 activities</span>
+                      <button class="activity-header-action" id="openActivityCreate" type="button">+ Add Activity</button>
+                      <button class="activity-header-action hidden" id="openActivityDeletionQueue" type="button">Deletion Requests</button>
+                    </div>
                   </div>
                   <div class="activity-filter-shell">
                     <button class="ghost-button activity-filter-toggle" type="button" id="activityFilterToggle">Filters</button>
@@ -1432,6 +1439,177 @@
       </form>
     </dialog>
 
+    <dialog id="activityDialog" class="activity-entry-dialog" aria-labelledby="activityDialogTitle" aria-describedby="activityDialogDescription">
+      <form class="activity-entry-modal" id="activityForm" novalidate>
+        <header class="activity-entry-header">
+          <div>
+            <span class="activity-entry-eyebrow">Lead activity</span>
+            <h2 id="activityDialogTitle">Add New Activity</h2>
+            <p id="activityDialogDescription">Record the next move and the purpose of this activity.</p>
+            <strong id="activityLeadName"></strong>
+          </div>
+          <button type="button" class="activity-entry-close" id="closeActivityDialog" aria-label="Close Add New Activity modal">&times;</button>
+        </header>
+
+        <input name="lead_id" type="hidden">
+        <input name="activity_id" type="hidden">
+        <input name="activity_version" type="hidden" value="1">
+        <div class="activity-entry-fields">
+          <label class="activity-entry-lead hidden" id="activityLeadPickerWrap" for="activityLeadPicker">
+            <span>Company / Lead <b aria-hidden="true">*</b></span>
+            <select id="activityLeadPicker" name="lead_picker"></select>
+          </label>
+          <label for="activityNextActionPlan">
+            <span>Next Action Plan <b aria-hidden="true">*</b></span>
+            <select id="activityNextActionPlan" name="next_action_plan" required>
+              <option value="To Call">To Call</option>
+              <option value="To Send Email">To Send Email</option>
+              <option value="To Visit">To Visit</option>
+            </select>
+          </label>
+          <label for="activityNextActionDate">
+            <span>Next Action Date <b aria-hidden="true">*</b></span>
+            <input id="activityNextActionDate" name="next_action_date" type="date" required>
+          </label>
+          <label class="activity-entry-purpose" for="activityPurpose">
+            <span>Type / Purpose of Activity <b aria-hidden="true">*</b></span>
+            <select id="activityPurpose" name="activity_purpose" required>
+              <option value="Company Introductory">Company Introductory</option>
+              <option value="New Requirements">New Requirements</option>
+              <option value="Quotation Submission">Quotation Submission</option>
+              <option value="Quotation Follow Up">Quotation Follow Up</option>
+              <option value="Meeting">Meeting</option>
+            </select>
+          </label>
+          <label class="activity-entry-notes" for="activityNotes">
+            <span>Notes</span>
+            <textarea id="activityNotes" name="notes" rows="6" placeholder="Type notes or record a voice note"></textarea>
+          </label>
+        </div>
+
+        <section class="activity-voice-recorder" aria-labelledby="activityVoiceHeading">
+          <h3 class="sr-only" id="activityVoiceHeading">Voice AI Recorder</h3>
+          <button class="activity-record-button" id="activityRecordVoice" type="button" data-state="ready">Record Voice Note</button>
+          <div class="activity-voice-controls hidden" id="activityVoiceControls">
+            <button type="button" id="activityPauseVoice">Pause</button>
+            <button type="button" id="activityStopVoice">Stop</button>
+            <button type="button" id="activityCancelVoice">Cancel Recording</button>
+          </div>
+          <div class="activity-voice-state" role="status" aria-live="polite" aria-atomic="true">
+            <span id="activityVoiceStatus">Ready. Record in any supported language; the English transcript will be added to Notes.</span>
+            <time id="activityVoiceElapsed" datetime="PT0S">00:00</time>
+          </div>
+        </section>
+
+        <section class="activity-attachments" aria-labelledby="activityAttachmentsHeading">
+          <div class="activity-attachments-heading">
+            <div>
+              <h3 id="activityAttachmentsHeading">Attachments</h3>
+              <p>PNG, PDF, Word, or Excel files. Maximum 8 MB per file.</p>
+            </div>
+            <label class="activity-file-button" for="activityAttachmentInput">Browse files</label>
+          </div>
+          <input id="activityAttachmentInput" type="file" multiple accept=".png,.pdf,.doc,.docx,.xls,.xlsx" class="sr-only">
+          <button class="activity-drop-zone" id="activityDropZone" type="button">
+            <strong>Drag and drop files here</strong>
+            <span>or choose Browse files</span>
+          </button>
+          <div class="activity-attachment-list" id="activityAttachmentList" aria-live="polite"></div>
+        </section>
+
+        <span class="form-message activity-entry-message" id="activityMessage" role="status" aria-live="polite"></span>
+        <footer class="activity-entry-actions">
+          <button class="text-button" id="cancelActivityDialog" type="button">Cancel</button>
+          <button class="primary-button" id="saveActivity" type="submit">Save Activity</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="activityDetailsDialog" class="activity-workflow-dialog" aria-labelledby="activityDetailsTitle">
+      <section class="activity-details-modal">
+        <header class="activity-workflow-header">
+          <div>
+            <span>Activity details</span>
+            <h2 id="activityDetailsTitle">Activity</h2>
+          </div>
+          <button type="button" data-close-activity-details aria-label="Close activity details">&times;</button>
+        </header>
+        <div id="activityDetailsBody"></div>
+        <footer class="activity-workflow-footer">
+          <button class="text-button" type="button" data-close-activity-details>Close</button>
+          <button class="text-button hidden" id="cancelActivityDeletionFromDetails" type="button">Cancel Deletion Request</button>
+          <button class="primary-button" id="editActivityFromDetails" type="button">Edit Activity</button>
+          <button class="danger-button" id="requestActivityDeletionFromDetails" type="button">Request Deletion</button>
+        </footer>
+      </section>
+    </dialog>
+
+    <dialog id="activityDeletionDialog" class="activity-workflow-dialog" aria-labelledby="activityDeletionTitle">
+      <form class="activity-deletion-modal" id="activityDeletionForm">
+        <header class="activity-workflow-header activity-workflow-header--danger">
+          <div>
+            <span>Approval required</span>
+            <h2 id="activityDeletionTitle">Request Activity Deletion</h2>
+          </div>
+          <button type="button" data-close-activity-deletion aria-label="Close deletion request">&times;</button>
+        </header>
+        <input name="lead_id" type="hidden">
+        <input name="activity_id" type="hidden">
+        <div class="activity-deletion-summary" id="activityDeletionSummary"></div>
+        <label>Reason
+          <select name="reason" required>
+            <option value="">Choose a reason</option>
+            <option>Activity entered by mistake</option>
+            <option>Duplicate activity</option>
+            <option>Incorrect related lead or account</option>
+            <option>Incorrect activity details</option>
+            <option>Test or invalid record</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Additional comments
+          <textarea name="comments" rows="4" maxlength="1000" placeholder="Give management enough context to review this request."></textarea>
+        </label>
+        <p class="activity-deletion-note">The activity remains visible until management approves the request.</p>
+        <span class="form-message" id="activityDeletionMessage" aria-live="polite"></span>
+        <footer class="activity-workflow-footer">
+          <button class="text-button" type="button" data-close-activity-deletion>Cancel</button>
+          <button class="danger-button" type="submit">Submit Request</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="activityDeletionQueueDialog" class="activity-workflow-dialog activity-queue-dialog" aria-labelledby="activityDeletionQueueTitle">
+      <section class="activity-queue-modal">
+        <header class="activity-workflow-header">
+          <div>
+            <span>Management review</span>
+            <h2 id="activityDeletionQueueTitle">Activity Deletion Requests</h2>
+          </div>
+          <button type="button" data-close-activity-queue aria-label="Close deletion request queue">&times;</button>
+        </header>
+        <div class="activity-queue-toolbar">
+          <input id="activityDeletionQueueSearch" type="search" placeholder="Search company, requester, or reason">
+          <select id="activityDeletionQueueStatus">
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="all">All statuses</option>
+          </select>
+          <input id="activityDeletionQueueRequester" type="search" placeholder="Requester">
+          <select id="activityDeletionQueueSalesman">
+            <option value="">All salesmen</option>
+          </select>
+          <label>From <input id="activityDeletionQueueFrom" type="date"></label>
+          <label>To <input id="activityDeletionQueueTo" type="date"></label>
+        </div>
+        <div id="activityDeletionQueueBody"></div>
+      </section>
+    </dialog>
+
     <dialog id="pendingChangesDialog" class="quick-log-dialog">
       <div class="quick-log-sheet">
         <div class="sheet-handle"></div>
@@ -1464,7 +1642,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="client.js?v=pipeline-report-export-1"></script>
+  <script src="client.js?v=salesmen-card-view-1"></script>
   </body>
 </html>
 

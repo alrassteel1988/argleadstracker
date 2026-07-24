@@ -51,16 +51,16 @@ function requireServiceRole() {
   return SUPABASE_SERVICE_ROLE_KEY;
 }
 
-function storageObjectUrl(objectPath) {
-  return `/storage/v1/object/${encodeURIComponent(SUPABASE_STORAGE_BUCKET)}/${String(objectPath || "")
+function storageObjectUrl(objectPath, bucket = SUPABASE_STORAGE_BUCKET) {
+  return `/storage/v1/object/${encodeURIComponent(bucket)}/${String(objectPath || "")
     .split("/")
     .map(part => encodeURIComponent(part))
     .join("/")}`;
 }
 
-async function uploadStorageObject(objectPath, content, contentType = "application/octet-stream") {
+async function uploadStorageObjectToBucket(bucket, objectPath, content, contentType = "application/octet-stream") {
   const key = requireServiceRole();
-  const response = await fetch(`${SUPABASE_URL}${storageObjectUrl(objectPath)}`, {
+  const response = await fetch(`${SUPABASE_URL}${storageObjectUrl(objectPath, bucket)}`, {
     method: "POST",
     headers: {
       apikey: key,
@@ -79,9 +79,13 @@ async function uploadStorageObject(objectPath, content, contentType = "applicati
   return data;
 }
 
-async function createStorageSignedUrl(objectPath, expiresIn = 3600) {
+async function uploadStorageObject(objectPath, content, contentType = "application/octet-stream") {
+  return uploadStorageObjectToBucket(SUPABASE_STORAGE_BUCKET, objectPath, content, contentType);
+}
+
+async function createStorageSignedUrlForBucket(bucket, objectPath, expiresIn = 3600) {
   const key = requireServiceRole();
-  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${encodeURIComponent(SUPABASE_STORAGE_BUCKET)}/${String(objectPath || "")
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${String(objectPath || "")
     .split("/")
     .map(part => encodeURIComponent(part))
     .join("/")}`, {
@@ -101,6 +105,10 @@ async function createStorageSignedUrl(objectPath, expiresIn = 3600) {
   }
   const signedUrl = data.signedURL || data.signedUrl || "";
   return signedUrl.startsWith("http") ? signedUrl : `${SUPABASE_URL}${signedUrl}`;
+}
+
+async function createStorageSignedUrl(objectPath, expiresIn = 3600) {
+  return createStorageSignedUrlForBucket(SUPABASE_STORAGE_BUCKET, objectPath, expiresIn);
 }
 
 async function signIn(email, password) {
@@ -169,6 +177,7 @@ module.exports = {
   bearerToken,
   createAuthUser,
   createStorageSignedUrl,
+  createStorageSignedUrlForBucket,
   currentSupabaseUser,
   isSupabaseAdminConfigured,
   isSupabaseConfigured,
@@ -176,5 +185,6 @@ module.exports = {
   rest,
   signIn,
   signOut,
-  uploadStorageObject
+  uploadStorageObject,
+  uploadStorageObjectToBucket
 };

@@ -89,7 +89,7 @@ body.pipeline-compact-mode .pipeline-report-range {
 
 body.pipeline-compact-mode .pipeline-report-range > span {
   align-self: center;
-  color: var(--bauhaus-text);
+  color: var(--bauhaus-text) !important;
   font: 700 12px/1.2 "Inter", sans-serif;
   white-space: nowrap;
 }
@@ -97,12 +97,12 @@ body.pipeline-compact-mode .pipeline-report-range > span {
 body.pipeline-compact-mode .pipeline-report-range label {
   display: grid;
   gap: 3px;
-  color: var(--bauhaus-text);
+  color: var(--bauhaus-text) !important;
   font: 700 11px/1 "Inter", sans-serif;
 }
 
 body.pipeline-compact-mode .pipeline-report-range label > span {
-  color: var(--bauhaus-text);
+  color: var(--bauhaus-text) !important;
   font: inherit;
 }
 
@@ -113,8 +113,21 @@ body.pipeline-compact-mode .pipeline-report-range input {
   border: 1px solid var(--bauhaus-border-light);
   border-radius: var(--bauhaus-radius);
   background: var(--bauhaus-surface);
-  color: var(--bauhaus-text);
+  color: var(--bauhaus-text) !important;
+  -webkit-text-fill-color: var(--bauhaus-text);
+  color-scheme: light;
   font: 600 12px/1 "Inter", sans-serif;
+}
+
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-fields-wrapper,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-text,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-month-field,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-day-field,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-year-field {
+  color: var(--bauhaus-text);
+  -webkit-text-fill-color: var(--bauhaus-text);
+  opacity: 1;
 }
 
 body.pipeline-compact-mode .pipeline-report-range input:focus {

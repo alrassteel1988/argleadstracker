@@ -230,6 +230,104 @@ body.salesman-dashboard-mode .salesman-simplified-stage .salesman-stage-icon {
   color: var(--salesman-stage-accent) !important;
 }
 
+@media (min-width: 821px) {
+  body.salesman-dashboard-mode .salesman-simplified-metrics {
+    gap: 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 12px;
+    min-height: 88px;
+    padding: 10px 14px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric .salesman-summary-card-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  body.salesman-dashboard-mode .salesman-summary-card-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  body.salesman-dashboard-mode .salesman-summary-card-copy {
+    gap: 2px;
+  }
+
+  body.salesman-dashboard-mode .salesman-summary-card-copy .salesman-summary-card-label {
+    font-size: 12px;
+  }
+
+  body.salesman-dashboard-mode .salesman-summary-card-copy strong {
+    font-size: 26px;
+  }
+
+  body.salesman-dashboard-mode .salesman-summary-card-copy small {
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric .salesman-summary-card-action {
+    gap: 5px;
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-metric .salesman-summary-card-chevron {
+    font-size: 22px;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline {
+    min-height: 0;
+    padding: 8px 12px 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header {
+    min-height: 0;
+    padding: 0 0 6px;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header h2 {
+    margin: 0;
+    font-size: 15px;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-pipeline-strip {
+    gap: 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-stage {
+    gap: 10px;
+    min-height: 72px;
+    padding: 8px 12px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-stage .salesman-stage-label {
+    font-size: 11px;
+  }
+
+  body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-stage strong {
+    font-size: 24px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-stage .salesman-stage-action {
+    gap: 5px;
+    font-size: 10px;
+  }
+
+  body.salesman-dashboard-mode .salesman-simplified-stage .salesman-stage-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  body.salesman-dashboard-mode .salesman-stage-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
 .summary-card-details-shell.tone-navy {
   --summary-details-accent: var(--bauhaus-navy);
   --summary-details-header-muted: #d7e6f1;

@@ -10,6 +10,8 @@ const LEAD_AI_SUMMARY_CACHE_KEY = "arg_lead_ai_summary_cache_v1";
 const OUTBOX_DB_NAME = "arg_leads_pwa_outbox";
 const OUTBOX_STORE = "outbox";
 const SMART_SEARCH_DEBOUNCE_MS = 220;
+const SUMMARY_DETAILS_DEFAULT_PAGE_SIZE = 10;
+const SUMMARY_DETAILS_PAGE_SIZES = [10, 20, 50];
 const ACTIVITY_PRESETS = ["Today", "This Week", "This Month", "Last 30 Days", "Last 90 Days"];
 const QUICK_LOG_TYPES = ["Phone Call", "Email", "In-Person Meeting", "Site Visit", "Video Call", "Quotation Sent", "Order Placed"];
 const QUICK_PHRASES = ["Discussed pricing", "Requested quotation", "Sample feedback", "Follow-up agreed", "Met procurement"];
@@ -156,7 +158,7 @@ const state = {
     sortKey: "",
     sortDirection: "asc",
     page: 1,
-    pageSize: 7,
+    pageSize: SUMMARY_DETAILS_DEFAULT_PAGE_SIZE,
     trigger: null
   }
 };
@@ -521,6 +523,50 @@ const els = {
   flagAttentionForm: document.querySelector("#flagAttentionForm"),
   flagAttentionTitle: document.querySelector("#flagAttentionTitle"),
   flagAttentionMessage: document.querySelector("#flagAttentionMessage"),
+  activityDialog: document.querySelector("#activityDialog"),
+  activityForm: document.querySelector("#activityForm"),
+  activityDialogTitle: document.querySelector("#activityDialogTitle"),
+  activityLeadName: document.querySelector("#activityLeadName"),
+  activityLeadPickerWrap: document.querySelector("#activityLeadPickerWrap"),
+  activityLeadPicker: document.querySelector("#activityLeadPicker"),
+  activityNextActionPlan: document.querySelector("#activityNextActionPlan"),
+  activityNextActionDate: document.querySelector("#activityNextActionDate"),
+  activityPurpose: document.querySelector("#activityPurpose"),
+  activityNotes: document.querySelector("#activityNotes"),
+  activityRecordVoice: document.querySelector("#activityRecordVoice"),
+  activityVoiceControls: document.querySelector("#activityVoiceControls"),
+  activityPauseVoice: document.querySelector("#activityPauseVoice"),
+  activityStopVoice: document.querySelector("#activityStopVoice"),
+  activityCancelVoice: document.querySelector("#activityCancelVoice"),
+  activityVoiceStatus: document.querySelector("#activityVoiceStatus"),
+  activityVoiceElapsed: document.querySelector("#activityVoiceElapsed"),
+  activityMessage: document.querySelector("#activityMessage"),
+  closeActivityDialog: document.querySelector("#closeActivityDialog"),
+  cancelActivityDialog: document.querySelector("#cancelActivityDialog"),
+  saveActivity: document.querySelector("#saveActivity"),
+  activityAttachmentInput: document.querySelector("#activityAttachmentInput"),
+  activityDropZone: document.querySelector("#activityDropZone"),
+  activityAttachmentList: document.querySelector("#activityAttachmentList"),
+  openActivityCreate: document.querySelector("#openActivityCreate"),
+  openActivityDeletionQueue: document.querySelector("#openActivityDeletionQueue"),
+  activityDetailsDialog: document.querySelector("#activityDetailsDialog"),
+  activityDetailsTitle: document.querySelector("#activityDetailsTitle"),
+  activityDetailsBody: document.querySelector("#activityDetailsBody"),
+  editActivityFromDetails: document.querySelector("#editActivityFromDetails"),
+  requestActivityDeletionFromDetails: document.querySelector("#requestActivityDeletionFromDetails"),
+  cancelActivityDeletionFromDetails: document.querySelector("#cancelActivityDeletionFromDetails"),
+  activityDeletionDialog: document.querySelector("#activityDeletionDialog"),
+  activityDeletionForm: document.querySelector("#activityDeletionForm"),
+  activityDeletionSummary: document.querySelector("#activityDeletionSummary"),
+  activityDeletionMessage: document.querySelector("#activityDeletionMessage"),
+  activityDeletionQueueDialog: document.querySelector("#activityDeletionQueueDialog"),
+  activityDeletionQueueSearch: document.querySelector("#activityDeletionQueueSearch"),
+  activityDeletionQueueStatus: document.querySelector("#activityDeletionQueueStatus"),
+  activityDeletionQueueRequester: document.querySelector("#activityDeletionQueueRequester"),
+  activityDeletionQueueSalesman: document.querySelector("#activityDeletionQueueSalesman"),
+  activityDeletionQueueFrom: document.querySelector("#activityDeletionQueueFrom"),
+  activityDeletionQueueTo: document.querySelector("#activityDeletionQueueTo"),
+  activityDeletionQueueBody: document.querySelector("#activityDeletionQueueBody"),
   quickLogDialog: document.querySelector("#quickLogDialog"),
   quickLogForm: document.querySelector("#quickLogForm"),
   closeQuickLog: document.querySelector("#closeQuickLog"),
@@ -737,6 +783,13 @@ const ACTIVITY_PURPOSE_OPTIONS = [
   "New Requirements",
   "Quotation Submission",
   "Quotation Follow-Up",
+  "Meeting"
+];
+const STRUCTURED_ACTIVITY_PURPOSE_OPTIONS = [
+  "Company Introductory",
+  "New Requirements",
+  "Quotation Submission",
+  "Quotation Follow Up",
   "Meeting"
 ];
 
@@ -1494,6 +1547,16 @@ let activeRecorder = null;
 let pmrVoiceRecorder = null;
 let pmrVoiceBlob = null;
 let pmrVoicePreviewUrl = "";
+let activityModalRecorder = null;
+let activityModalElapsedTimer = null;
+let activityModalTrigger = null;
+let activityModalSaving = false;
+let activityModalLastTranscript = "";
+let activityModalMode = "create";
+let activityModalFiles = [];
+let activityModalExistingAttachments = [];
+let activityModalRemovedAttachmentIds = new Set();
+let activityDetailsSelection = null;
 
 function recorderMimeType() {
   const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
@@ -1745,12 +1808,18 @@ function activityTranscriptMarkup(activity) {
 
 function activityEditButton(leadId, activityIndex, activity = {}) {
   if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
-  return `<button class="small-action" type="button" data-edit-activity-lead="${escapeHtml(leadId)}" data-edit-activity-index="${escapeHtml(activityIndex)}">Correct</button>`;
+  return `<button class="small-action" type="button" data-edit-activity-lead="${escapeHtml(leadId)}" data-edit-activity-index="${escapeHtml(activityIndex)}" data-edit-activity-id="${escapeHtml(activity.id || "")}">Edit</button>`;
 }
 
 function activityDeleteButton(leadId, activityIndex, activity = {}) {
   if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
-  return `<button class="small-action" type="button" data-delete-activity-lead="${escapeHtml(leadId)}" data-delete-activity-index="${escapeHtml(activityIndex)}">Request Review</button>`;
+  const pending = activity.deletion_status === "pending";
+  return `<button class="small-action" type="button" data-delete-activity-lead="${escapeHtml(leadId)}" data-delete-activity-index="${escapeHtml(activityIndex)}" data-delete-activity-id="${escapeHtml(activity.id || "")}" ${pending ? "disabled" : ""}>${pending ? "Deletion Pending" : "Request Deletion"}</button>`;
+}
+
+function activityViewButton(leadId, activityIndex, activity = {}) {
+  if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
+  return `<button class="small-action" type="button" data-view-activity-lead="${escapeHtml(leadId)}" data-view-activity-index="${escapeHtml(activityIndex)}" data-view-activity-id="${escapeHtml(activity.id || "")}">View</button>`;
 }
 
 function activityItemMarkup(activity, leadId, activityIndex) {
@@ -1759,6 +1828,7 @@ function activityItemMarkup(activity, leadId, activityIndex) {
       <div class="activity-row">
         <span class="meta-label">${escapeHtml(activity.at)} - ${escapeHtml(activity.type)}</span>
         <span class="activity-actions">
+          ${activityViewButton(leadId, activityIndex, activity)}
           ${activityEditButton(leadId, activityIndex, activity)}
           ${activityDeleteButton(leadId, activityIndex, activity)}
         </span>
@@ -1766,6 +1836,7 @@ function activityItemMarkup(activity, leadId, activityIndex) {
       <p>${escapeHtml(activity.text)}</p>
       ${activity.quotation_ref ? `<button class="quote-ref-pill" type="button" data-quotation-ref="${escapeHtml(activity.quotation_ref)}">Quote ${escapeHtml(activity.quotation_ref)}</button>` : ""}
       ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Review request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
+      ${activity.deletion_status === "pending" ? `<span class="request-status pending">Deletion pending approval</span>` : ""}
       ${activity.correction ? `<span class="meta-label">Correction for ${escapeHtml(activity.target_activity_summary || "previous activity")}</span>` : ""}
       ${activity.edited_at ? `<span class="meta-label">Legacy edited entry ${escapeHtml(String(activity.edited_at).slice(0, 10))}</span>` : ""}
       ${activityAudioMarkup(activity)}
@@ -1779,7 +1850,14 @@ function bindActivityEditButtons() {
     button.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      openActivityEdit(button.dataset.editActivityLead, Number(button.dataset.editActivityIndex));
+      openActivityEdit(button.dataset.editActivityLead, Number(button.dataset.editActivityIndex), button.dataset.editActivityId, button);
+    });
+  });
+  document.querySelectorAll("[data-view-activity-lead]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openActivityDetails(button.dataset.viewActivityLead, Number(button.dataset.viewActivityIndex), button.dataset.viewActivityId);
     });
   });
 }
@@ -1789,7 +1867,7 @@ function bindDeleteButtons() {
     button.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      handleActivityDelete(button.dataset.deleteActivityLead, Number(button.dataset.deleteActivityIndex));
+      handleActivityDelete(button.dataset.deleteActivityLead, Number(button.dataset.deleteActivityIndex), button.dataset.deleteActivityId);
     });
   });
 
@@ -1802,31 +1880,99 @@ function bindDeleteButtons() {
   });
 }
 
-function openActivityEdit(leadId, activityIndex) {
+function resolveActivity(leadId, activityIndex, activityId = "") {
   const lead = state.leads.find(item => item.id === leadId);
-  const activity = lead?.activities?.[activityIndex];
+  const activity = lead?.activities?.find(item => String(item.id) === String(activityId))
+    || lead?.activities?.[activityIndex]
+    || state.activities.find(item => item.lead_id === leadId && String(item.id) === String(activityId));
+  return { lead, activity };
+}
+
+function openActivityEdit(leadId, activityIndex, activityId = "", trigger = null) {
+  const { lead, activity } = resolveActivity(leadId, activityIndex, activityId);
   if (!lead || !activity) return;
-  els.activityEditMessage.textContent = "";
-  els.activityEditForm.reset();
-  const form = els.activityEditForm.elements;
-  form.lead_id.value = leadId;
-  form.activity_index.value = String(activityIndex);
-  form.at.value = activity.at || today();
-  form.type.value = activity.type || "Note";
-  form.text.value = "";
-  form.reminder_type.value = activity.reminder_type || "General follow-up";
-  form.due_date.value = activity.due_date || activity.at || today();
-  form.due_time.value = activity.due_time || "09:00";
-  form.activity_required.value = activity.activity_required || activity.text || "";
-  els.activityEditReminderFields.classList.toggle("hidden", !isReminderActivity(activity));
-  els.activityEditDialog.showModal();
+  openActivityModal(leadId, trigger, activity);
+}
+
+function auditEventLabel(event = {}) {
+  return String(event.action || "activity_updated").replaceAll("_", " ");
+}
+
+function openActivityDetails(leadId, activityIndex, activityId = "") {
+  const { lead, activity } = resolveActivity(leadId, activityIndex, activityId);
+  if (!lead || !activity || !els.activityDetailsDialog) return;
+  const pendingRequest = (lead.activities || []).find(item => (
+    item.delete_request
+    && item.target_type === "activity"
+    && String(item.target_activity_id) === String(activity.id)
+    && item.request_status === "pending"
+  ));
+  activityDetailsSelection = { leadId, activityIndex, activity, pendingRequest };
+  els.activityDetailsTitle.textContent = `${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`;
+  const attachments = (activity.attachments || []).filter(item => !item.removed_at);
+  const history = activity.audit_history || [];
+  els.activityDetailsBody.innerHTML = `
+    <div class="activity-detail-grid">
+      <div class="activity-detail-field"><span>Company</span><strong>${escapeHtml(lead.company_name)}</strong></div>
+      <div class="activity-detail-field"><span>Recorded by</span><strong>${escapeHtml(activity.created_by_name || activity.salesman_name || lead.assigned_salesman || "User")}</strong></div>
+      <div class="activity-detail-field"><span>Next action</span><strong>${escapeHtml(activity.next_action_plan || lead.next_action || "Not added")}</strong></div>
+      <div class="activity-detail-field"><span>Next action date</span><strong>${escapeHtml(formatDisplayDate(activity.next_action_date || activity.at || ""))}</strong></div>
+      <div class="activity-detail-field"><span>Purpose</span><strong>${escapeHtml(activity.activity_purpose || activity.type || "Activity")}</strong></div>
+      <div class="activity-detail-field"><span>Version</span><strong>${escapeHtml(activity.version || 1)}</strong></div>
+    </div>
+    <section class="activity-detail-section"><h3>Notes</h3><p>${escapeHtml(activity.notes || activity.text || "No notes added.")}</p></section>
+    <section class="activity-detail-section">
+      <h3>Attachments (${attachments.length})</h3>
+      <div class="activity-attachment-list">
+        ${attachments.map(item => `<div class="activity-attachment-row"><div><strong>${escapeHtml(item.filename || item.original_filename)}</strong><small>${escapeHtml(humanFileSize(item.size))}</small></div><span></span><button type="button" data-details-download-attachment="${escapeHtml(item.id)}">Download</button></div>`).join("") || "<p>No attachments.</p>"}
+      </div>
+    </section>
+    <section class="activity-detail-section">
+      <h3>Audit history</h3>
+      <div class="activity-audit-list">
+        ${history.map(event => `<article class="activity-audit-event"><span>${escapeHtml(auditEventLabel(event))}</span><strong>${escapeHtml(event.actor_name || "User")}</strong><p>${escapeHtml(formatDateTime(event.at || event.created_at || ""))}</p></article>`).join("") || "<p>No audit events available for this legacy activity.</p>"}
+      </div>
+    </section>
+  `;
+  els.activityDetailsBody.querySelectorAll("[data-details-download-attachment]").forEach(button => {
+    button.addEventListener("click", () => downloadActivityAttachment(button.dataset.detailsDownloadAttachment));
+  });
+  els.editActivityFromDetails.disabled = activity.deletion_status === "pending";
+  els.requestActivityDeletionFromDetails.disabled = activity.deletion_status === "pending";
+  els.requestActivityDeletionFromDetails.textContent = activity.deletion_status === "pending" ? "Deletion Pending" : "Request Deletion";
+  const canCancel = pendingRequest && (
+    String(pendingRequest.requested_by) === String(state.currentUser?.id)
+    || ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase())
+  );
+  els.cancelActivityDeletionFromDetails?.classList.toggle("hidden", !canCancel);
+  if (els.cancelActivityDeletionFromDetails) {
+    els.cancelActivityDeletionFromDetails.dataset.requestId = canCancel ? pendingRequest.id : "";
+  }
+  els.activityDetailsDialog.showModal();
 }
 
 function adminPasswordPrompt(action) {
   return window.prompt(`Enter admin password to ${action}:`);
 }
 
-async function submitDeleteRequest(leadId, targetType, activityIndex = null) {
+async function submitDeleteRequest(leadId, targetType, activityIndex = null, activityId = "") {
+  if (targetType === "activity" && els.activityDeletionDialog) {
+    const selection = resolveActivity(leadId, activityIndex, activityId);
+    els.activityDeletionForm.reset();
+    els.activityDeletionForm.elements.lead_id.value = leadId;
+    els.activityDeletionForm.elements.activity_id.value = activityId || selection.activity?.id || "";
+    if (els.activityDeletionSummary) {
+      const attachments = (selection.activity?.attachments || []).filter(item => !item.removed_at);
+      els.activityDeletionSummary.innerHTML = `
+        <strong>${escapeHtml(selection.lead?.company_name || "Activity")}</strong>
+        <span>${escapeHtml(selection.activity?.activity_purpose || selection.activity?.type || "Activity")} &middot; ${escapeHtml(formatDisplayDate(selection.activity?.at || selection.activity?.next_action_date || ""))}</span>
+        <span>Created by ${escapeHtml(selection.activity?.created_by_name || selection.activity?.salesman_name || "User")} &middot; ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}</span>
+      `;
+    }
+    setMessage(els.activityDeletionMessage, "");
+    els.activityDeletionDialog.showModal();
+    return;
+  }
   const promptText = targetType === "activity"
     ? "Reason for requesting activity review. The original activity will stay in history:"
     : "Reason for requesting lead deletion:";
@@ -1844,20 +1990,120 @@ async function submitDeleteRequest(leadId, targetType, activityIndex = null) {
   await loadLeads();
 }
 
-async function handleActivityDelete(leadId, activityIndex) {
-  await submitDeleteRequest(leadId, "activity", activityIndex);
+async function handleActivityDelete(leadId, activityIndex, activityId = "") {
+  await submitDeleteRequest(leadId, "activity", activityIndex, activityId);
 }
 
-async function reviewDeleteRequest(leadId, requestId, action) {
-  const password = adminPasswordPrompt(`${action} this delete request`);
-  if (!password) return;
-  const note = action === "reject" ? window.prompt("Optional rejection note:") || "" : "";
+async function reviewDeleteRequest(leadId, requestId, action, suppliedNote = "") {
+  const role = String(state.currentUser?.role || "").toLowerCase();
+  const password = role === "admin" ? adminPasswordPrompt(`${action} this delete request`) : "";
+  if (role === "admin" && !password) return;
+  const note = action === "reject"
+    ? suppliedNote.trim() || window.prompt("Rejection comment (required):") || ""
+    : suppliedNote.trim();
+  if (action === "reject" && !note.trim()) {
+    setToast("A rejection comment is required.", "error");
+    return;
+  }
   const result = await api(`/api/leads/${encodeURIComponent(leadId)}/delete-requests/${encodeURIComponent(requestId)}/${encodeURIComponent(action)}`, {
     method: "POST",
     body: JSON.stringify({ admin_password: password, note })
   });
   if (result.deleted && state.selectedId === leadId) state.selectedId = null;
   await loadLeads();
+  if (currentView === "activity") await fetchActivities();
+  if (els.activityDeletionQueueDialog?.open) await loadActivityDeletionQueue();
+  setToast(action === "approve" ? "Deletion approved; activity archived." : "Deletion request rejected.", "success");
+}
+
+function activityDeletionStatusLabel(status) {
+  return String(status || "pending").replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function activityDeletionQueueCard(request) {
+  const selfRequest = String(request.requested_by) === String(state.currentUser?.id);
+  const pending = request.request_status === "pending";
+  const historyCount = Array.isArray(request.audit_history) ? request.audit_history.length : 0;
+  return `
+    <article class="activity-queue-card">
+      <div class="activity-queue-card-head">
+        <div>
+          <span class="request-status ${escapeHtml(request.request_status || "pending")}">${escapeHtml(activityDeletionStatusLabel(request.request_status))}</span>
+          <h3>${escapeHtml(request.company_name || "Lead")}</h3>
+          <p>${escapeHtml(request.activity_type || "Activity")} &middot; ${escapeHtml(formatDisplayDate(request.activity_date || request.requested_at))}</p>
+        </div>
+        <strong>${escapeHtml(formatDateTime(request.requested_at || ""))}</strong>
+      </div>
+      <div class="activity-detail-grid">
+        <div class="activity-detail-field"><span>Requester</span><strong>${escapeHtml(request.requested_by_name || "User")}</strong></div>
+        <div class="activity-detail-field"><span>Salesman / team</span><strong>${escapeHtml(request.assigned_salesman || "Not assigned")}</strong></div>
+        <div class="activity-detail-field"><span>Activity creator</span><strong>${escapeHtml(request.activity_creator || "Not recorded")}</strong></div>
+        <div class="activity-detail-field"><span>Attachments</span><strong>${escapeHtml(request.attachment_count || 0)}</strong></div>
+        <div class="activity-detail-field"><span>Reason</span><strong>${escapeHtml(request.reason || "Not added")}</strong></div>
+        <div class="activity-detail-field"><span>Audit events</span><strong>${escapeHtml(historyCount)}</strong></div>
+      </div>
+      ${request.comments ? `<p><strong>Requester comments:</strong> ${escapeHtml(request.comments)}</p>` : ""}
+      ${request.activity_notes ? `<p><strong>Activity notes:</strong> ${escapeHtml(request.activity_notes)}</p>` : ""}
+      ${request.review_note ? `<p><strong>Management comment:</strong> ${escapeHtml(request.review_note)}</p>` : ""}
+      ${pending ? `
+        <div class="activity-queue-card-actions">
+          <textarea data-activity-review-note="${escapeHtml(request.id)}" aria-label="Management comment for ${escapeHtml(request.company_name || "activity")}"></textarea>
+          <button class="danger-button" type="button" data-activity-request-action="reject" data-request-lead="${escapeHtml(request.lead_id)}" data-request-id="${escapeHtml(request.id)}" ${selfRequest ? "disabled title=\"You cannot review your own request.\"" : ""}>Reject</button>
+          <button class="primary-button" type="button" data-activity-request-action="approve" data-request-lead="${escapeHtml(request.lead_id)}" data-request-id="${escapeHtml(request.id)}" ${selfRequest ? "disabled title=\"You cannot review your own request.\"" : ""}>Approve</button>
+        </div>
+      ` : ""}
+    </article>
+  `;
+}
+
+async function loadActivityDeletionQueue() {
+  if (!els.activityDeletionQueueBody) return;
+  els.activityDeletionQueueBody.innerHTML = `<div class="activity-workflow-loading" role="status">Loading deletion requests...</div>`;
+  const params = new URLSearchParams({
+    status: els.activityDeletionQueueStatus?.value || "pending",
+    search: els.activityDeletionQueueSearch?.value || "",
+    requester: els.activityDeletionQueueRequester?.value || "",
+    salesman: els.activityDeletionQueueSalesman?.value || "",
+    from: els.activityDeletionQueueFrom?.value || "",
+    to: els.activityDeletionQueueTo?.value || ""
+  });
+  try {
+    const requests = await api(`/api/activity-deletion-requests?${params.toString()}`);
+    els.activityDeletionQueueBody.innerHTML = requests.length
+      ? `<div class="activity-queue-list">${requests.map(activityDeletionQueueCard).join("")}</div>`
+      : `<div class="activity-workflow-empty"><strong>No deletion requests match these filters.</strong></div>`;
+    els.activityDeletionQueueBody.querySelectorAll("[data-activity-request-action]").forEach(button => {
+      button.addEventListener("click", async () => {
+        const note = els.activityDeletionQueueBody.querySelector(`[data-activity-review-note="${CSS.escape(button.dataset.requestId)}"]`)?.value || "";
+        button.disabled = true;
+        try {
+          await reviewDeleteRequest(button.dataset.requestLead, button.dataset.requestId, button.dataset.activityRequestAction, note);
+        } catch (error) {
+          button.disabled = false;
+          setToast(error.message, "error");
+        }
+      });
+    });
+  } catch (error) {
+    els.activityDeletionQueueBody.innerHTML = `<div class="activity-workflow-error" role="alert">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function cancelActivityDeletionRequest() {
+  const requestId = els.cancelActivityDeletionFromDetails?.dataset.requestId;
+  const leadId = activityDetailsSelection?.leadId;
+  if (!requestId || !leadId) return;
+  try {
+    await api(`/api/leads/${encodeURIComponent(leadId)}/delete-requests/${encodeURIComponent(requestId)}/cancel`, {
+      method: "POST"
+    });
+    els.activityDetailsDialog?.close();
+    await loadLeads();
+    if (currentView === "activity") await fetchActivities();
+    setToast("Deletion request cancelled.", "success");
+  } catch (error) {
+    setToast(error.message, "error");
+  }
 }
 
 async function markFollowupComplete(button) {
@@ -2846,6 +3092,184 @@ function setLeadFormMode(mode = "create") {
   }
   if (els.leadSubmitButton) {
     els.leadSubmitButton.textContent = mode === "edit" ? "Save Changes" : "Save Lead";
+  }
+}
+
+function activityRecordingElapsedSeconds(session = activityModalRecorder) {
+  if (!session?.startedAt) return 0;
+  const end = session.pausedAt || Date.now();
+  return Math.max(0, Math.floor((end - session.startedAt - (session.pausedDuration || 0)) / 1000));
+}
+
+function renderActivityRecordingElapsed() {
+  if (!els.activityVoiceElapsed) return;
+  const seconds = activityRecordingElapsedSeconds();
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  els.activityVoiceElapsed.textContent = `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  els.activityVoiceElapsed.setAttribute("datetime", `PT${seconds}S`);
+}
+
+function clearActivityRecordingTimer() {
+  clearInterval(activityModalElapsedTimer);
+  activityModalElapsedTimer = null;
+}
+
+function setActivityVoiceState(status, message) {
+  if (!els.activityRecordVoice) return;
+  const labels = {
+    ready: "Record Voice Note",
+    recording: "Recording Voice Note",
+    paused: "Recording Paused",
+    processing: "Processing Voice Note",
+    completed: "Record Another Voice Note",
+    failed: "Retry Voice Note"
+  };
+  els.activityRecordVoice.dataset.state = status;
+  els.activityRecordVoice.textContent = labels[status] || labels.ready;
+  els.activityRecordVoice.disabled = ["recording", "paused", "processing"].includes(status);
+  els.activityVoiceControls?.classList.toggle("hidden", !["recording", "paused"].includes(status));
+  if (els.activityPauseVoice) {
+    els.activityPauseVoice.textContent = status === "paused" ? "Resume" : "Pause";
+    els.activityPauseVoice.disabled = !["recording", "paused"].includes(status);
+  }
+  if (els.activityStopVoice) els.activityStopVoice.disabled = !["recording", "paused"].includes(status);
+  if (els.activityCancelVoice) els.activityCancelVoice.disabled = !["recording", "paused"].includes(status);
+  if (els.activityVoiceStatus) els.activityVoiceStatus.textContent = message;
+  if (!["recording", "paused"].includes(status)) clearActivityRecordingTimer();
+  renderActivityRecordingElapsed();
+}
+
+function activityModalIsBusy() {
+  return activityModalSaving || Boolean(activityModalRecorder);
+}
+
+function stopActivityRecordingTracks(session = activityModalRecorder) {
+  session?.stream?.getTracks?.().forEach(track => track.stop());
+}
+
+function resetActivityVoiceRecorder() {
+  const session = activityModalRecorder;
+  if (session) {
+    session.cancelled = true;
+    if (session.recorder?.state && session.recorder.state !== "inactive") {
+      session.recorder.stop();
+    }
+    stopActivityRecordingTracks(session);
+  }
+  activityModalRecorder = null;
+  activityModalLastTranscript = "";
+  clearActivityRecordingTimer();
+  if (els.activityVoiceElapsed) {
+    els.activityVoiceElapsed.textContent = "00:00";
+    els.activityVoiceElapsed.setAttribute("datetime", "PT0S");
+  }
+  setActivityVoiceState("ready", "Ready. Record in any supported language; the English transcript will be added to Notes.");
+}
+
+async function startActivityVoiceRecording() {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    setActivityVoiceState("failed", "Voice recording is not supported in this browser.");
+    return;
+  }
+  if (activityModalRecorder || activityModalSaving) return;
+
+  setActivityVoiceState("ready", "Requesting microphone permission...");
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = [];
+    const mimeType = recorderMimeType();
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const session = {
+      recorder,
+      stream,
+      chunks,
+      cancelled: false,
+      startedAt: Date.now(),
+      pausedAt: 0,
+      pausedDuration: 0
+    };
+    activityModalRecorder = session;
+
+    recorder.addEventListener("dataavailable", event => {
+      if (event.data.size) session.chunks.push(event.data);
+    });
+    recorder.addEventListener("pause", () => {
+      session.pausedAt = Date.now();
+      setActivityVoiceState("paused", "Paused. Resume, stop, or cancel the voice note.");
+    });
+    recorder.addEventListener("resume", () => {
+      if (session.pausedAt) session.pausedDuration += Date.now() - session.pausedAt;
+      session.pausedAt = 0;
+      setActivityVoiceState("recording", "Recording. Speak naturally in any supported language.");
+      activityModalElapsedTimer = setInterval(renderActivityRecordingElapsed, 250);
+    });
+    recorder.addEventListener("stop", async () => {
+      clearActivityRecordingTimer();
+      stopActivityRecordingTracks(session);
+      if (session.cancelled) {
+        if (activityModalRecorder === session) activityModalRecorder = null;
+        setActivityVoiceState("ready", "Recording cancelled. No audio was saved.");
+        return;
+      }
+
+      setActivityVoiceState("processing", "Processing speech and converting the final transcript to English...");
+      try {
+        const transcript = await transcribeRecording(new Blob(session.chunks, { type: recorder.mimeType || "audio/webm" }));
+        if (!transcript) throw new Error("No speech was detected. Please record again.");
+        if (transcript !== activityModalLastTranscript) {
+          const existing = els.activityNotes?.value.trim() || "";
+          els.activityNotes.value = [existing, transcript].filter(Boolean).join(existing ? "\n" : "");
+          els.activityNotes.dispatchEvent(new Event("input", { bubbles: true }));
+          activityModalLastTranscript = transcript;
+        }
+        if (activityModalRecorder === session) activityModalRecorder = null;
+        setActivityVoiceState("completed", "Completed. The English transcript was added to Notes and remains editable.");
+      } catch (error) {
+        if (activityModalRecorder === session) activityModalRecorder = null;
+        setActivityVoiceState("failed", `Voice processing failed: ${error.message}`);
+      }
+    });
+
+    recorder.start();
+    setActivityVoiceState("recording", "Recording. Speak naturally in any supported language.");
+    activityModalElapsedTimer = setInterval(renderActivityRecordingElapsed, 250);
+  } catch (error) {
+    activityModalRecorder = null;
+    stream?.getTracks?.().forEach(track => track.stop());
+    setActivityVoiceState(
+      "failed",
+      error.name === "NotAllowedError"
+        ? "Microphone permission was denied. Allow microphone access in your browser and retry."
+        : `Recording failed: ${error.message}`
+    );
+  }
+}
+
+function pauseActivityVoiceRecording() {
+  const recorder = activityModalRecorder?.recorder;
+  if (!recorder) return;
+  if (recorder.state === "recording") recorder.pause();
+  else if (recorder.state === "paused") recorder.resume();
+}
+
+function stopActivityVoiceRecording() {
+  const recorder = activityModalRecorder?.recorder;
+  if (!recorder || recorder.state === "inactive") return;
+  setActivityVoiceState("processing", "Preparing the recording for transcription...");
+  recorder.stop();
+}
+
+function cancelActivityVoiceRecording() {
+  const session = activityModalRecorder;
+  if (!session) return;
+  session.cancelled = true;
+  if (session.recorder?.state && session.recorder.state !== "inactive") session.recorder.stop();
+  else {
+    stopActivityRecordingTracks(session);
+    activityModalRecorder = null;
+    setActivityVoiceState("ready", "Recording cancelled. No audio was saved.");
   }
 }
 
@@ -4543,7 +4967,7 @@ function renderSummaryCardDetailsResults() {
     <span>Showing ${firstResult} to ${lastResult} of ${records.length} result${records.length === 1 ? "" : "s"}</span>
     <div class="summary-pagination-controls">
       <label class="summary-page-size"><span class="sr-only">Results per page</span><select data-summary-details-page-size>
-        ${[7, 10, 20].map(size => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size} / page</option>`).join("")}
+        ${SUMMARY_DETAILS_PAGE_SIZES.map(size => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size} / page</option>`).join("")}
       </select></label>
       <button type="button" data-summary-details-page="${state.summaryCardDetails.page - 1}" aria-label="Previous page" ${state.summaryCardDetails.page <= 1 ? "disabled" : ""}>&lsaquo;</button>
       ${pageButtons}
@@ -4580,7 +5004,7 @@ function openSummaryCardDetails(type, trigger) {
     sortKey: type === "salesmanOverdueCalls" ? "daysOverdue" : "dueDate",
     sortDirection: type === "salesmanOverdueCalls" ? "desc" : "asc",
     page: 1,
-    pageSize: 7,
+    pageSize: SUMMARY_DETAILS_DEFAULT_PAGE_SIZE,
     trigger
   };
   renderSummaryCardDetailsModal();
@@ -5272,13 +5696,26 @@ function renderOverdueBanner() {
     : admin
       ? `${shown.map(([name, count]) => `<span class="overdue-pill">${escapeHtml(name)}: ${count}</span>`).join("")}${moreCount ? `<span class="overdue-pill">+${moreCount} more</span>` : ""}`
       : `Oldest: ${escapeHtml(oldest.company_name)} - ${escapeHtml(daysOverdueLabel(oldest.due_date))}`;
+  const summary = admin && total > 1
+    ? `
+      <span class="overdue-banner-eyebrow">Attention required</span>
+      <strong>Overdue follow-ups</strong>
+      <div class="overdue-banner-kpis">
+        <span><b>${escapeHtml(String(total))}</b> overdue follow-ups</span>
+        <span><b>${escapeHtml(String(breakdownEntries.length))}</b> salesmen affected</span>
+      </div>
+      <div class="overdue-banner-pills">${subtitle}</div>
+    `
+    : `
+      <strong>${escapeHtml(title)}</strong>
+      <div>${subtitle}</div>
+    `;
 
   els.overdueBanner.classList.remove("hidden");
   els.overdueBanner.innerHTML = `
     <div class="overdue-banner-icon" aria-hidden="true"></div>
     <div class="overdue-banner-copy">
-      <strong>${escapeHtml(title)}</strong>
-      <div>${subtitle}</div>
+      ${summary}
     </div>
     <div class="overdue-banner-actions">
       <button class="overdue-action" type="button" data-overdue-action="${total === 1 ? "open" : admin ? "report" : "view"}" data-lead-id="${escapeHtml(oldest.lead_id)}">${escapeHtml(actionLabel)}</button>
@@ -5768,7 +6205,7 @@ function renderPerformanceFeed(rows) {
 }
 
 function isAdminDashboardCollapseMode() {
-  return state.currentUser?.role === "admin" && currentView === "dashboard";
+  return Boolean(state.currentUser) && !isSalesmanRole() && currentView === "dashboard";
 }
 
 function directSectionHeader(section) {
@@ -5848,10 +6285,13 @@ function updateDashboardCollapsibleButton(section) {
   const button = section.querySelector(".panel-collapse-toggle");
   if (!button) return;
   const collapsed = section.classList.contains("is-collapsed");
+  const sectionTitle = directSectionHeader(section)?.querySelector("h2")?.textContent?.trim() || "section";
+  const action = collapsed ? "Expand" : "Collapse";
   button.setAttribute("aria-expanded", String(!collapsed));
-  button.setAttribute("title", collapsed ? "Expand section" : "Collapse section");
+  button.setAttribute("aria-label", `${action} ${sectionTitle}`);
+  button.setAttribute("title", `${action} ${sectionTitle}`);
   const label = button.querySelector(".panel-collapse-label");
-  if (label) label.textContent = collapsed ? "Expand section" : "Collapse section";
+  if (label) label.textContent = action;
   const icon = button.querySelector(".panel-collapse-icon");
   if (icon) icon.textContent = collapsed ? "\u25bc" : "\u25b2";
 }
@@ -5872,6 +6312,22 @@ function setDashboardSectionCollapsed(section, collapsed, options = {}) {
   }
 }
 
+function handleDashboardCollapseClick(event) {
+  const button = event.target.closest(".panel-collapse-toggle");
+  if (!button) return;
+  const section = button.closest(".panel");
+  const adminDashboardActive = document.body.classList.contains("admin-dashboard-mode");
+  if (!section || (!section.classList.contains("collapsible-enabled") && !adminDashboardActive)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  section.classList.add("collapsible-enabled");
+  setDashboardSectionCollapsed(
+    section,
+    !section.classList.contains("is-collapsed"),
+    { force: adminDashboardActive }
+  );
+}
+
 function setupDashboardCollapsible(definition) {
   const section = document.getElementById(definition.id);
   if (!section) return;
@@ -5881,21 +6337,18 @@ function setupDashboardCollapsible(definition) {
   if (definition.refresh) section.dataset.refreshOnExpand = definition.refresh;
   ensureCollapsibleBody(section, header);
   const actions = ensurePanelHeaderActions(header);
-  if (!actions.querySelector(".panel-collapse-toggle")) {
-    const button = document.createElement("button");
+  let button = actions.querySelector(".panel-collapse-toggle");
+  if (!button) {
+    button = document.createElement("button");
     button.type = "button";
     button.className = "panel-collapse-toggle";
     button.innerHTML = `
       <span class="panel-collapse-label">Collapse section</span>
       <span class="panel-collapse-icon" aria-hidden="true">\u25b2</span>
     `;
-    button.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      setDashboardSectionCollapsed(section, !section.classList.contains("is-collapsed"));
-    });
     actions.appendChild(button);
   }
+  button.dataset.collapseBound = "true";
   updateDashboardCollapsibleButton(section);
 }
 
@@ -5918,6 +6371,10 @@ function syncDashboardCollapsibles() {
 
 function initDashboardCollapsibles() {
   if (dashboardCollapsiblesReady) return;
+  if (document.documentElement.dataset.dashboardCollapseDelegated !== "true") {
+    document.addEventListener("click", handleDashboardCollapseClick);
+    document.documentElement.dataset.dashboardCollapseDelegated = "true";
+  }
   ADMIN_DASHBOARD_COLLAPSIBLES.forEach(setupDashboardCollapsible);
   dashboardCollapsiblesReady = true;
   syncDashboardCollapsibles();
@@ -6212,6 +6669,19 @@ function arrangeAdminDashboardLayout() {
     [els.marketSnapshotPanel, els.dashboardPipelineFunnelPanel].forEach(panel => {
       if (panel) els.adminDashboardAnalyticsRow?.appendChild(panel);
     });
+    const actionPlanBody = els.actionPlanPanel?.querySelector(
+      ":scope > .dashboard-collapsible-body > .dashboard-collapsible-body-inner"
+    );
+    if (actionPlanBody && els.adminDashboardBottomRow?.parentElement !== actionPlanBody) {
+      actionPlanBody.appendChild(els.adminDashboardBottomRow);
+    }
+    ADMIN_DASHBOARD_COLLAPSIBLES.forEach(definition => {
+      const section = document.getElementById(definition.id);
+      if (!section) return;
+      section.classList.add("collapsible-enabled");
+      section.querySelector(".panel-collapse-toggle")?.classList.remove("hidden");
+      updateDashboardCollapsibleButton(section);
+    });
     return;
   }
 
@@ -6234,6 +6704,9 @@ function arrangeAdminDashboardLayout() {
       els.dashboardView.insertBefore(panel, dashboardAnchor);
     }
   });
+  if (els.adminDashboardBottomRow?.parentElement !== els.dashboardView) {
+    els.actionPlanPanel?.after(els.adminDashboardBottomRow);
+  }
 }
 
 function salesmanDashboardLeads() {
@@ -8299,7 +8772,7 @@ function renderDrawerOverview(lead) {
       <div class="drawer-primary-actions">
         <a class="ghost-button" href="${lead.phone ? `tel:${escapeHtml(lead.phone)}` : "#"}">Call</a>
         <a class="ghost-button" href="${lead.email ? `mailto:${escapeHtml(lead.email)}` : "#"}">Email</a>
-        <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button>
+        <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Add New Activity</button>
         <button class="primary-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit Lead</button>
       </div>
     </section>
@@ -8398,7 +8871,7 @@ function renderDrawerActivities(lead) {
           <h3>Activities</h3>
           <p class="drawer-section-copy">See the current rhythm first, then expand the full timeline only when you need the history.</p>
         </div>
-        <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log New Activity</button>
+        <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Add New Activity</button>
       </div>
       <div class="drawer-summary-grid">
         ${drawerSummaryMetric("Total Activities", String(activities.length))}
@@ -8409,7 +8882,7 @@ function renderDrawerActivities(lead) {
       <div class="drawer-list">
         ${recentActivities.length
           ? recentActivities.map((activity, index) => activityCard(activity, index)).join("")
-          : `<div class="timeline-empty"><strong>No activities logged yet.</strong><span>Log the first one.</span><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log Activity</button></div>`
+          : `<div class="timeline-empty"><strong>No activities logged yet.</strong><span>Log the first one.</span><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Add New Activity</button></div>`
         }
       </div>
       ${olderActivities.length ? `
@@ -8692,7 +9165,7 @@ function bindLeadDrawerEvents() {
     }
   });
   document.querySelectorAll("[data-drawer-log-activity]").forEach(button => {
-    button.addEventListener("click", () => logDrawerActivity(button.dataset.drawerLogActivity));
+    button.addEventListener("click", () => openActivityModal(button.dataset.drawerLogActivity, button));
   });
   document.querySelectorAll("[data-drawer-add-reminder]").forEach(button => {
     button.addEventListener("click", () => addDrawerReminder(button.dataset.drawerAddReminder));
@@ -8800,19 +9273,293 @@ function bindLeadDrawerEvents() {
   bindDeleteButtons();
 }
 
-async function logDrawerActivity(leadId) {
-  const text = window.prompt("Activity note:");
-  if (!text?.trim()) return;
-  try {
-    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
-      method: "POST",
-      body: JSON.stringify({ type: "Note", text: text.trim() })
+function activityClientId() {
+  return `act-${window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function humanFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function activityAttachmentUrl(leadId, activityId, attachmentId) {
+  return `/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityId)}/attachments/${encodeURIComponent(attachmentId)}`;
+}
+
+function renderActivityAttachmentList() {
+  if (!els.activityAttachmentList) return;
+  const existingRows = activityModalExistingAttachments.map(attachment => {
+    const removed = activityModalRemovedAttachmentIds.has(String(attachment.id));
+    return `
+      <div class="activity-attachment-row ${removed ? "is-removed" : ""}">
+        <div>
+          <strong>${escapeHtml(attachment.filename || attachment.original_filename || "Attachment")}</strong>
+          <small>${escapeHtml(humanFileSize(attachment.size))}${removed ? " · will be removed" : ""}</small>
+        </div>
+        <button type="button" data-download-activity-attachment="${escapeHtml(attachment.id)}" ${removed ? "disabled" : ""}>Download</button>
+        <button type="button" data-toggle-remove-activity-attachment="${escapeHtml(attachment.id)}">${removed ? "Keep" : "Remove"}</button>
+      </div>
+    `;
+  });
+  const pendingRows = activityModalFiles.map(item => `
+    <div class="activity-attachment-row">
+      <div>
+        <strong title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</strong>
+        <small>${escapeHtml(humanFileSize(item.file.size))} · ${escapeHtml(item.status || "ready")}${item.error ? ` · ${escapeHtml(item.error)}` : ""}</small>
+      </div>
+      ${item.status === "uploading" ? `<progress max="100" value="${Number(item.progress || 20)}"></progress>` : "<span></span>"}
+      ${item.status === "failed" ? `<button type="button" data-retry-pending-activity-file="${escapeHtml(item.id)}">Retry</button>` : ""}
+      <button type="button" data-remove-pending-activity-file="${escapeHtml(item.id)}" ${item.status === "uploading" ? "disabled" : ""}>Remove</button>
+    </div>
+  `);
+  els.activityAttachmentList.innerHTML = [...existingRows, ...pendingRows].join("")
+    || `<p class="activity-attachment-empty">No attachments selected.</p>`;
+  els.activityAttachmentList.querySelectorAll("[data-remove-pending-activity-file]").forEach(button => {
+    button.addEventListener("click", () => {
+      activityModalFiles = activityModalFiles.filter(item => item.id !== button.dataset.removePendingActivityFile);
+      renderActivityAttachmentList();
     });
-    setToast("Activity logged.", "success");
-    await loadLeads();
-    openLeadDrawer(leadId, "activities");
+  });
+  els.activityAttachmentList.querySelectorAll("[data-retry-pending-activity-file]").forEach(button => {
+    button.addEventListener("click", () => {
+      const item = activityModalFiles.find(file => file.id === button.dataset.retryPendingActivityFile);
+      if (!item) return;
+      item.status = "ready";
+      item.error = "";
+      item.progress = 0;
+      setMessage(els.activityMessage, "");
+      renderActivityAttachmentList();
+    });
+  });
+  els.activityAttachmentList.querySelectorAll("[data-toggle-remove-activity-attachment]").forEach(button => {
+    button.addEventListener("click", () => {
+      const id = String(button.dataset.toggleRemoveActivityAttachment);
+      if (activityModalRemovedAttachmentIds.has(id)) activityModalRemovedAttachmentIds.delete(id);
+      else activityModalRemovedAttachmentIds.add(id);
+      renderActivityAttachmentList();
+    });
+  });
+  els.activityAttachmentList.querySelectorAll("[data-download-activity-attachment]").forEach(button => {
+    button.addEventListener("click", () => downloadActivityAttachment(button.dataset.downloadActivityAttachment));
+  });
+  if (!activityModalSaving && els.saveActivity) {
+    els.saveActivity.disabled = activityModalFiles.some(item => ["uploading", "failed", "rejected"].includes(item.status));
+  }
+}
+
+const ACTIVITY_ATTACHMENT_TYPES = {
+  png: ["image/png"],
+  pdf: ["application/pdf"],
+  doc: ["application/msword", "application/octet-stream"],
+  docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/zip", "application/octet-stream"],
+  xls: ["application/vnd.ms-excel", "application/octet-stream"],
+  xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/zip", "application/octet-stream"]
+};
+
+async function activityFileSignatureLooksValid(file, extension) {
+  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const begins = (...values) => values.every((value, index) => bytes[index] === value);
+  if (extension === "png") return begins(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+  if (extension === "pdf") return begins(0x25, 0x50, 0x44, 0x46, 0x2d);
+  if (["doc", "xls"].includes(extension)) return begins(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1);
+  if (["docx", "xlsx"].includes(extension)) return begins(0x50, 0x4b, 0x03, 0x04);
+  return false;
+}
+
+async function addActivityFiles(files) {
+  for (const file of [...files]) {
+    const extension = file.name.split(".").pop()?.toLowerCase() || "";
+    if (!ACTIVITY_ATTACHMENT_TYPES[extension]) {
+      setMessage(els.activityMessage, `${file.name} is not an allowed attachment type.`, "error");
+      continue;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setMessage(els.activityMessage, "File is too large. The maximum allowed size is 8 MB.", "error");
+      continue;
+    }
+    if (file.type && !ACTIVITY_ATTACHMENT_TYPES[extension].includes(file.type)) {
+      setMessage(els.activityMessage, `${file.name} does not match its declared file type.`, "error");
+      continue;
+    }
+    if (!await activityFileSignatureLooksValid(file, extension)) {
+      setMessage(els.activityMessage, `${file.name} has an invalid or unsupported file signature.`, "error");
+      continue;
+    }
+    if (activityModalFiles.some(item => item.file.name === file.name && item.file.size === file.size)) continue;
+    activityModalFiles.push({ id: activityClientId(), file, status: "ready", progress: 0, error: "" });
+  }
+  renderActivityAttachmentList();
+}
+
+async function downloadActivityAttachment(attachmentId) {
+  const leadId = els.activityForm?.elements.lead_id?.value || activityDetailsSelection?.leadId;
+  const activityId = els.activityForm?.elements.activity_id?.value || activityDetailsSelection?.activity?.id;
+  if (!leadId || !activityId) return;
+  try {
+    const token = sessionStorage.getItem(SESSION_KEY);
+    const response = await fetch(activityAttachmentUrl(leadId, activityId, attachmentId), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    if (!response.ok) throw new Error("Attachment could not be downloaded.");
+    const blob = await response.blob();
+    const disposition = response.headers.get("content-disposition") || "";
+    const filename = disposition.match(/filename="([^"]+)"/i)?.[1] || "attachment";
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   } catch (error) {
     setToast(error.message, "error");
+  }
+}
+
+function closeActivityModal({ force = false } = {}) {
+  if (!els.activityDialog?.open) return;
+  if (!force && activityModalIsBusy()) {
+    setMessage(els.activityMessage, "Finish or cancel the recording, or wait for the save to complete.", "error");
+    return;
+  }
+  resetActivityVoiceRecorder();
+  els.activityDialog.close();
+}
+
+function openActivityModal(leadId = "", trigger = null, activity = null) {
+  const lead = state.leads.find(item => String(item.id) === String(leadId)) || state.leads[0];
+  if (!lead || !els.activityDialog || !els.activityForm) {
+    setToast("This lead is not available to your account.", "error");
+    return;
+  }
+  activityModalMode = activity ? "edit" : "create";
+  activityModalTrigger = trigger || document.activeElement;
+  activityModalSaving = false;
+  activityModalLastTranscript = "";
+  activityModalFiles = [];
+  activityModalExistingAttachments = (activity?.attachments || []).map(item => ({ ...item }));
+  activityModalRemovedAttachmentIds = new Set();
+  els.activityForm.reset();
+  els.activityForm.elements.lead_id.value = lead.id;
+  els.activityForm.elements.activity_id.value = activity?.id || "";
+  els.activityForm.elements.activity_version.value = String(activity?.version || 1);
+  els.activityForm.dataset.clientId = activity?.id || activityClientId();
+  els.activityDialogTitle.textContent = activity ? "Edit Activity" : "Add New Activity";
+  els.saveActivity.textContent = activity ? "Save Changes" : "Save Activity";
+  els.closeActivityDialog.setAttribute("aria-label", `Close ${activity ? "Edit Activity" : "Add New Activity"} modal`);
+  els.activityLeadName.textContent = lead.company_name || "Selected lead";
+  const globalCreate = !leadId && !activity;
+  els.activityLeadPickerWrap.classList.toggle("hidden", !globalCreate);
+  els.activityLeadPicker.innerHTML = state.leads.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.company_name)}</option>`).join("");
+  els.activityLeadPicker.value = lead.id;
+  els.activityNextActionPlan.value = normalizeNextActionPlan(activity?.next_action_plan || lead.next_action);
+  const dateValue = String(activity?.next_action_date || lead.next_action_date || today()).slice(0, 10);
+  els.activityNextActionDate.value = /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? dateValue : today();
+  const normalizedPurpose = normalizeActivityPurpose(activity?.activity_purpose || activity?.type || lead.activity_purpose).replace("Quotation Follow-Up", "Quotation Follow Up");
+  els.activityPurpose.value = STRUCTURED_ACTIVITY_PURPOSE_OPTIONS.includes(normalizedPurpose)
+    ? normalizedPurpose
+    : STRUCTURED_ACTIVITY_PURPOSE_OPTIONS[0];
+  els.activityNotes.value = activity?.notes ?? activity?.text ?? "";
+  setMessage(els.activityMessage, "");
+  resetActivityVoiceRecorder();
+  renderActivityAttachmentList();
+  document.body.classList.add("activity-modal-open");
+  els.activityDialog.showModal();
+  requestAnimationFrame(() => els.activityNextActionPlan?.focus());
+}
+
+async function saveActivityModal() {
+  if (!els.activityForm || activityModalSaving || activityModalRecorder) return;
+  if (!els.activityForm.reportValidity()) return;
+
+  const data = new FormData(els.activityForm);
+  const leadId = String(data.get("lead_picker") || data.get("lead_id") || "");
+  const nextActionPlan = String(data.get("next_action_plan") || "").trim();
+  const nextActionDate = String(data.get("next_action_date") || "").trim();
+  const activityPurpose = String(data.get("activity_purpose") || "").trim();
+  const notes = String(data.get("notes") || "").trim();
+  const parsedDate = new Date(`${nextActionDate}T00:00:00`);
+  if (
+    !NEXT_ACTION_PLAN_OPTIONS.includes(nextActionPlan)
+    || !STRUCTURED_ACTIVITY_PURPOSE_OPTIONS.includes(activityPurpose)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(nextActionDate)
+    || Number.isNaN(parsedDate.getTime())
+  ) {
+    setMessage(els.activityMessage, "Complete each required field with a valid value.", "error");
+    return;
+  }
+
+  activityModalSaving = true;
+  els.saveActivity.disabled = true;
+  els.cancelActivityDialog.disabled = true;
+  els.closeActivityDialog.disabled = true;
+  els.activityRecordVoice.disabled = true;
+  setMessage(els.activityMessage, "Saving activity...");
+  try {
+    const activityId = String(data.get("activity_id") || els.activityForm.dataset.clientId);
+    const result = await api(`/api/leads/${encodeURIComponent(leadId)}/activities${activityModalMode === "edit" ? `/${encodeURIComponent(activityId)}` : ""}`, {
+      method: activityModalMode === "edit" ? "PATCH" : "POST",
+      body: JSON.stringify({
+        id: activityId,
+        version: Number(data.get("activity_version") || 1),
+        structured_activity: true,
+        type: activityPurpose,
+        text: notes || `${activityPurpose}: ${nextActionPlan} on ${nextActionDate}`,
+        notes,
+        next_action_plan: nextActionPlan,
+        next_action_date: nextActionDate,
+        activity_purpose: activityPurpose,
+        remove_attachment_ids: [...activityModalRemovedAttachmentIds]
+      })
+    });
+    const savedActivity = result.activity;
+    els.activityForm.elements.activity_id.value = savedActivity.id;
+    els.activityForm.elements.activity_version.value = String(savedActivity.version || 1);
+    for (const item of activityModalFiles.filter(file => file.status !== "uploaded")) {
+      item.status = "uploading";
+      item.progress = 30;
+      item.error = "";
+      renderActivityAttachmentList();
+      try {
+        const upload = await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(savedActivity.id)}/attachments`, {
+          method: "POST",
+          headers: {
+            "Content-Type": item.file.type || "application/octet-stream",
+            "x-file-name": encodeURIComponent(item.file.name)
+          },
+          body: item.file
+        });
+        item.status = "uploaded";
+        item.progress = 100;
+        activityModalExistingAttachments.push(upload.attachment);
+        els.activityForm.elements.activity_version.value = String(upload.activity.version || Number(els.activityForm.elements.activity_version.value) + 1);
+      } catch (error) {
+        item.status = "failed";
+        item.error = error.message || "Upload failed";
+      }
+      renderActivityAttachmentList();
+    }
+    const failedUploads = activityModalFiles.filter(file => file.status === "failed");
+    if (failedUploads.length) {
+      activityModalMode = "edit";
+      activityModalSaving = false;
+      setMessage(els.activityMessage, `Activity saved, but ${failedUploads.length} attachment${failedUploads.length === 1 ? "" : "s"} failed. Fix or retry without losing your entries.`, "error");
+      return;
+    }
+    await loadLeads();
+    activityModalSaving = false;
+    closeActivityModal({ force: true });
+    if (currentView === "activity") await fetchActivities();
+    setToast(activityModalMode === "edit" ? "Activity updated." : "Activity saved.", "success");
+    openLeadDrawer(leadId, "activities");
+  } catch (error) {
+    activityModalSaving = false;
+    setMessage(els.activityMessage, error.message || "Activity could not be saved. Your entries were preserved.", "error");
+  } finally {
+    els.saveActivity.disabled = activityModalFiles.some(item => ["uploading", "failed", "rejected"].includes(item.status));
+    els.cancelActivityDialog.disabled = false;
+    els.closeActivityDialog.disabled = false;
+    if (!activityModalRecorder) els.activityRecordVoice.disabled = false;
   }
 }
 
@@ -9216,20 +9963,62 @@ function salesmenDirectoryTableMarkup(rows) {
   `;
 }
 
+const SALESMAN_CARD_ACCENTS = ["blue", "yellow", "red", "green", "orange", "violet"];
+
+function salesmanCardAccent(row) {
+  const person = row && typeof row.person === "object" ? row.person : {};
+  const identity = String(person.id || person.user_id || row.email || row.name || row.territory || "salesman").toLowerCase();
+  const hash = Array.from(identity).reduce((value, character) => ((value * 31) + character.codePointAt(0)) >>> 0, 0);
+  return SALESMAN_CARD_ACCENTS[hash % SALESMAN_CARD_ACCENTS.length];
+}
+
 function salesmenDirectoryCardsMarkup(rows) {
-  return `<div class="salesmen-card-grid">${rows.map(row => `
-    <article class="salesmen-directory-card">
-      <div class="salesmen-directory-card-head">
-        <div class="salesmen-person-cell"><span class="salesmen-avatar" aria-hidden="true">${escapeHtml(salesmanInitials(row.name))}</span><div><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.email || row.territory || "Account details unavailable")}</small></div></div>
-        <span class="salesmen-status-badge is-${escapeHtml(row.statusKey)}">${escapeHtml(row.statusLabel)}</span>
-      </div>
-      <div class="salesmen-directory-card-metrics">
-        <span><strong>${row.totalAssigned}</strong>Assigned</span><span><strong>${row.activeCustomers}</strong>Customers</span>
-        <span><strong>${row.overdueFollowups}</strong>Overdue</span><span><strong>${row.conversionRate}%</strong>Conversion</span>
-      </div>
-      <div class="salesmen-directory-card-actions">${salesmenRowActionsMarkup(row)}</div>
-    </article>
-  `).join("")}</div>`;
+  return `<div class="salesmen-card-grid">${rows.map(row => {
+    const accent = salesmanCardAccent(row);
+    const email = row.email || "Email not available";
+    const territory = row.territory || "Territory not available";
+    const lastActivity = row.lastActivity ? formatDisplayDate(String(row.lastActivity).slice(0, 10)) : "—";
+    const conversion = Math.max(0, Math.min(100, Number(row.conversionRate) || 0));
+    return `
+      <article class="salesmen-directory-card" data-card-accent="${accent}" aria-labelledby="salesman-card-${escapeHtml(String(row.name).toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">
+        <header class="salesmen-directory-card-head">
+          <div class="salesmen-card-identity">
+            <span class="salesmen-card-avatar" aria-hidden="true">${escapeHtml(salesmanInitials(row.name))}</span>
+            <div class="salesmen-card-identity-copy">
+              <h3 id="salesman-card-${escapeHtml(String(row.name).toLowerCase().replace(/[^a-z0-9]+/g, "-"))}" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</h3>
+              ${row.email
+                ? `<a href="mailto:${escapeHtml(row.email)}" title="${escapeHtml(row.email)}">${escapeHtml(row.email)}</a>`
+                : `<span title="${escapeHtml(email)}">${escapeHtml(email)}</span>`}
+              <small title="${escapeHtml(territory)}"><b>Territory:</b> ${escapeHtml(territory)}</small>
+            </div>
+          </div>
+          <span class="salesmen-status-badge is-${escapeHtml(row.statusKey)}">${escapeHtml(row.statusLabel)}</span>
+        </header>
+
+        <div class="salesmen-directory-card-metrics" aria-label="Performance metrics for ${escapeHtml(row.name)}">
+          <div class="salesmen-card-metric is-assigned"><strong>${escapeHtml(String(row.totalAssigned))}</strong><span>Assigned Leads</span></div>
+          <div class="salesmen-card-metric is-customers"><strong>${escapeHtml(String(row.activeCustomers))}</strong><span>Active Customers</span></div>
+          <div class="salesmen-card-metric is-overdue ${row.overdueFollowups ? "has-warning" : ""}">
+            <strong>${row.overdueFollowups ? `<i aria-hidden="true">!</i>` : ""}${escapeHtml(String(row.overdueFollowups))}</strong><span>Overdue Follow-ups</span>
+          </div>
+          <div class="salesmen-card-metric is-conversion"><strong>${escapeHtml(String(row.conversionRate))}%</strong><span>Conversion Rate</span></div>
+        </div>
+
+        <div class="salesmen-card-progress" aria-label="Conversion rate ${escapeHtml(String(row.conversionRate))}%">
+          <div><span>Conversion progress</span><strong>${escapeHtml(String(row.conversionRate))}%</strong></div>
+          <span class="salesmen-card-progress-track"><i style="width:${conversion}%"></i></span>
+        </div>
+
+        <dl class="salesmen-card-meta">
+          <div><dt>Tasks due</dt><dd class="${row.tasksDue ? "is-alert" : ""}">${escapeHtml(String(row.tasksDue))}</dd></div>
+          <div><dt>Last activity</dt><dd title="${escapeHtml(row.lastActivity || "Not available")}">${escapeHtml(lastActivity)}</dd></div>
+          <div><dt>Territory</dt><dd title="${escapeHtml(territory)}">${escapeHtml(territory)}</dd></div>
+        </dl>
+
+        <footer class="salesmen-directory-card-actions">${salesmenRowActionsMarkup(row)}</footer>
+      </article>
+    `;
+  }).join("")}</div>`;
 }
 
 function bindSalesmenDirectoryActions() {
@@ -10075,7 +10864,7 @@ function activityCardMarkup(activity) {
   const actionLabel = isReminder ? `${statusLabel}${dueDate ? ` · ${formatDisplayDate(dueDate)}` : ""}` : formatDisplayDate(activityDisplayDate(activity));
   const timeLabel = activityDisplayTime(activity);
   return `
-    <article class="activity-feed-item timeline-card ${activityTypeClass(type)} ${reminderOverdue ? "is-urgent" : ""}" data-activity-lead="${escapeHtml(activity.lead_id)}" tabindex="0">
+    <article class="activity-feed-item timeline-card ${activityTypeClass(type)} ${reminderOverdue ? "is-urgent" : ""} ${activity.deletion_status === "pending" ? "is-deletion-pending" : ""}" data-activity-lead="${escapeHtml(activity.lead_id)}" tabindex="0">
       <div class="activity-feed-head">
         <span class="activity-type-icon" aria-hidden="true">${escapeHtml(activityIconGlyph(type))}</span>
         <div class="activity-feed-body">
@@ -10093,10 +10882,12 @@ function activityCardMarkup(activity) {
           ${activity.quotation_ref ? `<button class="quote-ref-pill" type="button" data-quotation-ref="${escapeHtml(activity.quotation_ref)}">Quote ${escapeHtml(activity.quotation_ref)}</button>` : ""}
         </div>
         <div class="activity-footer-actions">
+          ${activityViewButton(activity.lead_id, activity.activity_index, activity)}
           ${activityEditButton(activity.lead_id, activity.activity_index, activity)}
           ${activityDeleteButton(activity.lead_id, activity.activity_index, activity)}
         </div>
       </div>
+      ${activity.deletion_status === "pending" ? `<span class="request-status pending">Deletion pending approval</span>` : ""}
       ${activity.delete_request ? `<span class="request-status ${escapeHtml(activity.request_status || "pending")}">Review request ${escapeHtml(activity.request_status || "pending")}</span>` : ""}
       ${activity.correction ? `<span class="meta-label">Correction for ${escapeHtml(activity.target_activity_summary || "previous activity")}</span>` : ""}
       ${activity.edited_at ? `<span class="meta-label">Legacy edited entry ${escapeHtml(String(activity.edited_at).slice(0, 10))}</span>` : ""}
@@ -11283,6 +12074,8 @@ function bindWeeklyReviewEvents() {
 
 function renderActivityView() {
   const activities = state.activities || [];
+  const canReviewDeletions = ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase());
+  els.openActivityDeletionQueue?.classList.toggle("hidden", !canReviewDeletions);
   els.activitySummary.textContent = `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`;
   renderActivityFilters();
   const upcoming = allReminders().filter(reminder => !reminder.due_date || reminder.due_date >= today()).slice(0, 8);
@@ -11832,7 +12625,9 @@ async function fetchSalesmanAccounts() {
 
 function showLogin(message = "") {
   if (els.summaryCardDetailsDialog?.open) els.summaryCardDetailsDialog.close();
+  if (els.activityDialog?.open) closeActivityModal({ force: true });
   document.body.classList.remove("summary-details-modal-open");
+  document.body.classList.remove("activity-modal-open");
   state.currentUser = null;
   state.userAccounts = [];
   state.marketNews = { items: [], disabled: false, loading: false, error: "", reason: "", fetched_at: "" };
@@ -11846,7 +12641,7 @@ function showLogin(message = "") {
     sortKey: "",
     sortDirection: "asc",
     page: 1,
-    pageSize: 7,
+    pageSize: SUMMARY_DETAILS_DEFAULT_PAGE_SIZE,
     trigger: null
   };
   state.overduePipelineOnly = false;
@@ -12323,7 +13118,7 @@ els.summaryCardDetailsDialog?.addEventListener("input", event => {
 
 els.summaryCardDetailsDialog?.addEventListener("change", event => {
   if (event.target.matches("[data-summary-details-page-size]")) {
-    state.summaryCardDetails.pageSize = Number(event.target.value || 7);
+    state.summaryCardDetails.pageSize = Number(event.target.value || SUMMARY_DETAILS_DEFAULT_PAGE_SIZE);
     state.summaryCardDetails.page = 1;
     renderSummaryCardDetailsResults();
     return;
@@ -12855,6 +13650,141 @@ els.closePendingChanges?.addEventListener("click", () => els.pendingChangesDialo
 els.syncNowButton?.addEventListener("click", () => syncOutbox());
 els.closeQuickLog?.addEventListener("click", () => els.quickLogDialog?.close());
 els.closeMobileMap?.addEventListener("click", () => els.mobileMapDialog?.close());
+els.closeActivityDialog?.addEventListener("click", () => closeActivityModal());
+els.cancelActivityDialog?.addEventListener("click", () => closeActivityModal());
+els.openActivityCreate?.addEventListener("click", event => openActivityModal("", event.currentTarget));
+els.activityLeadPicker?.addEventListener("change", event => {
+  const lead = state.leads.find(item => String(item.id) === String(event.target.value));
+  if (!lead) return;
+  els.activityForm.elements.lead_id.value = lead.id;
+  els.activityLeadName.textContent = lead.company_name || "Selected lead";
+});
+els.activityAttachmentInput?.addEventListener("change", async event => {
+  await addActivityFiles(event.target.files || []);
+  event.target.value = "";
+});
+els.activityDropZone?.addEventListener("click", () => els.activityAttachmentInput?.click());
+els.activityDropZone?.addEventListener("dragenter", event => {
+  event.preventDefault();
+  els.activityDropZone.classList.add("is-dragging");
+});
+els.activityDropZone?.addEventListener("dragover", event => {
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+});
+els.activityDropZone?.addEventListener("dragleave", event => {
+  if (!els.activityDropZone.contains(event.relatedTarget)) els.activityDropZone.classList.remove("is-dragging");
+});
+els.activityDropZone?.addEventListener("drop", async event => {
+  event.preventDefault();
+  els.activityDropZone.classList.remove("is-dragging");
+  await addActivityFiles(event.dataTransfer?.files || []);
+});
+els.activityRecordVoice?.addEventListener("click", startActivityVoiceRecording);
+els.activityPauseVoice?.addEventListener("click", pauseActivityVoiceRecording);
+els.activityStopVoice?.addEventListener("click", stopActivityVoiceRecording);
+els.activityCancelVoice?.addEventListener("click", cancelActivityVoiceRecording);
+els.activityForm?.addEventListener("submit", event => {
+  event.preventDefault();
+  saveActivityModal();
+});
+els.activityDialog?.addEventListener("cancel", event => {
+  event.preventDefault();
+  closeActivityModal();
+});
+els.activityDialog?.addEventListener("click", event => {
+  if (event.target === els.activityDialog) closeActivityModal();
+});
+els.activityDialog?.addEventListener("close", () => {
+  document.body.classList.remove("activity-modal-open");
+  activityModalFiles = [];
+  activityModalExistingAttachments = [];
+  activityModalRemovedAttachmentIds = new Set();
+  const trigger = activityModalTrigger;
+  activityModalTrigger = null;
+  if (trigger?.isConnected) trigger.focus();
+});
+document.querySelectorAll("[data-close-activity-details]").forEach(button => {
+  button.addEventListener("click", () => els.activityDetailsDialog?.close());
+});
+els.editActivityFromDetails?.addEventListener("click", () => {
+  const selection = activityDetailsSelection;
+  els.activityDetailsDialog?.close();
+  if (selection) openActivityEdit(selection.leadId, selection.activityIndex, selection.activity.id);
+});
+els.requestActivityDeletionFromDetails?.addEventListener("click", () => {
+  const selection = activityDetailsSelection;
+  els.activityDetailsDialog?.close();
+  if (selection) submitDeleteRequest(selection.leadId, "activity", selection.activityIndex, selection.activity.id);
+});
+els.cancelActivityDeletionFromDetails?.addEventListener("click", cancelActivityDeletionRequest);
+els.activityDeletionForm?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const reason = String(data.get("reason") || "").trim();
+  const comments = String(data.get("comments") || "").trim();
+  if (reason === "Other" && !comments) {
+    setMessage(els.activityDeletionMessage, "Add supporting comments when the reason is Other.", "error");
+    return;
+  }
+  const submit = event.currentTarget.querySelector('[type="submit"]');
+  submit.disabled = true;
+  setMessage(els.activityDeletionMessage, "Submitting deletion request...");
+  try {
+    await api(`/api/leads/${encodeURIComponent(data.get("lead_id"))}/delete-requests`, {
+      method: "POST",
+      body: JSON.stringify({
+        target_type: "activity",
+        activity_id: String(data.get("activity_id") || ""),
+        reason,
+        comments
+      })
+    });
+    els.activityDeletionDialog.close();
+    await loadLeads();
+    if (currentView === "activity") await fetchActivities();
+    setToast("Deletion request submitted for management approval.", "success");
+  } catch (error) {
+    setMessage(els.activityDeletionMessage, error.message, "error");
+  } finally {
+    submit.disabled = false;
+  }
+});
+document.querySelectorAll("[data-close-activity-deletion]").forEach(button => {
+  button.addEventListener("click", () => els.activityDeletionDialog?.close());
+});
+els.activityDeletionDialog?.addEventListener("cancel", event => {
+  event.preventDefault();
+  els.activityDeletionDialog.close();
+});
+els.openActivityDeletionQueue?.addEventListener("click", async () => {
+  if (els.activityDeletionQueueSalesman) {
+    const previous = els.activityDeletionQueueSalesman.value;
+    const salesmen = (state.settings.salesmen || [])
+      .map(salesmanName)
+      .filter(Boolean);
+    els.activityDeletionQueueSalesman.innerHTML = [
+      `<option value="">All salesmen</option>`,
+      ...salesmen.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+    ].join("");
+    els.activityDeletionQueueSalesman.value = previous;
+  }
+  els.activityDeletionQueueDialog?.showModal();
+  await loadActivityDeletionQueue();
+});
+document.querySelectorAll("[data-close-activity-queue]").forEach(button => {
+  button.addEventListener("click", () => els.activityDeletionQueueDialog?.close());
+});
+els.activityDeletionQueueStatus?.addEventListener("change", loadActivityDeletionQueue);
+els.activityDeletionQueueSalesman?.addEventListener("change", loadActivityDeletionQueue);
+els.activityDeletionQueueFrom?.addEventListener("change", loadActivityDeletionQueue);
+els.activityDeletionQueueTo?.addEventListener("change", loadActivityDeletionQueue);
+let activityDeletionQueueSearchTimer = null;
+const queueSearchInputs = [els.activityDeletionQueueSearch, els.activityDeletionQueueRequester].filter(Boolean);
+queueSearchInputs.forEach(input => input.addEventListener("input", () => {
+  clearTimeout(activityDeletionQueueSearchTimer);
+  activityDeletionQueueSearchTimer = setTimeout(loadActivityDeletionQueue, 250);
+}));
 
 els.quickLogCompanySearch?.addEventListener("input", renderQuickLogSheet);
 els.quickLogLeadSelect?.addEventListener("change", event => {
