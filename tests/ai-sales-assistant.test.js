@@ -13,6 +13,7 @@ const root = path.join(__dirname, "..");
 const serverSource = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const clientSource = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const htmlSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const vercelSource = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 const migrationSource = fs.readFileSync(
   path.join(root, "supabase", "migrations", "20260724120000_ai_sales_assistant.sql"),
   "utf8"
@@ -85,7 +86,11 @@ assert.match(emailPreview.email_draft.subject, /QTN-2042/);
   "/api/ai-assistant/history",
   "/api/ai-assistant/email-drafts",
   "AI_ASSISTANT_WRITE_INTENTS",
-  "assistantRateAllowed"
+  "assistantRateAllowed",
+  "assistantCompatibilityLogRow",
+  "saveAssistantCompatibilityEntry",
+  "loadAssistantCompatibilityEntries",
+  "ai_action_log"
 ].forEach(token => assert(serverSource.includes(token), `${token} must be implemented`));
 
 [
@@ -104,6 +109,7 @@ assert.match(emailPreview.email_draft.subject, /QTN-2042/);
   "refreshAiDrafts"
 ].forEach(id => assert(htmlSource.includes(`id="${id}"`), `${id} must exist`));
 
+assert(vercelSource.includes("ai-sales-assistant.css"));
 assert(migrationSource.includes("enable row level security"));
 assert(migrationSource.includes("assistant_audit_logs"));
 assert(migrationSource.includes("email_drafts"));

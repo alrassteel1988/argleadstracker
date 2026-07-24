@@ -3646,16 +3646,74 @@ function assistantAuditRow(user, input = {}) {
   };
 }
 
+function assistantTableMissing(error, table) {
+  return Number(error?.status) === 404 &&
+    String(error?.message || "").includes(`'public.${table}'`);
+}
+
+function assistantCompatibilityLogRow(user, entry, kind, leadId = "") {
+  const recordId = cleanAssistantText(entry.id, 120);
+  return {
+    timestamp: entry.updated_at || entry.created_at || new Date().toISOString(),
+    user_uid: user.id,
+    user_role: user.role || "",
+    scope: "ai_sales_assistant",
+    company_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(leadId || ""))
+      ? leadId
+      : null,
+    action: `${kind}:${recordId}`,
+    duration_ms: 0,
+    status: "success",
+    error: JSON.stringify(entry)
+  };
+}
+
+function parseAssistantCompatibilityRows(rows, kind) {
+  const prefix = `${kind}:`;
+  return (Array.isArray(rows) ? rows : []).flatMap(row => {
+    if (!String(row.action || "").startsWith(prefix)) return [];
+    try {
+      return [JSON.parse(String(row.error || "{}"))];
+    } catch {
+      return [];
+    }
+  });
+}
+
+async function saveAssistantCompatibilityEntry(user, entry, kind, leadId = "") {
+  await rest("ai_action_log", {
+    method: "POST",
+    ...supabaseDataOptions(user.token),
+    body: assistantCompatibilityLogRow(user, entry, kind, leadId)
+  });
+  return entry;
+}
+
+async function loadAssistantCompatibilityEntries(user, kind, id = "", limit = 100) {
+  const action = id ? `${kind}:${id}` : `${kind}:%`;
+  const operator = id ? "eq" : "like";
+  const rows = await rest(
+    `ai_action_log?user_uid=eq.${encodeURIComponent(user.id)}&scope=eq.ai_sales_assistant&action=${operator}.${encodeURIComponent(action)}&select=action,error,timestamp&order=timestamp.desc&limit=${limit}`,
+    supabaseDataOptions(user.token)
+  );
+  return parseAssistantCompatibilityRows(rows, kind);
+}
+
 async function saveAssistantAudit(db, user, row, supabaseEnabled) {
   const entry = assistantAuditRow(user, row);
   if (supabaseEnabled) {
-    const rows = await rest("assistant_audit_logs?on_conflict=id&select=*", {
-      method: "POST",
-      ...supabaseDataOptions(user.token),
-      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-      body: entry
-    });
-    return rows[0] || entry;
+    try {
+      const rows = await rest("assistant_audit_logs?on_conflict=id&select=*", {
+        method: "POST",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: entry
+      });
+      return rows[0] || entry;
+    } catch (error) {
+      if (!assistantTableMissing(error, "assistant_audit_logs")) throw error;
+      return saveAssistantCompatibilityEntry(user, entry, "assistant_audit", entry.selected_record_id);
+    }
   }
   const index = db.assistant_audit_logs.findIndex(item => item.id === entry.id);
   if (index >= 0) db.assistant_audit_logs[index] = entry;
@@ -3667,11 +3725,16 @@ async function saveAssistantAudit(db, user, row, supabaseEnabled) {
 
 async function loadAssistantAudit(db, user, id, supabaseEnabled) {
   if (supabaseEnabled) {
-    const rows = await rest(
-      `assistant_audit_logs?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(user.id)}&select=*&limit=1`,
-      supabaseDataOptions(user.token)
-    );
-    return rows[0] || null;
+    try {
+      const rows = await rest(
+        `assistant_audit_logs?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(user.id)}&select=*&limit=1`,
+        supabaseDataOptions(user.token)
+      );
+      return rows[0] || null;
+    } catch (error) {
+      if (!assistantTableMissing(error, "assistant_audit_logs")) throw error;
+      return (await loadAssistantCompatibilityEntries(user, "assistant_audit", id, 1))[0] || null;
+    }
   }
   return db.assistant_audit_logs.find(item => item.id === id && String(item.user_id) === String(user.id)) || null;
 }
@@ -3696,13 +3759,18 @@ async function saveAssistantEmailDraft(db, user, lead, activity, draft, supabase
     sent_at: null
   };
   if (supabaseEnabled) {
-    const rows = await rest("email_drafts?select=*", {
-      method: "POST",
-      ...supabaseDataOptions(user.token),
-      headers: { Prefer: "return=representation" },
-      body: row
-    });
-    return rows[0] || row;
+    try {
+      const rows = await rest("email_drafts?select=*", {
+        method: "POST",
+        ...supabaseDataOptions(user.token),
+        headers: { Prefer: "return=representation" },
+        body: row
+      });
+      return rows[0] || row;
+    } catch (error) {
+      if (!assistantTableMissing(error, "email_drafts")) throw error;
+      return saveAssistantCompatibilityEntry(user, row, "assistant_email_draft", lead.id);
+    }
   }
   db.email_drafts.unshift(row);
   writeDb(db);
@@ -3713,10 +3781,15 @@ async function assistantDueDrafts(db, user, supabaseEnabled) {
   const now = new Date().toISOString();
   let drafts;
   if (supabaseEnabled) {
-    drafts = await rest(
-      `email_drafts?user_id=eq.${encodeURIComponent(user.id)}&select=*&order=created_at.desc`,
-      supabaseDataOptions(user.token)
-    );
+    try {
+      drafts = await rest(
+        `email_drafts?user_id=eq.${encodeURIComponent(user.id)}&select=*&order=created_at.desc`,
+        supabaseDataOptions(user.token)
+      );
+    } catch (error) {
+      if (!assistantTableMissing(error, "email_drafts")) throw error;
+      drafts = await loadAssistantCompatibilityEntries(user, "assistant_email_draft", "", 100);
+    }
   } else {
     drafts = db.email_drafts.filter(item => String(item.user_id) === String(user.id));
   }
@@ -3728,7 +3801,10 @@ async function assistantDueDrafts(db, user, supabaseEnabled) {
       method: "PATCH",
       ...supabaseDataOptions(user.token),
       body: { status: "Ready for Review", updated_at: now }
-    }).catch(() => null);
+    }).catch(error => {
+      if (!assistantTableMissing(error, "email_drafts")) throw error;
+      return null;
+    });
   } else if (dueIds.length) {
     db.email_drafts.forEach(item => {
       if (dueIds.includes(item.id)) {
@@ -4171,11 +4247,22 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/ai-assistant/history") {
     if (supabaseEnabled) {
-      const rows = await rest(
-        `assistant_audit_logs?user_id=eq.${encodeURIComponent(user.id)}&select=id,created_at,intent,status,confirmation_status,selected_record_id,error&order=created_at.desc&limit=20`,
-        supabaseDataOptions(user.token)
-      );
-      return sendJson(res, 200, rows);
+      try {
+        const rows = await rest(
+          `assistant_audit_logs?user_id=eq.${encodeURIComponent(user.id)}&select=id,created_at,intent,status,confirmation_status,selected_record_id,error&order=created_at.desc&limit=20`,
+          supabaseDataOptions(user.token)
+        );
+        return sendJson(res, 200, rows);
+      } catch (error) {
+        if (!assistantTableMissing(error, "assistant_audit_logs")) throw error;
+        const rows = await loadAssistantCompatibilityEntries(user, "assistant_audit", "", 40);
+        const latest = new Map();
+        rows.forEach(item => {
+          if (!latest.has(item.id)) latest.set(item.id, item);
+        });
+        return sendJson(res, 200, [...latest.values()].slice(0, 20)
+          .map(({ original_command, translated_command, extracted_fields, records_considered, ...item }) => item));
+      }
     }
     return sendJson(res, 200, db.assistant_audit_logs
       .filter(item => String(item.user_id) === String(user.id))
