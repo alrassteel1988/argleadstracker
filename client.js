@@ -12430,6 +12430,7 @@ function renderDetail() {
 }
 
 function render() {
+  document.querySelector("#aiAssistantLauncher")?.classList.toggle("hidden", !state.currentUser);
   renderMetrics();
   renderOverdueBanner();
   // Funnel analytics remain available for Dashboard and their planned
@@ -12658,6 +12659,10 @@ function showLogin(message = "") {
   els.installBanner?.classList.add("hidden");
   els.updateBanner?.classList.add("hidden");
   els.syncStatusPill?.classList.add("hidden");
+  document.querySelector("#aiAssistantLauncher")?.classList.add("hidden");
+  const aiDialog = document.querySelector("#aiAssistantDialog");
+  if (aiDialog?.open) aiDialog.close();
+  document.body.classList.remove("ai-assistant-open");
 }
 
 function configureRoleUi(user) {
@@ -12724,6 +12729,7 @@ function showApp(user) {
   configureRoleUi(user);
   els.authScreen.classList.add("hidden");
   els.appShell.classList.remove("hidden");
+  document.querySelector("#aiAssistantLauncher")?.classList.remove("hidden");
   maybeShowInstallBanner();
   refreshSyncState();
   startOverdueRefresh();
@@ -14048,6 +14054,465 @@ els.pmrForm.addEventListener("submit", async event => {
   }
 });
 
+const aiAssistant = {
+  sessionId: "",
+  preview: null,
+  selectedContextId: "",
+  recorder: null,
+  recordingTimeout: null,
+  chunks: [],
+  trigger: null,
+  needsRender: false
+};
+
+function aiAssistantElements() {
+  return {
+    launcher: document.querySelector("#aiAssistantLauncher"),
+    dialog: document.querySelector("#aiAssistantDialog"),
+    form: document.querySelector("#aiAssistantForm"),
+    close: document.querySelector("#closeAiAssistant"),
+    greeting: document.querySelector("#aiAssistantGreeting"),
+    state: document.querySelector("#aiAssistantState"),
+    command: document.querySelector("#aiAssistantCommand"),
+    mic: document.querySelector("#aiAssistantMic"),
+    interpret: document.querySelector("#aiAssistantInterpret"),
+    transcript: document.querySelector("#aiAssistantTranscript"),
+    result: document.querySelector("#aiAssistantResult"),
+    preview: document.querySelector("#aiAssistantPreview"),
+    previewFields: document.querySelector("#aiAssistantPreviewFields"),
+    confirm: document.querySelector("#aiAssistantConfirm"),
+    cancel: document.querySelector("#aiAssistantCancel"),
+    refreshDrafts: document.querySelector("#refreshAiDrafts"),
+    draftList: document.querySelector("#aiAssistantDraftList")
+  };
+}
+
+function setAiAssistantState(name, title, detail) {
+  const { state: stateElement } = aiAssistantElements();
+  if (!stateElement) return;
+  stateElement.dataset.state = name;
+  const strong = stateElement.querySelector("strong");
+  const span = stateElement.querySelector("span:last-child");
+  if (strong) strong.textContent = title;
+  if (span) span.textContent = detail;
+}
+
+function setAiAssistantBusy(busy) {
+  const { interpret, confirm, cancel, refreshDrafts, command } = aiAssistantElements();
+  [interpret, confirm, cancel, refreshDrafts].forEach(button => {
+    if (button) button.disabled = Boolean(busy);
+  });
+  if (command) command.readOnly = Boolean(busy);
+}
+
+function runAiAssistantUiStep(label, callback) {
+  try {
+    return callback();
+  } catch (error) {
+    throw new Error(`${label}: ${error.message}`);
+  }
+}
+
+function currentAiAssistantLeadId() {
+  return currentView === "lead" && state.selectedId ? state.selectedId : "";
+}
+
+function clearAiAssistantPreview() {
+  const { preview, previewFields } = aiAssistantElements();
+  aiAssistant.sessionId = "";
+  aiAssistant.preview = null;
+  preview?.classList.add("hidden");
+  if (previewFields) previewFields.innerHTML = "";
+}
+
+function aiAssistantChoiceMarkup(choice, missingField = "") {
+  const title = choice.company_name || choice.label || choice.id || "Select";
+  const detail = [choice.contact_person, choice.territory].filter(Boolean).join(" - ");
+  return `
+    <button type="button" class="ai-assistant-choice" data-ai-choice-id="${escapeHtml(choice.id)}" data-ai-choice-value="${escapeHtml(title)}" data-ai-missing-field="${escapeHtml(missingField)}">
+      <strong>${escapeHtml(title)}</strong>
+      ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+    </button>
+  `;
+}
+
+function showAiAssistantResult(result, stateName = "completed") {
+  const { result: resultElement } = aiAssistantElements();
+  if (!resultElement) return;
+  const records = Array.isArray(result.records) ? result.records : [];
+  const choices = Array.isArray(result.choices) ? result.choices : [];
+  const recordMarkup = records.length ? `
+    <div class="ai-assistant-records">
+      ${records.slice(0, 25).map(record => `
+        <button type="button" data-ai-open-lead="${escapeHtml(record.lead_id || record.id)}">
+          <strong>${escapeHtml(record.company_name || record.type || "CRM activity")}</strong>
+          <span>${escapeHtml([
+            record.next_action || record.next_action_plan || record.type,
+            record.next_action_date,
+            record.status
+          ].filter(Boolean).join(" - "))}</span>
+        </button>
+      `).join("")}
+    </div>
+  ` : "";
+  const choiceMarkup = choices.length ? `
+    <div class="ai-assistant-records">
+      ${choices.map(choice => aiAssistantChoiceMarkup(choice, result.missing_field)).join("")}
+    </div>
+  ` : "";
+  resultElement.dataset.state = stateName;
+  resultElement.innerHTML = `
+    <h3>${escapeHtml(result.question || (stateName === "failed" ? "I could not complete that command" : "Assistant result"))}</h3>
+    <p>${escapeHtml(result.message || result.error || "Review the information below.")}</p>
+    ${recordMarkup}
+    ${choiceMarkup}
+    ${result.missing_field === "requestedDateExpression" ? "<p><strong>Add the missing date and time to your command, then try again.</strong></p>" : ""}
+  `;
+  resultElement.classList.remove("hidden");
+}
+
+function aiAssistantOptions(options, selected) {
+  return options.map(value => `<option value="${escapeHtml(value)}" ${String(value) === String(selected) ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
+}
+
+function renderAiAssistantPreview(result) {
+  const { preview, previewFields } = aiAssistantElements();
+  const data = result.preview || {};
+  const activity = data.activity || {};
+  const email = data.email_draft || null;
+  aiAssistant.sessionId = result.session_id || "";
+  aiAssistant.preview = data;
+  aiAssistant.selectedContextId = data.lead?.id || aiAssistant.selectedContextId;
+  previewFields.innerHTML = `
+    <div class="ai-assistant-fields">
+      <div class="ai-assistant-field ai-assistant-field--wide">
+        <label>CRM record</label>
+        <input value="${escapeHtml(data.lead?.company_name || "")}" readonly aria-readonly="true">
+      </div>
+      <div class="ai-assistant-field">
+        <label for="aiActivityPlan">Next action plan</label>
+        <select id="aiActivityPlan">${aiAssistantOptions(NEXT_ACTION_PLAN_OPTIONS, activity.next_action_plan)}</select>
+      </div>
+      <div class="ai-assistant-field">
+        <label for="aiActivityPurpose">Type / purpose</label>
+        <select id="aiActivityPurpose">${aiAssistantOptions(STRUCTURED_ACTIVITY_PURPOSE_OPTIONS, activity.activity_purpose)}</select>
+      </div>
+      <div class="ai-assistant-field">
+        <label for="aiActivityDate">Date</label>
+        <input id="aiActivityDate" type="date" value="${escapeHtml(activity.next_action_date || "")}">
+      </div>
+      <div class="ai-assistant-field">
+        <label for="aiActivityTime">Time</label>
+        <input id="aiActivityTime" type="time" value="${escapeHtml(activity.next_action_time || "")}">
+      </div>
+      <div class="ai-assistant-field ai-assistant-field--wide">
+        <label for="aiActivityNotes">Notes</label>
+        <textarea id="aiActivityNotes" rows="4">${escapeHtml(activity.notes || "")}</textarea>
+      </div>
+      ${email ? `
+        <div class="ai-assistant-field ai-assistant-field--wide">
+          <label for="aiDraftRecipient">Verified recipient</label>
+          <input id="aiDraftRecipient" type="email" value="${escapeHtml(email.recipient || "")}" placeholder="Add a verified CRM email">
+        </div>
+        <div class="ai-assistant-field">
+          <label for="aiDraftCc">CC</label>
+          <input id="aiDraftCc" type="text" value="${escapeHtml(email.cc || "")}">
+        </div>
+        <div class="ai-assistant-field">
+          <label for="aiDraftBcc">BCC</label>
+          <input id="aiDraftBcc" type="text" value="${escapeHtml(email.bcc || "")}">
+        </div>
+        <div class="ai-assistant-field ai-assistant-field--wide">
+          <label for="aiDraftSubject">Email subject</label>
+          <input id="aiDraftSubject" value="${escapeHtml(email.subject || "")}">
+        </div>
+        <div class="ai-assistant-field ai-assistant-field--wide">
+          <label for="aiDraftBody">Editable email draft</label>
+          <textarea id="aiDraftBody" rows="8">${escapeHtml(email.body || "")}</textarea>
+        </div>
+        <div class="ai-assistant-field ai-assistant-field--wide">
+          <p class="ai-assistant-draft-notice"><strong>This assistant never sends email automatically.</strong> Saving creates a draft for manual review and Send.</p>
+        </div>
+      ` : ""}
+    </div>
+  `;
+  preview?.classList.remove("hidden");
+  showAiAssistantResult({ message: result.message || "Review every field before confirming." }, "confirmation");
+  setAiAssistantState("confirmation", "Confirmation required", "Nothing has been saved yet");
+  preview?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+function aiAssistantConfirmedPayload() {
+  const value = selector => document.querySelector(selector)?.value || "";
+  const payload = {
+    session_id: aiAssistant.sessionId,
+    activity: {
+      next_action_plan: value("#aiActivityPlan"),
+      activity_purpose: value("#aiActivityPurpose"),
+      next_action_date: value("#aiActivityDate"),
+      next_action_time: value("#aiActivityTime"),
+      notes: value("#aiActivityNotes"),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Dubai"
+    }
+  };
+  if (aiAssistant.preview?.email_draft) {
+    payload.email_draft = {
+      recipient: value("#aiDraftRecipient"),
+      cc: value("#aiDraftCc"),
+      bcc: value("#aiDraftBcc"),
+      subject: value("#aiDraftSubject"),
+      body: value("#aiDraftBody")
+    };
+  }
+  return payload;
+}
+
+async function loadAiAssistantDrafts() {
+  const { draftList } = aiAssistantElements();
+  if (!draftList || !state.currentUser) return;
+  draftList.innerHTML = '<p class="ai-assistant-empty">Loading your drafts...</p>';
+  try {
+    const drafts = await api("/api/ai-assistant/email-drafts");
+    draftList.innerHTML = drafts.length ? drafts.map(draft => `
+      <article class="ai-assistant-draft-card">
+        <strong>${escapeHtml(draft.company_name || draft.recipient || "Email draft")}</strong>
+        <span>${escapeHtml(draft.subject || "No subject")}</span>
+        <em>${escapeHtml(draft.status || "Draft")}${draft.scheduled_for ? ` - ${escapeHtml(formatDateTime(draft.scheduled_for))}` : ""}</em>
+      </article>
+    `).join("") : '<p class="ai-assistant-empty">No AI-assisted email drafts yet.</p>';
+  } catch (error) {
+    draftList.innerHTML = `<p class="ai-assistant-empty">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function interpretAiAssistantCommand() {
+  const { command, result: resultElement } = aiAssistantElements();
+  const text = String(command?.value || "").trim();
+  if (text.length < 3) {
+    showAiAssistantResult({ error: "Type or speak a CRM command first." }, "failed");
+    command?.focus();
+    return;
+  }
+  clearAiAssistantPreview();
+  resultElement?.classList.add("hidden");
+  setAiAssistantBusy(true);
+  setAiAssistantState("processing", "Understanding command", "Checking authorized CRM records");
+  try {
+    const response = await api("/api/ai-assistant/interpret", {
+      method: "POST",
+      body: JSON.stringify({
+        command: text,
+        context_lead_id: aiAssistant.selectedContextId || currentAiAssistantLeadId(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Dubai"
+      })
+    });
+    if (response.state === "ready_for_confirmation") {
+      renderAiAssistantPreview(response);
+    } else if (response.state === "needs_clarification") {
+      aiAssistant.sessionId = response.session_id || "";
+      if (response.selected_record?.id) aiAssistant.selectedContextId = response.selected_record.id;
+      showAiAssistantResult(response, "clarification");
+      setAiAssistantState("clarification", "One detail needed", response.question || "Choose an option");
+    } else {
+      showAiAssistantResult(response, "completed");
+      setAiAssistantState("completed", "Complete", response.message || "CRM information is ready");
+    }
+  } catch (error) {
+    showAiAssistantResult({ error: error.message }, "failed");
+    setAiAssistantState("failed", "Command not completed", error.message);
+  } finally {
+    setAiAssistantBusy(false);
+  }
+}
+
+async function confirmAiAssistantAction() {
+  if (!aiAssistant.sessionId || !aiAssistant.preview) return;
+  setAiAssistantBusy(true);
+  setAiAssistantState("processing", "Saving confirmed action", "Writing to the existing CRM workflow");
+  try {
+    const response = await api("/api/ai-assistant/confirm", {
+      method: "POST",
+      body: JSON.stringify(aiAssistantConfirmedPayload())
+    });
+    runAiAssistantUiStep("clear preview", clearAiAssistantPreview);
+    runAiAssistantUiStep("show result", () => showAiAssistantResult(response, "completed"));
+    runAiAssistantUiStep("update status", () => setAiAssistantState("completed", "Saved", response.message || "CRM action saved"));
+    runAiAssistantUiStep("show toast", () => setToast(response.message || "Assistant action saved."));
+    if (response.lead?.id) {
+      const index = state.leads.findIndex(lead => lead.id === response.lead.id);
+      if (index >= 0) state.leads[index] = response.lead;
+      else state.leads.unshift(response.lead);
+      aiAssistant.needsRender = true;
+    }
+    try {
+      await loadAiAssistantDrafts();
+    } catch (error) {
+      throw new Error(`refresh drafts: ${error.message}`);
+    }
+  } catch (error) {
+    showAiAssistantResult({ error: error.message }, "failed");
+    setAiAssistantState("failed", "Save failed", error.message);
+  } finally {
+    setAiAssistantBusy(false);
+  }
+}
+
+async function cancelAiAssistantAction() {
+  const sessionId = aiAssistant.sessionId;
+  clearAiAssistantPreview();
+  setAiAssistantState("ready", "Ready", "Waiting for a command");
+  if (!sessionId) return;
+  try {
+    await api("/api/ai-assistant/cancel", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId })
+    });
+  } catch {
+    // The local preview is already discarded; cancellation audit can retry with a new command.
+  }
+}
+
+async function stopAiAssistantRecording() {
+  if (aiAssistant.recorder?.state === "recording") aiAssistant.recorder.stop();
+}
+
+async function toggleAiAssistantRecording() {
+  const { mic, transcript, command } = aiAssistantElements();
+  if (aiAssistant.recorder) {
+    stopAiAssistantRecording();
+    return;
+  }
+  if (activeRecorder || activityModalRecorder || pmrVoiceRecorder) {
+    transcript.textContent = "Finish the current CRM voice recording first.";
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    transcript.textContent = "Voice commands are not supported in this browser. Type the command instead.";
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = recorderMimeType();
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    aiAssistant.recorder = recorder;
+    aiAssistant.chunks = [];
+    aiAssistant.recordingTimeout = setTimeout(() => recorder.state === "recording" && recorder.stop(), 120_000);
+    mic.classList.add("recording");
+    mic.setAttribute("aria-label", "Stop voice command");
+    mic.querySelector("span:last-child").textContent = "Stop recording";
+    transcript.textContent = "Listening... Speak naturally in your preferred language.";
+    setAiAssistantState("recording", "Listening", "Tap Stop recording when finished");
+    recorder.addEventListener("dataavailable", event => {
+      if (event.data.size) aiAssistant.chunks.push(event.data);
+    });
+    recorder.addEventListener("stop", async () => {
+      clearTimeout(aiAssistant.recordingTimeout);
+      stream.getTracks().forEach(track => track.stop());
+      const chunks = aiAssistant.chunks.slice();
+      aiAssistant.recorder = null;
+      aiAssistant.chunks = [];
+      mic.classList.remove("recording");
+      mic.setAttribute("aria-label", "Start voice command");
+      mic.querySelector("span:last-child").textContent = "Tap to speak";
+      transcript.textContent = "Transcribing and translating voice to English...";
+      setAiAssistantState("processing", "Transcribing", "Converting speech into an editable command");
+      try {
+        const text = await transcribeRecording(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+        if (!text) throw new Error("No speech was detected. Please try again.");
+        command.value = text;
+        transcript.textContent = "Voice transcript added. Review it, then choose Understand command.";
+        setAiAssistantState("ready", "Transcript ready", "Review the text before continuing");
+        command.focus();
+      } catch (error) {
+        transcript.textContent = error.message;
+        setAiAssistantState("failed", "Transcription failed", error.message);
+      }
+    });
+    recorder.start();
+  } catch (error) {
+    transcript.textContent = error.name === "NotAllowedError"
+      ? "Microphone permission was denied. Allow microphone access or type the command."
+      : `Could not start recording: ${error.message}`;
+    setAiAssistantState("failed", "Microphone unavailable", transcript.textContent);
+  }
+}
+
+function openAiAssistant() {
+  const { dialog, greeting, command } = aiAssistantElements();
+  if (!dialog || !state.currentUser) return;
+  aiAssistant.trigger = document.activeElement;
+  aiAssistant.selectedContextId = currentAiAssistantLeadId();
+  greeting.textContent = `Hi ${state.currentUser.name || "there"}, how can I help?`;
+  if (!dialog.open) dialog.showModal();
+  document.body.classList.add("ai-assistant-open");
+  loadAiAssistantDrafts();
+  setTimeout(() => command?.focus(), 0);
+}
+
+function closeAiAssistant() {
+  const { dialog } = aiAssistantElements();
+  stopAiAssistantRecording();
+  if (dialog?.open) dialog.close();
+  document.body.classList.remove("ai-assistant-open");
+  if (aiAssistant.needsRender) {
+    aiAssistant.needsRender = false;
+    render();
+  }
+  aiAssistant.trigger?.focus?.();
+}
+
+function initAiSalesAssistant() {
+  const elements = aiAssistantElements();
+  if (!elements.dialog || !elements.launcher) return;
+  elements.launcher.addEventListener("click", openAiAssistant);
+  elements.close.addEventListener("click", closeAiAssistant);
+  elements.interpret.addEventListener("click", interpretAiAssistantCommand);
+  elements.command.addEventListener("keydown", event => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") interpretAiAssistantCommand();
+  });
+  elements.mic.addEventListener("click", toggleAiAssistantRecording);
+  elements.confirm.addEventListener("click", confirmAiAssistantAction);
+  elements.cancel.addEventListener("click", cancelAiAssistantAction);
+  elements.refreshDrafts.addEventListener("click", loadAiAssistantDrafts);
+  elements.dialog.addEventListener("cancel", event => {
+    event.preventDefault();
+    closeAiAssistant();
+  });
+  elements.dialog.addEventListener("click", event => {
+    if (event.target === elements.dialog) closeAiAssistant();
+  });
+  elements.dialog.addEventListener("close", () => {
+    document.body.classList.remove("ai-assistant-open");
+  });
+  elements.form.addEventListener("submit", event => event.preventDefault());
+  document.querySelectorAll("[data-ai-prompt]").forEach(button => {
+    button.addEventListener("click", () => {
+      elements.command.value = button.dataset.aiPrompt || "";
+      elements.command.focus();
+    });
+  });
+  elements.result.addEventListener("click", event => {
+    const choice = event.target.closest("[data-ai-choice-id]");
+    if (choice) {
+      const missingField = choice.dataset.aiMissingField;
+      if (missingField === "purpose") {
+        const purpose = choice.dataset.aiChoiceValue || "";
+        elements.command.value = `${elements.command.value.trim()} Purpose: ${purpose}.`;
+      } else {
+        aiAssistant.selectedContextId = choice.dataset.aiChoiceId || "";
+      }
+      interpretAiAssistantCommand();
+      return;
+    }
+    const record = event.target.closest("[data-ai-open-lead]");
+    if (!record?.dataset.aiOpenLead) return;
+    state.selectedId = record.dataset.aiOpenLead;
+    closeAiAssistant();
+    setView("lead");
+    loadLeadDetailData(state.selectedId);
+  });
+}
+
 document.querySelectorAll(".nav-item").forEach(item => {
   item.addEventListener("click", () => {
     if (item.dataset.mobileAction === "quick-log") {
@@ -14066,6 +14531,7 @@ document.querySelectorAll(".nav-item").forEach(item => {
   });
 });
 
+initAiSalesAssistant();
 initPwaShell();
 initDashboardCollapsibles();
 setInterval(() => {
