@@ -3651,6 +3651,33 @@ function assistantTableMissing(error, table) {
     String(error?.message || "").includes(`'public.${table}'`);
 }
 
+function issueAssistantAuditToken(entry) {
+  const payload = Buffer.from(JSON.stringify({
+    version: 1,
+    expires_at: Date.now() + 30 * 60 * 1000,
+    entry
+  })).toString("base64url");
+  const signature = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+  return `ast1.${payload}.${signature}`;
+}
+
+function parseAssistantAuditToken(token, user) {
+  const [prefix, payload, signature] = String(token || "").split(".");
+  if (prefix !== "ast1" || !payload || !signature) return null;
+  const expected = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+  if (signature.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const entry = parsed?.entry;
+    if (parsed?.version !== 1 || Number(parsed?.expires_at) < Date.now()) return null;
+    if (!entry || String(entry.user_id) !== String(user.id)) return null;
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
 function assistantCompatibilityLogRow(user, entry, kind, leadId = "") {
   const recordId = cleanAssistantText(entry.id, 120);
   return {
@@ -3712,7 +3739,14 @@ async function saveAssistantAudit(db, user, row, supabaseEnabled) {
       return rows[0] || entry;
     } catch (error) {
       if (!assistantTableMissing(error, "assistant_audit_logs")) throw error;
-      return saveAssistantCompatibilityEntry(user, entry, "assistant_audit", entry.selected_record_id);
+      try {
+        return await saveAssistantCompatibilityEntry(user, entry, "assistant_audit", entry.selected_record_id);
+      } catch (compatibilityError) {
+        if (!assistantTableMissing(compatibilityError, "ai_action_log")) throw compatibilityError;
+        const previous = parseAssistantAuditToken(entry.id, user);
+        const tokenEntry = { ...entry, id: previous?.id || entry.id };
+        return { ...tokenEntry, id: issueAssistantAuditToken(tokenEntry) };
+      }
     }
   }
   const index = db.assistant_audit_logs.findIndex(item => item.id === entry.id);
@@ -3724,6 +3758,8 @@ async function saveAssistantAudit(db, user, row, supabaseEnabled) {
 }
 
 async function loadAssistantAudit(db, user, id, supabaseEnabled) {
+  const tokenEntry = parseAssistantAuditToken(id, user);
+  if (tokenEntry) return { ...tokenEntry, id };
   if (supabaseEnabled) {
     try {
       const rows = await rest(
@@ -3733,7 +3769,12 @@ async function loadAssistantAudit(db, user, id, supabaseEnabled) {
       return rows[0] || null;
     } catch (error) {
       if (!assistantTableMissing(error, "assistant_audit_logs")) throw error;
-      return (await loadAssistantCompatibilityEntries(user, "assistant_audit", id, 1))[0] || null;
+      try {
+        return (await loadAssistantCompatibilityEntries(user, "assistant_audit", id, 1))[0] || null;
+      } catch (compatibilityError) {
+        if (!assistantTableMissing(compatibilityError, "ai_action_log")) throw compatibilityError;
+        return null;
+      }
     }
   }
   return db.assistant_audit_logs.find(item => item.id === id && String(item.user_id) === String(user.id)) || null;
@@ -3769,7 +3810,12 @@ async function saveAssistantEmailDraft(db, user, lead, activity, draft, supabase
       return rows[0] || row;
     } catch (error) {
       if (!assistantTableMissing(error, "email_drafts")) throw error;
-      return saveAssistantCompatibilityEntry(user, row, "assistant_email_draft", lead.id);
+      try {
+        return await saveAssistantCompatibilityEntry(user, row, "assistant_email_draft", lead.id);
+      } catch (compatibilityError) {
+        if (!assistantTableMissing(compatibilityError, "ai_action_log")) throw compatibilityError;
+        return { ...row, storage_status: "activity_only" };
+      }
     }
   }
   db.email_drafts.unshift(row);
@@ -3788,7 +3834,12 @@ async function assistantDueDrafts(db, user, supabaseEnabled) {
       );
     } catch (error) {
       if (!assistantTableMissing(error, "email_drafts")) throw error;
-      drafts = await loadAssistantCompatibilityEntries(user, "assistant_email_draft", "", 100);
+      try {
+        drafts = await loadAssistantCompatibilityEntries(user, "assistant_email_draft", "", 100);
+      } catch (compatibilityError) {
+        if (!assistantTableMissing(compatibilityError, "ai_action_log")) throw compatibilityError;
+        drafts = [];
+      }
     }
   } else {
     drafts = db.email_drafts.filter(item => String(item.user_id) === String(user.id));
@@ -4142,7 +4193,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/ai-assistant/confirm") {
     const body = await readBody(req, 80_000);
-    const audit = await loadAssistantAudit(db, user, cleanAssistantText(body.session_id, 100), supabaseEnabled);
+    const audit = await loadAssistantAudit(db, user, cleanAssistantText(body.session_id, 12000), supabaseEnabled);
     if (!audit) return sendJson(res, 404, { error: "Assistant preview not found or no longer authorized." });
     if (audit.status === "completed") {
       return sendJson(res, 200, {
@@ -4228,14 +4279,16 @@ async function handleApi(req, res, url) {
       lead: updatedLead,
       audit_id: completedAudit.id,
       message: draft
-        ? "Activity and editable email draft saved. The email still requires manual review and Send."
+        ? draft.storage_status === "activity_only"
+          ? "Activity saved. Review and send the returned email draft manually; durable draft history requires the assistant database migration."
+          : "Activity and editable email draft saved. The email still requires manual review and Send."
         : "Activity saved to the CRM."
     });
   }
 
   if (req.method === "POST" && url.pathname === "/api/ai-assistant/cancel") {
     const body = await readBody(req);
-    const audit = await loadAssistantAudit(db, user, cleanAssistantText(body.session_id, 100), supabaseEnabled);
+    const audit = await loadAssistantAudit(db, user, cleanAssistantText(body.session_id, 12000), supabaseEnabled);
     if (!audit) return sendJson(res, 404, { error: "Assistant command not found." });
     const cancelled = await saveAssistantAudit(db, user, {
       ...audit,
@@ -4255,7 +4308,13 @@ async function handleApi(req, res, url) {
         return sendJson(res, 200, rows);
       } catch (error) {
         if (!assistantTableMissing(error, "assistant_audit_logs")) throw error;
-        const rows = await loadAssistantCompatibilityEntries(user, "assistant_audit", "", 40);
+        let rows;
+        try {
+          rows = await loadAssistantCompatibilityEntries(user, "assistant_audit", "", 40);
+        } catch (compatibilityError) {
+          if (!assistantTableMissing(compatibilityError, "ai_action_log")) throw compatibilityError;
+          rows = [];
+        }
         const latest = new Map();
         rows.forEach(item => {
           if (!latest.has(item.id)) latest.set(item.id, item);

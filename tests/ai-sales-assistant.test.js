@@ -90,6 +90,9 @@ assert.match(emailPreview.email_draft.subject, /QTN-2042/);
   "assistantCompatibilityLogRow",
   "saveAssistantCompatibilityEntry",
   "loadAssistantCompatibilityEntries",
+  "issueAssistantAuditToken",
+  "parseAssistantAuditToken",
+  "activity_only",
   "ai_action_log"
 ].forEach(token => assert(serverSource.includes(token), `${token} must be implemented`));
 
