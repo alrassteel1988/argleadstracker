@@ -18,6 +18,16 @@ assert.match(client, /function dashboardSummaryDatasets\(\)/, "dashboard totals 
 assert.match(client, /function renderMetrics\(\)\s*{\s*const datasets = dashboardSummaryDatasets\(\)/, "metric counts must consume the shared selector");
 assert.match(client, /function summaryCardDetailsConfig\(type\)/, "modal configuration should be reusable across summary types");
 assert.match(client, /function salesmanDashboardSummaryDatasets\(\)/, "Salesman card counts and modal records need one shared selector");
+assert.match(
+  client,
+  /adminDashboardBottomRow:\s*document\.querySelector\("#adminDashboardBottomRow"\)/,
+  "the Admin Dashboard bottom row must be registered before dashboard rendering"
+);
+assert.match(
+  client,
+  /els\.adminDashboardBottomRow instanceof HTMLElement[\s\S]*actionPlanBody\.appendChild\(els\.adminDashboardBottomRow\)/,
+  "the Admin Dashboard bottom row must be validated as a DOM node before appendChild"
+);
 
 for (const type of [
   "salesmanMyLeads",

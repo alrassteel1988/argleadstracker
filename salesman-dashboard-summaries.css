@@ -31,12 +31,12 @@ body.salesman-dashboard-mode .salesman-simplified-metric::after {
 }
 
 body.salesman-dashboard-mode .salesman-simplified-metric.tone-danger {
-  --salesman-card-accent: var(--bauhaus-red);
+  --salesman-card-accent: var(--bauhaus-metric-red);
   --salesman-card-tint: var(--bauhaus-red-tint);
 }
 
 body.salesman-dashboard-mode .salesman-simplified-metric.tone-warm {
-  --salesman-card-accent: var(--bauhaus-amber);
+  --salesman-card-accent: var(--bauhaus-amber-text);
   --salesman-card-tint: var(--bauhaus-amber-tint);
 }
 
@@ -156,7 +156,7 @@ body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-p
 }
 
 body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-stage {
-  --salesman-stage-accent: var(--bauhaus-green);
+  --salesman-stage-accent: var(--bauhaus-green-text);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -180,7 +180,7 @@ body.salesman-dashboard-mode .salesman-simplified-stage.tone-contacted {
 }
 
 body.salesman-dashboard-mode .salesman-simplified-stage.tone-negotiation {
-  --salesman-stage-accent: var(--bauhaus-amber);
+  --salesman-stage-accent: var(--bauhaus-amber-text);
 }
 
 body.salesman-dashboard-mode .salesman-simplified-stage.tone-won {

@@ -268,6 +268,7 @@ const els = {
   adminDashboardOverviewSlot: document.querySelector("#adminDashboardOverviewSlot"),
   adminDashboardTriageRow: document.querySelector("#adminDashboardTriageRow"),
   adminDashboardAnalyticsRow: document.querySelector("#adminDashboardAnalyticsRow"),
+  adminDashboardBottomRow: document.querySelector("#adminDashboardBottomRow"),
   metricsPanel: document.querySelector("#metricsPanel"),
   summaryCardDetailsDialog: document.querySelector("#summaryCardDetailsDialog"),
   summaryCardDetailsShell: document.querySelector("#summaryCardDetailsShell"),
@@ -6672,7 +6673,11 @@ function arrangeAdminDashboardLayout() {
     const actionPlanBody = els.actionPlanPanel?.querySelector(
       ":scope > .dashboard-collapsible-body > .dashboard-collapsible-body-inner"
     );
-    if (actionPlanBody && els.adminDashboardBottomRow?.parentElement !== actionPlanBody) {
+    if (
+      actionPlanBody &&
+      els.adminDashboardBottomRow instanceof HTMLElement &&
+      els.adminDashboardBottomRow.parentElement !== actionPlanBody
+    ) {
       actionPlanBody.appendChild(els.adminDashboardBottomRow);
     }
     ADMIN_DASHBOARD_COLLAPSIBLES.forEach(definition => {
@@ -6704,7 +6709,11 @@ function arrangeAdminDashboardLayout() {
       els.dashboardView.insertBefore(panel, dashboardAnchor);
     }
   });
-  if (els.adminDashboardBottomRow?.parentElement !== els.dashboardView) {
+  if (
+    els.dashboardView &&
+    els.adminDashboardBottomRow instanceof HTMLElement &&
+    els.adminDashboardBottomRow.parentElement !== els.dashboardView
+  ) {
     els.actionPlanPanel?.after(els.adminDashboardBottomRow);
   }
 }

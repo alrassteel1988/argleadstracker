@@ -12,6 +12,9 @@
   --bauhaus-light-orange: #faead4;
   --bauhaus-green: #6d9f3d;
   --bauhaus-light-green: #e6f0d8;
+  --bauhaus-metric-green: #4f7f2f;
+  --bauhaus-metric-red: #b9363f;
+  --bauhaus-metric-orange: #a85f08;
   --bauhaus-violet: #7657c8;
   --bauhaus-background: #f7f5ef;
   --bauhaus-surface: #ffffff;
@@ -419,21 +422,21 @@ body :is(
 
 .metric-active,
 .activity-kpi-card:nth-child(4) {
-  background-color: var(--bauhaus-green) !important;
+  background-color: var(--bauhaus-metric-green) !important;
   color: #ffffff !important;
 }
 
 .metric-risk,
 .salesman-simplified-metric.tone-danger,
 .activity-kpi-card:nth-child(2) {
-  background-color: var(--bauhaus-red) !important;
+  background-color: var(--bauhaus-metric-red) !important;
   color: #ffffff !important;
 }
 
 .metric-due,
 .salesman-simplified-metric.tone-warm,
 .activity-kpi-card:nth-child(3) {
-  background-color: var(--bauhaus-orange) !important;
+  background-color: var(--bauhaus-metric-orange) !important;
   color: #ffffff !important;
 }
 
@@ -455,7 +458,7 @@ body :is(
 }
 
 .salesman-simplified-stage:nth-child(1) {
-  background-color: var(--bauhaus-green) !important;
+  background-color: var(--bauhaus-metric-green) !important;
   color: #ffffff !important;
 }
 
@@ -465,7 +468,7 @@ body :is(
 }
 
 .salesman-simplified-stage:nth-child(3) {
-  background-color: var(--bauhaus-orange) !important;
+  background-color: var(--bauhaus-metric-orange) !important;
   color: #ffffff !important;
 }
 
@@ -1208,19 +1211,19 @@ button:disabled,
 .metric-active,
 .metric-card--success,
 [data-summary-card="activeCustomers"] {
-  background: var(--bauhaus-green) !important;
+  background: var(--bauhaus-metric-green) !important;
 }
 
 .metric-risk,
 .metric-card--danger,
 [data-summary-card="atRisk"] {
-  background: var(--bauhaus-red) !important;
+  background: var(--bauhaus-metric-red) !important;
 }
 
 .metric-due,
 .metric-card--warning,
 [data-summary-card="tasksDue"] {
-  background: var(--bauhaus-orange) !important;
+  background: var(--bauhaus-metric-orange) !important;
 }
 
 .metrics > article span,

@@ -26,6 +26,8 @@ assert.match(vercelConfig, /"src": "tasks-contrast\.css"/, "Vercel must build th
 assert.match(vercelConfig, /"src": "\/tasks-bauhaus-flat\.css", "dest": "\/tasks-bauhaus-flat\.css"/, "Vercel must route the Tasks Bauhaus stylesheet directly");
 assert.match(contrastCss, /#tasksWeekLabel\s*\{[^}]*color:\s*#0f3550\s*!important;[^}]*font-size:\s*13px;[^}]*-webkit-text-fill-color:\s*#0f3550/s, "Week date badge must use dark readable text");
 assert.match(contrastCss, /#tasksStatusBadge\s*\{[^}]*color:\s*#5a3709\s*!important;[^}]*font-size:\s*13px;[^}]*-webkit-text-fill-color:\s*#5a3709/s, "Not Started badge must use dark readable text");
+assert.match(contrastCss, /body\.tasks-mode\.admin-tasks-mode \.tasks-header-meta #tasksWeekLabel\s*\{[^}]*color:\s*#0f3550\s*!important;[^}]*font-size:\s*13px;[^}]*-webkit-text-fill-color:\s*#0f3550/s, "Admin week date badge must use dark readable text");
+assert.match(contrastCss, /body\.tasks-mode\.admin-tasks-mode \.tasks-header-meta #tasksStatusBadge\s*\{[^}]*color:\s*#5a3709\s*!important;[^}]*font-size:\s*13px;[^}]*-webkit-text-fill-color:\s*#5a3709/s, "Admin Not Started badge must use dark readable text");
 
 assert.match(css, /body\.tasks-mode:not\(\.admin-tasks-mode\)/, "Bauhaus styling must be scoped to the Salesman Tasks page");
 assert.doesNotMatch(css, /body\.tasks-mode\.admin-tasks-mode/, "Admin Tasks review must not receive Salesman-only styling");

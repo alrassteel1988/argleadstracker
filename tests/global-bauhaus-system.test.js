@@ -25,6 +25,9 @@ for (const [token, value] of [
   ["--bauhaus-red", "#d94a48"],
   ["--bauhaus-yellow", "#e6a933"],
   ["--bauhaus-green", "#6d9f3d"],
+  ["--bauhaus-metric-green", "#4f7f2f"],
+  ["--bauhaus-metric-red", "#b9363f"],
+  ["--bauhaus-metric-orange", "#a85f08"],
   ["--bauhaus-background", "#f7f5ef"],
   ["--bauhaus-surface", "#ffffff"],
   ["--bauhaus-border", "#17324d"],
@@ -32,6 +35,25 @@ for (const [token, value] of [
 ]) {
   assert.match(css, new RegExp(`${token}:\\s*${value}`, "i"), `${token} must use the approved shared value`);
 }
+
+function relativeLuminance(hex) {
+  const channels = hex.match(/[a-f\d]{2}/gi).map(value => Number.parseInt(value, 16) / 255);
+  const linear = channels.map(value => value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+}
+
+for (const [name, value] of [
+  ["green", "4f7f2f"],
+  ["red", "b9363f"],
+  ["orange", "a85f08"]
+]) {
+  const contrastWithWhite = 1.05 / (relativeLuminance(value) + 0.05);
+  assert.ok(contrastWithWhite >= 4.5, `${name} metric fill must meet WCAG AA with white text`);
+}
+
+assert.match(css, /\.metric-active,[\s\S]*background-color:\s*var\(--bauhaus-metric-green\)\s*!important/, "success KPI tiles must use the accessible green fill");
+assert.match(css, /\.metric-risk,[\s\S]*background-color:\s*var\(--bauhaus-metric-red\)\s*!important/, "risk KPI tiles must use the accessible red fill");
+assert.match(css, /\.metric-due,[\s\S]*background-color:\s*var\(--bauhaus-metric-orange\)\s*!important/, "warning KPI tiles must use the accessible orange fill");
 
 assert.doesNotMatch(css, /rgba\(/i, "The shared theme must not define translucent surfaces");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient/i, "The shared theme must not define decorative gradients");
