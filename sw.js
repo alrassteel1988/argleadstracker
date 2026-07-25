@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v59-salesmen-card-view";
+const CACHE_VERSION = "arg-pwa-v60-mobile-readability";
 const APP_SHELL = [
   "/",
   "/index.html",

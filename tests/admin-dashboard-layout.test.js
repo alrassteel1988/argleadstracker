@@ -24,7 +24,7 @@ assert.match(client, /actionPlanBody\.appendChild\(els\.adminDashboardBottomRow\
 assert.match(client, /section\.classList\.add\("collapsible-enabled"\)/, "Admin Dashboard layout must enable its visible collapse controls");
 assert.match(client, /section\.querySelector\("\.panel-collapse-toggle"\)\?\.classList\.remove\("hidden"\)/, "Admin Dashboard layout must reveal its collapse controls");
 assert.match(client, /class="overdue-banner-kpis"/, "overdue attention panel must expose total and affected-salesman counts");
-assert.match(client, /class="overdue-banner-pills"/, "salesman overdue counts must remain visible");
+assert.match(client, /class="overdue-banner-pills overdue-owner-chips"/, "salesman overdue counts must remain visible and wrap safely");
 assert.match(client, /renderMetrics\(\)/, "dashboard metric rendering must remain intact");
 assert.match(client, /renderMarketSnapshotPanel\(\)/, "market snapshot rendering must remain intact");
 assert.match(client, /renderDashboardPipelineFunnel\(\)/, "pipeline funnel rendering must remain intact");
@@ -41,7 +41,7 @@ assert.match(css, /@media \(max-width:\s*700px\)/, "mobile layout breakpoint mus
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v59-salesmen-card-view/, "PWA cache must rotate for the latest UI assets");
+assert.match(sw, /arg-pwa-v60-mobile-readability/, "PWA cache must rotate for the latest UI assets");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
 assert.match(vercel, /"src": "admin-dashboard-clean\.css"/, "Vercel must build the dashboard stylesheet");
 assert.match(vercel, /"src": "\/admin-dashboard-clean\.css", "dest": "\/admin-dashboard-clean\.css"/, "Vercel must expose the dashboard stylesheet");

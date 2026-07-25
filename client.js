@@ -5695,7 +5695,7 @@ function renderOverdueBanner() {
   const subtitle = total === 1
     ? escapeHtml(oldest.text)
     : admin
-      ? `${shown.map(([name, count]) => `<span class="overdue-pill">${escapeHtml(name)}: ${count}</span>`).join("")}${moreCount ? `<span class="overdue-pill">+${moreCount} more</span>` : ""}`
+      ? `${shown.map(([name, count]) => `<span class="overdue-pill overdue-owner-chip">${escapeHtml(name)}: ${count}</span>`).join("")}${moreCount ? `<span class="overdue-pill overdue-owner-chip">+${moreCount} more</span>` : ""}`
       : `Oldest: ${escapeHtml(oldest.company_name)} - ${escapeHtml(daysOverdueLabel(oldest.due_date))}`;
   const summary = admin && total > 1
     ? `
@@ -5705,7 +5705,7 @@ function renderOverdueBanner() {
         <span><b>${escapeHtml(String(total))}</b> overdue follow-ups</span>
         <span><b>${escapeHtml(String(breakdownEntries.length))}</b> salesmen affected</span>
       </div>
-      <div class="overdue-banner-pills">${subtitle}</div>
+      <div class="overdue-banner-pills overdue-owner-chips">${subtitle}</div>
     `
     : `
       <strong>${escapeHtml(title)}</strong>

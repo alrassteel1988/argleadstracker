@@ -30,6 +30,10 @@
   --bauhaus-radius: 4px;
   --bauhaus-radius-large: 6px;
   --bauhaus-shadow-hard: 3px 3px 0 #cbd5df;
+  --text-caption-readable: 12px;
+  --text-body-readable: 14px;
+  --text-table-readable: 13px;
+  --text-control-readable: 13px;
 
   /* Rebind legacy presentation tokens to opaque shared values. */
   --blue-sidebar: var(--bauhaus-navy);
@@ -1036,6 +1040,62 @@ dialog::backdrop {
 
 .summary-card-details-header :is(h2, p, span, strong, small) {
   color: #ffffff !important;
+}
+
+.summary-card-details-kicker,
+.summary-card-details-header-actions > strong {
+  font-size: var(--text-caption-readable) !important;
+  line-height: 1.4 !important;
+}
+
+.summary-card-details-header p {
+  font-size: var(--text-body-readable) !important;
+  line-height: 1.45 !important;
+}
+
+.summary-card-details-filters label > span,
+.summary-card-details-table th {
+  font-size: var(--text-caption-readable) !important;
+  line-height: 1.35 !important;
+}
+
+.summary-card-details-filters :is(input, select),
+.summary-column-filter :is(input, select),
+.summary-page-size select {
+  min-height: 40px;
+  font-size: var(--text-control-readable) !important;
+  line-height: 1.4 !important;
+}
+
+.summary-card-details-reset,
+.summary-card-details-pagination,
+.summary-card-details-pagination button,
+.summary-open-full-list,
+.summary-card-details-status {
+  font-size: var(--text-control-readable) !important;
+  line-height: 1.4 !important;
+}
+
+.summary-card-details-table td {
+  min-height: 44px;
+  padding: 11px 10px !important;
+  font-size: var(--text-table-readable) !important;
+  line-height: 1.45 !important;
+}
+
+.summary-card-details-table th {
+  padding: 10px !important;
+}
+
+.summary-details-badge {
+  min-height: 24px;
+  font-size: var(--text-caption-readable) !important;
+  line-height: 1.35 !important;
+}
+
+.summary-card-details-state {
+  font-size: var(--text-body-readable) !important;
+  line-height: 1.5 !important;
 }
 
 .tooltip,
