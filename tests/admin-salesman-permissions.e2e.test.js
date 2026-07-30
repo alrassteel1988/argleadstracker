@@ -154,6 +154,80 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     });
     assert.equal(forbiddenPatch.response.status, 404);
 
+    const invalidStructuredActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+      method: "POST",
+      token: salesmanToken,
+      body: {
+        id: "act-invalid-structured",
+        structured_activity: true,
+        next_action_plan: "To Call",
+        next_action_date: "",
+        activity_purpose: "Company Introductory",
+        notes: "Missing required date"
+      }
+    });
+    assert.equal(invalidStructuredActivity.response.status, 400);
+
+    const forbiddenStructuredActivity = await request(baseUrl, `/api/leads/${otherLead.data.id}/activities`, {
+      method: "POST",
+      token: salesmanToken,
+      body: {
+        id: "act-forbidden-structured",
+        structured_activity: true,
+        next_action_plan: "To Visit",
+        next_action_date: "2026-07-30",
+        activity_purpose: "Meeting",
+        notes: "Salesman must not be able to reach this lead."
+      }
+    });
+    assert.equal(forbiddenStructuredActivity.response.status, 404);
+
+    const structuredActivityPayload = {
+      id: "act-salesman-structured",
+      structured_activity: true,
+      next_action_plan: "To Send Email",
+      next_action_date: "2026-07-30",
+      activity_purpose: "Quotation Follow Up",
+      notes: "Reviewed the quotation and agreed to send the revised commercial offer."
+    };
+    const structuredActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+      method: "POST",
+      token: salesmanToken,
+      body: structuredActivityPayload
+    });
+    assert.equal(structuredActivity.response.status, 201, JSON.stringify(structuredActivity.data));
+    assert.equal(structuredActivity.data.activity.next_action_plan, "To Send Email");
+    assert.equal(structuredActivity.data.activity.next_action_date, "2026-07-30");
+    assert.equal(structuredActivity.data.activity.activity_purpose, "Quotation Follow Up");
+    assert.equal(structuredActivity.data.activity.created_by, salesmanAccount.data.id);
+    assert(structuredActivity.data.activity.created_at);
+    assert.equal(structuredActivity.data.lead.next_action, "To Send Email");
+
+    const structuredActivityRetry = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+      method: "POST",
+      token: salesmanToken,
+      body: structuredActivityPayload
+    });
+    assert.equal(structuredActivityRetry.response.status, 200);
+    assert.equal(structuredActivityRetry.data.duplicate, true);
+    assert.equal(structuredActivityRetry.data.activity.id, structuredActivity.data.activity.id);
+
+    const adminStructuredActivity = await request(baseUrl, `/api/leads/${otherLead.data.id}/activities`, {
+      method: "POST",
+      token: adminToken,
+      body: {
+        id: "act-admin-structured",
+        structured_activity: true,
+        next_action_plan: "To Visit",
+        next_action_date: "2026-08-03",
+        activity_purpose: "Meeting",
+        notes: "Admin scheduled a director-supported customer visit."
+      }
+    });
+    assert.equal(adminStructuredActivity.response.status, 201, JSON.stringify(adminStructuredActivity.data));
+    assert.equal(adminStructuredActivity.data.activity.created_by, adminLogin.data.user.id);
+    assert.equal(adminStructuredActivity.data.lead.next_action, "To Visit");
+
     const handoffWithoutNote = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
       method: "PATCH",
       token: adminToken,

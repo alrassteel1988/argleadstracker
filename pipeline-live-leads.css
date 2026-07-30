@@ -89,7 +89,7 @@ body.pipeline-compact-mode .pipeline-report-range {
 
 body.pipeline-compact-mode .pipeline-report-range > span {
   align-self: center;
-  color: var(--bauhaus-text);
+  color: var(--bauhaus-text) !important;
   font: 700 12px/1.2 "Inter", sans-serif;
   white-space: nowrap;
 }
@@ -97,12 +97,12 @@ body.pipeline-compact-mode .pipeline-report-range > span {
 body.pipeline-compact-mode .pipeline-report-range label {
   display: grid;
   gap: 3px;
-  color: var(--bauhaus-text);
+  color: var(--bauhaus-text) !important;
   font: 700 11px/1 "Inter", sans-serif;
 }
 
 body.pipeline-compact-mode .pipeline-report-range label > span {
-  color: var(--bauhaus-text);
+  color: var(--bauhaus-text) !important;
   font: inherit;
 }
 
@@ -113,8 +113,21 @@ body.pipeline-compact-mode .pipeline-report-range input {
   border: 1px solid var(--bauhaus-border-light);
   border-radius: var(--bauhaus-radius);
   background: var(--bauhaus-surface);
-  color: var(--bauhaus-text);
+  color: var(--bauhaus-text) !important;
+  -webkit-text-fill-color: var(--bauhaus-text);
+  color-scheme: light;
   font: 600 12px/1 "Inter", sans-serif;
+}
+
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-fields-wrapper,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-text,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-month-field,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-day-field,
+body.pipeline-compact-mode .pipeline-report-range input::-webkit-datetime-edit-year-field {
+  color: var(--bauhaus-text);
+  -webkit-text-fill-color: var(--bauhaus-text);
+  opacity: 1;
 }
 
 body.pipeline-compact-mode .pipeline-report-range input:focus {
@@ -505,15 +518,102 @@ body.pipeline-compact-mode .pipeline-workspace-list .pipeline-lead-table .lead-t
 }
 
 @media (max-width: 640px) {
+  body.pipeline-compact-mode .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    padding: 12px;
+    overflow: visible;
+  }
+
+  body.pipeline-compact-mode .topbar-title {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.pipeline-compact-mode .topbar-copy {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  body.pipeline-compact-mode .topbar-copy :is(h1, p) {
+    max-width: 100%;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  body.pipeline-compact-mode .topbar-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: 0;
+    overflow: visible;
+  }
+
+  body.pipeline-compact-mode .topbar-actions > *,
+  body.pipeline-compact-mode .topbar-actions .smart-search-shell,
+  body.pipeline-compact-mode .topbar-actions .smart-search-field {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.pipeline-compact-mode .topbar-actions .smart-search-shell {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  body.pipeline-compact-mode .topbar-actions :is(button, input) {
+    max-width: 100%;
+  }
+
+  body.pipeline-compact-mode .topbar-actions button {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
   body.pipeline-compact-mode .pipeline-list-header {
+    min-height: 0;
     padding: 10px;
+    overflow: visible;
+  }
+
+  body.pipeline-compact-mode .pipeline-list-header > div:first-child {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body.pipeline-compact-mode .pipeline-list-header :is(h2, span) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   body.pipeline-compact-mode .pipeline-list-actions,
   body.pipeline-compact-mode .pipeline-report-tools,
   body.pipeline-compact-mode .pipeline-pagination-controls {
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     flex-wrap: wrap;
+  }
+
+  body.pipeline-compact-mode .pipeline-list-actions > *,
+  body.pipeline-compact-mode .pipeline-report-tools > * {
+    min-width: 0;
+    max-width: 100%;
   }
 
   body.pipeline-compact-mode .pipeline-list-actions .ghost-button {

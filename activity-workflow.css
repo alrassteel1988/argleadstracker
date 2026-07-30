@@ -1,0 +1,402 @@
+:root {
+  --activity-workflow-navy: var(--bauhaus-navy, #06283d);
+  --activity-workflow-blue: var(--bauhaus-blue, #1f6aa5);
+  --activity-workflow-red: var(--bauhaus-red, #d94a48);
+  --activity-workflow-surface: var(--bauhaus-surface, #fff);
+  --activity-workflow-muted: var(--bauhaus-muted, #eef1f4);
+  --activity-workflow-border: var(--bauhaus-border-light, #cbd5df);
+  --activity-workflow-text: var(--bauhaus-text, #151515);
+}
+
+.activity-panel-actions,
+.activity-attachments-heading,
+.activity-workflow-header,
+.activity-workflow-footer,
+.activity-queue-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.activity-panel-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.activity-queue-toolbar {
+  flex-wrap: wrap;
+}
+
+.activity-header-action,
+.activity-file-button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid #111;
+  border-radius: 4px;
+  background: #fff;
+  color: #151515;
+  font: 700 13px/1.2 inherit;
+  cursor: pointer;
+}
+
+.activity-entry-lead {
+  grid-column: 1 / -1;
+}
+
+.activity-attachments {
+  margin: 0 18px 14px;
+  padding: 14px;
+  border: 1px solid var(--activity-workflow-border);
+  border-radius: 4px;
+  background: var(--activity-workflow-surface);
+}
+
+.activity-attachments-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.activity-attachments h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.activity-attachments p {
+  margin: 3px 0 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.activity-drop-zone {
+  width: 100%;
+  min-height: 84px;
+  margin-top: 12px;
+  border: 2px dashed #8da3b8;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: var(--activity-workflow-text);
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.activity-drop-zone.is-dragging {
+  border-color: var(--activity-workflow-blue);
+  background: #dceaf6;
+}
+
+.activity-attachment-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.activity-attachment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--activity-workflow-border);
+  background: #fff;
+}
+
+.activity-attachment-row > div {
+  min-width: 0;
+}
+
+.activity-attachment-row strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-attachment-row small {
+  display: block;
+  color: #475569;
+}
+
+.activity-attachment-row progress {
+  width: 90px;
+}
+
+.activity-attachment-row button,
+.activity-attachment-row a {
+  border: 1px solid #17324d;
+  border-radius: 3px;
+  background: #fff;
+  color: #17324d;
+  padding: 5px 8px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.activity-feed-item.is-deletion-pending {
+  border-left-color: #de8b20 !important;
+}
+
+.activity-workflow-dialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(86vh, 820px);
+  padding: 0;
+  border: 2px solid var(--activity-workflow-navy);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--activity-workflow-text);
+}
+
+.activity-workflow-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: none;
+}
+
+.activity-workflow-header {
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--activity-workflow-navy);
+  color: #fff;
+}
+
+.activity-workflow-header--danger {
+  background: #9f2f2f;
+}
+
+.activity-workflow-header span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.activity-workflow-header h2 {
+  margin: 2px 0 0;
+  color: #fff;
+  font-size: 20px;
+}
+
+.activity-workflow-header button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #fff;
+  background: #fff;
+  color: #111;
+  font-size: 22px;
+}
+
+.activity-details-modal,
+.activity-deletion-modal,
+.activity-queue-modal {
+  background: #fff;
+}
+
+#activityDetailsBody,
+.activity-deletion-summary,
+.activity-deletion-modal > label,
+.activity-deletion-note,
+#activityDeletionMessage,
+.activity-queue-toolbar,
+#activityDeletionQueueBody {
+  margin: 14px 16px;
+}
+
+.activity-deletion-summary {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--activity-workflow-border);
+  border-left: 4px solid var(--activity-workflow-red);
+  background: var(--activity-workflow-muted);
+}
+
+.activity-deletion-summary span {
+  color: #475569;
+  font-size: 13px;
+}
+
+.activity-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.activity-detail-field,
+.activity-audit-event,
+.activity-queue-card {
+  padding: 10px;
+  border: 1px solid var(--activity-workflow-border);
+  background: var(--activity-workflow-muted);
+}
+
+.activity-detail-field span,
+.activity-audit-event span {
+  display: block;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.activity-detail-section {
+  margin-top: 16px;
+}
+
+.activity-detail-section h3 {
+  margin: 0 0 8px;
+}
+
+.activity-audit-list,
+.activity-queue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-deletion-modal > label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.activity-deletion-modal select,
+.activity-deletion-modal textarea,
+.activity-queue-toolbar input,
+.activity-queue-toolbar select {
+  min-height: 42px;
+  border: 1px solid #8da3b8;
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: #151515;
+  background: #fff;
+  font: inherit;
+}
+
+.activity-deletion-modal textarea {
+  resize: vertical;
+}
+
+.activity-deletion-note {
+  padding: 10px;
+  border-left: 4px solid #de8b20;
+  background: #f8edce;
+}
+
+.activity-workflow-footer {
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--activity-workflow-border);
+}
+
+.danger-button {
+  min-height: 38px;
+  border: 1px solid #9f2f2f;
+  border-radius: 4px;
+  background: var(--activity-workflow-red);
+  color: #fff;
+  padding: 8px 14px;
+  font-weight: 700;
+}
+
+.activity-queue-dialog {
+  width: min(1120px, calc(100vw - 28px));
+}
+
+.activity-queue-toolbar input {
+  flex: 1 1 180px;
+}
+
+.activity-queue-toolbar label {
+  display: grid;
+  gap: 3px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.activity-queue-toolbar label input {
+  min-width: 150px;
+}
+
+#activityDeletionQueueBody {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.activity-queue-card {
+  background: #fff;
+}
+
+.activity-queue-card-head,
+.activity-queue-card-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.activity-queue-card p {
+  margin: 6px 0;
+}
+
+.activity-queue-card h3 {
+  margin: 4px 0 0;
+}
+
+.activity-queue-card-actions {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.activity-queue-card-actions textarea {
+  flex: 1;
+  min-height: 40px;
+}
+
+.activity-workflow-dialog :focus-visible,
+.activity-header-action:focus-visible,
+.activity-drop-zone:focus-visible,
+.activity-attachment-row :focus-visible {
+  outline: 3px solid #f4ac45;
+  outline-offset: 2px;
+}
+
+.activity-workflow-loading,
+.activity-workflow-empty,
+.activity-workflow-error {
+  padding: 20px;
+  border: 1px solid var(--activity-workflow-border);
+  background: var(--activity-workflow-muted);
+}
+
+.activity-workflow-error {
+  border-left: 4px solid var(--activity-workflow-red);
+  color: #7a2020;
+}
+
+@media (max-width: 700px) {
+  .activity-panel-actions {
+    justify-content: flex-start;
+  }
+
+  .activity-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-attachment-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .activity-attachment-row progress {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .activity-queue-toolbar,
+  .activity-queue-card-head,
+  .activity-queue-card-actions,
+  .activity-workflow-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

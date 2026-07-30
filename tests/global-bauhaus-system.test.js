@@ -14,7 +14,7 @@ const globalStyleIndex = html.indexOf('href="bauhaus-global.css');
 assert.ok(tasksStyleIndex >= 0, "Tasks stylesheet must remain linked");
 assert.ok(globalStyleIndex > tasksStyleIndex, "The shared Bauhaus system must load after every page override");
 assert.match(serviceWorker, /"\/bauhaus-global\.css"/, "The PWA shell must cache the shared Bauhaus stylesheet");
-assert.match(serviceWorker, /arg-pwa-v44-pipeline-report-export/, "The PWA cache must rotate for the Pipeline report export update");
+assert.match(serviceWorker, /arg-pwa-v60-mobile-readability/, "The PWA cache must rotate for the latest UI assets");
 assert.match(vercelConfig, /"src": "bauhaus-global\.css"/, "Vercel must build the shared Bauhaus stylesheet");
 assert.match(vercelConfig, /"src": "\/bauhaus-global\.css", "dest": "\/bauhaus-global\.css"/, "Vercel must expose the shared Bauhaus stylesheet");
 
@@ -25,6 +25,9 @@ for (const [token, value] of [
   ["--bauhaus-red", "#d94a48"],
   ["--bauhaus-yellow", "#e6a933"],
   ["--bauhaus-green", "#6d9f3d"],
+  ["--bauhaus-metric-green", "#4f7f2f"],
+  ["--bauhaus-metric-red", "#b9363f"],
+  ["--bauhaus-metric-orange", "#a85f08"],
   ["--bauhaus-background", "#f7f5ef"],
   ["--bauhaus-surface", "#ffffff"],
   ["--bauhaus-border", "#17324d"],
@@ -32,6 +35,36 @@ for (const [token, value] of [
 ]) {
   assert.match(css, new RegExp(`${token}:\\s*${value}`, "i"), `${token} must use the approved shared value`);
 }
+
+function relativeLuminance(hex) {
+  const channels = hex.match(/[a-f\d]{2}/gi).map(value => Number.parseInt(value, 16) / 255);
+  const linear = channels.map(value => value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+}
+
+for (const [name, value] of [
+  ["green", "4f7f2f"],
+  ["red", "b9363f"],
+  ["orange", "a85f08"]
+]) {
+  const contrastWithWhite = 1.05 / (relativeLuminance(value) + 0.05);
+  assert.ok(contrastWithWhite >= 4.5, `${name} metric fill must meet WCAG AA with white text`);
+}
+
+assert.match(css, /\.metric-active,[\s\S]*background-color:\s*var\(--bauhaus-metric-green\)\s*!important/, "success KPI tiles must use the accessible green fill");
+assert.match(css, /\.metric-risk,[\s\S]*background-color:\s*var\(--bauhaus-metric-red\)\s*!important/, "risk KPI tiles must use the accessible red fill");
+assert.match(css, /\.metric-due,[\s\S]*background-color:\s*var\(--bauhaus-metric-orange\)\s*!important/, "warning KPI tiles must use the accessible orange fill");
+for (const [token, value] of [
+  ["--text-caption-readable", "12px"],
+  ["--text-body-readable", "14px"],
+  ["--text-table-readable", "13px"],
+  ["--text-control-readable", "13px"]
+]) {
+  assert.match(css, new RegExp(`${token}:\\s*${value}`, "i"), `${token} must establish the shared readable floor`);
+}
+assert.match(css, /\.summary-card-details-table th\s*\{[^}]*font-size:\s*var\(--text-caption-readable\)\s*!important/s, "Summary modal table headers must be at least 12px");
+assert.match(css, /\.summary-card-details-table td\s*\{[^}]*font-size:\s*var\(--text-table-readable\)\s*!important/s, "Summary modal table cells must be at least 13px");
+assert.match(css, /\.summary-card-details-filters :is\(input, select\),[\s\S]*font-size:\s*var\(--text-control-readable\)\s*!important/s, "Summary modal controls must be at least 13px");
 
 assert.doesNotMatch(css, /rgba\(/i, "The shared theme must not define translucent surfaces");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient/i, "The shared theme must not define decorative gradients");

@@ -1,0 +1,296 @@
+.activity-entry-dialog {
+  width: min(860px, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(820px, calc(100dvh - 32px));
+  padding: 0;
+  color: var(--bauhaus-text, #151515);
+  background: var(--bauhaus-surface, #fff);
+  border: 2px solid var(--bauhaus-border, #17324d);
+  border-radius: var(--bauhaus-radius, 4px);
+  overflow: hidden;
+}
+
+.activity-entry-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: none;
+}
+
+body.activity-modal-open {
+  overflow: hidden;
+}
+
+.activity-entry-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: min(816px, calc(100dvh - 36px));
+  margin: 0;
+  background: var(--bauhaus-surface, #fff);
+  overflow-y: auto;
+}
+
+.activity-entry-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 20px;
+  color: #fff;
+  background: var(--bauhaus-navy, #06283d);
+  border-bottom: 2px solid var(--bauhaus-border, #17324d);
+}
+
+.activity-entry-header h2,
+.activity-entry-header p {
+  margin: 0;
+  color: #fff;
+}
+
+.activity-entry-header h2 {
+  margin-top: 2px;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.activity-entry-header p {
+  margin-top: 3px;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.activity-entry-header strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--bauhaus-light-yellow, #f8edce);
+  font-size: 0.875rem;
+}
+
+.activity-entry-eyebrow {
+  color: var(--bauhaus-light-blue, #dceaf6);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.activity-entry-close {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--bauhaus-navy, #06283d);
+  background: #fff;
+  border: 1px solid #fff;
+  border-radius: var(--bauhaus-radius, 4px);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.activity-entry-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+}
+
+.activity-entry-fields label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--bauhaus-text, #151515);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.activity-entry-fields label > span {
+  line-height: 1.35;
+}
+
+.activity-entry-fields label b {
+  color: var(--bauhaus-red, #d94a48);
+}
+
+.activity-entry-fields input,
+.activity-entry-fields select,
+.activity-entry-fields textarea {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  color: var(--bauhaus-text, #151515);
+  background: #fff;
+  border: 1px solid #aebdca;
+  border-radius: var(--bauhaus-radius, 4px);
+  font: inherit;
+  font-weight: 400;
+}
+
+.activity-entry-fields textarea {
+  min-height: 132px;
+  resize: vertical;
+}
+
+.activity-entry-fields input:focus-visible,
+.activity-entry-fields select:focus-visible,
+.activity-entry-fields textarea:focus-visible,
+.activity-entry-dialog button:focus-visible {
+  outline: 2px solid var(--bauhaus-blue, #1f6aa5);
+  outline-offset: 2px;
+}
+
+.activity-entry-purpose,
+.activity-entry-notes {
+  grid-column: 1 / -1;
+}
+
+.activity-entry-purpose {
+  width: calc(50% - 8px);
+}
+
+.activity-voice-recorder {
+  display: grid;
+  gap: 10px;
+  margin: 0 20px 18px;
+  padding: 14px;
+  background: var(--bauhaus-muted, #eef1f4);
+  border: 1px solid var(--bauhaus-border-light, #cbd5df);
+  border-radius: var(--bauhaus-radius, 4px);
+}
+
+.activity-record-button {
+  width: 100%;
+  min-height: 46px;
+  color: #fff;
+  background: var(--bauhaus-blue, #1f6aa5);
+  border: 2px solid var(--bauhaus-blue, #1f6aa5);
+  border-radius: var(--bauhaus-radius, 4px);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.activity-record-button[data-state="recording"],
+.activity-record-button[data-state="paused"] {
+  background: var(--bauhaus-red, #d94a48);
+  border-color: var(--bauhaus-red, #d94a48);
+}
+
+.activity-record-button[data-state="processing"] {
+  color: var(--bauhaus-text, #151515);
+  background: var(--bauhaus-yellow, #e6a933);
+  border-color: var(--bauhaus-yellow, #e6a933);
+}
+
+.activity-record-button[data-state="completed"] {
+  background: var(--bauhaus-green, #6d9f3d);
+  border-color: var(--bauhaus-green, #6d9f3d);
+}
+
+.activity-voice-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.activity-voice-controls.hidden {
+  display: none;
+}
+
+.activity-voice-controls button {
+  min-height: 38px;
+  padding: 7px 12px;
+  color: var(--bauhaus-navy, #06283d);
+  background: #fff;
+  border: 1px solid var(--bauhaus-border, #17324d);
+  border-radius: var(--bauhaus-radius, 4px);
+  font-weight: 600;
+}
+
+.activity-voice-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 24px;
+  color: var(--bauhaus-text-muted, #586575);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.activity-voice-state time {
+  flex: 0 0 auto;
+  color: var(--bauhaus-navy, #06283d);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.activity-entry-message {
+  min-height: 20px;
+  margin: 0 20px 10px;
+}
+
+.activity-entry-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  background: var(--bauhaus-muted, #eef1f4);
+  border-top: 1px solid var(--bauhaus-border-light, #cbd5df);
+}
+
+.activity-entry-actions button {
+  min-width: 132px;
+  min-height: 42px;
+  border-radius: var(--bauhaus-radius, 4px);
+}
+
+.activity-entry-actions button:disabled,
+.activity-record-button:disabled,
+.activity-voice-controls button:disabled,
+.activity-entry-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+@media (max-width: 700px) {
+  .activity-entry-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .activity-entry-modal {
+    max-height: calc(100dvh - 20px);
+  }
+
+  .activity-entry-header,
+  .activity-entry-fields,
+  .activity-entry-actions {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .activity-entry-fields {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .activity-entry-purpose,
+  .activity-entry-notes {
+    grid-column: auto;
+    width: auto;
+  }
+
+  .activity-voice-recorder,
+  .activity-entry-message {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+
+  .activity-entry-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .activity-entry-actions button {
+    min-width: 0;
+    width: 100%;
+  }
+}

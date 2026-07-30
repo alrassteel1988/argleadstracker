@@ -5,6 +5,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const css = fs.readFileSync(path.join(root, "activity-readability.css"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const client = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercelConfig = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
@@ -40,6 +41,10 @@ assert.match(css, /\.activity-feed-body > strong\s*\{[^}]*font-size:\s*var\(--ac
 assert.match(css, /\.reminder-card strong\s*\{[^}]*font-size:\s*15px\s*!important/s, "Reminder titles need the 15px scale");
 assert.match(css, /:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--activity-focus\)\s*!important/s, "Activity controls need a visible keyboard focus ring");
 assert.match(css, /@media \(max-width: 1024px\)[\s\S]*body\.activity-mode \.app-shell\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/, "Activity must reclaim the full app-shell width at zoomed laptop sizes");
+assert.match(client, /class="overdue-banner-pills overdue-owner-chips"/, "The owner breakdown needs a dedicated responsive container");
+assert.match(client, /class="overdue-pill overdue-owner-chip"/, "Each owner count needs the responsive chip treatment");
+assert.match(css, /\.overdue-owner-chips\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*min-width:\s*0;/s, "Owner chips must wrap instead of clipping on mobile");
+assert.match(css, /\.overdue-owner-chip\s*\{[^}]*max-width:\s*100%;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/s, "Long owner labels must wrap inside the available mobile width");
 
 for (const forbidden of [/rgba\(/i, /(?:linear|radial)-gradient/i, /filter:\s*blur/i]) {
   assert.doesNotMatch(css, forbidden, `Activity readability CSS must not introduce ${forbidden}`);

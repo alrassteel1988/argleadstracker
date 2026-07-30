@@ -1,0 +1,11 @@
+Meet the AI Sales Assistant inside the ARG Leads Tracker Salesman workspace.
+
+From the mobile dashboard, the salesman keeps the day's leads, overdue calls, and next actions in view. Tap the AI Assistant launcher in the lower-right corner to open a voice-enabled command panel.
+
+The assistant accepts spoken or typed requests. A salesman can ask to show overdue calls, check work due today, schedule a follow-up, or prepare an email draft.
+
+Read-only questions return results immediately and only from records the salesman is permitted to see.
+
+For CRM changes, the assistant gathers missing details and presents the action for review before anything is saved.
+
+That means faster follow-up, cleaner records, and controlled automation from any phone.

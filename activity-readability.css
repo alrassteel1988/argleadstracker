@@ -53,6 +53,22 @@ body.activity-mode .overdue-banner :is(button, .overdue-owner-chip) {
   font-weight: 700 !important;
 }
 
+body.activity-mode .overdue-owner-chips {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 6px;
+  overflow: visible;
+}
+
+body.activity-mode .overdue-owner-chip {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 body.activity-mode .activity-kpi-card {
   min-height: 72px;
   padding: 6px 12px !important;
@@ -469,6 +485,15 @@ body.activity-mode #activityView :is(button, input, select):disabled {
 }
 
 @media (max-width: 680px) {
+  body.activity-mode .overdue-banner {
+    align-items: flex-start;
+  }
+
+  body.activity-mode .overdue-banner-copy,
+  body.activity-mode .overdue-owner-chips {
+    width: 100%;
+  }
+
   body.activity-mode .activity-kpi-card {
     min-height: 104px;
   }

@@ -1,10 +1,13 @@
 .env
 .vercel/
 node_modules/
+.venv/
 *.log
 .codex-server-*.err
 data/db.json
 scripts/push-github-api.ps1
 arg leads tracker web/
+artifacts/salesman-ai-walkthrough/local-app/
+artifacts/salesman-ai-walkthrough/local-server.pid
 
 .vercel

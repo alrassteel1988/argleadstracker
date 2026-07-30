@@ -65,6 +65,8 @@ assert.match(css, /lead-page-header \.chip:not\(\.hot\):not\(\.warm\)\s*\{[^}]*c
 assert.match(contrastCss, /lead-ai-badge\.confidence\s*\{[^}]*color:\s*#0f3550\s*!important;[^}]*-webkit-text-fill-color:\s*#0f3550/s, "final contrast guard must keep the confidence badge readable");
 assert.match(contrastCss, /drawer-stage-select\)\s*\{[^}]*color:\s*#243912\s*!important;[^}]*-webkit-text-fill-color:\s*#243912/s, "final contrast guard must keep stage controls readable");
 assert.match(contrastCss, /lead-page-header \.chip:not\(\.hot\):not\(\.warm\)\s*\{[^}]*color:\s*#0f3550\s*!important;[^}]*-webkit-text-fill-color:\s*#0f3550/s, "final contrast guard must keep header badges readable");
+assert.match(contrastCss, /drawer-overview-panel--snapshot \.drawer-primary-actions > a\.ghost-button[\s\S]*color:\s*var\(--lead-bauhaus-navy\)\s*!important;[\s\S]*-webkit-text-fill-color:\s*var\(--lead-bauhaus-navy\)\s*!important;/s, "Call and Email links must stay dark and readable on their light buttons");
+assert.match(contrastCss, /drawer-primary-actions > a\.ghost-button:is\(:hover, :focus-visible\)[\s\S]*background-color:\s*var\(--lead-bauhaus-light-blue,\s*#dceaf6\)\s*!important;/s, "Call and Email links need a readable shared hover and keyboard-focus surface");
 assert.match(css, /@media \(max-width: 1024px\)[\s\S]*body\.lead-detail-mode \.app-shell\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/, "Lead Detail must reclaim the full app-shell width at tablet and zoomed laptop sizes");
 
 let depth = 0;

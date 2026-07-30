@@ -47,8 +47,15 @@ assert.match(css, /min-width:\s*1120px/, "Table overflow must stay scoped to the
 assert.match(css, /overflow:\s*auto/, "The worklist must support scoped scrolling");
 assert.match(css, /outline:\s*2px solid var\(--bauhaus-blue\)/, "Pipeline controls must have visible keyboard focus");
 assert.match(css, /\.pipeline-report-tools/, "Pipeline report controls must use shared responsive toolbar styling");
+assert.match(css, /\.pipeline-report-range label > span\s*\{[\s\S]*color:\s*var\(--bauhaus-text\)\s*!important/, "Pipeline report date labels must override white panel-header text");
+assert.match(css, /\.pipeline-report-range input\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--bauhaus-text\)[\s\S]*color-scheme:\s*light/, "Pipeline report date values must remain dark in native date controls");
 assert.match(css, /\.pipeline-export-button\.is-excel[\s\S]*var\(--bauhaus-green\)/, "Excel export must have a clear green action style");
 assert.match(css, /\.pipeline-export-button\.is-pdf[\s\S]*var\(--bauhaus-red\)/, "PDF export must have a clear red action style");
+const mobilePipelineCss = css.slice(css.indexOf("@media (max-width: 640px)"));
+assert.match(mobilePipelineCss, /body\.pipeline-compact-mode \.topbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*?overflow:\s*visible/, "Mobile Pipeline page header must stay inside a single unclipped column");
+assert.match(mobilePipelineCss, /body\.pipeline-compact-mode \.topbar-copy :is\(h1,\s*p\)\s*\{[\s\S]*?overflow-wrap:\s*anywhere[\s\S]*?white-space:\s*normal/, "Mobile Pipeline title and subtitle must wrap instead of clipping");
+assert.match(mobilePipelineCss, /body\.pipeline-compact-mode \.topbar-actions\s*\{[\s\S]*?min-width:\s*0[\s\S]*?margin-left:\s*0[\s\S]*?overflow:\s*visible/, "Mobile Pipeline header actions must not overflow their container");
+assert.match(mobilePipelineCss, /body\.pipeline-compact-mode \.pipeline-list-header\s*\{[\s\S]*?min-height:\s*0[\s\S]*?overflow:\s*visible/, "Mobile Live Leads header must grow with wrapped content");
 assert.match(server, /pipeline-report\\\.\(xls\|pdf\)/, "Server must expose Pipeline Excel and PDF report formats");
 assert.match(server, /async function pipelineReportLeadsForUser/, "Server must authorize and resolve requested Pipeline records");
 assert.match(server, /await exportableLeadsForUser\(user, supabaseEnabled, db\)/, "Pipeline reports must reuse Admin lead authorization");
