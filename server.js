@@ -6229,7 +6229,6 @@ function serveStatic(req, res, url) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     return res.end("Not found");
   }
-
   const filePath = path.join(ROOT, publicFile);
   fs.readFile(filePath, (error, content) => {
     if (error) {
