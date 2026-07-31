@@ -25892,3 +25892,120 @@ body.summary-details-modal-open {
     padding: 9px 12px;
   }
 }
+
+/* Weekly report lifecycle: visible report links, immutable versions, and review feedback. */
+body.tasks-mode .tasks-open-report-copy {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 5px;
+  color: var(--bauhaus-blue);
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+body.tasks-mode .tasks-review-card:hover .tasks-open-report-copy,
+body.tasks-mode .tasks-review-card:focus-visible .tasks-open-report-copy {
+  color: var(--bauhaus-deep-navy);
+}
+
+body.tasks-mode .tasks-review-latest-note {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 4px solid var(--bauhaus-orange);
+  background: var(--bauhaus-light-orange);
+  color: var(--bauhaus-text);
+  line-height: 1.45;
+}
+
+body.tasks-mode .tasks-version-list {
+  display: grid;
+  gap: 6px;
+}
+
+body.tasks-mode .tasks-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--bauhaus-border-light);
+  border-radius: var(--bauhaus-radius);
+  background: var(--bauhaus-surface);
+  color: var(--bauhaus-text);
+  text-align: left;
+}
+
+body.tasks-mode .tasks-version-row:hover,
+body.tasks-mode .tasks-version-row:focus-visible,
+body.tasks-mode .tasks-version-row.active {
+  border-color: var(--bauhaus-blue);
+  background: var(--bauhaus-light-blue);
+}
+
+body.tasks-mode .tasks-version-row > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+body.tasks-mode .tasks-version-row small,
+body.tasks-mode .tasks-version-row > span:last-child {
+  color: var(--bauhaus-text-muted);
+  font-size: 11px;
+}
+
+body.tasks-mode .tasks-version-row > span:last-child {
+  color: var(--bauhaus-blue);
+  font-weight: 700;
+}
+
+.tasks-week-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--bauhaus-border-light);
+}
+
+.tasks-week-filter label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tasks-week-filter label > span {
+  color: var(--bauhaus-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tasks-week-filter input {
+  width: 100%;
+  min-height: 36px;
+  color: var(--bauhaus-text);
+  background: var(--bauhaus-surface);
+  border: 1px solid var(--bauhaus-border-light);
+  border-radius: var(--bauhaus-radius);
+  padding: 6px 8px;
+}
+
+.tasks-week-filter input:focus-visible {
+  outline: 2px solid var(--bauhaus-blue);
+  outline-offset: 1px;
+  border-color: var(--bauhaus-blue);
+}
+
+body.tasks-mode .tasks-actions-card.inline {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .tasks-week-filter {
+    grid-template-columns: 1fr;
+  }
+}

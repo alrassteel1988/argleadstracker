@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v60-mobile-readability";
+const CACHE_VERSION = "arg-pwa-v63-activity-dashboard";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "/salesman-dashboard-live-leads.css",
   "/lead-detail-readability.css",
   "/activity-readability.css",
+  "/activity-dashboard-latest.css",
   "/tasks-bauhaus-flat.css",
   "/salesmen-directory.css",
   "/salesman-dashboard-summaries.css",

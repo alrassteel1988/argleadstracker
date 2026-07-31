@@ -1,0 +1,1192 @@
+/* Latest Admin Activity workspace. This final layer intentionally wins over
+   earlier Activity experiments while remaining isolated from the sidebar. */
+body.activity-admin-mode {
+  --activity-latest-ink: #102a43;
+  --activity-latest-muted: #475569;
+  --activity-latest-line: #cbd5e1;
+  --activity-latest-soft: #f8fafc;
+  --activity-latest-blue: #1677c8;
+  --activity-latest-red: #d64545;
+  --activity-latest-amber: #e58b13;
+  --activity-latest-green: #438b32;
+}
+
+body.activity-admin-mode .main {
+  overflow: visible;
+}
+
+body.activity-admin-mode .topbar {
+  min-height: 64px;
+  padding: 10px 14px;
+}
+
+body.activity-admin-mode .topbar-actions {
+  gap: 8px;
+}
+
+body.activity-admin-mode .overdue-banner {
+  min-height: 42px;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+}
+
+body.activity-admin-mode .overdue-banner-copy {
+  min-height: 32px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+body.activity-admin-mode #activityView,
+body.activity-admin-mode .activity-dashboard,
+body.activity-admin-mode .activity-main-column {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+body.activity-admin-mode .activity-main-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.activity-admin-mode .activity-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.activity-admin-mode .activity-kpi-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+  min-height: 74px;
+  padding: 9px 12px;
+  border: 1px solid var(--activity-latest-line);
+  border-radius: 6px;
+  background-color: #ffffff;
+  background-image: none;
+  box-shadow: none;
+  color: var(--activity-latest-ink) !important;
+}
+
+body.activity-admin-mode .activity-kpi-icon,
+body.activity-admin-mode .activity-kpi-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: currentColor;
+  font-weight: 800;
+  line-height: 1;
+}
+
+body.activity-admin-mode .activity-kpi-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  background-color: #eaf3fb;
+  font-size: 13px;
+}
+
+body.activity-admin-mode .activity-kpi-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--activity-latest-soft);
+  font-size: 17px;
+}
+
+body.activity-admin-mode .activity-kpi-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+body.activity-admin-mode .activity-kpi-copy > span,
+body.activity-admin-mode .activity-kpi-copy > small {
+  color: var(--activity-latest-muted) !important;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+body.activity-admin-mode .activity-kpi-copy > strong {
+  margin: 0;
+  color: var(--activity-latest-ink);
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+body.activity-admin-mode .activity-kpi-card--blue {
+  border-color: #b8d5ee;
+  color: var(--activity-latest-blue);
+}
+
+body.activity-admin-mode .activity-kpi-card--red {
+  border-color: #efc0c0;
+  color: var(--activity-latest-red);
+}
+
+body.activity-admin-mode .activity-kpi-card--red .activity-kpi-icon {
+  background-color: #fbe8e8;
+}
+
+body.activity-admin-mode .activity-kpi-card--amber {
+  border-color: #f0d1a3;
+  color: var(--activity-latest-amber);
+}
+
+body.activity-admin-mode .activity-kpi-card--amber .activity-kpi-icon {
+  background-color: #fff1da;
+}
+
+body.activity-admin-mode .activity-kpi-card--green {
+  border-color: #c8dfbc;
+  color: var(--activity-latest-green);
+}
+
+body.activity-admin-mode .activity-kpi-card--green .activity-kpi-icon {
+  background-color: #eaf5e4;
+}
+
+body.activity-admin-mode .activity-weekly-card,
+body.activity-admin-mode .activity-log-panel,
+body.activity-admin-mode .activity-reminders-panel {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+  border: 1px solid var(--activity-latest-line);
+  border-radius: 6px;
+  background-color: #ffffff;
+  background-image: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body.activity-admin-mode .activity-panel-cap,
+body.activity-admin-mode .activity-log-panel > .activity-panel-cap,
+body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--activity-latest-line);
+  border-radius: 6px 6px 0 0;
+  background-color: #ffffff;
+  background-image: none;
+  color: var(--activity-latest-ink);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body.activity-admin-mode .activity-panel-cap h2,
+body.activity-admin-mode .activity-log-panel > .activity-panel-cap h2,
+body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap h2 {
+  color: var(--activity-latest-ink) !important;
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+body.activity-admin-mode .activity-panel-cap :is(.activity-weekly-subheading, div > span:not(.activity-count-pill)),
+body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap > div > span {
+  color: var(--activity-latest-muted) !important;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+body.activity-admin-mode .calendar-toolbar {
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+body.activity-admin-mode .calendar-nav-button,
+body.activity-admin-mode #activityWeekRange.calendar-range-pill {
+  min-height: 32px;
+  height: 32px;
+  border: 1px solid var(--activity-latest-line);
+  border-radius: 5px;
+  background-color: #ffffff;
+  color: var(--activity-latest-ink);
+  font-weight: 700;
+}
+
+body.activity-admin-mode .calendar-nav-button {
+  width: 34px;
+  min-width: 34px;
+  font-size: 18px;
+}
+
+body.activity-admin-mode #activityWeekRange.calendar-range-pill {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+body.activity-admin-mode .activity-weekly-log {
+  display: grid;
+  gap: 4px;
+  padding: 4px 10px 8px;
+}
+
+body.activity-admin-mode .calendar-legend {
+  min-height: 15px;
+  gap: 10px;
+  font-size: 11px;
+}
+
+body.activity-admin-mode .activity-day-strip {
+  gap: 6px;
+}
+
+body.activity-admin-mode .activity-weekly-card .activity-day-chip {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  gap: 5px;
+  min-height: 31px;
+  padding: 4px 8px;
+  border: 1px solid #dbe3eb;
+  border-radius: 5px;
+  background-color: #ffffff;
+}
+
+body.activity-admin-mode .activity-weekly-card .activity-day-chip :is(strong, span) {
+  color: var(--activity-latest-ink);
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+body.activity-admin-mode .activity-secondary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(330px, 1fr);
+  align-items: start;
+  gap: 10px;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+body.activity-admin-mode .activity-panel-actions {
+  gap: 6px;
+}
+
+body.activity-admin-mode .activity-panel-actions :is(.activity-count-pill, .activity-header-action) {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--activity-latest-line);
+  border-radius: 5px;
+  background-color: #ffffff;
+  color: var(--activity-latest-ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+body.activity-admin-mode .activity-filter-shell {
+  padding: 7px 10px 5px;
+  border-bottom: 1px solid var(--activity-latest-line);
+  background-color: #ffffff;
+}
+
+body.activity-admin-mode .activity-filter-bar {
+  gap: 5px;
+}
+
+body.activity-admin-mode .activity-filter-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(250px, 0.85fr);
+  align-items: end;
+  gap: 8px;
+}
+
+body.activity-admin-mode .activity-filter-right,
+body.activity-admin-mode .date-range-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+body.activity-admin-mode .activity-filter-secondary {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.75fr) minmax(220px, 1.25fr) auto;
+  align-items: end;
+  gap: 7px;
+}
+
+body.activity-admin-mode .activity-date-filter,
+body.activity-admin-mode .activity-filter-right label,
+body.activity-admin-mode .activity-filter-secondary label {
+  gap: 2px;
+}
+
+body.activity-admin-mode .activity-filter-shell :is(label, .activity-date-filter > span) {
+  color: var(--activity-latest-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+body.activity-admin-mode .date-presets {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+body.activity-admin-mode .date-presets button,
+body.activity-admin-mode .activity-filter-bar :is(input, select),
+body.activity-admin-mode :is(#activityResetFilters, .activity-filter-toggle) {
+  min-height: 32px;
+  height: 32px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  color: var(--activity-latest-ink);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+body.activity-admin-mode .date-presets button {
+  white-space: nowrap;
+}
+
+body.activity-admin-mode .activity-results-summary {
+  margin: 0;
+  padding: 4px 0 0;
+  color: var(--activity-latest-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+body.activity-admin-mode .activity-feed {
+  display: block;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  background-color: #ffffff;
+}
+
+body.activity-admin-mode .activity-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+body.activity-admin-mode .activity-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: var(--activity-latest-ink);
+}
+
+body.activity-admin-mode .activity-table th {
+  height: 30px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--activity-latest-line);
+  background-color: #f4f7fa;
+  color: var(--activity-latest-muted);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.15;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+body.activity-admin-mode .activity-table th:nth-child(1) { width: 34%; }
+body.activity-admin-mode .activity-table th:nth-child(2) { width: 15%; }
+body.activity-admin-mode .activity-table th:nth-child(3) { width: 14%; }
+body.activity-admin-mode .activity-table th:nth-child(4) { width: 12%; }
+body.activity-admin-mode .activity-table th:nth-child(5) { width: 11%; }
+body.activity-admin-mode .activity-table th:nth-child(6) { width: 14%; }
+
+body.activity-admin-mode .activity-table-row {
+  height: 46px;
+  cursor: pointer;
+}
+
+body.activity-admin-mode .activity-table-row:hover {
+  background-color: #f8fbfe;
+}
+
+body.activity-admin-mode .activity-table td {
+  height: 46px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  color: var(--activity-latest-ink);
+  font-size: 12px;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+body.activity-admin-mode .activity-table td > strong,
+body.activity-admin-mode .activity-table td > small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.activity-admin-mode .activity-table td > strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+body.activity-admin-mode .activity-table td > small {
+  margin-top: 2px;
+  color: var(--activity-latest-muted);
+  font-size: 10px;
+}
+
+body.activity-admin-mode .activity-table-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+body.activity-admin-mode .activity-table-type i {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background-color: #eef4f9;
+  color: var(--activity-latest-blue);
+  font-style: normal;
+}
+
+body.activity-admin-mode .activity-table-status {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid #d2dbe5;
+  border-radius: 5px;
+  background-color: #eef2f6;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+body.activity-admin-mode .activity-table-status.overdue,
+body.activity-admin-mode .activity-table-status.pending {
+  border-color: #efb4b4;
+  background-color: #fbe6e6;
+  color: #8a2020;
+}
+
+body.activity-admin-mode .activity-table-status.upcoming,
+body.activity-admin-mode .activity-table-status.scheduled {
+  border-color: #f0d09d;
+  background-color: #fff1d8;
+  color: #7a4700;
+}
+
+body.activity-admin-mode .activity-table-status.completed {
+  border-color: #bddcae;
+  background-color: #e8f4e2;
+  color: #285d19;
+}
+
+body.activity-admin-mode .activity-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+body.activity-admin-mode .activity-table-actions .small-action,
+body.activity-admin-mode .activity-row-menu summary {
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 1px solid #b9c7d5;
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: var(--activity-latest-ink);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+body.activity-admin-mode .activity-row-menu {
+  position: relative;
+}
+
+body.activity-admin-mode .activity-row-menu summary {
+  display: grid;
+  width: 28px;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.activity-admin-mode .activity-row-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+body.activity-admin-mode .activity-row-menu > div {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  gap: 4px;
+  width: 150px;
+  padding: 6px;
+  border: 1px solid var(--activity-latest-line);
+  border-radius: 5px;
+  background-color: #ffffff;
+}
+
+body.activity-admin-mode .activity-row-menu > div .small-action {
+  width: 100%;
+  white-space: normal;
+}
+
+body.activity-admin-mode .activity-pagination {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 9px;
+  color: var(--activity-latest-muted);
+  font-size: 11px;
+}
+
+body.activity-admin-mode .activity-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.activity-admin-mode .activity-pagination button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #b9c7d5;
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: var(--activity-latest-ink);
+  font-size: 17px;
+}
+
+body.activity-admin-mode .activity-reminders-filters,
+body.activity-admin-mode .activity-reminders-panel #activityReminders,
+body.activity-admin-mode .activity-reminders-links {
+  background-color: #ffffff;
+}
+
+body.activity-admin-mode .activity-reminders-filters {
+  padding: 7px 10px 4px;
+}
+
+body.activity-admin-mode .activity-reminders-filter-label {
+  margin-bottom: 4px;
+  color: var(--activity-latest-muted);
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+body.activity-admin-mode .activity-shortcut-chips {
+  gap: 4px;
+}
+
+body.activity-admin-mode .activity-shortcut-chips button {
+  min-height: 27px;
+  padding: 4px 7px;
+  border-radius: 4px;
+  color: var(--activity-latest-ink);
+  font-size: 10px;
+}
+
+body.activity-admin-mode .activity-reminders-panel #activityReminders {
+  display: grid;
+  gap: 5px;
+  padding: 4px 10px 7px;
+}
+
+body.activity-admin-mode .reminder-stack-header {
+  min-height: 24px;
+  padding: 2px 0;
+  color: var(--activity-latest-ink);
+  font-size: 11px;
+}
+
+body.activity-admin-mode .reminder-grid.compact {
+  gap: 4px;
+}
+
+body.activity-admin-mode .reminder-card {
+  min-height: 52px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+
+body.activity-admin-mode .reminder-card strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+body.activity-admin-mode .reminder-card p,
+body.activity-admin-mode .reminder-card .meta-label {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+body.activity-admin-mode .reminder-card .calendar-link.icon-only {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  font-size: 14px;
+}
+
+body.activity-admin-mode .activity-reminders-links {
+  margin: 0 10px 8px;
+  padding: 7px 0 0;
+  border-top: 1px solid var(--activity-latest-line);
+}
+
+body.activity-admin-mode .activity-reminders-links-head h3 {
+  color: var(--activity-latest-ink);
+  font-size: 13px;
+}
+
+body.activity-admin-mode .activity-reminders-links-head span {
+  color: var(--activity-latest-muted);
+  font-size: 10px;
+}
+
+body.activity-admin-mode .activity-quick-links {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  grid-auto-rows: 30px;
+}
+
+body.activity-admin-mode .activity-quick-link {
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 7px;
+}
+
+body.activity-admin-mode #activityView :is(button, input, select, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--activity-latest-blue);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  body.activity-admin-mode .activity-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.activity-admin-mode .activity-secondary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.activity-admin-mode .activity-filter-main,
+  body.activity-admin-mode .activity-filter-secondary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.activity-admin-mode .date-presets {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 680px) {
+  body.activity-admin-mode .activity-kpi-grid,
+  body.activity-admin-mode .activity-filter-right,
+  body.activity-admin-mode .date-range-inputs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.activity-admin-mode .activity-kpi-card {
+    min-height: 82px;
+  }
+
+  body.activity-admin-mode .activity-panel-cap {
+    align-items: flex-start;
+  }
+
+  body.activity-admin-mode .activity-panel-actions,
+  body.activity-admin-mode .calendar-toolbar {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  body.activity-admin-mode #activityWeekRange.calendar-range-pill {
+    flex: 1 1 180px;
+    text-align: center;
+  }
+
+  body.activity-admin-mode .activity-day-strip {
+    grid-template-columns: repeat(7, minmax(72px, 1fr));
+    overflow-x: auto;
+  }
+
+  body.activity-admin-mode .activity-table {
+    min-width: 0;
+  }
+
+  body.activity-admin-mode .activity-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  body.activity-admin-mode .activity-table,
+  body.activity-admin-mode .activity-table tbody,
+  body.activity-admin-mode .activity-table-row,
+  body.activity-admin-mode .activity-table td {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  body.activity-admin-mode .activity-table-row {
+    padding: 9px;
+    border-bottom: 1px solid var(--activity-latest-line);
+  }
+
+  body.activity-admin-mode .activity-table td {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 8px;
+    padding: 4px 0;
+    border: 0;
+  }
+
+  body.activity-admin-mode .activity-table td::before {
+    content: attr(data-label);
+    color: var(--activity-latest-muted);
+    font-size: 10px;
+    font-weight: 750;
+    text-transform: uppercase;
+  }
+
+  body.activity-admin-mode .activity-table td > :is(strong, small) {
+    grid-column: 2;
+  }
+
+  body.activity-admin-mode .activity-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/*
+ * Desktop laptop contract
+ *
+ * Legacy Activity styles intentionally locked the app shell to 100dvh and
+ * allocated the lower workspace as an equal-width, fixed-height row.  That
+ * clipped the table after its heading.  Keep the navigation column intact,
+ * but let the Activity document participate in normal flow and reserve the
+ * wider column for the working table.
+ */
+@media (min-width: 1280px) and (min-height: 650px) {
+  body.activity-admin-mode {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  body.activity-admin-mode .app-shell,
+  body.activity-admin-mode .main,
+  body.activity-admin-mode #activityView,
+  body.activity-admin-mode .activity-dashboard,
+  body.activity-admin-mode .activity-main-column,
+  body.activity-admin-mode .activity-secondary-grid {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body.activity-admin-mode .app-shell {
+    min-height: 100dvh !important;
+  }
+
+  body.activity-admin-mode .main {
+    min-height: 100dvh !important;
+    padding-top: 7px !important;
+    padding-bottom: 10px !important;
+  }
+
+  body.activity-admin-mode .topbar {
+    flex-wrap: nowrap !important;
+    min-height: 52px !important;
+    margin-bottom: 6px !important;
+    padding: 6px 10px !important;
+  }
+
+  body.activity-admin-mode .topbar-title {
+    flex: 0 1 330px !important;
+    min-width: 250px !important;
+  }
+
+  body.activity-admin-mode .topbar-actions {
+    flex: 1 1 auto !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-end !important;
+    gap: 5px !important;
+    min-width: 0 !important;
+  }
+
+  body.activity-admin-mode .topbar-actions .smart-search-shell {
+    flex: 1 1 250px !important;
+    width: auto !important;
+    min-width: 210px !important;
+    max-width: 290px !important;
+  }
+
+  body.activity-admin-mode .topbar-actions :is(.ghost-button, .primary-button) {
+    min-height: 30px !important;
+    height: 30px !important;
+    padding: 4px 7px !important;
+    font-size: 10px !important;
+    white-space: nowrap !important;
+  }
+
+  body.activity-admin-mode .overdue-banner {
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    flex-basis: auto !important;
+    min-height: 38px !important;
+    margin-bottom: 6px !important;
+    padding: 3px 8px !important;
+  }
+
+  body.activity-admin-mode .overdue-banner-copy {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 0 !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+
+  body.activity-admin-mode .overdue-banner-copy > * {
+    flex: 0 0 auto !important;
+  }
+
+  body.activity-admin-mode .overdue-banner-eyebrow,
+  body.activity-admin-mode .overdue-banner-copy > strong {
+    width: auto !important;
+    white-space: nowrap !important;
+  }
+
+  body.activity-admin-mode .overdue-banner-kpis,
+  body.activity-admin-mode .overdue-owner-chips {
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+  }
+
+  body.activity-admin-mode .overdue-owner-chips > * {
+    min-height: 26px !important;
+    padding: 3px 7px !important;
+    font-size: 10px !important;
+    white-space: nowrap !important;
+  }
+
+  body.activity-admin-mode .activity-main-column {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-grid {
+    gap: 7px !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-card {
+    grid-template-columns: 34px minmax(0, 1fr) 24px !important;
+    gap: 8px !important;
+    min-height: 58px !important;
+    padding: 5px 9px !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: var(--activity-latest-ink) !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-card--blue .activity-kpi-icon {
+    background-color: var(--activity-latest-blue) !important;
+    color: #ffffff !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-card--red .activity-kpi-icon {
+    background-color: var(--activity-latest-red) !important;
+    color: #ffffff !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-card--amber .activity-kpi-icon {
+    background-color: var(--activity-latest-amber) !important;
+    color: #ffffff !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-card--green .activity-kpi-icon {
+    background-color: var(--activity-latest-green) !important;
+    color: #ffffff !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-icon {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-mark {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 14px !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-copy > strong {
+    font-size: 22px !important;
+  }
+
+  body.activity-admin-mode .activity-kpi-copy > span,
+  body.activity-admin-mode .activity-kpi-copy > small {
+    font-size: 10px !important;
+  }
+
+  body.activity-admin-mode .activity-weekly-card {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body.activity-admin-mode .activity-weekly-card > .activity-panel-cap {
+    min-height: 38px !important;
+    padding: 4px 10px !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: var(--activity-latest-ink) !important;
+  }
+
+  body.activity-admin-mode .activity-weekly-card .calendar-nav-button,
+  body.activity-admin-mode .activity-weekly-card #activityWeekRange.calendar-range-pill {
+    height: 29px !important;
+    min-height: 29px !important;
+  }
+
+  body.activity-admin-mode .activity-weekly-log {
+    gap: 3px !important;
+    padding: 3px 9px 5px !important;
+  }
+
+  body.activity-admin-mode .calendar-legend {
+    min-height: 12px !important;
+    font-size: 10px !important;
+  }
+
+  body.activity-admin-mode .activity-weekly-card .activity-day-chip {
+    min-height: 28px !important;
+    padding: 3px 6px !important;
+  }
+
+  body.activity-admin-mode .activity-secondary-grid {
+    grid-template-columns: minmax(0, 1.9fr) minmax(320px, 1fr) !important;
+    align-items: start !important;
+    gap: 8px !important;
+  }
+
+  body.activity-admin-mode .activity-log-panel,
+  body.activity-admin-mode .activity-reminders-panel {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+  }
+
+  body.activity-admin-mode .activity-log-panel > .activity-panel-cap,
+  body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap {
+    min-height: 44px !important;
+    padding: 5px 10px !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: var(--activity-latest-ink) !important;
+  }
+
+  body.activity-admin-mode .activity-panel-actions {
+    flex-wrap: nowrap !important;
+  }
+
+  body.activity-admin-mode .activity-log-panel > .activity-panel-cap :is(
+    .activity-count-pill,
+    .activity-header-action
+  ) {
+    min-height: 29px !important;
+    height: 29px !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+
+  body.activity-admin-mode .activity-filter-shell {
+    padding: 5px 8px 4px !important;
+  }
+
+  body.activity-admin-mode .activity-filter-bar {
+    gap: 4px !important;
+  }
+
+  body.activity-admin-mode .activity-filter-main {
+    grid-template-columns: minmax(0, 1.35fr) minmax(230px, 0.9fr) !important;
+    gap: 6px !important;
+  }
+
+  body.activity-admin-mode .activity-filter-right,
+  body.activity-admin-mode .date-range-inputs {
+    gap: 5px !important;
+  }
+
+  body.activity-admin-mode .activity-filter-secondary {
+    grid-template-columns: minmax(205px, 0.8fr) minmax(220px, 1.2fr) auto !important;
+    gap: 6px !important;
+  }
+
+  body.activity-admin-mode .date-presets {
+    gap: 3px !important;
+  }
+
+  body.activity-admin-mode .date-presets button,
+  body.activity-admin-mode .activity-filter-bar :is(input, select),
+  body.activity-admin-mode :is(#activityResetFilters, .activity-filter-toggle) {
+    height: 30px !important;
+    min-height: 30px !important;
+    padding: 4px 7px !important;
+    font-size: 11px !important;
+  }
+
+  body.activity-admin-mode .activity-results-summary {
+    margin-top: 0 !important;
+    padding-top: 3px !important;
+    font-size: 10px !important;
+  }
+
+  body.activity-admin-mode .activity-feed {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.activity-admin-mode .activity-table-scroll {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+  }
+
+  body.activity-admin-mode .activity-table {
+    min-width: 680px !important;
+  }
+
+  body.activity-admin-mode .activity-table th {
+    height: 27px !important;
+    padding: 4px 6px !important;
+    font-size: 9px !important;
+  }
+
+  body.activity-admin-mode .activity-table-row,
+  body.activity-admin-mode .activity-table td {
+    height: 43px !important;
+    min-height: 43px !important;
+  }
+
+  body.activity-admin-mode .activity-table td {
+    padding: 4px 6px !important;
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    overflow: hidden !important;
+  }
+
+  body.activity-admin-mode .activity-table td > strong,
+  body.activity-admin-mode .activity-table td > small,
+  body.activity-admin-mode .activity-table-type {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  body.activity-admin-mode .activity-table-type i {
+    width: 21px !important;
+    height: 21px !important;
+  }
+
+  body.activity-admin-mode .activity-table-status {
+    min-height: 21px !important;
+    padding: 2px 5px !important;
+    font-size: 9px !important;
+  }
+
+  body.activity-admin-mode .activity-table-actions .small-action,
+  body.activity-admin-mode .activity-row-menu summary {
+    min-height: 25px !important;
+    height: 25px !important;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+  }
+
+  body.activity-admin-mode .activity-row-menu summary {
+    width: 25px !important;
+    padding: 0 !important;
+  }
+
+  body.activity-admin-mode .activity-pagination {
+    min-height: 30px !important;
+    padding: 3px 7px !important;
+  }
+
+  body.activity-admin-mode .activity-reminders-filters {
+    padding: 5px 8px 3px !important;
+  }
+
+  body.activity-admin-mode .activity-shortcut-chips button {
+    min-height: 25px !important;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+  }
+
+  body.activity-admin-mode .activity-reminders-panel #activityReminders {
+    max-height: 245px !important;
+    padding: 3px 8px 5px !important;
+    overflow-y: auto !important;
+  }
+
+  body.activity-admin-mode .reminder-card {
+    min-height: 48px !important;
+    padding: 5px 7px !important;
+  }
+
+  body.activity-admin-mode .reminder-card strong {
+    font-size: 11px !important;
+  }
+
+  body.activity-admin-mode .reminder-card p,
+  body.activity-admin-mode .reminder-card .meta-label {
+    font-size: 9px !important;
+  }
+
+  body.activity-admin-mode .activity-reminders-links {
+    margin: 0 8px 6px !important;
+    padding: 5px 0 0 !important;
+  }
+
+  body.activity-admin-mode .activity-quick-link {
+    height: 28px !important;
+    min-height: 28px !important;
+    padding: 3px 6px !important;
+  }
+}

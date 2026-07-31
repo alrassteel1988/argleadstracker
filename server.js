@@ -80,6 +80,7 @@ const {
   requestRateLimitCategory,
   resetLocalBucket
 } = require("./src/services/rateLimitService");
+const weeklyReportWorkflow = require("./src/services/weeklyReportWorkflowService");
 const { applySecurityHeaders } = require("./src/config/securityHeaders");
 const { fetchMarketNews } = require("./src/services/marketNewsService");
 const {
@@ -232,6 +233,7 @@ const PUBLIC_STATIC_FILES = new Map([
   ["/client.js", "client.js"],
   ["/styles.css", "styles.css"],
   ["/activity-modal.css", "activity-modal.css"],
+  ["/activity-dashboard-latest.css", "activity-dashboard-latest.css"],
   ["/activity-readability.css", "activity-readability.css"],
   ["/activity-workflow.css", "activity-workflow.css"],
   ["/admin-dashboard-clean.css", "admin-dashboard-clean.css"],
@@ -360,6 +362,8 @@ function readDb() {
   db.attention_flags = Array.isArray(db.attention_flags) ? db.attention_flags : [];
   db.notifications = Array.isArray(db.notifications) ? db.notifications : [];
   db.weekly_reports = Array.isArray(db.weekly_reports) ? db.weekly_reports : [];
+  db.weekly_report_versions = Array.isArray(db.weekly_report_versions) ? db.weekly_report_versions : [];
+  db.weekly_report_reviews = Array.isArray(db.weekly_report_reviews) ? db.weekly_report_reviews : [];
   db.weekly_report_events = Array.isArray(db.weekly_report_events) ? db.weekly_report_events : [];
   db.market_intelligence = Array.isArray(db.market_intelligence) ? db.market_intelligence : [];
   db.market_intelligence_archive = Array.isArray(db.market_intelligence_archive) ? db.market_intelligence_archive : [];
@@ -3783,6 +3787,7 @@ function weeklyReportDefaultMarketIntelligence() {
 function weeklyReportDefaults(user, weekEnding) {
   return {
     id: "",
+    week_start: weeklyReportWorkflow.weekStartFromEnding(weekEnding),
     week_ending: weekEnding,
     rep_name: user?.name || user?.email || "",
     rep_email: user?.email || "",
@@ -3804,6 +3809,12 @@ function weeklyReportDefaults(user, weekEnding) {
     submitted_at: "",
     reviewed_at: "",
     review_note: "",
+    latest_review_note: "",
+    current_version_number: 0,
+    current_version_id: "",
+    row_version: 0,
+    accepted_at: "",
+    rejected_at: "",
     contradiction_flags: [],
     created_at: "",
     updated_at: ""
@@ -3811,7 +3822,7 @@ function weeklyReportDefaults(user, weekEnding) {
 }
 
 function weeklyReportIsLockedForEditing(status) {
-  return ["submitted", "under_review", "accepted"].includes(String(status || "").trim().toLowerCase());
+  return !weeklyReportWorkflow.isEditableStatus(status);
 }
 
 function weeklyProblemCandidateFlags(lead) {
@@ -4042,14 +4053,21 @@ function sanitizeWeeklyReportPayload(input, user, weekEnding) {
 }
 
 function weeklyReportEventEntry(reportId, actor, action, details = {}) {
+  const now = new Date().toISOString();
   return {
     id: newRecordId("wsre"),
     report_id: reportId,
-    timestamp: new Date().toISOString(),
+    report_version_id: details.report_version_id || null,
+    timestamp: now,
+    created_at: now,
     actor_uid: actor?.id || "",
     actor_name: actor?.name || actor?.full_name || actor?.email || "System",
     actor_role: actor?.role || "system",
     action: String(action || "").trim(),
+    event_type: String(action || "").trim(),
+    previous_status: details.previous_status || null,
+    new_status: details.new_status || details.status || null,
+    idempotency_key: details.idempotency_key || null,
     details
   };
 }
@@ -4080,7 +4098,7 @@ async function loadWeeklyReportEvents(db, token, supabaseEnabled, reportId) {
   if (!reportId) return [];
   if (supabaseEnabled) {
     try {
-      return await rest(`weekly_report_events?report_id=eq.${encodeURIComponent(reportId)}&order=timestamp.desc&limit=12`, supabaseDataOptions(token));
+      return await rest(`weekly_report_events?report_id=eq.${encodeURIComponent(reportId)}&order=timestamp.desc&limit=100`, supabaseDataOptions(token));
     } catch {
       const localDb = readDb();
       return loadWeeklyReportEvents(localDb, token, false, reportId);
@@ -4089,7 +4107,31 @@ async function loadWeeklyReportEvents(db, token, supabaseEnabled, reportId) {
   return (db.weekly_report_events || [])
     .filter(item => item.report_id === reportId)
     .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))
-    .slice(0, 12);
+    .slice(0, 100);
+}
+
+async function loadWeeklyReportVersions(db, token, supabaseEnabled, reportId) {
+  if (!reportId) return [];
+  if (supabaseEnabled) {
+    try {
+      return await rest(`weekly_report_versions?weekly_report_id=eq.${encodeURIComponent(reportId)}&select=*&order=version_number.desc`, supabaseDataOptions(token));
+    } catch {
+      return [];
+    }
+  }
+  return weeklyReportWorkflow.reportVersions(db, reportId);
+}
+
+async function loadWeeklyReportReviews(db, token, supabaseEnabled, reportId) {
+  if (!reportId) return [];
+  if (supabaseEnabled) {
+    try {
+      return await rest(`weekly_report_reviews?weekly_report_id=eq.${encodeURIComponent(reportId)}&select=*&order=created_at.desc`, supabaseDataOptions(token));
+    } catch {
+      return [];
+    }
+  }
+  return weeklyReportWorkflow.reportReviews(db, reportId);
 }
 
 function weeklyReportContext(user, leads, weekEnding) {
@@ -4185,9 +4227,12 @@ async function weeklyReportForUser(db, token, supabaseEnabled, user, weekEnding)
   return reports.find(item => item.user_id === user.id && item.week_ending === weekEnding) || null;
 }
 
-function serializeWeeklyReport(report, context, storageMode = "local", events = []) {
+function serializeWeeklyReport(report, context, storageMode = "local", events = [], versions = [], reviews = []) {
   const merged = mergeWeeklyContext(report, context);
   const contradictionFlags = contradictionFlagsForReport(merged);
+  const latestVersion = versions.find(item => String(item.id) === String(report?.current_version_id || ""))
+    || versions[0]
+    || null;
   return {
     report: {
       ...merged,
@@ -4197,8 +4242,127 @@ function serializeWeeklyReport(report, context, storageMode = "local", events = 
     blockers: weeklyReportBlockers({ ...merged, contradiction_flags: contradictionFlags }, context),
     thin_report: weeklyThinReport(merged),
     storage_mode: storageMode,
-    events: Array.isArray(events) ? events : []
+    events: Array.isArray(events) ? events : [],
+    versions: Array.isArray(versions) ? versions : [],
+    reviews: Array.isArray(reviews) ? reviews : [],
+    latest_submitted_version: latestVersion
   };
+}
+
+async function serializeStoredWeeklyReport(db, token, supabaseEnabled, report, context, storageMode = "saved") {
+  const [events, versions, reviews] = await Promise.all([
+    loadWeeklyReportEvents(db, token, supabaseEnabled, report.id),
+    loadWeeklyReportVersions(db, token, supabaseEnabled, report.id),
+    loadWeeklyReportReviews(db, token, supabaseEnabled, report.id)
+  ]);
+  return serializeWeeklyReport(report, context, storageMode, events, versions, reviews);
+}
+
+function weeklyRequestIdempotency(req, scope, payload = {}, report = {}) {
+  const provided = String(req.headers["idempotency-key"] || payload.idempotency_key || "").trim();
+  if (provided) return provided.slice(0, 180);
+  return weeklyReportWorkflow.idempotencyKey(scope, [
+    report.id || payload.id || "",
+    report.user_id || payload.user_id || "",
+    report.current_version_id || payload.current_version_id || "",
+    report.row_version ?? payload.row_version ?? "",
+    payload
+  ]);
+}
+
+function weeklyWorkflowHttpStatus(error) {
+  if (error?.status && [400, 401, 403, 404, 409, 422].includes(Number(error.status))) return Number(error.status);
+  const code = String(error?.code || error?.details?.code || "");
+  if (["40001", "23505"].includes(code)) return 409;
+  if (["22023", "23502", "23514"].includes(code)) return 422;
+  if (code === "42501") return 403;
+  const message = String(error?.message || "");
+  if (/newer submitted version|changed in another session|locked|not in a reviewable state|already/i.test(message)) return 409;
+  if (/not found/i.test(message)) return 404;
+  if (/required|valid weekly reporting period|valid review action/i.test(message)) return 422;
+  if (/access|required|permission|policy/i.test(message)) return 403;
+  return Number(error?.status || 500);
+}
+
+async function persistWeeklySubmission(db, user, supabaseEnabled, report, expectedRowVersion, idempotency) {
+  if (supabaseEnabled) {
+    try {
+      return await rest("rpc/submit_weekly_report", {
+        method: "POST",
+        ...supabaseDataOptions(user.token),
+        body: {
+          p_report: report,
+          p_expected_row_version: expectedRowVersion ?? null,
+          p_idempotency_key: idempotency
+        }
+      });
+    } catch (error) {
+      error.status = weeklyWorkflowHttpStatus(error);
+      throw error;
+    }
+  }
+  const result = weeklyReportWorkflow.submitLocalReport(db, {
+    report,
+    actor: user,
+    expectedRowVersion,
+    idempotency
+  });
+  writeDb(db);
+  return result;
+}
+
+async function persistWeeklyReview(db, user, supabaseEnabled, {
+  reportId,
+  versionId,
+  action,
+  note,
+  idempotency
+}) {
+  if (supabaseEnabled) {
+    try {
+      return await rest("rpc/review_weekly_report", {
+        method: "POST",
+        ...supabaseDataOptions(user.token),
+        body: {
+          p_report_id: reportId,
+          p_version_id: versionId,
+          p_action: action,
+          p_note: note,
+          p_idempotency_key: idempotency
+        }
+      });
+    } catch (error) {
+      error.status = weeklyWorkflowHttpStatus(error);
+      throw error;
+    }
+  }
+  const result = weeklyReportWorkflow.reviewLocalReport(db, {
+    reportId,
+    versionId,
+    action,
+    note,
+    actor: user,
+    idempotency
+  });
+  writeDb(db);
+  return result;
+}
+
+async function weeklyReportDetail(db, user, supabaseEnabled, report) {
+  const owner = String(report.user_id) === String(user.id)
+    ? user
+    : (await weeklyReportSalesmen(db, user.token, supabaseEnabled)).find(person => String(person.id) === String(report.user_id)) || {
+      id: report.user_id,
+      name: report.rep_name,
+      email: report.rep_email,
+      territory: report.territory,
+      role: "salesman"
+    };
+  const leads = supabaseEnabled
+    ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+    : db.leads.map(leadWithDerivedFields);
+  const context = weeklyReportContext(owner, leads, report.week_ending);
+  return serializeStoredWeeklyReport(db, user.token, supabaseEnabled, report, context, supabaseEnabled ? "supabase" : "local");
 }
 
 async function assistantAuthorizedLeads(db, user, supabaseEnabled) {
@@ -4907,7 +5071,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/weekly-reports/current") {
-    const weekEnding = String(url.searchParams.get("week") || reportingFriday()).slice(0, 10);
+    const weekEnding = String(url.searchParams.get("weekEnd") || url.searchParams.get("week") || reportingFriday()).slice(0, 10);
     const leads = supabaseEnabled
       ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
       : db.leads.map(leadWithDerivedFields);
@@ -4919,8 +5083,15 @@ async function handleApi(req, res, url) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    const events = baseline.id ? await loadWeeklyReportEvents(db, user.token, supabaseEnabled, baseline.id) : [];
-    return sendJson(res, 200, serializeWeeklyReport(baseline, context, existing ? "saved" : "draft", events));
+    if (!baseline.id) return sendJson(res, 200, serializeWeeklyReport(baseline, context, "draft"));
+    return sendJson(res, 200, await serializeStoredWeeklyReport(
+      db,
+      user.token,
+      supabaseEnabled,
+      baseline,
+      context,
+      supabaseEnabled ? "supabase" : "local"
+    ));
   }
 
   if (req.method === "POST" && url.pathname === "/api/weekly-reports/current") {
@@ -4938,20 +5109,53 @@ async function handleApi(req, res, url) {
     const next = sanitizeWeeklyReportPayload(payload, user, weekEnding);
     next.id = existing?.id || "";
     next.user_id = user.id;
-    next.status = existing?.status && !["not_started", "revision_required"].includes(existing.status) ? existing.status : "in_progress";
+    next.week_start = weeklyReportWorkflow.weekStartFromEnding(weekEnding);
+    next.status = "in_progress";
     next.created_at = existing?.created_at || now;
     next.updated_at = now;
     next.submitted_at = existing?.submitted_at || "";
     next.reviewed_at = existing?.reviewed_at || "";
     next.review_note = existing?.review_note || "";
+    next.latest_review_note = existing?.latest_review_note || existing?.review_note || "";
+    next.current_version_number = Number(existing?.current_version_number || 0);
+    next.current_version_id = existing?.current_version_id || null;
+    next.row_version = Number(existing?.row_version || 0);
     next.contradiction_flags = contradictionFlagsForReport(next);
-    const saved = await upsertStoredWeeklyReport(db, user.token, supabaseEnabled, next);
-    await recordWeeklyReportEvent(db, user.token, supabaseEnabled, saved.record.id, user, existing ? "draft_saved" : "report_started", {
-      status: saved.record.status || "in_progress",
-      week_ending: saved.record.week_ending
-    });
-    const events = await loadWeeklyReportEvents(db, user.token, supabaseEnabled, saved.record.id);
-    return sendJson(res, 200, serializeWeeklyReport(saved.record, context, saved.storage_mode, events));
+    const idempotency = weeklyRequestIdempotency(req, "weekly-report-draft", payload, existing || next);
+    let saved;
+    if (supabaseEnabled) {
+      if (existing && existing.last_idempotency_key === idempotency) {
+        saved = { record: existing, storage_mode: "supabase" };
+      } else {
+        next.row_version = Number(existing?.row_version || 0) + 1;
+        next.last_idempotency_key = idempotency;
+        saved = await upsertStoredWeeklyReport(db, user.token, true, next);
+        await recordWeeklyReportEvent(db, user.token, true, saved.record.id, user, existing ? "draft_saved" : "report_created", {
+          previous_status: existing?.status || "not_started",
+          new_status: "in_progress",
+          idempotency_key: idempotency,
+          week_start: next.week_start,
+          week_ending: weekEnding
+        });
+      }
+    } else {
+      const record = weeklyReportWorkflow.saveLocalDraft(db, {
+        report: next,
+        actor: user,
+        expectedRowVersion: payload.row_version,
+        idempotency
+      });
+      writeDb(db);
+      saved = { record, storage_mode: "local" };
+    }
+    return sendJson(res, 200, await serializeStoredWeeklyReport(
+      db,
+      user.token,
+      supabaseEnabled,
+      saved.record,
+      context,
+      saved.storage_mode
+    ));
   }
 
   if (req.method === "POST" && url.pathname === "/api/weekly-reports/current/submit") {
@@ -4962,39 +5166,75 @@ async function handleApi(req, res, url) {
       : db.leads.map(leadWithDerivedFields);
     const context = weeklyReportContext(user, leads, weekEnding);
     const existing = await weeklyReportForUser(db, user.token, supabaseEnabled, user, weekEnding);
-    if (existing && weeklyReportIsLockedForEditing(existing.status)) {
-      return sendJson(res, 409, { error: "This weekly report has already been submitted and is locked for editing." });
-    }
     const now = new Date().toISOString();
     const next = sanitizeWeeklyReportPayload(payload, user, weekEnding);
     next.id = existing?.id || "";
     next.user_id = user.id;
+    next.week_start = weeklyReportWorkflow.weekStartFromEnding(weekEnding);
     next.created_at = existing?.created_at || now;
     next.updated_at = now;
     next.contradiction_flags = contradictionFlagsForReport(next);
     const blockers = weeklyReportBlockers(next, context);
-    if (blockers.length) return sendJson(res, 400, { error: "Clear all weekly report blockers before submitting.", blockers });
-    next.status = "submitted";
-    next.submitted_at = now;
+    if (blockers.length) return sendJson(res, 422, { error: "Clear all weekly report blockers before submitting.", blockers });
     next.attested = true;
     next.attested_at = now;
-    const saved = await upsertStoredWeeklyReport(db, user.token, supabaseEnabled, next);
-    await recordWeeklyReportEvent(db, user.token, supabaseEnabled, saved.record.id, user, existing?.status === "revision_required" ? "resubmitted" : "submitted", {
-      status: "submitted",
-      attested_at: now,
-      week_ending: saved.record.week_ending
-    });
-    const events = await loadWeeklyReportEvents(db, user.token, supabaseEnabled, saved.record.id);
-    return sendJson(res, 200, serializeWeeklyReport(saved.record, context, saved.storage_mode, events));
+    const idempotency = weeklyRequestIdempotency(req, "weekly-report-submit", payload, existing || next);
+    const persisted = await persistWeeklySubmission(
+      db,
+      user,
+      supabaseEnabled,
+      next,
+      payload.row_version ?? existing?.row_version ?? null,
+      idempotency
+    );
+    const savedReport = persisted.report || (await weeklyReportForUser(db, user.token, supabaseEnabled, user, weekEnding));
+    return sendJson(res, 200, await serializeStoredWeeklyReport(
+      db,
+      user.token,
+      supabaseEnabled,
+      savedReport,
+      context,
+      supabaseEnabled ? "supabase" : "local"
+    ));
   }
 
-  if (req.method === "GET" && url.pathname === "/api/weekly-reports/review") {
+  if (req.method === "GET" && url.pathname === "/api/weekly-reports/mine") {
+    const status = weeklyReportWorkflow.normalizeStatus(url.searchParams.get("status") || "");
+    const from = String(url.searchParams.get("from") || "").slice(0, 10);
+    const to = String(url.searchParams.get("to") || "").slice(0, 10);
+    const reports = (await loadStoredWeeklyReports(db, user.token, supabaseEnabled))
+      .filter(report => String(report.user_id) === String(user.id))
+      .filter(report => !url.searchParams.get("status") || weeklyReportWorkflow.normalizeStatus(report.status) === status)
+      .filter(report => !from || String(report.week_ending || "") >= from)
+      .filter(report => !to || String(report.week_start || weeklyReportWorkflow.weekStartFromEnding(report.week_ending)) <= to)
+      .sort((a, b) => String(b.week_ending || "").localeCompare(String(a.week_ending || "")));
+    return sendJson(res, 200, {
+      reports: reports.map(report => ({
+        id: report.id,
+        week_start: report.week_start || weeklyReportWorkflow.weekStartFromEnding(report.week_ending),
+        week_ending: report.week_ending,
+        status: weeklyReportWorkflow.normalizeStatus(report.status),
+        current_version_number: Number(report.current_version_number || 0),
+        current_version_id: report.current_version_id || null,
+        submitted_at: report.submitted_at || "",
+        reviewed_at: report.reviewed_at || "",
+        latest_review_note: report.latest_review_note || report.review_note || "",
+        updated_at: report.updated_at || ""
+      }))
+    });
+  }
+
+  if (req.method === "GET" && ["/api/weekly-reports/review", "/api/admin/weekly-reports"].includes(url.pathname)) {
     if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Director access required." });
-    const weekEnding = String(url.searchParams.get("week") || reportingFriday()).slice(0, 10);
+    const weekEnding = String(url.searchParams.get("weekEnd") || url.searchParams.get("week") || reportingFriday()).slice(0, 10);
+    const statusFilter = String(url.searchParams.get("status") || "").trim().toLowerCase();
+    const salesmanFilter = String(url.searchParams.get("salesman") || "").trim();
+    const territoryFilter = String(url.searchParams.get("territory") || "").trim().toLowerCase();
     const salesmen = await weeklyReportSalesmen(db, user.token, supabaseEnabled);
     const reports = (await loadStoredWeeklyReports(db, user.token, supabaseEnabled)).filter(item => item.week_ending === weekEnding);
+    const reportedStatuses = ["submitted", "under_review", "accepted", "rejected", "revision_required"];
     const missing = salesmen
-      .filter(person => !reports.some(report => report.user_id === person.id && ["submitted", "under_review", "accepted"].includes(String(report.status || ""))))
+      .filter(person => !reports.some(report => String(report.user_id) === String(person.id) && reportedStatuses.includes(weeklyReportWorkflow.normalizeStatus(report.status))))
       .map(person => ({
         id: person.id,
         name: person.name || person.full_name || person.email || "Unnamed salesman",
@@ -5002,9 +5242,16 @@ async function handleApi(req, res, url) {
         territory: person.territory || "",
         status: "missing"
       }));
-    const items = reports.map(report => ({
+    const items = reports
+      .filter(report => reportedStatuses.includes(weeklyReportWorkflow.normalizeStatus(report.status)))
+      .filter(report => !statusFilter || weeklyReportWorkflow.normalizeStatus(report.status) === weeklyReportWorkflow.normalizeStatus(statusFilter))
+      .filter(report => !salesmanFilter || String(report.user_id) === salesmanFilter)
+      .filter(report => !territoryFilter || String(report.territory || "").toLowerCase() === territoryFilter)
+      .map(report => ({
       id: report.id,
       user_id: report.user_id,
+      week_start: report.week_start || weeklyReportWorkflow.weekStartFromEnding(report.week_ending),
+      week_ending: report.week_ending,
       rep_name: report.rep_name,
       rep_email: report.rep_email,
       territory: report.territory,
@@ -5012,6 +5259,9 @@ async function handleApi(req, res, url) {
       status: report.status || "in_progress",
       submitted_at: report.submitted_at || "",
       reviewed_at: report.reviewed_at || "",
+      current_version_number: Number(report.current_version_number || 0),
+      current_version_id: report.current_version_id || null,
+      latest_review_note: report.latest_review_note || report.review_note || "",
       contradiction_flags: contradictionFlagsForReport(report),
       thin_report: weeklyThinReport(report),
       summary: String(report.summary || "").trim()
@@ -5024,64 +5274,171 @@ async function handleApi(req, res, url) {
     });
   }
 
-  const weeklyReportDetailMatch = url.pathname.match(/^\/api\/weekly-reports\/([^/]+)$/);
+  const weeklyReportDetailMatch = url.pathname.match(/^\/api\/(?:admin\/)?weekly-reports\/([^/]+)$/);
   if (req.method === "GET" && weeklyReportDetailMatch) {
     const reports = await loadStoredWeeklyReports(db, user.token, supabaseEnabled);
     const report = reports.find(item => item.id === weeklyReportDetailMatch[1]);
     if (!report) return sendJson(res, 404, { error: "Weekly report not found." });
+    if (url.pathname.startsWith("/api/admin/") && !isDirectorOrAdmin(user)) {
+      return sendJson(res, 403, { error: "Director access required." });
+    }
     if (!isDirectorOrAdmin(user) && report.user_id !== user.id) return sendJson(res, 403, { error: "Access denied." });
-    const owner = report.user_id === user.id
-      ? user
-      : (await weeklyReportSalesmen(db, user.token, supabaseEnabled)).find(person => person.id === report.user_id) || {
-        id: report.user_id,
-        name: report.rep_name,
-        email: report.rep_email,
-        territory: report.territory,
-        role: "salesman"
+    const detail = await weeklyReportDetail(db, user, supabaseEnabled, report);
+    const requestedVersion = Number(url.searchParams.get("version") || 0);
+    if (requestedVersion > 0) {
+      const version = (detail.versions || []).find(item => Number(item.version_number) === requestedVersion);
+      if (!version) return sendJson(res, 404, { error: "Weekly report version not found." });
+      detail.displayed_version = version;
+      detail.report = {
+        ...detail.report,
+        ...(version.report_payload || {}),
+        status: detail.report.status,
+        current_version_id: detail.report.current_version_id,
+        current_version_number: detail.report.current_version_number
       };
-    const leads = supabaseEnabled
-      ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
-      : db.leads.map(leadWithDerivedFields);
-    const context = weeklyReportContext(owner, leads, report.week_ending);
-    const events = await loadWeeklyReportEvents(db, user.token, supabaseEnabled, report.id);
-    return sendJson(res, 200, serializeWeeklyReport(report, context, "saved", events));
+    }
+    return sendJson(res, 200, detail);
   }
 
   const weeklyReportReviewMatch = url.pathname.match(/^\/api\/weekly-reports\/([^/]+)\/review$/);
-  if (req.method === "POST" && weeklyReportReviewMatch) {
+  const weeklyReportAdminActionMatch = url.pathname.match(/^\/api\/admin\/weekly-reports\/([^/]+)\/(start-review|accept|reject|request-revision)$/);
+  if (req.method === "POST" && (weeklyReportReviewMatch || weeklyReportAdminActionMatch)) {
     if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Director access required." });
     const reports = await loadStoredWeeklyReports(db, user.token, supabaseEnabled);
-    const report = reports.find(item => item.id === weeklyReportReviewMatch[1]);
+    const reportId = (weeklyReportReviewMatch || weeklyReportAdminActionMatch)[1];
+    const report = reports.find(item => String(item.id) === String(reportId));
     if (!report) return sendJson(res, 404, { error: "Weekly report not found." });
     const payload = await readBody(req);
-    const action = String(payload.action || "").trim().toLowerCase();
-    if (!["under_review", "accepted", "revision_required"].includes(action)) {
+    const routeAction = weeklyReportAdminActionMatch?.[2] || "";
+    const action = weeklyReportWorkflow.normalizeStatus(routeAction
+      ? {
+          "start-review": "under_review",
+          accept: "accepted",
+          reject: "rejected",
+          "request-revision": "revision_required"
+        }[routeAction]
+      : payload.action);
+    if (!["under_review", "accepted", "rejected", "revision_required"].includes(action)) {
       return sendJson(res, 400, { error: "Choose a valid review action." });
     }
-    const next = {
-      ...report,
-      status: action,
-      review_note: String(payload.note || "").trim(),
-      reviewed_at: new Date().toISOString()
-    };
-    const saved = await upsertStoredWeeklyReport(db, user.token, supabaseEnabled, next);
-    const owner = (await weeklyReportSalesmen(db, user.token, supabaseEnabled)).find(person => person.id === next.user_id) || {
-      id: next.user_id,
-      name: next.rep_name,
-      email: next.rep_email,
-      territory: next.territory,
-      role: "salesman"
-    };
+    const versionId = String(payload.version_id || payload.report_version_id || "").trim();
+    if (!versionId) return sendJson(res, 400, { error: "The submitted report version is required." });
+    const idempotency = weeklyRequestIdempotency(req, `weekly-report-review-${action}`, payload, report);
+    try {
+      const persisted = await persistWeeklyReview(db, user, supabaseEnabled, {
+        reportId: report.id,
+        versionId,
+        action,
+        note: String(payload.note || "").trim(),
+        idempotency
+      });
+      const savedReport = persisted.report || (await loadStoredWeeklyReports(db, user.token, supabaseEnabled))
+        .find(item => String(item.id) === String(report.id));
+      return sendJson(res, 200, await weeklyReportDetail(db, user, supabaseEnabled, savedReport));
+    } catch (error) {
+      return sendJson(res, weeklyWorkflowHttpStatus(error), {
+        error: error.message || "Unable to review the weekly report.",
+        ...(error.details ? { details: error.details } : {})
+      });
+    }
+  }
+
+  const weeklyReportDraftMatch = url.pathname.match(/^\/api\/weekly-reports\/([^/]+)\/draft$/);
+  if (["PUT", "PATCH"].includes(req.method) && weeklyReportDraftMatch) {
+    const reports = await loadStoredWeeklyReports(db, user.token, supabaseEnabled);
+    const report = reports.find(item => String(item.id) === String(weeklyReportDraftMatch[1]));
+    if (!report) return sendJson(res, 404, { error: "Weekly report not found." });
+    if (String(report.user_id) !== String(user.id)) return sendJson(res, 403, { error: "Access denied." });
+    if (!weeklyReportWorkflow.isEditableStatus(report.status)) {
+      return sendJson(res, 409, { error: "This weekly report is locked after submission." });
+    }
+    const payload = await readBody(req);
+    const weekEnding = String(report.week_ending || payload.week_ending || reportingFriday()).slice(0, 10);
     const leads = supabaseEnabled
       ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
       : db.leads.map(leadWithDerivedFields);
-    const context = weeklyReportContext(owner, leads, next.week_ending);
-    await recordWeeklyReportEvent(db, user.token, supabaseEnabled, saved.record.id, user, `review_${action}`, {
-      note: next.review_note || "",
-      status: action
+    const context = weeklyReportContext(user, leads, weekEnding);
+    const next = {
+      ...report,
+      ...sanitizeWeeklyReportPayload(payload, user, weekEnding),
+      id: report.id,
+      user_id: user.id,
+      week_start: report.week_start || weeklyReportWorkflow.weekStartFromEnding(weekEnding),
+      week_ending: weekEnding,
+      updated_at: new Date().toISOString()
+    };
+    const idempotency = weeklyRequestIdempotency(req, "weekly-report-draft", payload, report);
+    let saved;
+    if (supabaseEnabled) {
+      saved = await upsertStoredWeeklyReport(db, user.token, true, next);
+      await recordWeeklyReportEvent(db, user.token, true, saved.record.id, user, "draft_saved", {
+        previous_status: report.status,
+        new_status: "in_progress",
+        idempotency_key: idempotency
+      });
+    } else {
+      saved = {
+        record: weeklyReportWorkflow.saveLocalDraft(db, {
+          report: next,
+          actor: user,
+          expectedRowVersion: payload.row_version,
+          idempotency
+        }),
+        storage_mode: "local"
+      };
+      writeDb(db);
+    }
+    return sendJson(res, 200, await serializeStoredWeeklyReport(
+      db,
+      user.token,
+      supabaseEnabled,
+      saved.record,
+      context,
+      saved.storage_mode
+    ));
+  }
+
+  const weeklyReportSubmitMatch = url.pathname.match(/^\/api\/weekly-reports\/([^/]+)\/submit$/);
+  if (req.method === "POST" && weeklyReportSubmitMatch) {
+    const reports = await loadStoredWeeklyReports(db, user.token, supabaseEnabled);
+    const report = reports.find(item => String(item.id) === String(weeklyReportSubmitMatch[1]));
+    if (!report) return sendJson(res, 404, { error: "Weekly report not found." });
+    if (String(report.user_id) !== String(user.id)) return sendJson(res, 403, { error: "Access denied." });
+    const payload = await readBody(req);
+    const weekEnding = String(report.week_ending || payload.week_ending || reportingFriday()).slice(0, 10);
+    const leads = supabaseEnabled
+      ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
+      : db.leads.map(leadWithDerivedFields);
+    const context = weeklyReportContext(user, leads, weekEnding);
+    const next = {
+      ...report,
+      ...sanitizeWeeklyReportPayload(payload, user, weekEnding),
+      id: report.id,
+      user_id: user.id,
+      week_start: report.week_start || weeklyReportWorkflow.weekStartFromEnding(weekEnding),
+      week_ending: weekEnding,
+      updated_at: new Date().toISOString()
+    };
+    next.contradiction_flags = contradictionFlagsForReport(next);
+    const blockers = weeklyReportBlockers(next, context);
+    if (blockers.length) return sendJson(res, 422, {
+      error: "Clear all weekly report blockers before submitting.",
+      blockers
     });
-    const events = await loadWeeklyReportEvents(db, user.token, supabaseEnabled, saved.record.id);
-    return sendJson(res, 200, serializeWeeklyReport(saved.record, context, saved.storage_mode, events));
+    next.attested = true;
+    next.attested_at = new Date().toISOString();
+    const idempotency = weeklyRequestIdempotency(req, "weekly-report-submit", payload, report);
+    const persisted = await persistWeeklySubmission(
+      db,
+      user,
+      supabaseEnabled,
+      next,
+      payload.row_version ?? report.row_version ?? null,
+      idempotency
+    );
+    const savedReport = persisted.report || (await loadStoredWeeklyReports(db, user.token, supabaseEnabled))
+      .find(item => String(item.id) === String(report.id));
+    return sendJson(res, 200, await weeklyReportDetail(db, user, supabaseEnabled, savedReport));
   }
 
   if (req.method === "GET" && url.pathname === "/api/integrations/status") {
@@ -6832,7 +7189,10 @@ const server = http.createServer(async (req, res) => {
       serveStatic(req, res, url);
     }
   } catch (error) {
-    sendJson(res, error.status || 500, { error: error.message || "Server error" });
+    sendJson(res, error.status || 500, {
+      error: error.message || "Server error",
+      ...(error.details ? { details: error.details } : {})
+    });
   }
 });
 
@@ -6856,6 +7216,7 @@ server.weeklyReportDefaults = weeklyReportDefaults;
 server.weeklyReportBlockers = weeklyReportBlockers;
 server.weeklyReportIsLockedForEditing = weeklyReportIsLockedForEditing;
 server.weeklyReportContext = weeklyReportContext;
+server.weeklyReportWorkflow = weeklyReportWorkflow;
 server.normalizeEnglishText = normalizeEnglishText;
 server.transcribeAudio = transcribeAudio;
 module.exports = server;

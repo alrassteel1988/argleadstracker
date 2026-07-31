@@ -89,12 +89,16 @@ const state = {
   importLeads: null,
   activities: [],
   activityLoading: false,
+  activityPage: 1,
+  activityPageSize: 10,
   activityFiltersOpen: false,
   activityFilters: loadActivityFilters(),
   activityWeekAnchor: today(),
   weeklyReports: {
     loading: false,
+    actionPending: false,
     current: null,
+    history: [],
     review: [],
     missing: [],
     selectedId: "",
@@ -10636,6 +10640,7 @@ function bindActivityFilterButtons() {
 
 async function fetchActivities() {
   const filters = state.activityFilters;
+  state.activityPage = 1;
   state.activityLoading = true;
   renderActivityView();
   const params = new URLSearchParams({
@@ -10929,18 +10934,18 @@ function renderActivityReminders(upcoming, overdue) {
   els.activityReminders.innerHTML = `
     <div class="reminder-stack">
       <div class="reminder-stack-header">
-        <span>Upcoming</span>
-        <em class="count-chip upcoming">${upcoming.length}</em>
-      </div>
-      <div class="reminder-grid compact">${upcoming.map(reminder => reminderCard(reminder, { compact: true })).join("") || `<p class="empty-copy">No upcoming reminders.</p>`}</div>
-    </div>
-    <div class="reminder-divider"></div>
-    <div class="reminder-stack">
-      <div class="reminder-stack-header">
         <span>Overdue</span>
         <em class="count-chip overdue">${overdue.length}</em>
       </div>
       <div class="reminder-grid compact">${overdue.map(reminder => reminderCard(reminder, { compact: true })).join("") || `<p class="empty-copy">No overdue reminders.</p>`}</div>
+    </div>
+    <div class="reminder-divider"></div>
+    <div class="reminder-stack">
+      <div class="reminder-stack-header">
+        <span>Upcoming</span>
+        <em class="count-chip upcoming">${upcoming.length}</em>
+      </div>
+      <div class="reminder-grid compact">${upcoming.map(reminder => reminderCard(reminder, { compact: true })).join("") || `<p class="empty-copy">No upcoming reminders.</p>`}</div>
     </div>
   `;
 }
@@ -11201,18 +11206,97 @@ function renderWeeklyActivityLog(activities) {
   });
 }
 
+function activityTableStatus(activity) {
+  const type = String(activity.type || "Note");
+  const dueDate = String(activity.reminder_due_date || activity.due_date || "").slice(0, 10);
+  const reminder = type.toLowerCase() === "reminder";
+  const status = String(activity.reminder_status || activity.status || "").trim();
+  if (activity.deletion_status === "pending") return { label: "Deletion pending", tone: "pending" };
+  if (reminder && dueDate && dueDate < today() && status !== "completed") return { label: "Overdue", tone: "overdue" };
+  if (status.toLowerCase() === "completed") return { label: "Completed", tone: "completed" };
+  if (reminder) return { label: status || "Scheduled", tone: "scheduled" };
+  if (dueDate && dueDate >= today()) return { label: "Upcoming", tone: "upcoming" };
+  return { label: activity.stage || status || "Logged", tone: "neutral" };
+}
+
+function activityTableMarkup(activities) {
+  const total = activities.length;
+  const pageSize = state.activityPageSize || 10;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  state.activityPage = Math.min(Math.max(1, state.activityPage || 1), pageCount);
+  const start = (state.activityPage - 1) * pageSize;
+  const pageActivities = activities.slice(start, start + pageSize);
+  const rows = pageActivities.map(activity => {
+    const type = activity.type || "Note";
+    const note = activity.note || activity.text || "No description added.";
+    const salesman = activity.salesman_name || activity.assigned_salesman || "Unassigned";
+    const date = formatDisplayDate(activityDisplayDate(activity));
+    const time = activityDisplayTime(activity);
+    const status = activityTableStatus(activity);
+    const overflowActions = [
+      activityDeleteButton(activity.lead_id, activity.activity_index, activity),
+      activity.quotation_ref ? `<button class="small-action" type="button" data-quotation-ref="${escapeHtml(activity.quotation_ref)}">Open quote ${escapeHtml(activity.quotation_ref)}</button>` : ""
+    ].filter(Boolean).join("");
+    return `
+      <tr class="activity-table-row" data-activity-lead="${escapeHtml(activity.lead_id)}" tabindex="0">
+        <td data-label="Company / Lead">
+          <strong>${escapeHtml(activity.company_name || "Unnamed lead")}</strong>
+          <small>${escapeHtml(note)}</small>
+        </td>
+        <td data-label="Activity Type"><span class="activity-table-type ${activityTypeClass(type)}"><i aria-hidden="true">${escapeHtml(activityIconGlyph(type))}</i>${escapeHtml(type)}</span></td>
+        <td data-label="Salesman">${escapeHtml(salesman)}</td>
+        <td data-label="Date"><strong>${escapeHtml(date)}</strong>${time ? `<small>${escapeHtml(time)}</small>` : ""}</td>
+        <td data-label="Status"><span class="activity-table-status ${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span></td>
+        <td data-label="Actions">
+          <div class="activity-table-actions">
+            ${activityViewButton(activity.lead_id, activity.activity_index, activity)}
+            ${activityEditButton(activity.lead_id, activity.activity_index, activity)}
+            ${overflowActions ? `<details class="activity-row-menu"><summary aria-label="More actions for ${escapeHtml(activity.company_name || "activity")}">&#8230;</summary><div>${overflowActions}</div></details>` : ""}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+  const firstShown = total ? start + 1 : 0;
+  const lastShown = Math.min(start + pageSize, total);
+  return `
+    <div class="activity-table-scroll">
+      <table class="activity-table">
+        <thead><tr>
+          <th scope="col">Company / Lead</th>
+          <th scope="col">Activity Type</th>
+          <th scope="col">Salesman</th>
+          <th scope="col">Date</th>
+          <th scope="col">Status</th>
+          <th scope="col">Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <nav class="activity-pagination" aria-label="Activity log pagination">
+      <span>Showing ${firstShown} to ${lastShown} of ${total} activities</span>
+      <div>
+        <button type="button" data-activity-page="${state.activityPage - 1}" ${state.activityPage <= 1 ? "disabled" : ""} aria-label="Previous activity page">&#8249;</button>
+        <strong>Page ${state.activityPage} of ${pageCount}</strong>
+        <button type="button" data-activity-page="${state.activityPage + 1}" ${state.activityPage >= pageCount ? "disabled" : ""} aria-label="Next activity page">&#8250;</button>
+      </div>
+    </nav>
+  `;
+}
+
 function weeklyReportStatusMeta(status) {
   const value = String(status || "not_started").trim().toLowerCase();
   if (value === "submitted") return { label: "Submitted", chipClass: "plan-upcoming" };
   if (value === "under_review") return { label: "Under Review", chipClass: "warm" };
   if (value === "accepted") return { label: "Accepted", chipClass: "success" };
-  if (value === "revision_required") return { label: "Revision Required", chipClass: "hot" };
+  if (value === "rejected") return { label: "Rejected", chipClass: "hot" };
+  if (["revision_required", "revision_requested"].includes(value)) return { label: "Revision Requested", chipClass: "plan-missing" };
   if (value === "in_progress") return { label: "In Progress", chipClass: "plan-soon" };
   return { label: "Not Started", chipClass: "plan-missing" };
 }
 
 function weeklyReportIsLocked(status) {
-  return ["submitted", "under_review", "accepted"].includes(String(status || "").trim().toLowerCase());
+  return ["submitted", "under_review", "accepted", "rejected"].includes(String(status || "").trim().toLowerCase());
 }
 
 function weeklyDefaultMarketIntel() {
@@ -11258,7 +11342,11 @@ function normalizeWeeklyReportWrapper(payload) {
     blockers: Array.isArray(payload?.blockers) ? [...payload.blockers] : [],
     thin_report: Boolean(payload?.thin_report),
     storage_mode: payload?.storage_mode || "",
-    events: Array.isArray(payload?.events) ? payload.events.map(item => ({ ...item })) : []
+    events: Array.isArray(payload?.events) ? payload.events.map(item => ({ ...item })) : [],
+    versions: Array.isArray(payload?.versions) ? payload.versions.map(item => ({ ...item })) : [],
+    reviews: Array.isArray(payload?.reviews) ? payload.reviews.map(item => ({ ...item })) : [],
+    latest_submitted_version: payload?.latest_submitted_version || null,
+    displayed_version: payload?.displayed_version || null
   };
 }
 
@@ -11476,13 +11564,15 @@ function weeklyReportFieldValue(path) {
 
 function weeklyReportEventLabel(action) {
   const value = String(action || "").trim().toLowerCase();
+  if (value === "report_created") return "Report created";
   if (value === "report_started") return "Report started";
   if (value === "draft_saved") return "Draft saved";
-  if (value === "submitted") return "Submitted for review";
-  if (value === "resubmitted") return "Resubmitted after revision";
-  if (value === "review_under_review") return "Marked under review";
-  if (value === "review_accepted") return "Accepted by director";
-  if (value === "review_revision_required") return "Revision requested";
+  if (["submitted", "report_submitted"].includes(value)) return "Submitted for review";
+  if (["resubmitted", "report_resubmitted"].includes(value)) return "Resubmitted after revision";
+  if (["review_under_review", "review_started"].includes(value)) return "Marked under review";
+  if (["review_accepted", "report_accepted"].includes(value)) return "Accepted by management";
+  if (["review_revision_required", "revision_requested"].includes(value)) return "Revision requested";
+  if (["review_rejected", "report_rejected"].includes(value)) return "Rejected by management";
   return "Weekly report update";
 }
 
@@ -11514,9 +11604,17 @@ async function loadWeeklyReportReviewDetail(id) {
     state.weeklyReports.selectedReport = null;
     return;
   }
-  const detail = await api(`/api/weekly-reports/${encodeURIComponent(id)}`);
+  const detail = await api(`${isAdminOrManager() ? "/api/admin" : "/api"}/weekly-reports/${encodeURIComponent(id)}`);
   state.weeklyReports.selectedId = id;
   state.weeklyReports.selectedReport = normalizeWeeklyReportWrapper(detail);
+}
+
+async function loadWeeklySalesmanReportDetail(id) {
+  if (!id) return;
+  const detail = await api(`/api/weekly-reports/${encodeURIComponent(id)}`);
+  state.weeklyReports.current = normalizeWeeklyReportWrapper(detail);
+  state.weeklyReports.weekEnding = state.weeklyReports.current.report.week_ending || "";
+  state.weeklyReports.storageMode = state.weeklyReports.current.storage_mode || "";
 }
 
 async function loadWeeklyReportWorkspace(force = false) {
@@ -11525,7 +11623,10 @@ async function loadWeeklyReportWorkspace(force = false) {
   renderTasksView();
   try {
     if (isAdminOrManager()) {
-      const review = await api("/api/weekly-reports/review");
+      const weekQuery = state.weeklyReports.weekEnding
+        ? `?weekEnd=${encodeURIComponent(state.weeklyReports.weekEnding)}`
+        : "";
+      const review = await api(`/api/admin/weekly-reports${weekQuery}`);
       state.weeklyReports.review = Array.isArray(review.reports) ? review.reports : [];
       state.weeklyReports.missing = Array.isArray(review.missing) ? review.missing : [];
       state.weeklyReports.weekEnding = review.week_ending || "";
@@ -11540,9 +11641,13 @@ async function loadWeeklyReportWorkspace(force = false) {
         state.weeklyReports.selectedReport = null;
       }
     } else {
-      const current = await api("/api/weekly-reports/current");
+      const [current, history] = await Promise.all([
+        api("/api/weekly-reports/current"),
+        api("/api/weekly-reports/mine")
+      ]);
       const normalized = normalizeWeeklyReportWrapper(current);
       state.weeklyReports.current = normalized;
+      state.weeklyReports.history = Array.isArray(history.reports) ? history.reports : [];
       state.weeklyReports.weekEnding = normalized.report.week_ending || "";
       state.weeklyReports.storageMode = normalized.storage_mode || "";
     }
@@ -11848,7 +11953,7 @@ function renderWeeklySalesmanView() {
           </div>
         </section>
       ` : ""}
-      ${String(report.status || "").toLowerCase() === "revision_required" && report.review_note ? `
+      ${String(report.status || "").toLowerCase() === "revision_required" && (report.latest_review_note || report.review_note) ? `
         <section class="tasks-section-card warning">
           <div class="tasks-section-head">
             <div>
@@ -11858,7 +11963,7 @@ function renderWeeklySalesmanView() {
             ${weeklyStatusMarkup(report.status)}
           </div>
           <div class="tasks-section-body">
-            <p>${escapeHtml(report.review_note)}</p>
+            <p>${escapeHtml(report.latest_review_note || report.review_note)}</p>
           </div>
         </section>
       ` : ""}
@@ -11899,9 +12004,56 @@ function renderWeeklySalesmanView() {
           <strong data-weekly-progress-percent>${completion.percent}%</strong>
         </div>
         <div class="tasks-status-notes">
+          ${report.current_version_number ? `<span><strong>Version ${Number(report.current_version_number)}</strong></span>` : ""}
+          ${report.submitted_at ? `<span>${escapeHtml(`Submitted ${formatDateTime(report.submitted_at)}`)}</span>` : ""}
+          ${report.reviewed_at ? `<span>${escapeHtml(`Reviewed ${formatDateTime(report.reviewed_at)}`)}</span>` : ""}
           <span>${escapeHtml(report.updated_at ? `Last updated ${formatDateTime(report.updated_at)}` : "Not saved yet")}</span>
           <span>${escapeHtml(wrapper.storage_mode ? `Storage: ${wrapper.storage_mode}` : "")}</span>
           ${report.attested_at ? `<span>${escapeHtml(`Attested ${formatDateTime(report.attested_at)}`)}</span>` : ""}
+        </div>
+      </section>
+      <section class="tasks-section-card tasks-report-history">
+        <div class="tasks-section-head">
+          <div>
+            <h3>My weekly reports</h3>
+            <p>Open any saved reporting week, including submitted and reviewed reports.</p>
+          </div>
+        </div>
+        <div class="tasks-section-body">
+          <div class="tasks-week-filter">
+            <label for="weeklyAdminWeekEnding">
+              <span>Reporting week ending</span>
+              <input
+                id="weeklyAdminWeekEnding"
+                type="date"
+                value="${escapeHtml(state.weeklyReports.weekEnding || "")}"
+                ${state.weeklyReports.actionPending ? "disabled" : ""}
+              >
+            </label>
+            <button class="ghost-button" type="button" id="weeklyAdminLoadWeek" ${state.weeklyReports.actionPending ? "disabled" : ""}>Load week</button>
+          </div>
+          <div class="tasks-review-list">
+            ${(state.weeklyReports.history || []).length ? state.weeklyReports.history.map(item => `
+              <button
+                class="tasks-review-card ${String(report.id || "") === String(item.id) ? "active" : ""}"
+                type="button"
+                data-weekly-history-id="${escapeHtml(item.id)}"
+              >
+                <div class="tasks-review-card-head">
+                  <strong>${escapeHtml(item.week_start && item.week_ending
+                    ? `${formatDisplayDate(item.week_start)} - ${formatDisplayDate(item.week_ending)}`
+                    : `Week ending ${formatDisplayDate(item.week_ending)}`)}</strong>
+                  ${weeklyStatusMarkup(item.status)}
+                </div>
+                <div class="tasks-review-card-meta">
+                  <span>${item.current_version_number ? `Version ${Number(item.current_version_number)}` : "Draft"}</span>
+                  ${item.submitted_at ? `<span>${escapeHtml(formatDateTime(item.submitted_at))}</span>` : ""}
+                </div>
+                ${item.latest_review_note ? `<small>${escapeHtml(item.latest_review_note)}</small>` : ""}
+                <span class="tasks-open-report-copy">Open report</span>
+              </button>
+            `).join("") : `<p class="empty-copy">No prior weekly reports yet.</p>`}
+          </div>
         </div>
       </section>
       <section class="tasks-section-card tasks-blockers-card">
@@ -11919,7 +12071,7 @@ function renderWeeklySalesmanView() {
       ${weeklyReportCard("Immutable report trail", "Each save, submit, and review action is preserved as an append-only event.", eventsMarkup)}
       <section class="tasks-actions-card">
         <button class="ghost-button" type="button" id="weeklySaveDraft" ${locked ? "disabled" : ""}>Save draft</button>
-        <button class="primary-button" type="button" id="weeklySubmitReport" ${locked ? "disabled" : ""}>Submit report</button>
+        <button class="primary-button" type="button" id="weeklySubmitReport" ${locked ? "disabled" : ""}>${String(report.status || "").toLowerCase() === "revision_required" ? "Resubmit report" : "Submit report"}</button>
       </section>
     </div>
   `;
@@ -11927,7 +12079,7 @@ function renderWeeklySalesmanView() {
   bindWeeklySalesmanEvents();
 }
 
-function renderWeeklyReviewView() {
+function renderWeeklyReviewViewLegacy() {
   const review = state.weeklyReports.review || [];
   const missing = state.weeklyReports.missing || [];
   const detail = state.weeklyReports.selectedReport;
@@ -12081,6 +12233,231 @@ function renderWeeklyReviewView() {
   bindWeeklyReviewEvents();
 }
 
+function weeklyReviewVersionMarkup(detail) {
+  const versions = detail?.versions || [];
+  if (!versions.length) return `<p class="empty-copy">No immutable submitted version is available yet.</p>`;
+  const selectedVersion = Number(detail?.displayed_version?.version_number || 0);
+  return `
+    <div class="tasks-version-list">
+      ${versions.map(version => `
+        <button
+          class="tasks-version-row ${selectedVersion === Number(version.version_number) ? "active" : ""}"
+          type="button"
+          data-weekly-version-number="${Number(version.version_number)}"
+        >
+          <span>
+            <strong>Version ${Number(version.version_number)}</strong>
+            <small>${escapeHtml(formatDateTime(version.submitted_at || version.created_at))}</small>
+          </span>
+          <span>Open submitted version</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderWeeklyReviewView() {
+  const review = state.weeklyReports.review || [];
+  const missing = state.weeklyReports.missing || [];
+  const detail = state.weeklyReports.selectedReport;
+  const report = detail?.report || {};
+  const reviewStatus = String(report.status || "").toLowerCase();
+  const canReview = ["submitted", "under_review"].includes(reviewStatus);
+  const reviewDisabled = !canReview || state.weeklyReports.actionPending;
+  const latestReviewNote = report.latest_review_note || report.review_note || "";
+  const intel = { ...weeklyDefaultMarketIntel(), ...(report.market_intelligence || {}) };
+
+  els.tasksPrimary.innerHTML = detail ? `
+    <div class="tasks-review-shell">
+      <section class="tasks-section-card">
+        <div class="tasks-section-head">
+          <div>
+            <h3>${escapeHtml(report.rep_name || report.rep_email || "Weekly report")}</h3>
+            <p>${escapeHtml(report.territory || "Territory not set")} &middot; ${escapeHtml(weeklyWeekLabel(detail))}</p>
+          </div>
+          <div class="tasks-review-meta">
+            ${weeklyStatusMarkup(report.status)}
+            ${detail.thin_report ? `<span class="chip hot">Thin report</span>` : ""}
+            ${report.current_version_number ? `<span class="chip">Current version ${Number(report.current_version_number)}</span>` : ""}
+            ${detail.displayed_version ? `<span class="chip warm">Viewing version ${Number(detail.displayed_version.version_number)}</span>` : ""}
+          </div>
+        </div>
+        <div class="tasks-review-grid">
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Summary</span>
+            <p>${escapeHtml(report.summary || "No summary provided.")}</p>
+          </div>
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Next week plan</span>
+            <p>${escapeHtml(report.next_week_plan || "No next-week plan provided.")}</p>
+          </div>
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Secured orders</span>
+            ${(report.secured_orders || []).length ? `
+              <ul class="tasks-checklist compact">
+                ${(report.secured_orders || []).map(item => `
+                  <li>
+                    <strong>${escapeHtml(item.account_name || "Account")}</strong>
+                    ${item.quantity ? ` &middot; ${escapeHtml(item.quantity)}` : ""}
+                    ${item.amount ? ` &middot; ${escapeHtml(item.amount)}` : ""}
+                    ${item.flagged ? ` &middot; ${escapeHtml(item.problem_note || "Flagged exception")}` : ""}
+                  </li>
+                `).join("")}
+              </ul>
+            ` : `<p>${report.no_secured_orders_confirmed ? "Salesman confirmed there were no secured orders to report." : "No secured-order response was submitted."}</p>`}
+          </div>
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Expected orders</span>
+            ${(report.expected_orders || []).length ? `
+              <ul class="tasks-checklist compact">
+                ${(report.expected_orders || []).map(item => `
+                  <li>
+                    <strong>${escapeHtml(item.account_name || "Account")}</strong>
+                    &middot; ${escapeHtml(item.likelihood || "No likelihood")}
+                    &middot; ${escapeHtml(item.timing || "No timing")}
+                    ${item.blockers ? ` &middot; ${escapeHtml(item.blockers)}` : ""}
+                  </li>
+                `).join("")}
+              </ul>
+            ` : `<p>${report.no_expected_orders_confirmed ? "Salesman confirmed there were no expected orders." : "No expected-order response was submitted."}</p>`}
+          </div>
+          <div class="tasks-review-block">
+            <span class="tasks-kicker">Problematic accounts</span>
+            ${(report.problematic_accounts || []).length ? `
+              <ul class="tasks-checklist compact">
+                ${(report.problematic_accounts || []).map(item => `
+                  <li>
+                    <strong>${escapeHtml(item.account_name || "Account")}</strong>
+                    &middot; ${escapeHtml(item.disposition || "Undecided")}
+                    ${item.problems?.length ? ` &middot; ${escapeHtml(item.problems.join(", "))}` : ""}
+                    ${item.dismiss_reason ? ` &middot; ${escapeHtml(item.dismiss_reason)}` : ""}
+                    ${item.specifics ? ` &middot; ${escapeHtml(item.specifics)}` : ""}
+                  </li>
+                `).join("")}
+              </ul>
+            ` : `<p>${report.no_problematic_accounts_confirmed ? "Salesman confirmed there were no problematic accounts." : "No problematic-account response was submitted."}</p>`}
+          </div>
+          <div class="tasks-review-block tasks-review-block-full">
+            <span class="tasks-kicker">Market intelligence</span>
+            <div class="tasks-review-inline-list">
+              <span class="chip">${escapeHtml(intel.demand_band || "No demand signal")}</span>
+              <span class="chip">${escapeHtml(intel.pricing_band || "No pricing signal")}</span>
+              <span class="chip">${escapeHtml(intel.cashflow_band || "No cash-flow signal")}</span>
+              <span class="chip">${escapeHtml(intel.extended_terms_band || "No terms signal")}</span>
+              <span class="chip">${escapeHtml(intel.government_projects_band || "No government signal")}</span>
+            </div>
+            <p><strong>Demand:</strong> ${escapeHtml(intel.demand_note || "No demand note provided.")}</p>
+            <p><strong>Competitor pricing:</strong> ${escapeHtml(intel.competitor_pricing_note || "No competitor pricing note provided.")}</p>
+            <p><strong>Projects:</strong> ${escapeHtml(intel.projects_note || "No project signal provided.")}</p>
+            <p><strong>Government projects:</strong> ${escapeHtml(intel.government_projects_note || "No movement note provided.")}</p>
+            <p><strong>Customer movement:</strong> ${escapeHtml(intel.big_changes_note || "No major account change recorded.")}</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="tasks-section-card ${detail.blockers?.length ? "warning" : ""}">
+        <div class="tasks-section-head">
+          <div>
+            <h3>Review notes and decision</h3>
+            <p>Review the exact submitted version, then accept it or return it with a clear reason.</p>
+          </div>
+        </div>
+        <div class="tasks-section-body">
+          ${detail.blockers?.length ? `<ul class="tasks-checklist warning">${detail.blockers.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<p class="empty-copy">No blockers were found in this submitted report.</p>`}
+          ${report.contradiction_flags?.length ? `<ul class="tasks-checklist warning">${report.contradiction_flags.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+          <label>
+            <span>Review note</span>
+            <textarea rows="4" id="weeklyReviewNote" placeholder="Required when rejecting or requesting revision.">${escapeHtml(latestReviewNote)}</textarea>
+          </label>
+          ${latestReviewNote ? `<p class="tasks-review-latest-note"><strong>Latest management note:</strong> ${escapeHtml(latestReviewNote)}</p>` : ""}
+          <div class="tasks-actions-card inline">
+            <button class="ghost-button" type="button" data-weekly-review-action="under_review" ${reviewDisabled || reviewStatus === "under_review" ? "disabled" : ""}>Mark under review</button>
+            <button class="ghost-button" type="button" data-weekly-review-action="revision_required" ${reviewDisabled ? "disabled" : ""}>Request revision</button>
+            <button class="danger-button" type="button" data-weekly-review-action="rejected" ${reviewDisabled ? "disabled" : ""}>Reject report</button>
+            <button class="primary-button" type="button" data-weekly-review-action="accepted" ${reviewDisabled ? "disabled" : ""}>Accept report</button>
+          </div>
+          ${!canReview ? `<p class="empty-copy">This report is in ${escapeHtml(weeklyReportStatusMeta(reviewStatus).label)} status and has no pending management action.</p>` : ""}
+        </div>
+      </section>
+
+      ${weeklyReportCard(
+        "Submitted versions",
+        "Open the exact immutable payload that management reviewed.",
+        weeklyReviewVersionMarkup(detail)
+      )}
+
+      ${weeklyReportCard("Immutable report trail", "Salesman saves, submissions, and management decisions are preserved as an append-only log.", (detail.events || []).length ? `
+        <ul class="tasks-audit-list">
+          ${(detail.events || []).map(item => `
+            <li class="tasks-audit-item">
+              <strong>${escapeHtml(weeklyReportEventLabel(item.action))}</strong>
+              <span>${escapeHtml(item.actor_name || "System")} &middot; ${escapeHtml(formatDateTime(item.timestamp || item.created_at))}</span>
+              ${item.report_version_id ? `<span>Submitted version linked</span>` : ""}
+              ${item.details?.note ? `<p>${escapeHtml(item.details.note)}</p>` : ""}
+            </li>
+          `).join("")}
+        </ul>
+      ` : `<p class="empty-copy">No immutable events were recorded yet.</p>`)}
+    </div>
+  ` : `
+    <div class="timeline-empty tasks-review-empty">
+      <strong>No submitted weekly reports yet.</strong>
+      <span>Once a salesman submits, the review detail will appear here.</span>
+    </div>
+  `;
+
+  els.tasksSidebar.innerHTML = `
+    <div class="tasks-sidebar-stack">
+      <section class="tasks-section-card tasks-submitted-panel">
+        <div class="tasks-section-head">
+          <div>
+            <h3>Submitted reports</h3>
+            <p>${escapeHtml(state.weeklyReports.weekEnding ? `Week ending ${formatDisplayDate(state.weeklyReports.weekEnding)}` : "Current reporting week")}</p>
+          </div>
+        </div>
+        <div class="tasks-section-body">
+          <div class="tasks-review-list">
+            ${review.length ? review.map(item => `
+              <button class="tasks-review-card ${state.weeklyReports.selectedId === item.id ? "active" : ""}" type="button" data-weekly-open-id="${escapeHtml(item.id)}">
+                <div class="tasks-review-card-head">
+                  <strong>${escapeHtml(item.rep_name || item.rep_email || "Salesman")}</strong>
+                  ${weeklyStatusMarkup(item.status)}
+                </div>
+                <p>${escapeHtml(item.territory || "Territory not set")}</p>
+                <small>${escapeHtml(item.summary || "No summary added yet.")}</small>
+                <div class="tasks-review-card-meta">
+                  ${item.current_version_number ? `<span>Version ${Number(item.current_version_number)}</span>` : ""}
+                  ${item.submitted_at ? `<span>${escapeHtml(formatDateTime(item.submitted_at))}</span>` : ""}
+                  ${item.contradiction_flags?.length ? `<span class="chip hot">${item.contradiction_flags.length} flags</span>` : ""}
+                  ${item.thin_report ? `<span class="chip warm">Thin</span>` : `<span class="chip success">Solid</span>`}
+                </div>
+                <span class="tasks-open-report-copy">Open report</span>
+              </button>
+            `).join("") : `<p class="empty-copy">No submitted reports yet.</p>`}
+          </div>
+        </div>
+      </section>
+      <section class="tasks-section-card tasks-missing-panel">
+        <div class="tasks-section-head">
+          <div>
+            <h3>Missing submissions</h3>
+            <p>A missing report is itself a tracked escalation.</p>
+          </div>
+        </div>
+        <div class="tasks-section-body">
+          ${missing.length ? `
+            <ul class="tasks-checklist warning">
+              ${missing.map(item => `<li><strong>${escapeHtml(item.name || item.email || "Salesman")}</strong>${item.territory ? ` &middot; ${escapeHtml(item.territory)}` : ""}</li>`).join("")}
+            </ul>
+          ` : `<p class="empty-copy">Every active salesman has a report or active review state for this week.</p>`}
+        </div>
+      </section>
+    </div>
+  `;
+
+  bindWeeklyReviewEvents();
+}
+
 function renderTasksView() {
   if (!els.tasksPrimary || !els.tasksSidebar) return;
   const admin = isAdminOrManager();
@@ -12118,6 +12495,22 @@ function renderTasksView() {
 function bindWeeklySalesmanEvents() {
   const report = state.weeklyReports.current?.report || {};
   const locked = weeklyReportIsLocked(report.status);
+  els.tasksSidebar.querySelectorAll("[data-weekly-history-id]").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (state.weeklyReports.actionPending) return;
+      state.weeklyReports.actionPending = true;
+      setTasksMessage("Loading saved weekly report...");
+      try {
+        await loadWeeklySalesmanReportDetail(button.dataset.weeklyHistoryId);
+        setTasksMessage("");
+        renderTasksView();
+      } catch (error) {
+        setTasksMessage(error.message || "Unable to open the weekly report.", "error");
+      } finally {
+        state.weeklyReports.actionPending = false;
+      }
+    });
+  });
   if (locked) {
     els.tasksPrimary.querySelectorAll("[data-weekly-field], [data-weekly-array-toggle], [data-weekly-voice-button]").forEach(field => {
       field.disabled = true;
@@ -12160,42 +12553,64 @@ function bindWeeklySalesmanEvents() {
   });
 
   els.tasksSidebar.querySelector("#weeklySaveDraft")?.addEventListener("click", async () => {
+    if (state.weeklyReports.actionPending) return;
+    state.weeklyReports.actionPending = true;
     setTasksMessage("Saving weekly report draft…");
     try {
       state.weeklyReports.current.report.attestation_device = navigator.userAgent || "browser";
-      const saved = await api("/api/weekly-reports/current", {
-        method: "POST",
+      const reportId = state.weeklyReports.current.report.id;
+      const saved = await api(reportId
+        ? `/api/weekly-reports/${encodeURIComponent(reportId)}/draft`
+        : "/api/weekly-reports/current", {
+        method: reportId ? "PATCH" : "POST",
+        headers: { "Idempotency-Key": `draft-${reportId || "new"}-${Date.now()}` },
         body: JSON.stringify(state.weeklyReports.current.report)
       });
       state.weeklyReports.current = normalizeWeeklyReportWrapper(saved);
       state.weeklyReports.weekEnding = state.weeklyReports.current.report.week_ending || "";
+      const history = await api("/api/weekly-reports/mine");
+      state.weeklyReports.history = Array.isArray(history.reports) ? history.reports : [];
       setTasksMessage("Weekly report draft saved.", "success");
       renderTasksView();
     } catch (error) {
       setTasksMessage(error.message || "Unable to save the weekly report draft.", "error");
+    } finally {
+      state.weeklyReports.actionPending = false;
     }
   });
 
   els.tasksSidebar.querySelector("#weeklySubmitReport")?.addEventListener("click", async () => {
+    if (state.weeklyReports.actionPending) return;
+    state.weeklyReports.actionPending = true;
     setTasksMessage("Submitting weekly report…");
     try {
       state.weeklyReports.current.report.attestation_device = navigator.userAgent || "browser";
-      const saved = await api("/api/weekly-reports/current/submit", {
+      const reportId = state.weeklyReports.current.report.id;
+      const saved = await api(reportId
+        ? `/api/weekly-reports/${encodeURIComponent(reportId)}/submit`
+        : "/api/weekly-reports/current/submit", {
         method: "POST",
+        headers: { "Idempotency-Key": `submit-${reportId || "new"}-${state.weeklyReports.current.report.row_version || 0}` },
         body: JSON.stringify(state.weeklyReports.current.report)
       });
       state.weeklyReports.current = normalizeWeeklyReportWrapper(saved);
       state.weeklyReports.weekEnding = state.weeklyReports.current.report.week_ending || "";
-      setTasksMessage("Weekly report submitted for review.", "success");
+      const history = await api("/api/weekly-reports/mine");
+      state.weeklyReports.history = Array.isArray(history.reports) ? history.reports : [];
+      setTasksMessage(String(report.status || "").toLowerCase() === "revision_required"
+        ? "Revised weekly report resubmitted for review."
+        : "Weekly report submitted for review.", "success");
       renderTasksView();
     } catch (error) {
       const blockers = Array.isArray(error.details?.blockers) ? ` ${error.details.blockers.join(" ")}` : "";
       setTasksMessage(`${error.message || "Unable to submit weekly report."}${blockers}`, "error");
+    } finally {
+      state.weeklyReports.actionPending = false;
     }
   });
 }
 
-function bindWeeklyReviewEvents() {
+function bindWeeklyReviewEventsLegacy() {
   els.tasksSidebar.querySelectorAll("[data-weekly-open-id]").forEach(button => {
     button.addEventListener("click", async () => {
       setTasksMessage("Loading weekly report detail…");
@@ -12231,6 +12646,109 @@ function bindWeeklyReviewEvents() {
   });
 }
 
+function bindWeeklyReviewEvents() {
+  const weekInput = els.tasksSidebar.querySelector("#weeklyAdminWeekEnding");
+  const loadWeekButton = els.tasksSidebar.querySelector("#weeklyAdminLoadWeek");
+  const loadSelectedWeek = async () => {
+    const weekEnding = String(weekInput?.value || "").trim();
+    if (!weekEnding || state.weeklyReports.actionPending) return;
+    state.weeklyReports.weekEnding = weekEnding;
+    state.weeklyReports.selectedId = "";
+    state.weeklyReports.selectedReport = null;
+    await loadWeeklyReportWorkspace(true);
+  };
+  loadWeekButton?.addEventListener("click", () => {
+    loadSelectedWeek().catch(error => setTasksMessage(error.message || "Unable to load the selected reporting week.", "error"));
+  });
+  weekInput?.addEventListener("change", () => {
+    loadSelectedWeek().catch(error => setTasksMessage(error.message || "Unable to load the selected reporting week.", "error"));
+  });
+
+  els.tasksSidebar.querySelectorAll("[data-weekly-open-id]").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (state.weeklyReports.actionPending) return;
+      state.weeklyReports.actionPending = true;
+      setTasksMessage("Loading weekly report detail...");
+      try {
+        await loadWeeklyReportReviewDetail(button.dataset.weeklyOpenId);
+        setTasksMessage("");
+        renderTasksView();
+      } catch (error) {
+        setTasksMessage(error.message || "Unable to open the weekly report.", "error");
+      } finally {
+        state.weeklyReports.actionPending = false;
+      }
+    });
+  });
+
+  els.tasksPrimary.querySelectorAll("[data-weekly-version-number]").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (!state.weeklyReports.selectedId || state.weeklyReports.actionPending) return;
+      state.weeklyReports.actionPending = true;
+      setTasksMessage(`Loading submitted version ${button.dataset.weeklyVersionNumber}...`);
+      try {
+        const detail = await api(`/api/admin/weekly-reports/${encodeURIComponent(state.weeklyReports.selectedId)}?version=${encodeURIComponent(button.dataset.weeklyVersionNumber)}`);
+        state.weeklyReports.selectedReport = normalizeWeeklyReportWrapper(detail);
+        setTasksMessage("");
+        renderTasksView();
+      } catch (error) {
+        setTasksMessage(error.message || "Unable to open the submitted version.", "error");
+      } finally {
+        state.weeklyReports.actionPending = false;
+      }
+    });
+  });
+
+  els.tasksPrimary.querySelectorAll("[data-weekly-review-action]").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (!state.weeklyReports.selectedId || state.weeklyReports.actionPending) return;
+      const action = button.dataset.weeklyReviewAction;
+      const note = String(els.tasksPrimary.querySelector("#weeklyReviewNote")?.value || "").trim();
+      const versionId = String(state.weeklyReports.selectedReport?.report?.current_version_id || "").trim();
+      const endpoint = {
+        under_review: "start-review",
+        accepted: "accept",
+        rejected: "reject",
+        revision_required: "request-revision"
+      }[action];
+      if (!endpoint || !versionId) {
+        setTasksMessage("Reload the report before applying a review decision.", "error");
+        return;
+      }
+      if (["rejected", "revision_required"].includes(action) && !note) {
+        setTasksMessage(action === "rejected"
+          ? "Add a rejection reason before rejecting this report."
+          : "Add a revision note before returning this report.", "error");
+        els.tasksPrimary.querySelector("#weeklyReviewNote")?.focus();
+        return;
+      }
+
+      state.weeklyReports.actionPending = true;
+      setTasksMessage("Saving review decision...");
+      try {
+        const updated = await api(`/api/admin/weekly-reports/${encodeURIComponent(state.weeklyReports.selectedId)}/${endpoint}`, {
+          method: "POST",
+          headers: { "Idempotency-Key": `review-${state.weeklyReports.selectedId}-${versionId}-${action}` },
+          body: JSON.stringify({
+            version_id: versionId,
+            note
+          })
+        });
+        state.weeklyReports.selectedReport = normalizeWeeklyReportWrapper(updated);
+        setTasksMessage("Weekly report review updated.", "success");
+        await loadWeeklyReportWorkspace(true);
+      } catch (error) {
+        const staleCopy = Number(error.status) === 409
+          ? " Reload the report to review its latest submitted version."
+          : "";
+        setTasksMessage(`${error.message || "Unable to update the weekly report review."}${staleCopy}`, "error");
+      } finally {
+        state.weeklyReports.actionPending = false;
+      }
+    });
+  });
+}
+
 function renderActivityView() {
   const activities = state.activities || [];
   const canReviewDeletions = ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase());
@@ -12252,13 +12770,6 @@ function renderActivityView() {
   }
   if (els.activityKpiOverdue) els.activityKpiOverdue.textContent = String(overdue.length);
   if (els.activityKpiUpcoming) els.activityKpiUpcoming.textContent = String(upcoming.length);
-  const groups = groupedActivities();
-  const timelineHtml = Object.keys(groups).sort().reverse().map(date => `
-    <section class="timeline-day">
-      <div class="timeline-divider"><span>${escapeHtml(activityDateHeading(date))}</span></div>
-      <div class="timeline-cards">${groups[date].map(activityCardMarkup).join("")}</div>
-    </section>
-  `).join("");
   const emptyHtml = `
     <div class="timeline-empty">
       <strong>No activities match your current filters.</strong>
@@ -12266,7 +12777,7 @@ function renderActivityView() {
       <button class="ghost-button" type="button" data-reset-activity-empty>Reset Filters</button>
     </div>
   `;
-  els.activityFeed.innerHTML = state.activityLoading ? "" : (timelineHtml || emptyHtml);
+  els.activityFeed.innerHTML = state.activityLoading ? "" : (activities.length ? activityTableMarkup(activities) : emptyHtml);
 
   document.querySelectorAll("[data-activity-lead], [data-reminder-lead]").forEach(item => {
     const openLead = () => {
@@ -12290,6 +12801,13 @@ function renderActivityView() {
     });
   });
   document.querySelector("[data-reset-activity-empty]")?.addEventListener("click", resetActivityFilters);
+  els.activityFeed.querySelectorAll("[data-activity-page]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.activityPage = Number(button.dataset.activityPage) || 1;
+      renderActivityView();
+      els.activityFeed.scrollIntoView({ block: "nearest" });
+    });
+  });
   els.activityQuickLinks?.querySelectorAll("[data-activity-quick-view]").forEach(button => {
     button.addEventListener("click", () => setView(button.dataset.activityQuickView || "dashboard"));
   });

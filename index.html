@@ -29,6 +29,7 @@
   <link rel="stylesheet" href="activity-workflow.css?v=1">
   <link rel="stylesheet" href="admin-dashboard-clean.css?v=2">
   <link rel="stylesheet" href="ai-sales-assistant.css?v=1">
+  <link rel="stylesheet" href="activity-dashboard-latest.css?v=5">
   <link rel="stylesheet" href="lead-detail-contrast.css?v=2-action-buttons">
   </head>
   <body>
@@ -811,25 +812,41 @@
           <div class="activity-dashboard">
             <div class="activity-main-column">
               <section class="activity-kpi-grid" aria-label="Activity metrics">
-                <article class="activity-kpi-card">
-                  <span>Activities (30d)</span>
-                  <strong id="activityKpiActivities">0</strong>
-                  <small id="activityKpiActivitiesMeta">Filtered activity count</small>
+                <article class="activity-kpi-card activity-kpi-card--blue">
+                  <span class="activity-kpi-icon" aria-hidden="true">30</span>
+                  <div class="activity-kpi-copy">
+                    <span>Activities (30d)</span>
+                    <strong id="activityKpiActivities">0</strong>
+                    <small id="activityKpiActivitiesMeta">Filtered activity count</small>
+                  </div>
+                  <span class="activity-kpi-mark" aria-hidden="true">&#8599;</span>
                 </article>
-                <article class="activity-kpi-card">
-                  <span>Overdue</span>
-                  <strong class="is-overdue" id="activityKpiOverdue">0</strong>
-                  <small>Reminders requiring action</small>
+                <article class="activity-kpi-card activity-kpi-card--red">
+                  <span class="activity-kpi-icon" aria-hidden="true">!</span>
+                  <div class="activity-kpi-copy">
+                    <span>Overdue</span>
+                    <strong class="is-overdue" id="activityKpiOverdue">0</strong>
+                    <small>Reminders requiring action</small>
+                  </div>
+                  <span class="activity-kpi-mark" aria-hidden="true">&#9888;</span>
                 </article>
-                <article class="activity-kpi-card">
-                  <span>Upcoming</span>
-                  <strong class="is-upcoming" id="activityKpiUpcoming">0</strong>
-                  <small>Scheduled reminders ahead</small>
+                <article class="activity-kpi-card activity-kpi-card--amber">
+                  <span class="activity-kpi-icon" aria-hidden="true">+</span>
+                  <div class="activity-kpi-copy">
+                    <span>Upcoming</span>
+                    <strong class="is-upcoming" id="activityKpiUpcoming">0</strong>
+                    <small>Scheduled reminders ahead</small>
+                  </div>
+                  <span class="activity-kpi-mark" aria-hidden="true">&#128197;</span>
                 </article>
-                <article class="activity-kpi-card">
-                  <span>This week</span>
-                  <strong id="activityKpiWeek">0</strong>
-                  <small id="activityKpiWeekMeta">Calendar items in this view</small>
+                <article class="activity-kpi-card activity-kpi-card--green">
+                  <span class="activity-kpi-icon" aria-hidden="true">W</span>
+                  <div class="activity-kpi-copy">
+                    <span>This week</span>
+                    <strong id="activityKpiWeek">0</strong>
+                    <small id="activityKpiWeekMeta">Calendar items in this view</small>
+                  </div>
+                  <span class="activity-kpi-mark" aria-hidden="true">&#10003;</span>
                 </article>
               </section>
 
