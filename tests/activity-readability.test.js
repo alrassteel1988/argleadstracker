@@ -45,6 +45,11 @@ assert.match(client, /class="overdue-banner-pills overdue-owner-chips"/, "The ow
 assert.match(client, /class="overdue-pill overdue-owner-chip"/, "Each owner count needs the responsive chip treatment");
 assert.match(css, /\.overdue-owner-chips\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[^}]*min-width:\s*0;/s, "Owner chips must wrap instead of clipping on mobile");
 assert.match(css, /\.overdue-owner-chip\s*\{[^}]*max-width:\s*100%;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/s, "Long owner labels must wrap inside the available mobile width");
+assert.match(css, /Admin Activity laptop density[\s\S]*body\.activity-admin-mode \.activity-filter-main\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:/, "Admin Activity filters need a compact desktop grid");
+assert.match(css, /body\.activity-admin-mode \.activity-feed-item\s*\{[^}]*padding:\s*8px 9px\s*!important;/s, "Admin Activity records need compact structural padding");
+assert.match(css, /body\.activity-admin-mode \.activity-feed-body > strong\s*\{[^}]*font-size:\s*15px\s*!important;/s, "Compact Activity records must retain readable company names");
+const densityLayer = css.slice(css.indexOf("Admin Activity laptop density"));
+assert.doesNotMatch(densityLayer, /\.sidebar\b/, "The Admin Activity density pass must not alter the sidebar");
 
 for (const forbidden of [/rgba\(/i, /(?:linear|radial)-gradient/i, /filter:\s*blur/i]) {
   assert.doesNotMatch(css, forbidden, `Activity readability CSS must not introduce ${forbidden}`);
