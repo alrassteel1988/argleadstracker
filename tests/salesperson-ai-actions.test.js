@@ -60,6 +60,16 @@ const bundle = {
       overdue_next_actions: 1,
       overdue_action_companies: [{ id: "lead-1", name: "Priority Fabricator LLC", action: "Follow up quotation QT-44", days_overdue: 8 }],
       contact_overdue_count: 1,
+      contact_overdue_companies: [{
+        id: "lead-1",
+        name: "Priority Fabricator LLC",
+        status: "ENGAGED",
+        next_action: "Follow up quotation QT-44",
+        last_activity_date: "2026-05-20",
+        days_since_activity: 23,
+        expected_contact_days: 10,
+        contact_overdue_by: 13
+      }],
       activities_this_month: 4,
       activities_last_month: 8,
       activity_trend: -50
@@ -67,6 +77,7 @@ const bundle = {
   });
   assert.strictEqual(metrics.type, "metrics");
   assert.strictEqual(metrics.metrics.overdue_next_actions, 1);
+  assert.strictEqual(metrics.metrics.contact_overdue_companies.length, metrics.metrics.contact_overdue_count);
   assert.ok(metrics.insight);
 
   const empty = await runSalespersonAiAction({

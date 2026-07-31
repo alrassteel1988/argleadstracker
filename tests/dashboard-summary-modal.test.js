@@ -36,7 +36,10 @@ for (const type of [
   "salesmanStageNew",
   "salesmanStageContacted",
   "salesmanStageNegotiation",
-  "salesmanStageWon"
+  "salesmanStageWon",
+  "salesmanActionOverdue",
+  "salesmanActionCoverageGap",
+  "salesmanActionNextUp"
 ]) {
   assert.ok(client.includes(`${type}: {`), `${type} modal configuration must exist`);
   assert.match(client, new RegExp(`data-summary-card="\\$\\{escapeHtml\\(card\\.type\\)\\}"`), "Salesman cards must opt into the shared modal");
@@ -45,6 +48,11 @@ for (const type of [
 assert.match(client, /data-summary-card="[^"]*"[^>]*aria-controls="summaryCardDetailsDialog"/, "Salesman summary buttons must expose the dialog they control");
 assert.match(client, /els\.salesmanSimplifiedDashboard\?\.addEventListener\("click"[\s\S]*event\.target\.closest\("\[data-summary-card\]"\)[\s\S]*openSummaryCardDetails\(card\.dataset\.summaryCard,\s*card\)/, "Dynamically rendered Salesman cards must open the shared details modal");
 assert.match(client, /function renderSalesmanSimplifiedDashboard\(\)\s*\{[\s\S]*const datasets = salesmanDashboardSummaryDatasets\(\)/, "Salesman card values must use the same datasets as their modal records");
+assert.match(client, /function salesmanDashboardActionSummaryDatasets\(\)/, "Salesman action popups must use a shared action-queue selector");
+for (const type of ["salesmanActionOverdue", "salesmanActionCoverageGap", "salesmanActionNextUp"]) {
+  assert.match(client, new RegExp(`summaryType:\\s*"${type}"`), `${type} action card must open its summary popup`);
+}
+assert.match(client, /contact_overdue_companies/, "Coverage Gap must consume the server-computed contact cadence records");
 
 for (const title of ["Open Pipeline", "Active Customers", "At Risk", "Tasks Due"]) {
   assert.ok(client.includes(`title: "${title}"`), `${title} modal configuration must exist`);

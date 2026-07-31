@@ -2,6 +2,15 @@ const SUPABASE_URL = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "pmr-voice-notes";
+const SERVICE_ROLE_OPERATIONS = new Set([
+  "auth.create_user",
+  "auth.list_users",
+  "cron.integration_logs",
+  "cron.market_intelligence",
+  "notifications.director_fanout",
+  "security.rate_limits",
+  "workflow.activity_managers"
+]);
 
 function isSupabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -20,10 +29,23 @@ function bearerToken(req) {
   return header.startsWith("Bearer ") ? header.slice(7) : "";
 }
 
-async function request(path, { method = "GET", body, token, service = false, headers = {} } = {}) {
+async function request(path, {
+  method = "GET",
+  body,
+  token,
+  service = false,
+  serviceOperation = "",
+  headers = {}
+} = {}) {
   if (!isSupabaseConfigured()) throw new Error("Supabase is not configured.");
+  if (service && !SERVICE_ROLE_OPERATIONS.has(serviceOperation)) {
+    throw new Error(`Supabase service-role operation is not allowlisted: ${serviceOperation || "missing operation"}.`);
+  }
   const key = service ? SUPABASE_SERVICE_ROLE_KEY : SUPABASE_ANON_KEY;
   if (!key) throw new Error(service ? "SUPABASE_SERVICE_ROLE_KEY is not configured." : "Supabase publishable key is not configured.");
+  if (!service && !token && !path.startsWith("/auth/v1/token")) {
+    throw new Error("An authenticated Supabase user token is required.");
+  }
 
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     method,
@@ -44,13 +66,6 @@ async function request(path, { method = "GET", body, token, service = false, hea
   return data;
 }
 
-function requireServiceRole() {
-  if (!isSupabaseAdminConfigured()) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY must be the JWT-format Supabase service_role key for this project.");
-  }
-  return SUPABASE_SERVICE_ROLE_KEY;
-}
-
 function storageObjectUrl(objectPath, bucket = SUPABASE_STORAGE_BUCKET) {
   return `/storage/v1/object/${encodeURIComponent(bucket)}/${String(objectPath || "")
     .split("/")
@@ -58,13 +73,19 @@ function storageObjectUrl(objectPath, bucket = SUPABASE_STORAGE_BUCKET) {
     .join("/")}`;
 }
 
-async function uploadStorageObjectToBucket(bucket, objectPath, content, contentType = "application/octet-stream") {
-  const key = requireServiceRole();
+function requireUserToken(token) {
+  const value = String(token || "").trim();
+  if (!value) throw new Error("An authenticated Supabase user token is required for Storage.");
+  return value;
+}
+
+async function uploadStorageObjectToBucket(bucket, objectPath, content, contentType = "application/octet-stream", token) {
+  const userToken = requireUserToken(token);
   const response = await fetch(`${SUPABASE_URL}${storageObjectUrl(objectPath, bucket)}`, {
     method: "POST",
     headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${userToken}`,
       "Content-Type": contentType,
       "x-upsert": "false"
     },
@@ -79,20 +100,20 @@ async function uploadStorageObjectToBucket(bucket, objectPath, content, contentT
   return data;
 }
 
-async function uploadStorageObject(objectPath, content, contentType = "application/octet-stream") {
-  return uploadStorageObjectToBucket(SUPABASE_STORAGE_BUCKET, objectPath, content, contentType);
+async function uploadStorageObject(objectPath, content, contentType = "application/octet-stream", token) {
+  return uploadStorageObjectToBucket(SUPABASE_STORAGE_BUCKET, objectPath, content, contentType, token);
 }
 
-async function createStorageSignedUrlForBucket(bucket, objectPath, expiresIn = 3600) {
-  const key = requireServiceRole();
+async function createStorageSignedUrlForBucket(bucket, objectPath, expiresIn = 3600, token) {
+  const userToken = requireUserToken(token);
   const response = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${String(objectPath || "")
     .split("/")
     .map(part => encodeURIComponent(part))
     .join("/")}`, {
     method: "POST",
     headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${userToken}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({ expiresIn })
@@ -107,8 +128,8 @@ async function createStorageSignedUrlForBucket(bucket, objectPath, expiresIn = 3
   return signedUrl.startsWith("http") ? signedUrl : `${SUPABASE_URL}${signedUrl}`;
 }
 
-async function createStorageSignedUrl(objectPath, expiresIn = 3600) {
-  return createStorageSignedUrlForBucket(SUPABASE_STORAGE_BUCKET, objectPath, expiresIn);
+async function createStorageSignedUrl(objectPath, expiresIn = 3600, token) {
+  return createStorageSignedUrlForBucket(SUPABASE_STORAGE_BUCKET, objectPath, expiresIn, token);
 }
 
 async function signIn(email, password) {
@@ -127,6 +148,7 @@ async function createAuthUser({ email, password, name, territory, role = "salesm
   return request("/auth/v1/admin/users", {
     method: "POST",
     service: true,
+    serviceOperation: "auth.create_user",
     body: {
       email,
       password,
@@ -139,12 +161,24 @@ async function createAuthUser({ email, password, name, territory, role = "salesm
 
 async function listAuthUsers(page = 1, perPage = 1000) {
   return request(`/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
-    service: true
+    service: true,
+    serviceOperation: "auth.list_users"
   });
 }
 
 async function rest(path, options = {}) {
   return request(`/rest/v1/${path}`, options);
+}
+
+async function serviceRest(operation, path, options = {}) {
+  if (!SERVICE_ROLE_OPERATIONS.has(operation)) {
+    throw new Error(`Supabase service-role operation is not allowlisted: ${operation || "missing operation"}.`);
+  }
+  return rest(path, {
+    ...options,
+    service: true,
+    serviceOperation: operation
+  });
 }
 
 async function getProfile(token, id) {
@@ -183,6 +217,7 @@ module.exports = {
   isSupabaseConfigured,
   listAuthUsers,
   rest,
+  serviceRest,
   signIn,
   signOut,
   uploadStorageObject,

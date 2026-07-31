@@ -1781,7 +1781,11 @@ async function uploadPmrVoiceBlob(blob, fallbackType = "audio/webm") {
 
 function activityAudioMarkup(activity) {
   if (!activity.voice_note_url && !activity.voice_note_id) return "";
-  return `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(activity.voice_note_id || "")}" ${activity.voice_note_url ? `src="${escapeHtml(activity.voice_note_url)}"` : ""}></audio>`;
+  const voiceNoteId = String(activity.voice_note_id || "");
+  const source = !voiceNoteId && activity.voice_note_url
+    ? `src="${escapeHtml(activity.voice_note_url)}"`
+    : "";
+  return `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(voiceNoteId)}" ${source}></audio>`;
 }
 
 async function loadActivityAudioSources() {
@@ -4637,6 +4641,54 @@ function summaryDetailsRecord(lead, type) {
   return record;
 }
 
+function summaryDetailsFollowupRecord(reminder, type) {
+  const lead = salesmanDashboardLeads().find(item => String(item.id) === String(reminder.lead_id));
+  if (!lead) return null;
+  const record = summaryDetailsRecord(lead, type);
+  const dueDate = String(reminder.due_date || "").slice(0, 10);
+  const dueDelta = dueDate ? daysUntil(dueDate) : 0;
+  record.id = reminder.id || `${lead.id}:${dueDate}:${reminder.activity_index ?? "next"}`;
+  record.nextAction = normalizeNextActionPlan(
+    reminder.activity_required
+    || reminder.text
+    || reminder.next_action
+    || reminder.reminder_type
+    || lead.next_action
+    || "Complete the follow-up"
+  );
+  record.dueDate = dueDate;
+  record.daysOverdue = dueDelta < 0 ? Math.abs(dueDelta) : 0;
+  record.daysUntilDue = dueDelta > 0 ? dueDelta : 0;
+  record.dueTiming = dueDelta > 0
+    ? `${dueDelta} day${dueDelta === 1 ? "" : "s"}`
+    : dueDelta === 0 ? "Today" : `${Math.abs(dueDelta)} day${Math.abs(dueDelta) === 1 ? "" : "s"} overdue`;
+  record.taskStatus = dueDelta < 0 ? "Overdue" : dueDelta === 0 ? "Due today" : "Upcoming";
+  record.searchText = Object.values(record).filter(value => typeof value === "string").join(" ").toLowerCase();
+  return record;
+}
+
+function summaryDetailsCoverageGapRecord(company, type) {
+  const lead = salesmanDashboardLeads().find(item => String(item.id) === String(company.id));
+  if (!lead) return null;
+  const record = summaryDetailsRecord(lead, type);
+  const inactiveDays = company.days_since_activity == null ? null : Number(company.days_since_activity);
+  const cadenceDays = Number(company.expected_contact_days || 0);
+  const overdueBy = company.contact_overdue_by == null ? null : Number(company.contact_overdue_by);
+  record.lastContact = company.last_activity_date
+    ? summaryDetailsDateLabel(company.last_activity_date)
+    : "No activity recorded";
+  record.daysInactive = inactiveDays == null
+    ? "No activity recorded"
+    : `${inactiveDays} day${inactiveDays === 1 ? "" : "s"}`;
+  record.daysInactiveValue = inactiveDays ?? Number.MAX_SAFE_INTEGER;
+  record.contactGap = overdueBy == null
+    ? `No logged activity; expected every ${cadenceDays || 30} days`
+    : `${overdueBy} day${overdueBy === 1 ? "" : "s"} past ${cadenceDays || 30}-day cadence`;
+  record.nextAction = normalizeNextActionPlan(company.next_action || lead.next_action || "Plan the next contact");
+  record.searchText = Object.values(record).filter(value => typeof value === "string").join(" ").toLowerCase();
+  return record;
+}
+
 function summaryDetailsStageTone(stageKey) {
   if (stageKey === "WON") return "green";
   if (stageKey === "LOST") return "red";
@@ -4659,6 +4711,7 @@ function summaryDetailsBadge(value, tone = "neutral") {
 function summaryCardDetailsConfig(type) {
   const datasets = dashboardSummaryDatasets();
   const salesmanDatasets = salesmanDashboardSummaryDatasets();
+  const actionDatasets = salesmanDashboardActionSummaryDatasets();
   const commonFilters = {
     company: { key: "company", label: "Company / Lead", type: "text", placeholder: "Search company / lead..." },
     salesman: { key: "salesman", label: "Owner", type: "select" },
@@ -4836,11 +4889,75 @@ function summaryCardDetailsConfig(type) {
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "WON" }
+    },
+    salesmanActionOverdue: {
+      title: "Overdue Follow-ups",
+      description: "Every overdue reminder and follow-up currently driving your action card.",
+      tone: "red",
+      searchPlaceholder: "Search overdue company or next action",
+      sources: actionDatasets.overdue,
+      recordFactory: reminder => summaryDetailsFollowupRecord(reminder, "salesmanActionOverdue"),
+      filters: [commonFilters.company, commonFilters.nextAction, commonFilters.stage, commonFilters.salesman],
+      columns: [
+        salesmanColumns[0],
+        salesmanColumns[2],
+        salesmanColumns[3],
+        {
+          key: "daysOverdue",
+          label: "Days Overdue",
+          render: record => summaryDetailsBadge(
+            `${record.daysOverdue} day${record.daysOverdue === 1 ? "" : "s"}`,
+            record.daysOverdue >= 35 ? "red" : "amber"
+          )
+        },
+        salesmanColumns[1],
+        salesmanColumns[4]
+      ],
+      fullList: { view: "pipeline", overdueOnly: true }
+    },
+    salesmanActionCoverageGap: {
+      title: "Coverage Gap",
+      description: "Accounts beyond their expected contact cadence, using the same pipeline-health calculation as this card.",
+      tone: "amber",
+      searchPlaceholder: "Search quiet account, action, stage, or owner",
+      sources: actionDatasets.coverageGap,
+      recordFactory: company => summaryDetailsCoverageGapRecord(company, "salesmanActionCoverageGap"),
+      filters: [commonFilters.company, commonFilters.nextAction, commonFilters.stage, commonFilters.salesman],
+      columns: [
+        salesmanColumns[0],
+        { key: "lastContact", label: "Last Contact" },
+        { key: "daysInactive", label: "Days Inactive" },
+        { key: "contactGap", label: "Coverage Gap", className: "is-risk" },
+        salesmanColumns[2],
+        salesmanColumns[1],
+        salesmanColumns[4]
+      ],
+      fullList: { view: "pipeline" }
+    },
+    salesmanActionNextUp: {
+      title: "Next Up",
+      description: "Upcoming reminders and follow-ups, ordered by the nearest due date.",
+      tone: "blue",
+      searchPlaceholder: "Search upcoming company or next action",
+      sources: actionDatasets.nextUp,
+      recordFactory: reminder => summaryDetailsFollowupRecord(reminder, "salesmanActionNextUp"),
+      filters: [commonFilters.company, commonFilters.nextAction, commonFilters.dueDate, commonFilters.stage, commonFilters.salesman],
+      columns: [
+        salesmanColumns[0],
+        salesmanColumns[2],
+        salesmanColumns[3],
+        { key: "dueTiming", label: "Due In", render: record => summaryDetailsBadge(record.dueTiming, "blue") },
+        salesmanColumns[1],
+        salesmanColumns[4]
+      ],
+      fullList: { view: "pipeline" }
     }
   });
   const config = configurations[type];
   if (!config) return null;
-  config.records = config.leads.map(lead => summaryDetailsRecord(lead, type));
+  const sources = config.sources || config.leads || [];
+  const recordFactory = config.recordFactory || (lead => summaryDetailsRecord(lead, type));
+  config.records = sources.map(recordFactory).filter(Boolean);
   return config;
 }
 
@@ -5002,8 +5119,12 @@ function openSummaryCardDetails(type, trigger) {
     type,
     search: "",
     filters: {},
-    sortKey: type === "salesmanOverdueCalls" ? "daysOverdue" : "dueDate",
-    sortDirection: type === "salesmanOverdueCalls" ? "desc" : "asc",
+    sortKey: ["salesmanOverdueCalls", "salesmanActionOverdue"].includes(type)
+      ? "daysOverdue"
+      : type === "salesmanActionCoverageGap" ? "daysInactiveValue" : "dueDate",
+    sortDirection: ["salesmanOverdueCalls", "salesmanActionOverdue", "salesmanActionCoverageGap"].includes(type)
+      ? "desc"
+      : "asc",
     page: 1,
     pageSize: SUMMARY_DETAILS_DEFAULT_PAGE_SIZE,
     trigger
@@ -6773,6 +6894,24 @@ function salesmanDashboardSummaryDatasets() {
   };
 }
 
+function salesmanDashboardActionSummaryDatasets() {
+  const followups = salesmanFollowups();
+  const metrics = state.dailyPipelineSummary?.metrics || {};
+  return {
+    overdue: followups.filter(reminder => daysUntil(reminder.due_date) < 0),
+    coverageGap: Array.isArray(metrics.contact_overdue_companies)
+      ? metrics.contact_overdue_companies
+      : [],
+    nextUp: followups
+      .filter(reminder => daysUntil(reminder.due_date) > 0)
+      .sort((a, b) =>
+        String(a.due_date || "").localeCompare(String(b.due_date || ""))
+        || String(a.due_time || "").localeCompare(String(b.due_time || ""))
+        || String(a.company_name || "").localeCompare(String(b.company_name || ""))
+      )
+  };
+}
+
 function salesmanDashboardSummaryIcon(type) {
   const icons = {
     myLeads: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>',
@@ -6825,15 +6964,22 @@ function renderSalesmanSimplifiedDashboard() {
   }
 
   if (els.salesmanSimplifiedActions) {
-    els.salesmanSimplifiedActions.innerHTML = salesmanPriorityActions().map(item => `
-      <button class="salesman-triage-card tone-${escapeHtml(item.tone || "neutral")}" type="button" ${item.aiAction ? `data-salesperson-ai-action="${escapeHtml(item.aiAction)}"` : `data-dashboard-action="${escapeHtml(item.key)}"`}>
-        <span class="salesman-triage-kicker">${escapeHtml(item.kicker)}</span>
-        <strong>${escapeHtml(item.title)}</strong>
-        <p>${escapeHtml(item.body)}</p>
-        <span class="salesman-triage-detail">${escapeHtml(item.detail || "")}</span>
-        <small>${escapeHtml(item.cta)}</small>
-      </button>
-    `).join("");
+    els.salesmanSimplifiedActions.innerHTML = salesmanPriorityActions().map(item => {
+      const attributes = item.summaryType
+        ? `data-summary-card="${escapeHtml(item.summaryType)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" title="${escapeHtml(`View ${item.kicker} breakdown`)}"`
+        : item.aiAction
+          ? `data-salesperson-ai-action="${escapeHtml(item.aiAction)}"`
+          : `data-dashboard-action="${escapeHtml(item.key)}"`;
+      return `
+        <button class="salesman-triage-card tone-${escapeHtml(item.tone || "neutral")}" type="button" ${attributes}>
+          <span class="salesman-triage-kicker">${escapeHtml(item.kicker)}</span>
+          <strong>${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.body)}</p>
+          <span class="salesman-triage-detail">${escapeHtml(item.detail || "")}</span>
+          <small>${escapeHtml(item.cta)}</small>
+        </button>
+      `;
+    }).join("");
   }
 
   const visibleQueue = queue.slice(0, 10);
@@ -7016,6 +7162,7 @@ function salesmanPriorityActions() {
   if (overdueFollowups.length) {
     cards.push({
       key: "followups",
+      summaryType: "salesmanActionOverdue",
       tone: "danger",
       kicker: "Overdue",
       title: `Clear ${overdueFollowups.length} overdue follow-up${overdueFollowups.length === 1 ? "" : "s"}`,
@@ -7062,13 +7209,13 @@ function salesmanPriorityActions() {
   if (cards.length < 3 && neglectedCount) {
     cards.push({
       key: "neglected",
+      summaryType: "salesmanActionCoverageGap",
       tone: "neutral",
       kicker: "Coverage gap",
       title: `${neglectedCount} account${neglectedCount === 1 ? "" : "s"} are past expected contact frequency`,
       body: "Use the queue and your next actions to revive the quiet relationships before they cool down.",
       detail: "Start with the account that has gone longest without a logged interaction.",
-      cta: "See neglected accounts",
-      aiAction: "neglected"
+      cta: "See neglected accounts"
     });
   }
 
@@ -7079,6 +7226,7 @@ function salesmanPriorityActions() {
     if (nextReminder) {
       cards.push({
         key: "followups",
+        summaryType: "salesmanActionNextUp",
         tone: "neutral",
         kicker: "Next up",
         title: `Prepare ${nextReminder.company_name || "the next account"} before it slips`,
@@ -7338,7 +7486,9 @@ function renderMarketNewsPanel() {
 
 function maybeAutoRunDailyPipeline() {
   if (!state.currentUser || !isSalesmanRole()) return;
-  const key = `arg_daily_pipeline_${state.currentUser.id || state.currentUser.email}_${today()}`;
+  // Version the key when the response shape changes so existing sessions fetch
+  // the new per-company coverage-gap details instead of reusing a stale marker.
+  const key = `arg_daily_pipeline_contact_list_v1_${state.currentUser.id || state.currentUser.email}_${today()}`;
   if (localStorage.getItem(key) === "true") return;
   localStorage.setItem(key, "true");
   runSalespersonAiAction("pipeline_health", { showDialog: false }).catch(() => null);
@@ -8964,7 +9114,7 @@ function renderDrawerPmrs(lead) {
         ${pmr.activity_id ? `<span class="chip">${escapeHtml(linkedActivityLabel(lead, pmr.activity_id))}</span>` : ""}
       </div>
       <p class="activity-note clamp" data-expand-note>${escapeHtml(pmr.notes || "No PMR notes added.")}</p>
-      ${pmr.voice_note_url || pmr.voice_note_id ? `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(pmr.voice_note_id || "")}" ${pmr.voice_note_url ? `src="${escapeHtml(pmr.voice_note_url)}"` : ""}></audio>` : ""}
+      ${pmr.voice_note_url || pmr.voice_note_id ? activityAudioMarkup(pmr) : ""}
     </article>
   `;
   return `

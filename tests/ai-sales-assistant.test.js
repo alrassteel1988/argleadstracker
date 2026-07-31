@@ -86,7 +86,7 @@ assert.match(emailPreview.email_draft.subject, /QTN-2042/);
   "/api/ai-assistant/history",
   "/api/ai-assistant/email-drafts",
   "AI_ASSISTANT_WRITE_INTENTS",
-  "assistantRateAllowed",
+  "enforceAuthenticatedRateLimits",
   "assistantCompatibilityLogRow",
   "saveAssistantCompatibilityEntry",
   "loadAssistantCompatibilityEntries",
@@ -95,6 +95,8 @@ assert.match(emailPreview.email_draft.subject, /QTN-2042/);
   "activity_only",
   "ai_action_log"
 ].forEach(token => assert(serverSource.includes(token), `${token} must be implemented`));
+
+assert(!serverSource.includes("assistantRateAllowed"), "AI Assistant must use the shared durable limiter, not process memory.");
 
 [
   "initAiSalesAssistant",

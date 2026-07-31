@@ -28,6 +28,7 @@ const {
   isSupabaseConfigured,
   listAuthUsers,
   rest,
+  serviceRest,
   signIn,
   signOut,
   uploadStorageObject,
@@ -60,6 +61,26 @@ const {
   heatMapFromIntel,
   matchIntelligenceToLeads
 } = require("./src/services/marketIntelService");
+const {
+  idempotencyUuid,
+  runSecuredScheduledJob
+} = require("./src/services/cronSecurityService");
+const {
+  VOICE_NOTE_SIGNED_URL_TTL_SECONDS,
+  signLocalVoiceNoteGrant,
+  verifyLocalVoiceNoteGrant
+} = require("./src/services/voiceNoteSecurityService");
+const {
+  consumeLocalBucket,
+  hashRateLimitSubject,
+  normalizeAccountIdentifier,
+  normalizeRateLimitResult,
+  policyFromEnvironment,
+  rateLimitHeaders,
+  requestRateLimitCategory,
+  resetLocalBucket
+} = require("./src/services/rateLimitService");
+const { applySecurityHeaders } = require("./src/config/securityHeaders");
 const { fetchMarketNews } = require("./src/services/marketNewsService");
 const {
   mergeVerifiedAutoEnrichment,
@@ -130,9 +151,10 @@ const OPENAI_LEAD_SUMMARY_MODEL = process.env.OPENAI_LEAD_SUMMARY_MODEL || proce
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "glory@alrassteel.com").trim().toLowerCase();
 const ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || "";
 const SESSION_SECRET = process.env.APP_SESSION_SECRET || "local-development-session-secret-change-me";
+const RATE_LIMIT_SECRET_CONFIGURED = Boolean(process.env.RATE_LIMIT_HASH_SECRET || process.env.APP_SESSION_SECRET);
+const RATE_LIMIT_HASH_SECRET = process.env.RATE_LIMIT_HASH_SECRET || SESSION_SECRET;
+const RATE_LIMIT_TENANT_ID = String(process.env.RATE_LIMIT_TENANT_ID || "arg-leads-tracker").trim();
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
-const transcriptionRateLimit = new Map();
-const assistantRateLimit = new Map();
 const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "LOST"];
 const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
 const COMPANY_TIERS = ["1", "2", "3"];
@@ -345,6 +367,7 @@ function readDb() {
   db.configuration_audit_log = Array.isArray(db.configuration_audit_log) ? db.configuration_audit_log : [];
   db.assistant_audit_logs = Array.isArray(db.assistant_audit_logs) ? db.assistant_audit_logs : [];
   db.email_drafts = Array.isArray(db.email_drafts) ? db.email_drafts : [];
+  db.rate_limit_buckets = Array.isArray(db.rate_limit_buckets) ? db.rate_limit_buckets : [];
   if (ensureAdminAccount(db)) writeDb(db);
   return db;
 }
@@ -455,6 +478,124 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+function setResponseHeaders(res, headers) {
+  Object.entries(headers || {}).forEach(([name, value]) => res.setHeader(name, value));
+}
+
+function rateLimitTelemetry(event, scope, subjectHash, result = {}) {
+  const severity = event === "rate_limit_exceeded" ? "warn" : "info";
+  console[severity](JSON.stringify({
+    event,
+    scope,
+    subject: String(subjectHash || "").slice(0, 12),
+    count: Number(result.count || 0),
+    remaining: Number(result.remaining || 0),
+    retry_after_seconds: Number(result.retryAfterSeconds || 0),
+    at: new Date().toISOString()
+  }));
+}
+
+async function consumeDurableRateLimit(db, supabaseEnabled, {
+  scope,
+  subject,
+  policy
+}) {
+  const subjectHash = hashRateLimitSubject(scope, subject, RATE_LIMIT_HASH_SECRET);
+  try {
+    if (supabaseEnabled) {
+      if (!RATE_LIMIT_SECRET_CONFIGURED) {
+        const error = new Error("Durable request protection is temporarily unavailable.");
+        error.status = 503;
+        throw error;
+      }
+      if (!isSupabaseAdminConfigured()) {
+        const error = new Error("Durable request protection is temporarily unavailable.");
+        error.status = 503;
+        throw error;
+      }
+      const response = await serviceRest("security.rate_limits", "rpc/consume_rate_limit", {
+        method: "POST",
+        body: {
+          p_scope: scope,
+          p_subject_hash: subjectHash,
+          p_limit: policy.limit,
+          p_window_seconds: Math.ceil(policy.windowMs / 1000),
+          p_block_seconds: Math.ceil(policy.blockMs / 1000)
+        }
+      });
+      return { ...normalizeRateLimitResult(response, policy), subjectHash };
+    }
+    const result = consumeLocalBucket(db, { scope, subjectHash, policy });
+    writeDb(db);
+    return { ...result, subjectHash };
+  } catch (error) {
+    if (error.status === 503) throw error;
+    const safeError = new Error("Durable request protection is temporarily unavailable.");
+    safeError.status = 503;
+    throw safeError;
+  }
+}
+
+async function resetDurableRateLimit(db, supabaseEnabled, scope, subject) {
+  const subjectHash = hashRateLimitSubject(scope, subject, RATE_LIMIT_HASH_SECRET);
+  if (supabaseEnabled) {
+    await serviceRest("security.rate_limits", "rpc/reset_rate_limit", {
+      method: "POST",
+      body: { p_scope: scope, p_subject_hash: subjectHash }
+    });
+    return;
+  }
+  resetLocalBucket(db, scope, subjectHash);
+  writeDb(db);
+}
+
+async function enforceRateLimit(req, res, db, supabaseEnabled, {
+  scope,
+  subject,
+  policyName,
+  policyOverride
+}) {
+  const policy = policyOverride || policyFromEnvironment(policyName);
+  const result = await consumeDurableRateLimit(db, supabaseEnabled, { scope, subject, policy });
+  setResponseHeaders(res, rateLimitHeaders(policy, result));
+  if (!result.allowed) {
+    res.setHeader("Retry-After", String(Math.max(1, result.retryAfterSeconds)));
+    rateLimitTelemetry("rate_limit_exceeded", scope, result.subjectHash, result);
+    sendJson(res, 429, {
+      error: "Too many requests. Please wait before trying again.",
+      retry_after_seconds: Math.max(1, result.retryAfterSeconds)
+    });
+    return null;
+  }
+  if (result.remaining <= 1) rateLimitTelemetry("rate_limit_near_threshold", scope, result.subjectHash, result);
+  return result;
+}
+
+async function enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled) {
+  const category = requestRateLimitCategory(req.method, url.pathname);
+  if (!category) return true;
+  const policy = policyFromEnvironment(category);
+  const tenantResult = await enforceRateLimit(req, res, db, supabaseEnabled, {
+    scope: `${category}:tenant`,
+    subject: RATE_LIMIT_TENANT_ID,
+    policyName: category,
+    policyOverride: { ...policy, limit: policy.limit * 20 }
+  });
+  if (!tenantResult) return false;
+  const userResult = await enforceRateLimit(req, res, db, supabaseEnabled, {
+    scope: `${category}:user`,
+    subject: user.id || user.email || clientIp(req),
+    policyName: category,
+    policyOverride: policy
+  });
+  return Boolean(userResult);
+}
+
+function loginFailureDelay(attemptCount) {
+  const delayMs = Math.min(2000, 125 * (2 ** Math.max(0, Number(attemptCount || 1) - 1)));
+  return new Promise(resolve => setTimeout(resolve, delayMs));
+}
+
 function sendDownload(res, contentType, filename, body) {
   const buffer = Buffer.isBuffer(body) ? body : Buffer.from(String(body), "utf8");
   res.writeHead(200, {
@@ -511,17 +652,6 @@ function clientIp(req) {
   return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "local").split(",")[0].trim();
 }
 
-function allowTranscription(req) {
-  const key = clientIp(req);
-  const now = Date.now();
-  const windowMs = 60_000;
-  const attempts = (transcriptionRateLimit.get(key) || []).filter(timestamp => now - timestamp < windowMs);
-  if (attempts.length >= 10) return false;
-  attempts.push(now);
-  transcriptionRateLimit.set(key, attempts);
-  return true;
-}
-
 function audioExtension(contentType) {
   if (contentType.includes("mp4")) return "mp4";
   if (contentType.includes("mpeg")) return "mp3";
@@ -556,7 +686,97 @@ function voiceNoteRecord(input = {}) {
   };
 }
 
-function sendVoiceNote(req, res, noteId) {
+function voiceNoteAccessAllowed(lead, user) {
+  if (!lead || !user || String(user.status || "active").toLowerCase() !== "active") return false;
+  if (leadBelongsToUser(lead, user)) return true;
+  const userTerritory = canonicalTerritory(user.territory);
+  const leadTerritory = canonicalTerritory(lead.territory);
+  return Boolean(
+    userTerritory &&
+    leadTerritory &&
+    !["All", "Mixed"].includes(userTerritory) &&
+    userTerritory === leadTerritory
+  );
+}
+
+function recordVoiceNoteAccess(req, {
+  noteId,
+  user = null,
+  leadId = "",
+  action,
+  outcome,
+  reason = ""
+}) {
+  const entry = {
+    event: "voice_note_media_access",
+    at: new Date().toISOString(),
+    action,
+    outcome,
+    reason,
+    note_id: safeVoiceNoteId(noteId),
+    lead_id: String(leadId || ""),
+    user_id: String(user?.id || ""),
+    role: String(user?.role || ""),
+    ip: clientIp(req)
+  };
+  const method = outcome === "allowed" ? "info" : "warn";
+  console[method](JSON.stringify(entry));
+}
+
+function localVoiceNoteContext(db, noteId) {
+  const pmr = (db.pmrs || []).find(item => safeVoiceNoteId(item.voice_note_id) === noteId);
+  if (!pmr) return null;
+  const leadId = String(pmr.lead_id || pmr.company_id || "");
+  const lead = (db.leads || []).find(item => String(item.id) === leadId);
+  return lead ? { pmr, lead, leadId } : null;
+}
+
+async function supabaseVoiceNoteContext(token, noteId) {
+  const pmrs = await rest(
+    `pmrs?voice_note_id=eq.${encodeURIComponent(noteId)}&select=lead_id,company_id,filed_by,voice_note_path&limit=1`,
+    supabaseDataOptions(token)
+  );
+  if (!pmrs[0]) return null;
+  const leadId = String(pmrs[0].lead_id || pmrs[0].company_id || "");
+  if (!leadId) return null;
+  const leads = await rest(`leads?id=eq.${encodeURIComponent(leadId)}&select=*`, supabaseDataOptions(token));
+  const lead = leads[0] ? fromSupabaseLead(leads[0]) : null;
+  return lead ? { pmr: pmrs[0], lead, leadId } : null;
+}
+
+function localVoiceNoteGrantUrl(noteId, user) {
+  const grant = signLocalVoiceNoteGrant({
+    noteId,
+    userId: user.id,
+    secret: SESSION_SECRET,
+    ttlSeconds: VOICE_NOTE_SIGNED_URL_TTL_SECONDS
+  });
+  const params = new URLSearchParams({
+    uid: grant.userId,
+    expires: String(grant.expiresAt),
+    signature: grant.signature
+  });
+  return `/api/pmr-voice-notes/${encodeURIComponent(noteId)}?${params.toString()}`;
+}
+
+function localUserFromVoiceNoteGrant(url, db, noteId) {
+  const userId = String(url.searchParams.get("uid") || "");
+  const verified = verifyLocalVoiceNoteGrant({
+    noteId,
+    userId,
+    expiresAt: url.searchParams.get("expires"),
+    signature: url.searchParams.get("signature"),
+    secret: SESSION_SECRET
+  });
+  if (!verified.ok) return { user: null, reason: verified.reason };
+  const user = (db.users || []).find(item =>
+    String(item.id) === userId &&
+    String(item.status || "active").toLowerCase() === "active"
+  );
+  return user ? { user, reason: "authorized" } : { user: null, reason: "inactive_user" };
+}
+
+function sendVoiceNoteFile(res, noteId) {
   const id = safeVoiceNoteId(noteId);
   if (!id) {
     res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
@@ -569,12 +789,129 @@ function sendVoiceNote(req, res, noteId) {
     return res.end("Voice note not found");
   }
   const filePath = path.join(VOICE_NOTE_DIR, fileName);
+  const fileSize = fs.statSync(filePath).size;
   res.writeHead(200, {
     "Content-Type": audioContentType(filePath),
-    "Cache-Control": "private, max-age=31536000, immutable",
+    "Content-Length": fileSize,
+    "Cache-Control": "private, no-store",
+    "Pragma": "no-cache",
+    "X-Content-Type-Options": "nosniff",
     "Content-Disposition": `inline; filename="${fileName}"`
   });
   fs.createReadStream(filePath).pipe(res);
+}
+
+async function handleVoiceNoteDownload(req, res, url, { supabaseEnabled, db }) {
+  const noteId = safeVoiceNoteId(url.pathname.match(/^\/api\/pmr-voice-notes\/([^/]+)$/)?.[1]);
+  let user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
+  let authenticationReason = user ? "bearer_token" : "missing_authentication";
+
+  if (!user && !supabaseEnabled) {
+    const grant = localUserFromVoiceNoteGrant(url, db, noteId);
+    user = grant.user;
+    authenticationReason = grant.reason;
+  }
+  if (!user) {
+    recordVoiceNoteAccess(req, {
+      noteId,
+      action: "download",
+      outcome: "denied",
+      reason: authenticationReason
+    });
+    return sendJson(res, 401, { error: "Authentication required." });
+  }
+  if (!noteId) {
+    recordVoiceNoteAccess(req, {
+      noteId,
+      user,
+      action: "download",
+      outcome: "denied",
+      reason: "invalid_note_id"
+    });
+    return sendJson(res, 400, { error: "Invalid voice note." });
+  }
+
+  const context = supabaseEnabled
+    ? await supabaseVoiceNoteContext(user.token, noteId)
+    : localVoiceNoteContext(db, noteId);
+  if (!context) {
+    recordVoiceNoteAccess(req, {
+      noteId,
+      user,
+      action: "download",
+      outcome: "denied",
+      reason: "record_not_found"
+    });
+    return sendJson(res, isAdmin(user) ? 404 : 403, {
+      error: isAdmin(user) ? "Voice note not found." : "You do not have permission to access this voice note."
+    });
+  }
+  if (!voiceNoteAccessAllowed(context.lead, user)) {
+    recordVoiceNoteAccess(req, {
+      noteId,
+      user,
+      leadId: context.leadId,
+      action: "download",
+      outcome: "denied",
+      reason: "lead_access_denied"
+    });
+    return sendJson(res, 403, { error: "You do not have permission to access this voice note." });
+  }
+
+  if (supabaseEnabled) {
+    const objectPath = String(context.pmr.voice_note_path || "").trim();
+    if (!objectPath) {
+      recordVoiceNoteAccess(req, {
+        noteId,
+        user,
+        leadId: context.leadId,
+        action: "download",
+        outcome: "denied",
+        reason: "storage_path_missing"
+      });
+      return sendJson(res, 404, { error: "Voice note not found." });
+    }
+    const signedUrl = await createStorageSignedUrl(
+      objectPath,
+      VOICE_NOTE_SIGNED_URL_TTL_SECONDS,
+      user.token
+    );
+    recordVoiceNoteAccess(req, {
+      noteId,
+      user,
+      leadId: context.leadId,
+      action: "download_redirect",
+      outcome: "allowed"
+    });
+    res.writeHead(302, {
+      Location: signedUrl,
+      "Cache-Control": "private, no-store",
+      Pragma: "no-cache"
+    });
+    return res.end();
+  }
+
+  const fileExists = fs.existsSync(VOICE_NOTE_DIR) &&
+    fs.readdirSync(VOICE_NOTE_DIR).some(name => name.startsWith(`${noteId}.`));
+  if (!fileExists) {
+    recordVoiceNoteAccess(req, {
+      noteId,
+      user,
+      leadId: context.leadId,
+      action: "download",
+      outcome: "denied",
+      reason: "media_file_missing"
+    });
+    return sendJson(res, 404, { error: "Voice note not found." });
+  }
+  recordVoiceNoteAccess(req, {
+    noteId,
+    user,
+    leadId: context.leadId,
+    action: "download",
+    outcome: "allowed"
+  });
+  return sendVoiceNoteFile(res, noteId);
 }
 
 async function saveVoiceNote(req, res, { supabaseEnabled = false, user = null } = {}) {
@@ -593,7 +930,7 @@ async function saveVoiceNote(req, res, { supabaseEnabled = false, user = null } 
   if (supabaseEnabled) {
     if (!user) return sendJson(res, 401, { error: "Authentication required." });
     const objectPath = `${user.id}/${fileName}`;
-    await uploadStorageObject(objectPath, audio, mimeType);
+    await uploadStorageObject(objectPath, audio, mimeType, user.token);
     return sendJson(res, 201, {
       id,
       url: `/api/pmr-voice-notes/${id}`,
@@ -781,7 +1118,6 @@ async function analyzePmrTranscriptText(transcript, lead = {}) {
 }
 
 async function analyzePmrTranscript(req, res) {
-  if (!allowTranscription(req)) return sendJson(res, 429, { error: "Too many AI voice requests. Please wait one minute and try again." });
   const payload = await readBody(req);
   const transcript = String(payload.transcript || "").trim();
   const draft = await analyzePmrTranscriptText(transcript, payload.lead || {});
@@ -794,7 +1130,6 @@ async function analyzePmrTranscript(req, res) {
 
 async function transcribeAudio(req, res) {
   if (!OPENAI_API_KEY) return sendJson(res, 503, { error: "Voice transcription is not configured. Add OPENAI_API_KEY on the server." });
-  if (!allowTranscription(req)) return sendJson(res, 429, { error: "Too many voice transcription requests. Please wait one minute and try again." });
 
   const contentType = String(req.headers["content-type"] || "audio/webm").split(";")[0].trim();
   if (!contentType.startsWith("audio/") && contentType !== "application/octet-stream") {
@@ -825,16 +1160,6 @@ async function transcribeAudio(req, res) {
     normalization_model: OPENAI_ENGLISH_NORMALIZATION_MODEL,
     language: "English"
   });
-}
-
-function assistantRateAllowed(req, user) {
-  const key = `${user?.id || clientIp(req)}:${clientIp(req)}`;
-  const now = Date.now();
-  const attempts = (assistantRateLimit.get(key) || []).filter(timestamp => now - timestamp < 60_000);
-  if (attempts.length >= 30) return false;
-  attempts.push(now);
-  assistantRateLimit.set(key, attempts);
-  return true;
 }
 
 async function interpretAssistantCommand(command, nowIso) {
@@ -2047,8 +2372,9 @@ function fromSupabasePmr(pmr) {
 }
 
 function supabaseDataOptions(token, extra = {}) {
+  if (!token) throw new Error("Authenticated Supabase access token required.");
   return {
-    ...(isSupabaseAdminConfigured() ? { service: true } : { token }),
+    token,
     ...extra
   };
 }
@@ -2337,7 +2663,10 @@ async function recordAiActionLog(db, user, { leadId = null, action, status, dura
 async function createDirectorNotifications({ db, user, lead, flag, supabaseEnabled }) {
   if (supabaseEnabled) {
     try {
-      const directors = await rest("profiles?role=in.(admin,director,manager)&status=eq.active&select=id,full_name", { service: true });
+      const directors = await serviceRest(
+        "notifications.director_fanout",
+        "profiles?role=in.(admin,director,manager)&status=eq.active&select=id,full_name"
+      );
       const rows = directors.map(profile => ({
         recipient_uid: profile.id,
         lead_id: lead.id,
@@ -2348,7 +2677,10 @@ async function createDirectorNotifications({ db, user, lead, flag, supabaseEnabl
         payload: flag
       }));
       if (rows.length) {
-        await rest("notifications", { method: "POST", service: true, body: rows });
+        await serviceRest("notifications.director_fanout", "notifications", {
+          method: "POST",
+          body: rows
+        });
       }
     } catch {
       // Notifications are secondary; the flag itself is the source of truth.
@@ -2441,6 +2773,24 @@ function computePipelineMetricsForPortfolio(companies, leads, activities) {
         days_overdue: company.days_overdue
       })),
     contact_overdue_count: companies.filter(company => company.contact_overdue).length,
+    contact_overdue_companies: companies
+      .filter(company => company.contact_overdue)
+      .sort((a, b) => {
+        if (a.days_since_activity == null && b.days_since_activity != null) return -1;
+        if (a.days_since_activity != null && b.days_since_activity == null) return 1;
+        return Number(b.contact_overdue_by || 0) - Number(a.contact_overdue_by || 0)
+          || String(a.name || "").localeCompare(String(b.name || ""));
+      })
+      .map(company => ({
+        id: company.id,
+        name: company.name,
+        status: company.status,
+        next_action: company.next_action,
+        last_activity_date: company.last_activity_date,
+        days_since_activity: company.days_since_activity,
+        expected_contact_days: company.expected_contact_days,
+        contact_overdue_by: company.contact_overdue_by
+      })),
     activities_this_month: activitiesThisMonth,
     activities_last_month: activitiesLastMonth,
     activity_trend: activitiesLastMonth > 0 ? Math.round(((activitiesThisMonth - activitiesLastMonth) / activitiesLastMonth) * 100) : null
@@ -2550,6 +2900,206 @@ function integrationLogEntry(service, action, status, startedAt, error = "") {
     duration_ms: Math.max(0, Date.now() - startedAt),
     error: String(error || "").slice(0, 500)
   };
+}
+
+const MARKET_INTELLIGENCE_CRON_JOB = "market_intelligence_weekly";
+const CRON_STALE_RUN_MS = 30 * 60 * 1000;
+
+function cronRunLogEntry({ idempotencyKey, window, startedAt }) {
+  return {
+    id: `ilog-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    timestamp: startedAt,
+    service: "market_intelligence",
+    action: "weekly_cron",
+    status: "running",
+    duration_ms: 0,
+    error: "",
+    idempotency_key: idempotencyKey,
+    run_window: window,
+    completed_at: null,
+    records_read: 0,
+    records_written: 0
+  };
+}
+
+function cronAuditDetails({ window, recordsRead = 0, recordsWritten = 0, failureReason = "" }) {
+  return JSON.stringify({
+    window,
+    records_read: Math.max(0, Number(recordsRead || 0)),
+    records_written: Math.max(0, Number(recordsWritten || 0)),
+    failure_reason: String(failureReason || "").slice(0, 300)
+  }).slice(0, 500);
+}
+
+async function reserveSupabaseCronRun({ idempotencyKey, window, startedAt }) {
+  const runId = idempotencyUuid(idempotencyKey);
+  const existing = await serviceRest(
+    "cron.integration_logs",
+    `integration_logs?id=eq.${encodeURIComponent(runId)}&select=id,status,timestamp&limit=1`,
+    {}
+  );
+  const current = existing[0];
+
+  if (current) {
+    const staleRunning = current.status === "running"
+      && Date.parse(current.timestamp || "") < Date.now() - CRON_STALE_RUN_MS;
+    if (current.status !== "failed" && !staleRunning) return false;
+
+    const statusFilter = encodeURIComponent(String(current.status || ""));
+    const timestampFilter = encodeURIComponent(String(current.timestamp || ""));
+    const updated = await serviceRest(
+      "cron.integration_logs",
+      `integration_logs?id=eq.${encodeURIComponent(current.id)}&status=eq.${statusFilter}&timestamp=eq.${timestampFilter}&select=id`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: {
+          timestamp: startedAt,
+          status: "running",
+          duration_ms: 0,
+          error: cronAuditDetails({ window })
+        }
+      }
+    );
+    return Array.isArray(updated) && updated.length === 1;
+  }
+
+  try {
+    const inserted = await serviceRest("cron.integration_logs", "integration_logs?on_conflict=id", {
+      method: "POST",
+      headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
+      body: {
+        id: runId,
+        timestamp: startedAt,
+        service: "market_intelligence",
+        action: "weekly_cron",
+        status: "running",
+        duration_ms: 0,
+        error: cronAuditDetails({ window })
+      }
+    });
+    return Array.isArray(inserted) && inserted.length === 1;
+  } catch (error) {
+    if (error.status === 409) return false;
+    throw error;
+  }
+}
+
+function reserveLocalCronRun({ idempotencyKey, window, startedAt }) {
+  const localDb = readDb();
+  const existing = localDb.integration_logs.find(item => item.idempotency_key === idempotencyKey);
+  if (existing) {
+    const staleRunning = existing.status === "running"
+      && Date.parse(existing.timestamp || "") < Date.now() - CRON_STALE_RUN_MS;
+    if (existing.status !== "failed" && !staleRunning) return false;
+    Object.assign(existing, cronRunLogEntry({ idempotencyKey, window, startedAt }), {
+      id: existing.id
+    });
+  } else {
+    localDb.integration_logs.unshift(cronRunLogEntry({ idempotencyKey, window, startedAt }));
+  }
+  localDb.integration_logs = localDb.integration_logs.slice(0, 500);
+  writeDb(localDb);
+  return true;
+}
+
+async function completeSupabaseCronRun(result) {
+  const runId = idempotencyUuid(result.idempotencyKey);
+  const updated = await serviceRest(
+    "cron.integration_logs",
+    `integration_logs?id=eq.${encodeURIComponent(runId)}&select=id`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: {
+        status: result.status,
+        duration_ms: result.durationMs,
+        error: cronAuditDetails({
+          window: result.window,
+          recordsRead: result.recordsRead,
+          recordsWritten: result.recordsWritten,
+          failureReason: result.error
+        })
+      }
+    }
+  );
+  if (!Array.isArray(updated) || updated.length !== 1) {
+    throw new Error("Scheduled job reservation could not be completed.");
+  }
+}
+
+function completeLocalCronRun(result) {
+  const localDb = readDb();
+  const entry = localDb.integration_logs.find(item => item.idempotency_key === result.idempotencyKey);
+  if (!entry) throw new Error("Scheduled job reservation could not be completed.");
+  Object.assign(entry, {
+    status: result.status,
+    duration_ms: result.durationMs,
+    error: result.error,
+    completed_at: new Date().toISOString(),
+    records_read: result.recordsRead,
+    records_written: result.recordsWritten
+  });
+  writeDb(localDb);
+}
+
+async function executeMarketIntelligenceCron(supabaseEnabled) {
+  if (supabaseEnabled) {
+    const leadRows = await serviceRest("cron.market_intelligence", "leads?select=*&order=created_at.desc");
+    const fetched = await fetchMarketIntelligence();
+    const matched = matchIntelligenceToLeads(fetched.items, leadRows.map(fromSupabaseLead));
+    if (matched.length) {
+      await serviceRest("cron.market_intelligence", "market_intelligence?on_conflict=url", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: matched
+      });
+    }
+    return {
+      recordsRead: leadRows.length,
+      recordsWritten: matched.length,
+      response: {
+        imported: matched.length,
+        disabled: fetched.disabled,
+        reason: fetched.reason || ""
+      }
+    };
+  }
+
+  const localDb = readDb();
+  const fetched = await fetchMarketIntelligence();
+  const matched = matchIntelligenceToLeads(
+    fetched.items,
+    localDb.leads.map(leadWithDerivedFields)
+  );
+  const byUrl = new Map((localDb.market_intelligence || []).map(item => [item.url || item.id, item]));
+  matched.forEach(item => byUrl.set(item.url || item.id, item));
+  localDb.market_intelligence = [...byUrl.values()]
+    .sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || "")))
+    .slice(0, 300);
+  writeDb(localDb);
+  return {
+    recordsRead: localDb.leads.length,
+    recordsWritten: matched.length,
+    response: {
+      imported: matched.length,
+      disabled: fetched.disabled,
+      reason: fetched.reason || ""
+    }
+  };
+}
+
+async function handleMarketIntelligenceCron(req, res, supabaseEnabled) {
+  const result = await runSecuredScheduledJob({
+    req,
+    configuredSecret: process.env.CRON_SECRET,
+    jobName: MARKET_INTELLIGENCE_CRON_JOB,
+    reserve: supabaseEnabled ? reserveSupabaseCronRun : reserveLocalCronRun,
+    execute: () => executeMarketIntelligenceCron(supabaseEnabled),
+    complete: supabaseEnabled ? completeSupabaseCronRun : completeLocalCronRun,
+    logger: console
+  });
+  return sendJson(res, result.status, result.body);
 }
 
 async function recordIntegrationLog(db, user, service, action, status, startedAt, error = "", supabaseEnabled = false) {
@@ -2814,9 +3364,10 @@ function activityManagers(db) {
 
 async function activityManagerIds(db, supabaseEnabled) {
   if (!supabaseEnabled) return activityManagers(db);
-  const profiles = await rest(
+  const profiles = await serviceRest(
+    "workflow.activity_managers",
     "profiles?role=in.(admin,director,manager)&status=eq.active&select=id",
-    { service: true }
+    {}
   ).catch(() => []);
   return profiles.map(profile => profile.id).filter(Boolean);
 }
@@ -3905,6 +4456,9 @@ async function assistantDueDrafts(db, user, supabaseEnabled) {
 
 async function handleApi(req, res, url) {
   const supabaseEnabled = isSupabaseConfigured();
+  if (req.method === "GET" && url.pathname === "/api/cron/fetch-market-intelligence") {
+    return handleMarketIntelligenceCron(req, res, supabaseEnabled);
+  }
   const db = supabaseEnabled ? null : readDb();
 
   if (req.method === "GET" && url.pathname === "/api/health") {
@@ -3925,76 +4479,54 @@ async function handleApi(req, res, url) {
     });
   }
 
-  if (req.method === "GET" && url.pathname === "/api/cron/fetch-market-intelligence") {
-    const cronSecret = String(process.env.CRON_SECRET || "").trim();
-    if (cronSecret && url.searchParams.get("secret") !== cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
-      return sendJson(res, 401, { error: "Invalid cron secret." });
-    }
-    const startedAt = Date.now();
-    if (supabaseEnabled) {
-      const leadRows = await rest("leads?select=*&order=created_at.desc", { service: true });
-      const fetched = await fetchMarketIntelligence();
-      const matched = matchIntelligenceToLeads(fetched.items, leadRows.map(fromSupabaseLead));
-      if (matched.length) {
-        await rest("market_intelligence?on_conflict=url", {
-          method: "POST",
-          service: true,
-          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-          body: matched
-        }).catch(() => null);
-      }
-      await rest("integration_logs", {
-        method: "POST",
-        service: true,
-        body: {
-          timestamp: new Date().toISOString(),
-          service: "market_intelligence",
-          action: "weekly_cron",
-          status: fetched.disabled ? "disabled" : "success",
-          duration_ms: Date.now() - startedAt,
-          error: fetched.reason || ""
-        }
-      }).catch(() => null);
-      return sendJson(res, 200, { imported: matched.length, disabled: fetched.disabled, reason: fetched.reason || "" });
-    }
-    const localDb = readDb();
-    const fetched = await fetchMarketIntelligence();
-    const matched = matchIntelligenceToLeads(fetched.items, localDb.leads.map(leadWithDerivedFields));
-    const byUrl = new Map((localDb.market_intelligence || []).map(item => [item.url || item.id, item]));
-    matched.forEach(item => byUrl.set(item.url || item.id, item));
-    localDb.market_intelligence = [...byUrl.values()].sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || ""))).slice(0, 300);
-    localDb.integration_logs.unshift(integrationLogEntry("market_intelligence", "weekly_cron", fetched.disabled ? "disabled" : "success", startedAt, fetched.reason || ""));
-    localDb.integration_logs = localDb.integration_logs.slice(0, 500);
-    writeDb(localDb);
-    return sendJson(res, 200, { imported: matched.length, disabled: fetched.disabled, reason: fetched.reason || "" });
-  }
-
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
     const payload = await readBody(req);
     const email = String(payload.email || "").trim().toLowerCase();
+    const normalizedAccount = normalizeAccountIdentifier(email) || "missing-account";
+    const ipLimit = await enforceRateLimit(req, res, db, supabaseEnabled, {
+      scope: "login:ip",
+      subject: clientIp(req),
+      policyName: "login_ip"
+    });
+    if (!ipLimit) return;
+    const accountLimit = await enforceRateLimit(req, res, db, supabaseEnabled, {
+      scope: "login:account",
+      subject: normalizedAccount,
+      policyName: "login_account"
+    });
+    if (!accountLimit) return;
     if (supabaseEnabled) {
-      const session = await signIn(email, String(payload.password || ""));
-      const user = await currentSupabaseUser({ headers: { authorization: `Bearer ${session.access_token}` } });
-      if (!user) return sendJson(res, 403, { error: "Your profile is not active. Contact the administrator." });
-      return sendJson(res, 200, { token: session.access_token, refresh_token: session.refresh_token, user });
+      try {
+        const session = await signIn(email, String(payload.password || ""));
+        const user = await currentSupabaseUser({ headers: { authorization: `Bearer ${session.access_token}` } });
+        if (!user) return sendJson(res, 403, { error: "Your profile is not active. Contact the administrator." });
+        await resetDurableRateLimit(db, supabaseEnabled, "login:account", normalizedAccount);
+        return sendJson(res, 200, { token: session.access_token, refresh_token: session.refresh_token, user });
+      } catch (error) {
+        await loginFailureDelay(accountLimit.count);
+        throw error;
+      }
     }
     const user = db.users.find(item => String(item.email || "").toLowerCase() === email && item.status === "active");
     if (!user || !passwordMatches(payload.password, user.password_hash)) {
+      await loginFailureDelay(accountLimit.count);
       return sendJson(res, 401, { error: "Invalid email or password." });
     }
     user.last_login_at = new Date().toISOString();
     user.updated_at = new Date().toISOString();
     writeDb(db);
+    await resetDurableRateLimit(db, supabaseEnabled, "login:account", normalizedAccount);
     return sendJson(res, 200, { token: issueToken(user), user: publicUser(user) });
   }
 
   const voiceNoteMatch = url.pathname.match(/^\/api\/pmr-voice-notes\/([^/]+)$/);
   if (req.method === "GET" && voiceNoteMatch) {
-    return sendVoiceNote(req, res, voiceNoteMatch[1]);
+    return handleVoiceNoteDownload(req, res, url, { supabaseEnabled, db });
   }
 
   const user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
+  if (!await enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)) return;
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     return sendJson(res, 200, { user: publicUser(user) });
@@ -4010,9 +4542,6 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/ai-assistant/interpret") {
-    if (!assistantRateAllowed(req, user)) {
-      return sendJson(res, 429, { error: "Too many assistant requests. Wait one minute and try again." });
-    }
     const body = await readBody(req, 60_000);
     const originalCommand = cleanAssistantText(body.command, 3000);
     if (originalCommand.length < 3) return sendJson(res, 400, { error: "Type or speak a CRM command first." });
@@ -4873,17 +5402,58 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && voiceNoteSignedMatch) {
     const id = safeVoiceNoteId(voiceNoteSignedMatch[1]);
     if (!id) return sendJson(res, 400, { error: "Invalid voice note." });
-    if (supabaseEnabled) {
-      const pmrs = await rest(`pmrs?voice_note_id=eq.${encodeURIComponent(id)}&select=lead_id,voice_note_path&limit=1`, supabaseDataOptions(user.token));
-      if (!pmrs[0]) return sendJson(res, 404, { error: "Voice note not found." });
-      const lead = await getSupabaseLead(user.token, pmrs[0].lead_id, user);
-      if (!lead) return sendJson(res, 404, { error: "Voice note not found." });
-      const objectPath = String(pmrs[0].voice_note_path || "").trim();
-      if (!objectPath) return sendJson(res, 404, { error: "Voice note not found." });
-      const signedUrl = await createStorageSignedUrl(objectPath, 3600);
-      return sendJson(res, 200, { url: signedUrl, expires_in: 3600 });
+    const context = supabaseEnabled
+      ? await supabaseVoiceNoteContext(user.token, id)
+      : localVoiceNoteContext(db, id);
+    if (!context) {
+      recordVoiceNoteAccess(req, {
+        noteId: id,
+        user,
+        action: "signed_url",
+        outcome: "denied",
+        reason: "record_not_found"
+      });
+      return sendJson(res, isAdmin(user) ? 404 : 403, {
+        error: isAdmin(user) ? "Voice note not found." : "You do not have permission to access this voice note."
+      });
     }
-    return sendJson(res, 200, { url: `/api/pmr-voice-notes/${id}` });
+    if (!voiceNoteAccessAllowed(context.lead, user)) {
+      recordVoiceNoteAccess(req, {
+        noteId: id,
+        user,
+        leadId: context.leadId,
+        action: "signed_url",
+        outcome: "denied",
+        reason: "lead_access_denied"
+      });
+      return sendJson(res, 403, { error: "You do not have permission to access this voice note." });
+    }
+
+    let signedUrl;
+    if (supabaseEnabled) {
+      const objectPath = String(context.pmr.voice_note_path || "").trim();
+      if (!objectPath) return sendJson(res, 404, { error: "Voice note not found." });
+      signedUrl = await createStorageSignedUrl(
+        objectPath,
+        VOICE_NOTE_SIGNED_URL_TTL_SECONDS,
+        user.token
+      );
+    } else {
+      signedUrl = localVoiceNoteGrantUrl(id, user);
+    }
+    recordVoiceNoteAccess(req, {
+      noteId: id,
+      user,
+      leadId: context.leadId,
+      action: "signed_url",
+      outcome: "allowed"
+    });
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
+    return sendJson(res, 200, {
+      url: signedUrl,
+      expires_in: VOICE_NOTE_SIGNED_URL_TTL_SECONDS
+    });
   }
 
   if (req.method === "POST" && url.pathname === "/api/places/search") {
@@ -5711,7 +6281,13 @@ async function handleApi(req, res, url) {
     });
     const storageKey = storageKeyForActivityAttachment(lead.id, found.activity.id, validated.filename);
     if (supabaseEnabled) {
-      await uploadStorageObjectToBucket(ACTIVITY_ATTACHMENT_BUCKET, storageKey, buffer, validated.contentType);
+      await uploadStorageObjectToBucket(
+        ACTIVITY_ATTACHMENT_BUCKET,
+        storageKey,
+        buffer,
+        validated.contentType,
+        user.token
+      );
     } else {
       ensureActivityAttachmentDir();
       const localPath = path.join(DATA_DIR, storageKey);
@@ -5763,7 +6339,12 @@ async function handleApi(req, res, url) {
     const attachment = found.activity?.attachments?.find(item => item.id === activityAttachmentDownloadMatch[3] && !item.removed_at);
     if (!attachment) return sendJson(res, 404, { error: "Attachment not found." });
     if (supabaseEnabled) {
-      const signedUrl = await createStorageSignedUrlForBucket(ACTIVITY_ATTACHMENT_BUCKET, attachment.storage_key, 300);
+      const signedUrl = await createStorageSignedUrlForBucket(
+        ACTIVITY_ATTACHMENT_BUCKET,
+        attachment.storage_key,
+        300,
+        user.token
+      );
       res.writeHead(302, { Location: signedUrl, "Cache-Control": "no-store" });
       return res.end();
     }
@@ -6242,6 +6823,7 @@ function serveStatic(req, res, url) {
 }
 
 const server = http.createServer(async (req, res) => {
+  applySecurityHeaders(res);
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (url.pathname.startsWith("/api/")) {
@@ -6267,6 +6849,7 @@ server.normalizeLead = normalizeLead;
 server.normalizePmr = normalizePmr;
 server.normalizePmrAnalysisDraft = normalizePmrAnalysisDraft;
 server.leadBelongsToUser = leadBelongsToUser;
+server.voiceNoteAccessAllowed = voiceNoteAccessAllowed;
 server.visibleLeadsForUser = visibleLeadsForUser;
 server.prepareLeadPayloadForUser = prepareLeadPayloadForUser;
 server.weeklyReportDefaults = weeklyReportDefaults;
