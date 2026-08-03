@@ -140,3 +140,25 @@ test("F-04 migration covers core tables and private CRM media", () => {
   assert.match(migration, /bucket_id = 'pmr-voice-notes'/i);
   assert.match(migration, /owner_id = auth\.uid\(\)::text/i);
 });
+
+test("production notification reconciliation precedes recipient-scoped policies", () => {
+  const migrationDirectory = path.join(__dirname, "..", "supabase", "migrations");
+  const reconciliationName = "20260803105000_reconcile_legacy_notifications_schema.sql";
+  const policyName = "20260803105004_replace_legacy_rls_policies.sql";
+  const reconciliation = fs.readFileSync(
+    path.join(migrationDirectory, reconciliationName),
+    "utf8"
+  );
+  const policyMigration = fs.readFileSync(
+    path.join(migrationDirectory, policyName),
+    "utf8"
+  );
+
+  assert.ok(reconciliationName < policyName);
+  assert.match(reconciliation, /add column if not exists recipient_uid uuid/i);
+  assert.match(reconciliation, /add column if not exists payload jsonb/i);
+  assert.match(reconciliation, /coalesce\(data, '\{\}'::jsonb\)/i);
+  assert.match(reconciliation, /notifications_recipient_uid_required/i);
+  assert.match(reconciliation, /notifications_recipient_status_idx/i);
+  assert.match(policyMigration, /using \(recipient_uid = auth\.uid\(\)\)/i);
+});
