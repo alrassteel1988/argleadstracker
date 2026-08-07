@@ -4,7 +4,9 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "pmr-voice-notes";
 const SERVICE_ROLE_OPERATIONS = new Set([
   "auth.create_user",
+  "auth.update_user",
   "auth.list_users",
+  "auth.recover_admin_profile",
   "cron.integration_logs",
   "cron.market_intelligence",
   "notifications.director_fanout",
@@ -159,6 +161,15 @@ async function createAuthUser({ email, password, name, territory, role = "salesm
   });
 }
 
+async function updateAuthUser(id, attributes = {}) {
+  return request(`/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    service: true,
+    serviceOperation: "auth.update_user",
+    body: attributes
+  });
+}
+
 async function listAuthUsers(page = 1, perPage = 1000) {
   return request(`/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
     service: true,
@@ -220,6 +231,7 @@ module.exports = {
   serviceRest,
   signIn,
   signOut,
+  updateAuthUser,
   uploadStorageObject,
   uploadStorageObjectToBucket
 };

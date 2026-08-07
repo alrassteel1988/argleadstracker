@@ -31,6 +31,7 @@ const {
   serviceRest,
   signIn,
   signOut,
+  updateAuthUser,
   uploadStorageObject,
   uploadStorageObjectToBucket
 } = require("./supabase-client");
@@ -4684,6 +4685,51 @@ async function handleApi(req, res, url) {
     writeDb(db);
     await resetDurableRateLimit(db, supabaseEnabled, "login:account", normalizedAccount);
     return sendJson(res, 200, { token: issueToken(user), user: publicUser(user) });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/recover-login") {
+    const recoveryToken = String(process.env.ADMIN_RECOVERY_TOKEN || "").trim();
+    const suppliedToken = String(req.headers["x-admin-recovery-token"] || "").trim();
+    if (!recoveryToken) return sendJson(res, 404, { error: "Not found" });
+    if (!suppliedToken || suppliedToken !== recoveryToken) return sendJson(res, 403, { error: "Recovery token required." });
+    if (!supabaseEnabled || !isSupabaseAdminConfigured()) {
+      return sendJson(res, 503, { error: "Supabase admin credentials are required for recovery." });
+    }
+    const payload = await readBody(req);
+    const email = String(payload.email || process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+    const password = String(payload.password || process.env.ADMIN_BOOTSTRAP_PASSWORD || "");
+    const name = String(payload.name || "Glory").trim();
+    if (!email || password.length < 8) return sendJson(res, 400, { error: "Admin email and password are required." });
+
+    const authResult = await listAuthUsers();
+    const authUsers = Array.isArray(authResult?.users) ? authResult.users : Array.isArray(authResult) ? authResult : [];
+    let account = authUsers.find(item => String(item.email || "").trim().toLowerCase() === email);
+    if (account) {
+      account = await updateAuthUser(account.id, {
+        password,
+        email_confirm: true,
+        ban_duration: "none",
+        app_metadata: { role: "admin" },
+        user_metadata: { name, territory: "Mixed" }
+      });
+    } else {
+      account = await createAuthUser({ email, password, name, territory: "Mixed", role: "admin" });
+    }
+    const adminId = account.id || account.user?.id;
+    if (!adminId) return sendJson(res, 500, { error: "Admin account recovery did not return a user id." });
+    await serviceRest("auth.recover_admin_profile", "profiles?on_conflict=id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: {
+        id: adminId,
+        full_name: name,
+        role: "admin",
+        territory: "Mixed",
+        status: "active",
+        updated_at: new Date().toISOString()
+      }
+    });
+    return sendJson(res, 200, { ok: true, email, role: "admin", status: "active" });
   }
 
   const voiceNoteMatch = url.pathname.match(/^\/api\/pmr-voice-notes\/([^/]+)$/);
