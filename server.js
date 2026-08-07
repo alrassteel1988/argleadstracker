@@ -6935,12 +6935,7 @@ async function handleApi(req, res, url) {
         updates.next_action_date = activity.next_action_date;
         updates.activity_purpose = activity.activity_purpose;
       }
-      const leads = await rest(`leads?id=eq.${encodeURIComponent(activityMatch[1])}&select=*`, {
-        method: "PATCH",
-        ...supabaseDataOptions(user.token),
-        headers: { Prefer: "return=representation" },
-        body: updates
-      });
+      const leads = await patchSupabaseLeadWithOptionalFallback(user.token, activityMatch[1], updates);
       return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), activity });
     }
     const lead = db.leads.find(item => item.id === activityMatch[1]);

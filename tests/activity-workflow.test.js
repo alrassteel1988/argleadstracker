@@ -108,6 +108,11 @@ assert.throws(
 ].forEach(token => assert(serverSource.includes(token), `${token} must be implemented server-side`));
 
 assert(serverSource.includes('url.pathname.match(/^\\/api\\/leads\\/([^/]+)\\/delete-requests\\/([^/]+)\\/cancel$/)'));
+assert.match(
+  serverSource,
+  /const activityMatch = url\.pathname\.match\([\s\S]*?patchSupabaseLeadWithOptionalFallback\(user\.token, activityMatch\[1\], updates\)/,
+  "Manual Add New Activity must tolerate production leads schemas missing optional mirror columns"
+);
 assert(htmlSource.includes("Upload PNG, PDF, Word, or Excel files") || htmlSource.includes("PNG, PDF, Word, or Excel files"));
 
 console.log("Activity workflow tests passed.");
