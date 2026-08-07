@@ -1,0 +1,489 @@
+=== STATUS ===
+?? outputs/
+?? scripts/
+?? tmp/
+=== MATCHES ===
+tests\admin-salesman-permissions.e2e.test.js-62-    assert.equal(salesmanAccount.response.status, 201);
+tests\admin-salesman-permissions.e2e.test.js-63-
+tests\admin-salesman-permissions.e2e.test.js:64:    const ownLead = await request(baseUrl, "/api/leads", {
+tests\admin-salesman-permissions.e2e.test.js-65-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-66-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-69-    assert.equal(ownLead.response.status, 201);
+tests\admin-salesman-permissions.e2e.test.js-70-
+tests\admin-salesman-permissions.e2e.test.js:71:    const otherLead = await request(baseUrl, "/api/leads", {
+tests\admin-salesman-permissions.e2e.test.js-72-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-73-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-125-    assert(configAudit.data.some(item => item.action === "configuration_applied"));
+tests\admin-salesman-permissions.e2e.test.js-126-
+tests\admin-salesman-permissions.e2e.test.js:127:    const salesmanLeads = await request(baseUrl, "/api/leads", { token: salesmanToken });
+tests\admin-salesman-permissions.e2e.test.js-128-    assert.equal(salesmanLeads.response.status, 200);
+tests\admin-salesman-permissions.e2e.test.js-129-    assert(salesmanLeads.data.some(lead => lead.id === ownLead.data.id));
+--
+tests\admin-salesman-permissions.e2e.test.js-148-    assert.equal(pdfBytes.slice(0, 4).toString("utf8"), "%PDF");
+tests\admin-salesman-permissions.e2e.test.js-149-
+tests\admin-salesman-permissions.e2e.test.js:150:    const forbiddenPatch = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
+tests\admin-salesman-permissions.e2e.test.js-151-      method: "PATCH",
+tests\admin-salesman-permissions.e2e.test.js-152-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-155-    assert.equal(forbiddenPatch.response.status, 404);
+tests\admin-salesman-permissions.e2e.test.js-156-
+tests\admin-salesman-permissions.e2e.test.js:157:    const invalidStructuredActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+tests\admin-salesman-permissions.e2e.test.js-158-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-159-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-169-    assert.equal(invalidStructuredActivity.response.status, 400);
+tests\admin-salesman-permissions.e2e.test.js-170-
+tests\admin-salesman-permissions.e2e.test.js:171:    const forbiddenStructuredActivity = await request(baseUrl, `/api/leads/${otherLead.data.id}/activities`, {
+tests\admin-salesman-permissions.e2e.test.js-172-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-173-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-191-      notes: "Reviewed the quotation and agreed to send the revised commercial offer."
+tests\admin-salesman-permissions.e2e.test.js-192-    };
+tests\admin-salesman-permissions.e2e.test.js:193:    const structuredActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+tests\admin-salesman-permissions.e2e.test.js-194-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-195-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-204-    assert.equal(structuredActivity.data.lead.next_action, "To Send Email");
+tests\admin-salesman-permissions.e2e.test.js-205-
+tests\admin-salesman-permissions.e2e.test.js:206:    const structuredActivityRetry = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+tests\admin-salesman-permissions.e2e.test.js-207-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-208-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-213-    assert.equal(structuredActivityRetry.data.activity.id, structuredActivity.data.activity.id);
+tests\admin-salesman-permissions.e2e.test.js-214-
+tests\admin-salesman-permissions.e2e.test.js:215:    const adminStructuredActivity = await request(baseUrl, `/api/leads/${otherLead.data.id}/activities`, {
+tests\admin-salesman-permissions.e2e.test.js-216-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-217-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-229-    assert.equal(adminStructuredActivity.data.lead.next_action, "To Visit");
+tests\admin-salesman-permissions.e2e.test.js-230-
+tests\admin-salesman-permissions.e2e.test.js:231:    const handoffWithoutNote = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
+tests\admin-salesman-permissions.e2e.test.js-232-      method: "PATCH",
+tests\admin-salesman-permissions.e2e.test.js-233-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-236-    assert.equal(handoffWithoutNote.response.status, 400);
+tests\admin-salesman-permissions.e2e.test.js-237-
+tests\admin-salesman-permissions.e2e.test.js:238:    const handoffWithNote = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
+tests\admin-salesman-permissions.e2e.test.js-239-      method: "PATCH",
+tests\admin-salesman-permissions.e2e.test.js-240-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-248-    assert.equal(handoffWithNote.data.territory, "UAE-North");
+tests\admin-salesman-permissions.e2e.test.js-249-
+tests\admin-salesman-permissions.e2e.test.js:250:    const handoffHistory = await request(baseUrl, `/api/leads/${otherLead.data.id}/handoffs`, { token: adminToken });
+tests\admin-salesman-permissions.e2e.test.js-251-    assert.equal(handoffHistory.response.status, 200);
+tests\admin-salesman-permissions.e2e.test.js-252-    assert.equal(handoffHistory.data.length, 1);
+tests\admin-salesman-permissions.e2e.test.js-253-    assert.equal(handoffHistory.data[0].new_owner_name, "E2E Salesman");
+tests\admin-salesman-permissions.e2e.test.js-254-
+tests\admin-salesman-permissions.e2e.test.js:255:    const directDeleteAsSalesman = await request(baseUrl, `/api/leads/${ownLead.data.id}`, {
+tests\admin-salesman-permissions.e2e.test.js-256-      method: "DELETE",
+tests\admin-salesman-permissions.e2e.test.js-257-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-260-    assert.equal(directDeleteAsSalesman.response.status, 403);
+tests\admin-salesman-permissions.e2e.test.js-261-
+tests\admin-salesman-permissions.e2e.test.js:262:    const activity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+tests\admin-salesman-permissions.e2e.test.js-263-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-264-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-267-    assert.equal(activity.response.status, 201);
+tests\admin-salesman-permissions.e2e.test.js-268-
+tests\admin-salesman-permissions.e2e.test.js:269:    const correction = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/0`, {
+tests\admin-salesman-permissions.e2e.test.js-270-      method: "PATCH",
+tests\admin-salesman-permissions.e2e.test.js-271-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-277-    assert(correction.data.lead.activities.some(item => item.id === activity.data.activity.id));
+tests\admin-salesman-permissions.e2e.test.js-278-
+tests\admin-salesman-permissions.e2e.test.js:279:    const directActivityDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/1`, {
+tests\admin-salesman-permissions.e2e.test.js-280-      method: "DELETE",
+tests\admin-salesman-permissions.e2e.test.js-281-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-284-    assert.equal(directActivityDelete.response.status, 405);
+tests\admin-salesman-permissions.e2e.test.js-285-
+tests\admin-salesman-permissions.e2e.test.js:286:    const activityDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
+tests\admin-salesman-permissions.e2e.test.js-287-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-288-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-292-    assert.equal(activityDeleteRequest.data.request.request_status, "pending");
+tests\admin-salesman-permissions.e2e.test.js-293-
+tests\admin-salesman-permissions.e2e.test.js:294:    const approveWithoutPassword = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${activityDeleteRequest.data.request.id}/approve`, {
+tests\admin-salesman-permissions.e2e.test.js-295-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-296-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-299-    assert.equal(approveWithoutPassword.response.status, 403);
+tests\admin-salesman-permissions.e2e.test.js-300-
+tests\admin-salesman-permissions.e2e.test.js:301:    const approveActivityDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${activityDeleteRequest.data.request.id}/approve`, {
+tests\admin-salesman-permissions.e2e.test.js-302-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-303-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-308-    assert(approveActivityDelete.data.lead.activities.some(item => item.type === "Activity Review"));
+tests\admin-salesman-permissions.e2e.test.js-309-
+tests\admin-salesman-permissions.e2e.test.js:310:    const meetingActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+tests\admin-salesman-permissions.e2e.test.js-311-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-312-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-315-    assert.equal(meetingActivity.response.status, 201, JSON.stringify(meetingActivity.data));
+tests\admin-salesman-permissions.e2e.test.js-316-
+tests\admin-salesman-permissions.e2e.test.js:317:    const linkedPmr = await request(baseUrl, `/api/leads/${ownLead.data.id}/pmrs`, {
+tests\admin-salesman-permissions.e2e.test.js-318-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-319-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-331-    assert(linkedPmr.data.lead.activities.some(item => item.id === meetingActivity.data.activity.id));
+tests\admin-salesman-permissions.e2e.test.js-332-
+tests\admin-salesman-permissions.e2e.test.js:333:    const autoLinkedPmr = await request(baseUrl, `/api/leads/${ownLead.data.id}/pmrs`, {
+tests\admin-salesman-permissions.e2e.test.js-334-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-335-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-345-    assert(autoLinkedPmr.data.lead.activities.some(item => item.id === autoLinkedPmr.data.pmr.activity_id && item.type === "In-Person Meeting"));
+tests\admin-salesman-permissions.e2e.test.js-346-
+tests\admin-salesman-permissions.e2e.test.js:347:    const leadDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
+tests\admin-salesman-permissions.e2e.test.js-348-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-349-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-352-    assert.equal(leadDeleteRequest.response.status, 201);
+tests\admin-salesman-permissions.e2e.test.js-353-
+tests\admin-salesman-permissions.e2e.test.js:354:    const rejectLeadDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${leadDeleteRequest.data.request.id}/reject`, {
+tests\admin-salesman-permissions.e2e.test.js-355-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-356-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-360-    assert.equal(rejectLeadDelete.data.request.request_status, "rejected");
+tests\admin-salesman-permissions.e2e.test.js-361-
+tests\admin-salesman-permissions.e2e.test.js:362:    const secondLeadDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
+tests\admin-salesman-permissions.e2e.test.js-363-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-364-      token: salesmanToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-367-    assert.equal(secondLeadDeleteRequest.response.status, 201);
+tests\admin-salesman-permissions.e2e.test.js-368-
+tests\admin-salesman-permissions.e2e.test.js:369:    const approveLeadDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${secondLeadDeleteRequest.data.request.id}/approve`, {
+tests\admin-salesman-permissions.e2e.test.js-370-      method: "POST",
+tests\admin-salesman-permissions.e2e.test.js-371-      token: adminToken,
+--
+tests\admin-salesman-permissions.e2e.test.js-375-    assert.equal(approveLeadDelete.data.deleted, true);
+tests\admin-salesman-permissions.e2e.test.js-376-
+tests\admin-salesman-permissions.e2e.test.js:377:    const deletedLeadHidden = await request(baseUrl, "/api/leads", { token: adminToken });
+tests\admin-salesman-permissions.e2e.test.js-378-    assert(!deletedLeadHidden.data.some(lead => lead.id === ownLead.data.id));
+tests\admin-salesman-permissions.e2e.test.js-379-
+--
+server.js-1827-        size: attachment.size,
+server.js-1828-        uploaded_at: attachment.uploaded_at,
+server.js:1829:        download_url: `/api/leads/${encodeURIComponent(lead.id)}/activities/${encodeURIComponent(activity.id)}/attachments/${encodeURIComponent(attachment.id)}`
+server.js-1830-      })),
+server.js-1831-      audit_history: activity.audit_history || [],
+--
+server.js-5828-  }
+server.js-5829-
+server.js:5830:  if (req.method === "POST" && url.pathname === "/api/leads/enrich-company") {
+server.js-5831-    const payload = await readBody(req);
+server.js-5832-    const companyName = String(payload.companyName || payload.company_name || "").trim();
+--
+server.js-5957-  }
+server.js-5958-
+server.js:5959:  if (req.method === "GET" && url.pathname === "/api/leads") {
+server.js-5960-    if (supabaseEnabled) {
+server.js-5961-      const leads = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
+--
+server.js-5965-  }
+server.js-5966-
+server.js:5967:  if (req.method === "GET" && url.pathname === "/api/leads/duplicates") {
+server.js-5968-    const name = String(url.searchParams.get("name") || "").trim();
+server.js-5969-    if (name.length < 4) return sendJson(res, 200, { matches: [] });
+--
+server.js-6042-  }
+server.js-6043-
+server.js:6044:  if (req.method === "POST" && url.pathname === "/api/leads") {
+server.js-6045-    const rawPayload = prepareLeadPayloadForUser(await readBody(req), user);
+server.js-6046-    const payload = await googleEnrichPayload(rawPayload, req);
+--
+server.js-6085-  }
+server.js-6086-
+server.js:6087:  if (req.method === "POST" && url.pathname === "/api/leads/import") {
+server.js-6088-    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+server.js-6089-    const payload = await readBody(req);
+--
+server.js-6683-        size: attachment.size,
+server.js-6684-        uploaded_at: attachment.uploaded_at,
+server.js:6685:        download_url: `/api/leads/${encodeURIComponent(lead.id)}/activities/${encodeURIComponent(found.activity.id)}/attachments/${encodeURIComponent(attachment.id)}`
+server.js-6686-      },
+server.js-6687-      activity: found.activity
+--
+client.js-1414-      try {
+client.js-1415-        if (next.kind === "activity") {
+client.js:1416:          await api(`/api/leads/${encodeURIComponent(next.lead_id)}/activities`, {
+client.js-1417-            method: "POST",
+client.js-1418-            body: JSON.stringify(next.payload)
+--
+client.js-1421-          await syncPendingPmr(next);
+client.js-1422-        } else if (next.kind === "lead_update") {
+client.js:1423:          await api(`/api/leads/${encodeURIComponent(next.lead_id)}`, {
+client.js-1424-            method: "PATCH",
+client.js-1425-            body: JSON.stringify(next.payload)
+--
+client.js-1469-    });
+client.js-1470-  }
+client.js:1471:  await api(`/api/leads/${encodeURIComponent(item.lead_id)}/pmrs`, {
+client.js-1472-    method: "POST",
+client.js-1473-    body: JSON.stringify(payload)
+--
+client.js-1988-  const reason = window.prompt(promptText);
+client.js-1989-  if (!reason?.trim()) return;
+client.js:1990:  await api(`/api/leads/${encodeURIComponent(leadId)}/delete-requests`, {
+client.js-1991-    method: "POST",
+client.js-1992-    body: JSON.stringify({
+--
+client.js-2015-    return;
+client.js-2016-  }
+client.js:2017:  const result = await api(`/api/leads/${encodeURIComponent(leadId)}/delete-requests/${encodeURIComponent(requestId)}/${encodeURIComponent(action)}`, {
+client.js-2018-    method: "POST",
+client.js-2019-    body: JSON.stringify({ admin_password: password, note })
+--
+client.js-2104-  if (!requestId || !leadId) return;
+client.js-2105-  try {
+client.js:2106:    await api(`/api/leads/${encodeURIComponent(leadId)}/delete-requests/${encodeURIComponent(requestId)}/cancel`, {
+client.js-2107-      method: "POST"
+client.js-2108-    });
+--
+client.js-2125-    const lead = state.leads.find(item => item.id === leadId);
+client.js-2126-    const activity = lead?.activities?.[Number(activityIndex)];
+client.js:2127:    await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityIndex)}`, {
+client.js-2128-      method: "PATCH",
+client.js-2129-      body: JSON.stringify({
+--
+client.js-2138-    });
+client.js-2139-  } else {
+client.js:2140:    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+client.js-2141-      method: "POST",
+client.js-2142-      body: JSON.stringify({
+--
+client.js-2163-    const lead = state.leads.find(item => item.id === leadId);
+client.js-2164-    const activity = lead?.activities?.[Number(activityIndex)];
+client.js:2165:    await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityIndex)}`, {
+client.js-2166-      method: "PATCH",
+client.js-2167-      body: JSON.stringify({
+--
+client.js-2177-  } else {
+client.js-2178-    const normalizedAction = normalizeNextActionPlan(text);
+client.js:2179:    await api(`/api/leads/${encodeURIComponent(leadId)}`, {
+client.js-2180-      method: "PATCH",
+client.js-2181-      body: JSON.stringify({ next_action: normalizedAction, next_action_date: date })
+client.js-2182-    });
+client.js:2183:    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+client.js-2184-      method: "POST",
+client.js-2185-      body: JSON.stringify({ type: "Note", text: `Follow-up rescheduled to ${date} ${time}: ${normalizedAction}` })
+--
+client.js-2192-  const note = window.prompt("Activity note:");
+client.js-2193-  if (!note?.trim()) return;
+client.js:2194:  await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+client.js-2195-    method: "POST",
+client.js-2196-    body: JSON.stringify({ type: "Note", text: note.trim() })
+--
+client.js-2588-  try {
+client.js-2589-    if (!navigator.onLine) throw new Error("offline");
+client.js:2590:    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+client.js-2591-      method: "POST",
+client.js-2592-      body: JSON.stringify(payload)
+--
+client.js-2869-  startAiLoadingTicker();
+client.js-2870-  try {
+client.js:2871:    const result = await api(`/api/leads/${encodeURIComponent(lead.id)}/ai-actions`, {
+client.js-2872-      method: "POST",
+client.js-2873-      body: JSON.stringify({ action })
+--
+client.js-2941-  const lead = aiLead();
+client.js-2942-  if (!lead.id || !state.aiAction.output) return;
+client.js:2943:  await api(`/api/leads/${encodeURIComponent(lead.id)}/activities`, {
+client.js-2944-    method: "POST",
+client.js-2945-    body: JSON.stringify({ type: "Note", text: `Meeting prep generated:\n${state.aiAction.output}` })
+--
+client.js-2957-  const nextDate = window.prompt("Due date (YYYY-MM-DD):", lead.next_action_date || today()) || lead.next_action_date || today();
+client.js-2958-  const normalizedAction = normalizeNextActionPlan(nextAction);
+client.js:2959:  await api(`/api/leads/${encodeURIComponent(lead.id)}`, {
+client.js-2960-    method: "PATCH",
+client.js-2961-    body: JSON.stringify({ next_action: normalizedAction, next_action_date: nextDate })
+--
+client.js-2969-  if (!lead.id || !state.aiAction.output) return;
+client.js-2970-  const note = [`AI relationship summary (${today()}):`, state.aiAction.output].join("\n");
+client.js:2971:  await api(`/api/leads/${encodeURIComponent(lead.id)}`, {
+client.js-2972-    method: "PATCH",
+client.js-2973-    body: JSON.stringify({ notes: [lead.notes, note].filter(Boolean).join("\n\n") })
+--
+client.js-3093-  const subtitle = document.querySelector("#leadFormSubtitle");
+client.js-3094-  if (title) {
+client.js:3095:    title.textContent = mode === "edit" ? "Edit Lead" : "Add New Lead";
+client.js-3096-  }
+client.js-3097-  if (subtitle) {
+--
+client.js-3101-  }
+client.js-3102-  if (els.leadSubmitButton) {
+client.js:3103:    els.leadSubmitButton.textContent = mode === "edit" ? "Save Changes" : "Save Lead";
+client.js-3104-  }
+client.js-3105-}
+--
+client.js-3596-    }
+client.js-3597-    try {
+client.js:3598:      const result = await api(`/api/leads/duplicates?name=${encodeURIComponent(companyName)}`);
+client.js-3599-      if (els.leadForm.elements.company_name.value.trim() !== companyName) return;
+client.js-3600-      state.duplicateMatches = result.matches || [];
+--
+client.js-3617-    let result = leadEnrichmentCache.get(key);
+client.js-3618-    if (!result) {
+client.js:3619:      result = await api("/api/leads/enrich-company", {
+client.js-3620-        method: "POST",
+client.js-3621-        body: JSON.stringify({ companyName, location, country: "United Arab Emirates" })
+--
+client.js-4159-    importState.progress = Math.min(importable.length, IMPORT_BATCH_SIZE);
+client.js-4160-    renderImportProgressStep();
+client.js:4161:    const result = await api("/api/leads/import", {
+client.js-4162-      method: "POST",
+client.js-4163-      body: JSON.stringify({
+--
+client.js-8599-  }
+client.js-8600-  const body = willBeLost ? { stage, ...(lostData || {}) } : { stage };
+client.js:8601:  const updated = await api(`/api/leads/${encodeURIComponent(lead.id)}/stage`, {
+client.js-8602-    method: "PATCH",
+client.js-8603-    body: JSON.stringify(body)
+--
+client.js-8619-  loadLeadAiSummary(leadId).catch(() => {});
+client.js-8620-  Promise.allSettled([
+client.js:8621:    api(`/api/leads/${encodeURIComponent(leadId)}/pmrs`),
+client.js:8622:    api(`/api/leads/${encodeURIComponent(leadId)}/intel`),
+client.js:8623:    api(`/api/leads/${encodeURIComponent(leadId)}/handoffs`),
+client.js-8624-    outboxItems()
+client.js-8625-  ])
+--
+client.js-9343-    button.addEventListener("click", async () => {
+client.js-9344-      try {
+client.js:9345:        const updated = await api(`/api/leads/${button.dataset.confirmAutoEnrichment}/auto-enrichment/confirm`, {
+client.js-9346-          method: "POST",
+client.js-9347-          body: JSON.stringify({ apply_all: true })
+--
+client.js-9359-    button.addEventListener("click", async () => {
+client.js-9360-      try {
+client.js:9361:        const updated = await api(`/api/leads/${button.dataset.leadId}/auto-enrichment/confirm`, {
+client.js-9362-          method: "POST",
+client.js-9363-          body: JSON.stringify({ fields: [button.dataset.applyAutoField] })
+--
+client.js-9376-      try {
+client.js-9377-        setToast("Refreshing company intelligence...", "");
+client.js:9378:        const updated = await api(`/api/leads/${button.dataset.reenrichLead}/auto-enrichment/retry`, { method: "POST" });
+client.js-9379-        const lead = state.leads.find(item => item.id === updated.id);
+client.js-9380-        if (lead) Object.assign(lead, updated);
+--
+client.js-9402-    button.addEventListener("click", async () => {
+client.js-9403-      try {
+client.js:9404:        state.leadDrawerIntel = await api(`/api/leads/${button.dataset.refreshLeadIntel}/intel`);
+client.js-9405-        renderLeadDrawer();
+client.js-9406-      } catch (error) {
+--
+client.js-9419-    const notes = new FormData(event.currentTarget).get("notes");
+client.js-9420-    try {
+client.js:9421:      const updated = await api(`/api/leads/${lead.id}`, { method: "PATCH", body: JSON.stringify({ notes }) });
+client.js-9422-      Object.assign(lead, updated);
+client.js-9423-      setToast("Notes updated.", "success");
+--
+client.js-9449-
+client.js-9450-function activityAttachmentUrl(leadId, activityId, attachmentId) {
+client.js:9451:  return `/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityId)}/attachments/${encodeURIComponent(attachmentId)}`;
+client.js-9452-}
+client.js-9453-
+--
+client.js-9661-  try {
+client.js-9662-    const activityId = String(data.get("activity_id") || els.activityForm.dataset.clientId);
+client.js:9663:    const result = await api(`/api/leads/${encodeURIComponent(leadId)}/activities${activityModalMode === "edit" ? `/${encodeURIComponent(activityId)}` : ""}`, {
+client.js-9664-      method: activityModalMode === "edit" ? "PATCH" : "POST",
+client.js-9665-      body: JSON.stringify({
+--
+client.js-9685-      renderActivityAttachmentList();
+client.js-9686-      try {
+client.js:9687:        const upload = await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(savedActivity.id)}/attachments`, {
+client.js-9688-          method: "POST",
+client.js-9689-          headers: {
+--
+client.js-9733-  if (!due_date?.trim()) return;
+client.js-9734-  try {
+client.js:9735:    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+client.js-9736-      method: "POST",
+client.js-9737-      body: JSON.stringify({
+--
+client.js-12980-    try {
+client.js-12981-      if (!navigator.onLine) throw new Error("offline");
+client.js:12982:      await api(`/api/leads/${lead.id}/activities`, {
+client.js-12983-        method: "POST",
+client.js-12984-        body: JSON.stringify(body)
+--
+client.js-13021-    setMessage(message, "Searching Hunter...");
+client.js-13022-    try {
+client.js:13023:      const result = await api(`/api/leads/${lead.id}/enrich`, { method: "POST" });
+client.js-13024-      setMessage(message, result.emails.length ? `Hunter found ${result.emails.length} email suggestion(s).` : "Hunter completed with no email suggestions.", "success");
+client.js-13025-      await loadLeads();
+--
+client.js-13033-    setMessage(message, "Refreshing company intelligence...");
+client.js-13034-    try {
+client.js:13035:      const updated = await api(`/api/leads/${lead.id}/auto-enrichment/retry`, { method: "POST" });
+client.js-13036-      Object.assign(lead, updated);
+client.js-13037-      setMessage(message, "Company intelligence refreshed. Review before confirming.", "success");
+--
+client.js-13047-      setMessage(message, "Confirming auto-enrichment...");
+client.js-13048-      try {
+client.js:13049:        const updated = await api(`/api/leads/${button.dataset.confirmAutoEnrichment}/auto-enrichment/confirm`, { method: "POST" });
+client.js-13050-        Object.assign(lead, updated);
+client.js-13051-        setMessage(message, "Auto-enrichment confirmed.", "success");
+--
+client.js-13096-    setMessage(message, "Deleting lead...");
+client.js-13097-    try {
+client.js:13098:      await api(`/api/leads/${lead.id}`, { method: "DELETE", body: JSON.stringify({ admin_password: password }) });
+client.js-13099-      state.selectedId = null;
+client.js-13100-      await loadLeads();
+--
+client.js-13205-  if (currentView === "pipeline") renderLeadList();
+client.js-13206-  try {
+client.js:13207:    state.leads = await api("/api/leads");
+client.js-13208-    state.leadsLoaded = true;
+client.js-13209-    await mergePendingActivitiesIntoState();
+--
+client.js-14023-  setMessage(els.activityEditMessage, "Appending correction...");
+client.js-14024-  try {
+client.js:14025:    await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityIndex)}`, {
+client.js-14026-      method: "PATCH",
+client.js-14027-      body: JSON.stringify({
+--
+client.js-14415-  setMessage(els.activityDeletionMessage, "Submitting deletion request...");
+client.js-14416-  try {
+client.js:14417:    await api(`/api/leads/${encodeURIComponent(data.get("lead_id"))}/delete-requests`, {
+client.js-14418-      method: "POST",
+client.js-14419-      body: JSON.stringify({
+--
+client.js-14516-  setMessage(els.flagAttentionMessage, "Flagging for director attention...");
+client.js-14517-  try {
+client.js:14518:    await api(`/api/leads/${encodeURIComponent(companyId)}/attention-flags`, {
+client.js-14519-      method: "POST",
+client.js-14520-      body: JSON.stringify({ reason })
+--
+client.js-14616-        payload.handoff_note = note;
+client.js-14617-      }
+client.js:14618:      lead = await api(`/api/leads/${encodeURIComponent(state.editingLeadId)}`, { method: "PATCH", body: JSON.stringify(payload) });
+client.js-14619-      state.selectedId = lead.id;
+client.js-14620-      state.editingLeadId = "";
+--
+client.js-14631-  }
+client.js-14632-  try {
+client.js:14633:    lead = await api("/api/leads", { method: "POST", body: JSON.stringify(payload) });
+client.js-14634-  } catch (error) {
+client.js-14635-    if (error.status === 409 && error.details?.duplicate) {
+--
+client.js-14641-      );
+client.js-14642-      if (!proceed) return;
+client.js:14643:      lead = await api("/api/leads", { method: "POST", body: JSON.stringify({ ...payload, allow_duplicate: true }) });
+client.js-14644-    } else {
+client.js-14645-      setEnrichmentStatus(error.message, "error");
+--
+client.js-14709-      payload = pmrPayloadFromForm();
+client.js-14710-    }
+client.js:14711:    await api(`/api/leads/${companyId}/pmrs`, {
+client.js-14712-      method: "POST",
+client.js-14713-      body: JSON.stringify(payload)
+--
+tests\rate-limit-security.test.js-93-assert.strictEqual(requestRateLimitCategory("POST", "/api/places/search"), "search");
+tests\rate-limit-security.test.js-94-assert.strictEqual(requestRateLimitCategory("GET", "/api/weekly-reports/review"), "report");
+tests\rate-limit-security.test.js:95:assert.strictEqual(requestRateLimitCategory("GET", "/api/leads"), "");
+tests\rate-limit-security.test.js-96-
+tests\rate-limit-security.test.js-97-assert.ok(serverSource.includes("enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)"));
