@@ -5979,7 +5979,7 @@ async function handleApi(req, res, url) {
     if (!["active", "inactive"].includes(status)) return sendJson(res, 400, { error: "Status must be active or inactive." });
 
     if (supabaseEnabled) {
-      const existingRows = await serviceRest("profiles.admin_update", `profiles?id=eq.${encodeURIComponent(targetId)}&select=id,full_name,email,role,territory,status&limit=1`);
+      const existingRows = await serviceRest("profiles.admin_update", `profiles?id=eq.${encodeURIComponent(targetId)}&select=id,full_name,role,territory,status&limit=1`);
       if (!existingRows[0]) return sendJson(res, 404, { error: "User not found" });
       if (String(existingRows[0].role || "").toLowerCase() !== "salesman") {
         return sendJson(res, 400, { error: "Only salesman accounts can be updated from this endpoint." });
