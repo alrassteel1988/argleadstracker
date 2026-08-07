@@ -190,3 +190,18 @@ test("production notification reconciliation precedes recipient-scoped policies"
   assert.match(reconciliation, /notifications_recipient_status_idx/i);
   assert.match(policyMigration, /using \(recipient_uid = auth\.uid\(\)\)/i);
 });
+
+test("salesman lead insert repair keeps ownership checks in RLS", () => {
+  const migration = fs.readFileSync(
+    path.join(__dirname, "..", "supabase", "migrations", "20260807170000_repair_salesman_lead_insert_policy.sql"),
+    "utf8"
+  );
+
+  assert.match(migration, /grant insert on public\.leads to authenticated/i);
+  assert.match(migration, /for insert to authenticated/i);
+  assert.match(migration, /created_by = auth\.uid\(\)/i);
+  assert.match(migration, /assigned_to = auth\.uid\(\)/i);
+  assert.match(migration, /lower\(profile\.role\) = 'salesman'/i);
+  assert.doesNotMatch(migration, /for update to authenticated/i);
+  assert.doesNotMatch(migration, /for delete to authenticated/i);
+});
