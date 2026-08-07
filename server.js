@@ -2245,6 +2245,9 @@ function actionResponse(action, lead, pmr) {
 
 function toSupabaseLead(input, user) {
   const lead = withAutomaticReminder(normalizeLead(input), user);
+  const salesmanScoped = !isDirectorOrAdmin(user);
+  const profileTerritory = String(user?.territory || "").trim();
+  const profileName = String(user?.name || user?.email || "").trim();
   return {
     company_id: input.company_id || null,
     company_name: lead.company_name,
@@ -2284,8 +2287,8 @@ function toSupabaseLead(input, user) {
     hunter_confidence_score: input.hunter_confidence_score == null ? null : Number(input.hunter_confidence_score),
     lead_status: lead.stage,
     notes: lead.notes,
-    territory: lead.territory,
-    assigned_salesman: lead.assigned_salesman,
+    territory: salesmanScoped && profileTerritory ? profileTerritory : lead.territory,
+    assigned_salesman: salesmanScoped && profileName ? profileName : lead.assigned_salesman,
     priority: lead.priority,
     estimated_value: lead.estimated_value,
     product_interest: lead.product_interest,
@@ -2312,7 +2315,7 @@ function toSupabaseLead(input, user) {
     enriched_at: lead.enriched_at,
     enrichment_updated_at: input.enrichment_updated_at || lead.enriched_at || null,
     created_by: user.id,
-    assigned_to: input.assigned_to || (isAdmin(user) ? null : user.id)
+    assigned_to: input.assigned_to || (salesmanScoped ? user.id : null)
   };
 }
 
@@ -7217,6 +7220,7 @@ server.leadBelongsToUser = leadBelongsToUser;
 server.voiceNoteAccessAllowed = voiceNoteAccessAllowed;
 server.visibleLeadsForUser = visibleLeadsForUser;
 server.prepareLeadPayloadForUser = prepareLeadPayloadForUser;
+server.toSupabaseLead = toSupabaseLead;
 server.weeklyReportDefaults = weeklyReportDefaults;
 server.weeklyReportBlockers = weeklyReportBlockers;
 server.weeklyReportIsLockedForEditing = weeklyReportIsLockedForEditing;

@@ -14591,6 +14591,10 @@ els.leadForm.addEventListener("submit", async event => {
   const payload = Object.fromEntries(formData.entries());
   payload.product_interest = formData.getAll("product_interest").map(value => String(value || "").trim()).filter(Boolean).join(", ");
   payload.estimated_value = Number(payload.estimated_value || 0);
+  if (!isAdminOrManager() && state.currentUser) {
+    payload.assigned_salesman = state.currentUser.name || state.currentUser.email || payload.assigned_salesman;
+    payload.territory = state.currentUser.territory || payload.territory;
+  }
   let lead;
   if (state.editingLeadId) {
     try {

@@ -55,6 +55,8 @@ assert.match(html, /id="salesmanSimplifiedAddLead"/, "Salesman dashboard must ke
 assert.match(client, /function openNewLeadForm\(\)/, "All Add lead entry points must share the same create-flow opener");
 assert.match(client, /openLeadForm"\)\?\.addEventListener\("click", openNewLeadForm\)/, "Topbar Add lead must open the create lead workflow");
 assert.match(client, /salesmanSimplifiedAddLead\?\.addEventListener\("click", openNewLeadForm\)/, "Salesman dashboard Add lead must open the create lead workflow");
+assert.match(client, /payload\.assigned_salesman = state\.currentUser\.name \|\| state\.currentUser\.email \|\| payload\.assigned_salesman/, "Salesman lead saves must post the logged-in salesman owner");
+assert.match(client, /payload\.territory = state\.currentUser\.territory \|\| payload\.territory/, "Salesman lead saves must post the logged-in salesman territory");
 assert.match(client, /new Chart\(els\.performanceChart/, "Assigned-lead chart must use the existing Chart.js dependency");
 assert.match(client, /new Chart\(els\.salesmenSummaryChart/, "Summary chart must use the existing Chart.js dependency");
 
