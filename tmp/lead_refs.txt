@@ -1,3 +1,0 @@
-.\index.html:996:            <h2 id="leadFormTitle">Add New Lead</h2>
-.\index.html:1165:              <button class="primary-button hidden" id="leadSubmitButton" type="submit">Save Lead</button>
-.\src\services\rateLimitService.js:147:  if (verb === "POST" && ["/api/places/search", "/api/leads/enrich-company"].includes(path)) return "search";
