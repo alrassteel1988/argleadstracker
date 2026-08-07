@@ -129,6 +129,31 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     assert(salesmanLeads.data.some(lead => lead.id === ownLead.data.id));
     assert(!salesmanLeads.data.some(lead => lead.id === otherLead.data.id));
 
+    const salesmanCreatedLead = await request(baseUrl, "/api/leads", {
+      method: "POST",
+      token: salesmanToken,
+      body: {
+        company_name: "Salesman Created E2E Lead",
+        assigned_salesman: "Other Salesman",
+        territory: "Saudi",
+        sector: "Fabrication",
+        stage: "PROSPECT",
+        priority: "New",
+        next_action: "To Call",
+        next_action_date: "2026-08-07",
+        activity_purpose: "Company Introductory",
+        notes: "Created from the salesman Add New Lead workflow."
+      }
+    });
+    assert.equal(salesmanCreatedLead.response.status, 201, JSON.stringify(salesmanCreatedLead.data));
+    assert.equal(salesmanCreatedLead.data.assigned_salesman, "E2E Salesman");
+    assert.equal(salesmanCreatedLead.data.territory, "UAE-North");
+    assert.equal(salesmanCreatedLead.data.created_by, salesmanAccount.data.id);
+
+    const salesmanLeadsAfterCreate = await request(baseUrl, "/api/leads", { token: salesmanToken });
+    assert.equal(salesmanLeadsAfterCreate.response.status, 200);
+    assert(salesmanLeadsAfterCreate.data.some(lead => lead.id === salesmanCreatedLead.data.id));
+
     const salesmanExcelExport = await request(baseUrl, "/api/exports/leads.xls", { token: salesmanToken });
     assert.equal(salesmanExcelExport.response.status, 403);
 

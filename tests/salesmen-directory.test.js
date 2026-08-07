@@ -51,6 +51,10 @@ assert.match(client, /salesmen-card-progress/, "Card View must retain the existi
 assert.match(client, /function exportSalesmenDirectoryCsv\(\)/, "The Export CSV control must be functional");
 assert.match(client, /openSalesmanLeadsViewer\(name\)/, "Existing Jump to Leads behavior must remain wired");
 assert.match(client, /resetLeadFormForNewLead\(\)/, "Assign Leads must use the existing lead workflow");
+assert.match(html, /id="salesmanSimplifiedAddLead"/, "Salesman dashboard must keep its direct Add lead button");
+assert.match(client, /function openNewLeadForm\(\)/, "All Add lead entry points must share the same create-flow opener");
+assert.match(client, /openLeadForm"\)\?\.addEventListener\("click", openNewLeadForm\)/, "Topbar Add lead must open the create lead workflow");
+assert.match(client, /salesmanSimplifiedAddLead\?\.addEventListener\("click", openNewLeadForm\)/, "Salesman dashboard Add lead must open the create lead workflow");
 assert.match(client, /new Chart\(els\.performanceChart/, "Assigned-lead chart must use the existing Chart.js dependency");
 assert.match(client, /new Chart\(els\.salesmenSummaryChart/, "Summary chart must use the existing Chart.js dependency");
 

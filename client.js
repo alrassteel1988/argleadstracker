@@ -13882,10 +13882,13 @@ document.addEventListener("click", async event => {
   }
 });
 
-document.querySelector("#openLeadForm").addEventListener("click", () => {
+function openNewLeadForm() {
   resetLeadFormForNewLead();
   els.leadDialog.showModal();
-});
+}
+
+document.querySelector("#openLeadForm")?.addEventListener("click", openNewLeadForm);
+els.salesmanSimplifiedAddLead?.addEventListener("click", openNewLeadForm);
 document.querySelector("#closeLeadForm").addEventListener("click", () => {
   state.editingLeadId = "";
   state.editingOriginalStage = "";

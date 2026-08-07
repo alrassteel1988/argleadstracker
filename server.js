@@ -6077,7 +6077,12 @@ async function handleApi(req, res, url) {
       return sendJson(res, 201, lead);
     }
     const lead = withAutomaticReminder(normalizeLead(payload), user);
-    if (!isAdmin(user)) lead.assigned_salesman = user.name || user.email || lead.assigned_salesman;
+    lead.created_by = user.id;
+    lead.created_by_name = user.name || user.email || "User";
+    if (!isDirectorOrAdmin(user)) {
+      lead.assigned_to = user.id;
+      lead.assigned_salesman = user.name || user.email || lead.assigned_salesman;
+    }
     db.leads.unshift(lead);
     writeDb(db);
     scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
