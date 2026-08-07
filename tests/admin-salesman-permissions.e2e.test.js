@@ -61,6 +61,34 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     });
     assert.equal(salesmanAccount.response.status, 201);
 
+    const dormantAccount = await request(baseUrl, "/api/users", {
+      method: "POST",
+      token: adminToken,
+      body: { name: "Dormant E2E Salesman", email: "dormant-salesman-e2e@alrassteel.test", password: "DormantPass123!", territory: "Saudi" }
+    });
+    assert.equal(dormantAccount.response.status, 201);
+
+    const deactivateWithoutPassword = await request(baseUrl, `/api/users/${dormantAccount.data.id}`, {
+      method: "PATCH",
+      token: adminToken,
+      body: { status: "inactive" }
+    });
+    assert.equal(deactivateWithoutPassword.response.status, 403);
+
+    const deactivatedAccount = await request(baseUrl, `/api/users/${dormantAccount.data.id}`, {
+      method: "PATCH",
+      token: adminToken,
+      body: { status: "inactive", admin_password: "AdminPass123!" }
+    });
+    assert.equal(deactivatedAccount.response.status, 200, JSON.stringify(deactivatedAccount.data));
+    assert.equal(deactivatedAccount.data.status, "inactive");
+
+    const inactiveLogin = await request(baseUrl, "/api/auth/login", {
+      method: "POST",
+      body: { email: "dormant-salesman-e2e@alrassteel.test", password: "DormantPass123!" }
+    });
+    assert.equal(inactiveLogin.response.status, 401);
+
     const ownLead = await request(baseUrl, "/api/leads", {
       method: "POST",
       token: adminToken,

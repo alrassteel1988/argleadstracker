@@ -31,6 +31,7 @@ const {
   serviceRest,
   signIn,
   signOut,
+  updateAuthUser,
   uploadStorageObject,
   uploadStorageObjectToBucket
 } = require("./supabase-client");
@@ -5963,6 +5964,45 @@ async function handleApi(req, res, url) {
       writeDb(db);
       return sendJson(res, 201, publicUser(account));
     }
+  }
+
+  const userMatch = url.pathname.match(/^\/api\/users\/([^/]+)$/);
+  if (req.method === "PATCH" && userMatch) {
+    if (user.role !== "admin") return sendJson(res, 403, { error: "Admin access required." });
+    const payload = await readBody(req);
+    if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
+      return sendJson(res, 403, { error: "Admin password confirmation is required to update a user." });
+    }
+    const targetId = decodeURIComponent(userMatch[1]);
+    if (String(targetId) === String(user.id)) return sendJson(res, 400, { error: "Admins cannot deactivate their own account." });
+    const status = String(payload.status || "").trim().toLowerCase();
+    if (!["active", "inactive"].includes(status)) return sendJson(res, 400, { error: "Status must be active or inactive." });
+
+    if (supabaseEnabled) {
+      const existingRows = await serviceRest("profiles.admin_update", `profiles?id=eq.${encodeURIComponent(targetId)}&select=id,full_name,email,role,territory,status&limit=1`);
+      if (!existingRows[0]) return sendJson(res, 404, { error: "User not found" });
+      if (String(existingRows[0].role || "").toLowerCase() !== "salesman") {
+        return sendJson(res, 400, { error: "Only salesman accounts can be updated from this endpoint." });
+      }
+      const rows = await serviceRest("profiles.admin_update", `profiles?id=eq.${encodeURIComponent(targetId)}&select=*`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: { status }
+      });
+      await updateAuthUser(targetId, status === "inactive" ? { ban_duration: "876000h" } : { ban_duration: "none" }).catch(() => null);
+      return sendJson(res, 200, salesmanAccountSummary(rows[0]));
+    }
+
+    const account = (db.users || []).find(item => item.id === targetId);
+    if (!account) return sendJson(res, 404, { error: "User not found" });
+    if (String(account.role || "").toLowerCase() !== "salesman") {
+      return sendJson(res, 400, { error: "Only salesman accounts can be updated from this endpoint." });
+    }
+    account.status = status;
+    const salesmanRecord = (db.salesmen || []).find(item => item.id === targetId || String(item.email || "").toLowerCase() === String(account.email || "").toLowerCase());
+    if (salesmanRecord) salesmanRecord.status = status;
+    writeDb(db);
+    return sendJson(res, 200, salesmanAccountSummary(account));
   }
 
   if (req.method === "GET" && url.pathname === "/api/settings") {
