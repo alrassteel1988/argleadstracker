@@ -36,6 +36,34 @@ assert.equal(supabaseLeadPayload.assigned_salesman, "Ahmed Khan");
 assert.equal(supabaseLeadPayload.assigned_to, "user-1");
 assert.equal(supabaseLeadPayload.created_by, "user-1");
 assert.equal(supabaseLeadPayload.territory, "Dubai");
+assert.equal(
+  server.canUseServerValidatedLeadInsert(exactTerritorySalesman, supabaseLeadPayload),
+  true
+);
+assert.equal(
+  server.canUseServerValidatedLeadInsert(admin, {
+    ...supabaseLeadPayload,
+    created_by: admin.id,
+    assigned_to: admin.id,
+    assigned_salesman: admin.name,
+    territory: admin.territory
+  }),
+  false
+);
+assert.equal(
+  server.canUseServerValidatedLeadInsert(exactTerritorySalesman, {
+    ...supabaseLeadPayload,
+    assigned_to: "other-user"
+  }),
+  false
+);
+assert.equal(
+  server.canUseServerValidatedLeadInsert(exactTerritorySalesman, {
+    ...supabaseLeadPayload,
+    territory: "Saudi"
+  }),
+  false
+);
 
 const updatePayload = server.prepareLeadPayloadForUser(
   { assigned_salesman: "Rafiq Ali", territory: "Saudi", notes: "Updated" },

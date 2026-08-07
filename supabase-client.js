@@ -7,6 +7,7 @@ const SERVICE_ROLE_OPERATIONS = new Set([
   "auth.list_users",
   "cron.integration_logs",
   "cron.market_intelligence",
+  "leads.server_validated_insert",
   "notifications.director_fanout",
   "security.rate_limits",
   "workflow.activity_managers"

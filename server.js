@@ -3564,7 +3564,7 @@ async function saveSupabaseLead(token, user, input) {
     company = companies[0];
   }
   lead.company_id = company?.id || null;
-  const leads = await postSupabaseLeadWithOptionalFallback(token, lead);
+  const leads = await postSupabaseLeadWithValidatedOwnership(token, user, lead);
   return fromSupabaseLead(leads[0]);
 }
 
@@ -3597,6 +3597,38 @@ function optionalLeadColumnMissing(error) {
     || /schema cache|column .* does not exist/i.test(message);
 }
 
+function isSupabaseRlsInsertError(error) {
+  return [401, 403].includes(Number(error?.status || 0))
+    && /row-level security|violates row-level security|permission denied/i.test(String(error?.message || ""));
+}
+
+function canUseServerValidatedLeadInsert(user, body) {
+  if (!user || isDirectorOrAdmin(user)) return false;
+  const userId = String(user.id || "").trim();
+  if (!userId) return false;
+  return String(body?.created_by || "") === userId
+    && String(body?.assigned_to || "") === userId
+    && String(body?.assigned_salesman || "").trim() === String(user.name || user.email || "").trim()
+    && String(body?.territory || "").trim() === String(user.territory || "").trim();
+}
+
+async function postSupabaseLeadWithServiceFallback(body) {
+  try {
+    return await serviceRest("leads.server_validated_insert", "leads?select=*", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body
+    });
+  } catch (error) {
+    if (!optionalLeadColumnMissing(error)) throw error;
+    return serviceRest("leads.server_validated_insert", "leads?select=*", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: stripOptionalSupabaseLeadColumns(body)
+    });
+  }
+}
+
 async function postSupabaseLeadWithOptionalFallback(token, body) {
   try {
     return await rest("leads?select=*", {
@@ -3613,6 +3645,15 @@ async function postSupabaseLeadWithOptionalFallback(token, body) {
       headers: { Prefer: "return=representation" },
       body: stripOptionalSupabaseLeadColumns(body)
     });
+  }
+}
+
+async function postSupabaseLeadWithValidatedOwnership(token, user, body) {
+  try {
+    return await postSupabaseLeadWithOptionalFallback(token, body);
+  } catch (error) {
+    if (!isSupabaseRlsInsertError(error) || !canUseServerValidatedLeadInsert(user, body)) throw error;
+    return postSupabaseLeadWithServiceFallback(body);
   }
 }
 
@@ -7221,6 +7262,7 @@ server.voiceNoteAccessAllowed = voiceNoteAccessAllowed;
 server.visibleLeadsForUser = visibleLeadsForUser;
 server.prepareLeadPayloadForUser = prepareLeadPayloadForUser;
 server.toSupabaseLead = toSupabaseLead;
+server.canUseServerValidatedLeadInsert = canUseServerValidatedLeadInsert;
 server.weeklyReportDefaults = weeklyReportDefaults;
 server.weeklyReportBlockers = weeklyReportBlockers;
 server.weeklyReportIsLockedForEditing = weeklyReportIsLockedForEditing;

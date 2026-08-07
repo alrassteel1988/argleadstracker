@@ -72,6 +72,34 @@ test("allowlisted cron operations use the service-role credential", async t => {
   assert.equal(calls[0].options.headers.Authorization, "Bearer service.role.signature");
 });
 
+test("server-validated lead insert is the only lead write allowlisted for service role", async t => {
+  const calls = [];
+  t.mock.method(global, "fetch", async (url, options) => {
+    calls.push({ url, options });
+    return jsonResponse([{ id: "lead-1" }]);
+  });
+
+  await serviceRest("leads.server_validated_insert", "leads?select=*", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: {
+      company_name: "Validated Salesman Lead",
+      created_by: "salesman-1",
+      assigned_to: "salesman-1"
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.method, "POST");
+  assert.match(String(calls[0].url), /\/rest\/v1\/leads\?select=\*/);
+  assert.equal(calls[0].options.headers.apikey, "service.role.signature");
+  assert.equal(calls[0].options.headers.Authorization, "Bearer service.role.signature");
+  await assert.rejects(
+    serviceRest("leads.untrusted_update", "leads?id=eq.lead-1", { method: "PATCH", body: { assigned_to: "other" } }),
+    /service-role operation is not allowlisted/
+  );
+});
+
 test("Storage upload and signing use the user's JWT, not service role", async t => {
   const calls = [];
   t.mock.method(global, "fetch", async (url, options) => {
