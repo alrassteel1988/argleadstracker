@@ -29,7 +29,7 @@ assert.equal(newLeadPayload.territory, "UAE-North");
 
 const exactTerritorySalesman = { ...salesman, territory: "Dubai" };
 const supabaseLeadPayload = server.toSupabaseLead(
-  { company_name: "Supabase Salesman Lead", assigned_salesman: "Other", territory: "Saudi" },
+  { company_name: "Supabase Salesman Lead", assigned_salesman: "Other", assigned_to: "other-user", territory: "Saudi" },
   exactTerritorySalesman
 );
 assert.equal(supabaseLeadPayload.assigned_salesman, "Ahmed Khan");

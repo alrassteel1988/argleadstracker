@@ -2315,7 +2315,7 @@ function toSupabaseLead(input, user) {
     enriched_at: lead.enriched_at,
     enrichment_updated_at: input.enrichment_updated_at || lead.enriched_at || null,
     created_by: user.id,
-    assigned_to: input.assigned_to || (salesmanScoped ? user.id : null)
+    assigned_to: salesmanScoped ? user.id : (input.assigned_to || null)
   };
 }
 
