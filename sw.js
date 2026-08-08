@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v63-activity-dashboard";
+const CACHE_VERSION = "arg-pwa-v64-activity-header-frame";
 const APP_SHELL = [
   "/",
   "/index.html",
