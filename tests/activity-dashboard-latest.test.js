@@ -10,7 +10,7 @@ const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /activity-dashboard-latest\.css\?v=header-frame-2/, "Latest Activity CSS must use the header-frame cache-busting revision");
+assert.match(html, /activity-dashboard-latest\.css\?v=header-frame-3/, "Latest Activity CSS must use the header-frame cache-busting revision");
 assert.ok(
   html.indexOf("activity-dashboard-latest.css") > html.indexOf("bauhaus-global.css"),
   "The latest Activity layer must win the theme cascade"
@@ -37,7 +37,9 @@ assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.activity-table td::befo
 assert.doesNotMatch(css, /\.sidebar\b/, "The Activity redesign must not change sidebar sizing");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter:\s*blur|filter:\s*blur/i, "The latest Activity layer must remain flat and opaque");
 assert.match(serviceWorker, /"\/activity-dashboard-latest\.css"/, "The PWA shell must cache the latest Activity layer");
-assert.match(serviceWorker, /arg-pwa-v64-activity-header-frame/, "The PWA cache must be bumped when Activity CSS changes");
+assert.match(serviceWorker, /arg-pwa-v65-network-first-header-frame/, "The PWA cache must be bumped when Activity CSS changes");
+assert.match(serviceWorker, /\.then\(\(\) => self\.skipWaiting\(\)\)/, "The updated service worker must activate immediately for stale CRM sessions");
+assert.match(serviceWorker, /event\.respondWith\(networkFirst\(request\)\)/, "Same-origin UI assets must prefer the network before cached fallbacks");
 assert.match(vercel, /"src": "activity-dashboard-latest\.css"/, "Vercel must publish the latest Activity layer");
 assert.match(server, /\["\/activity-dashboard-latest\.css", "activity-dashboard-latest\.css"\]/, "The Node server must publish the latest Activity layer");
 

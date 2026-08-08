@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v64-activity-header-frame";
+const CACHE_VERSION = "arg-pwa-v65-network-first-header-frame";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -38,7 +38,11 @@ const MAP_HOSTS = new Set([
 ]);
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.addAll(APP_SHELL)));
+  event.waitUntil(
+    caches.open(CACHE_VERSION)
+      .then(cache => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", event => {
@@ -46,8 +50,8 @@ self.addEventListener("activate", event => {
     caches.keys().then(keys => Promise.all(keys
       .filter(key => key !== CACHE_VERSION)
       .map(key => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("message", event => {
@@ -75,13 +79,11 @@ self.addEventListener("fetch", event => {
   }
 
   if (url.origin === self.location.origin) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(networkFirst(request));
   }
 });
 
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
+async function networkFirst(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
@@ -90,6 +92,8 @@ async function cacheFirst(request) {
     }
     return response;
   } catch (error) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
     if (request.mode === "navigate") return caches.match("/index.html");
     throw error;
   }
