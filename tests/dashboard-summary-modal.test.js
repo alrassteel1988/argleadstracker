@@ -53,6 +53,10 @@ for (const type of ["salesmanActionOverdue", "salesmanActionCoverageGap", "sales
   assert.match(client, new RegExp(`summaryType:\\s*"${type}"`), `${type} action card must open its summary popup`);
 }
 assert.match(client, /contact_overdue_companies/, "Coverage Gap must consume the server-computed contact cadence records");
+assert.match(client, /bodyEntity:\s*oldestOverdue\.company_name/, "Overdue action cards must expose the company name as semantic text");
+assert.match(client, /class="salesman-triage-title"/, "Salesman action cards must render semantic title text");
+assert.match(client, /class="salesman-triage-company"/, "Salesman action cards must render semantic company text");
+assert.match(client, /class="salesman-triage-detail"/, "Salesman action cards must render semantic detail text");
 
 for (const title of ["Open Pipeline", "Active Customers", "At Risk", "Tasks Due"]) {
   assert.ok(client.includes(`title: "${title}"`), `${title} modal configuration must exist`);
@@ -86,6 +90,11 @@ assert.doesNotMatch(client, /pageSize:\s*7|value \|\| 7|\[7,\s*10,\s*20\]/, "sum
 assert.match(client, /dueTodayPipelineOnly/, "Due Today full-list navigation must preserve its source scope");
 assert.match(css, /\.summary-card-details-table th\s*{[^}]*position:\s*sticky;/s, "table header must remain visible while scrolling");
 assert.match(css, /@media \(max-width: 639px\)[\s\S]*\.summary-card-details-dialog\s*{[^}]*width:\s*100vw;/, "modal must adapt to mobile screens");
+assert.match(salesmanCss, /--salesman-text-primary:\s*#102A43;/, "Salesman Dashboard needs semantic primary text tokens");
+assert.match(salesmanCss, /--salesman-text-link:\s*#125E8A;/, "Salesman Dashboard needs semantic link text tokens");
+assert.match(salesmanCss, /\.salesman-triage-card\.tone-danger\s*{[^}]*--salesman-action-kicker:\s*var\(--salesman-text-critical\);[^}]*--salesman-action-title:\s*var\(--salesman-text-secondary\);[^}]*--salesman-action-body:\s*var\(--salesman-text-primary\);[^}]*--salesman-action-cta:\s*var\(--salesman-text-link\);/s, "Pale overdue action cards must use readable semantic colors");
+assert.match(salesmanCss, /\.salesman-triage-card \.salesman-triage-company\s*{[^}]*color:\s*var\(--salesman-action-company\)\s*!important;[^}]*font-weight:\s*600;/s, "Action card company names must be dark and semibold");
+assert.match(salesmanCss, /\.salesman-triage-card:is\(\.is-dark, \.tone-dark, \.tone-inverse, \[data-contrast="dark"\]\)\s*{[^}]*--salesman-action-title:\s*var\(--salesman-text-inverse\);/s, "Dark action card variants must opt into light semantic tokens");
 assert.match(salesmanCss, /grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/, "pipeline stage cards must be equal-width on desktop");
 assert.match(salesmanCss, /@media \(min-width:\s*821px\)[\s\S]*\.salesman-simplified-metric\s*{[^}]*min-height:\s*88px;[^}]*padding:\s*10px 14px;/, "desktop summary cards must use the compact readable height");
 assert.match(salesmanCss, /@media \(min-width:\s*821px\)[\s\S]*\.salesman-simplified-stage\s*{[^}]*min-height:\s*72px;[^}]*padding:\s*8px 12px;/, "desktop pipeline stages must use the compact readable height");

@@ -6974,11 +6974,20 @@ function renderSalesmanSimplifiedDashboard() {
         : item.aiAction
           ? `data-salesperson-ai-action="${escapeHtml(item.aiAction)}"`
           : `data-dashboard-action="${escapeHtml(item.key)}"`;
+      const bodyMarkup = item.bodyEntity
+        ? `
+          <p class="salesman-triage-body">
+            ${item.bodyPrefix ? `<span class="salesman-triage-body-prefix">${escapeHtml(item.bodyPrefix)}</span>` : ""}
+            <span class="salesman-triage-company">${escapeHtml(item.bodyEntity)}</span>
+            ${item.bodySuffix ? `<span class="salesman-triage-body-suffix">${escapeHtml(item.bodySuffix)}</span>` : ""}
+          </p>
+        `
+        : `<p class="salesman-triage-body">${escapeHtml(item.body || "")}</p>`;
       return `
         <button class="salesman-triage-card tone-${escapeHtml(item.tone || "neutral")}" type="button" ${attributes}>
           <span class="salesman-triage-kicker">${escapeHtml(item.kicker)}</span>
-          <strong>${escapeHtml(item.title)}</strong>
-          <p>${escapeHtml(item.body)}</p>
+          <strong class="salesman-triage-title">${escapeHtml(item.title)}</strong>
+          ${bodyMarkup}
           <span class="salesman-triage-detail">${escapeHtml(item.detail || "")}</span>
           <small>${escapeHtml(item.cta)}</small>
         </button>
@@ -7164,24 +7173,30 @@ function salesmanPriorityActions() {
   const cards = [];
 
   if (overdueFollowups.length) {
+    const oldestOverdue = overdueFollowups[0];
     cards.push({
       key: "followups",
       summaryType: "salesmanActionOverdue",
       tone: "danger",
       kicker: "Overdue",
       title: `Clear ${overdueFollowups.length} overdue follow-up${overdueFollowups.length === 1 ? "" : "s"}`,
-      body: `Oldest: ${overdueFollowups[0].company_name || "Lead"} - ${daysOverdueLabel(overdueFollowups[0].due_date)}`,
-      detail: `Next move: ${overdueFollowups[0].activity_required || overdueFollowups[0].reminder_type || "Complete the follow-up"}`,
+      bodyPrefix: "Oldest:",
+      bodyEntity: oldestOverdue.company_name || "Lead",
+      bodySuffix: `- ${daysOverdueLabel(oldestOverdue.due_date)}`,
+      detail: `Next move: ${oldestOverdue.activity_required || oldestOverdue.reminder_type || "Complete the follow-up"}`,
       cta: "Review queue"
     });
   } else if (todayFollowups.length) {
+    const todayFollowup = todayFollowups[0];
     cards.push({
       key: "followups",
       tone: "warm",
       kicker: "Due today",
       title: `${todayFollowups.length} follow-up${todayFollowups.length === 1 ? "" : "s"} scheduled for today`,
-      body: `Start with ${todayFollowups[0].company_name || "your next lead"} and keep the day moving.`,
-      detail: `Next move: ${todayFollowups[0].activity_required || todayFollowups[0].reminder_type || "Complete today's follow-up"}`,
+      bodyPrefix: "Start with",
+      bodyEntity: todayFollowup.company_name || "your next lead",
+      bodySuffix: "and keep the day moving.",
+      detail: `Next move: ${todayFollowup.activity_required || todayFollowup.reminder_type || "Complete today's follow-up"}`,
       cta: "Open today queue"
     });
   }
@@ -7192,7 +7207,8 @@ function salesmanPriorityActions() {
       tone: "info",
       kicker: "First touch",
       title: `${firstTouches.length} lead${firstTouches.length === 1 ? "" : "s"} still need the first contact`,
-      body: `${firstTouches[0].company_name || "Newest lead"} is still waiting for its opening call or visit.`,
+      bodyEntity: firstTouches[0].company_name || "Newest lead",
+      bodySuffix: "is still waiting for its opening call or visit.",
       detail: `Contact: ${firstTouches[0].contact_person || firstTouches[0].location || firstTouches[0].territory || "Open the lead for contact details"}`,
       cta: "Start first touch"
     });
@@ -7204,7 +7220,8 @@ function salesmanPriorityActions() {
       tone: "danger",
       kicker: "3-day deadline",
       title: `${lossReasonPrompts.length} lost lead${lossReasonPrompts.length === 1 ? "" : "s"} still need a reason`,
-      body: `${lossReasonPrompts[0].company_name || "A lost lead"} has crossed the reason-capture deadline.`,
+      bodyEntity: lossReasonPrompts[0].company_name || "A lost lead",
+      bodySuffix: "has crossed the reason-capture deadline.",
       detail: "Capture the decision context while the customer conversation is still fresh.",
       cta: "Capture reason"
     });
@@ -7360,14 +7377,26 @@ function renderDailyAiPanel() {
   if (els.dailyAiGreeting) els.dailyAiGreeting.textContent = `${greetingText()}, ${firstName(state.currentUser.name || state.currentUser.email)}`;
   const actions = salesmanPriorityActions();
   if (els.dailyAiActions) {
-    els.dailyAiActions.innerHTML = actions.map(item => `
-      <button class="salesman-triage-card tone-${escapeHtml(item.tone || "neutral")}" type="button" ${item.aiAction ? `data-salesperson-ai-action="${escapeHtml(item.aiAction)}"` : `data-dashboard-action="${escapeHtml(item.key)}"`}>
-        <span class="salesman-triage-kicker">${escapeHtml(item.kicker)}</span>
-        <strong>${escapeHtml(item.title)}</strong>
-        <p>${escapeHtml(item.body)}</p>
-        <small>${escapeHtml(item.cta)}</small>
-      </button>
-    `).join("");
+    els.dailyAiActions.innerHTML = actions.map(item => {
+      const bodyMarkup = item.bodyEntity
+        ? `
+          <p class="salesman-triage-body">
+            ${item.bodyPrefix ? `<span class="salesman-triage-body-prefix">${escapeHtml(item.bodyPrefix)}</span>` : ""}
+            <span class="salesman-triage-company">${escapeHtml(item.bodyEntity)}</span>
+            ${item.bodySuffix ? `<span class="salesman-triage-body-suffix">${escapeHtml(item.bodySuffix)}</span>` : ""}
+          </p>
+        `
+        : `<p class="salesman-triage-body">${escapeHtml(item.body || "")}</p>`;
+      return `
+        <button class="salesman-triage-card tone-${escapeHtml(item.tone || "neutral")}" type="button" ${item.aiAction ? `data-salesperson-ai-action="${escapeHtml(item.aiAction)}"` : `data-dashboard-action="${escapeHtml(item.key)}"`}>
+          <span class="salesman-triage-kicker">${escapeHtml(item.kicker)}</span>
+          <strong class="salesman-triage-title">${escapeHtml(item.title)}</strong>
+          ${bodyMarkup}
+          <span class="salesman-triage-detail">${escapeHtml(item.detail || "")}</span>
+          <small>${escapeHtml(item.cta)}</small>
+        </button>
+      `;
+    }).join("");
   }
   els.dailyAiPanel.querySelectorAll("[data-salesperson-ai-action]").forEach(button => {
     button.disabled = state.dailyAiLoading || Date.now() < state.aiCooldownUntil;

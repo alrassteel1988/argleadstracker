@@ -205,3 +205,34 @@ test("salesman lead insert repair keeps ownership checks in RLS", () => {
   assert.doesNotMatch(migration, /for update to authenticated/i);
   assert.doesNotMatch(migration, /for delete to authenticated/i);
 });
+
+test("function hardening migration removes anonymous RPC execution", () => {
+  const migration = fs.readFileSync(
+    path.join(__dirname, "..", "supabase", "migrations", "20260808045702_harden_function_execution_and_search_path.sql"),
+    "utf8"
+  );
+
+  for (const signature of [
+    "public.submit_weekly_report\\(jsonb, integer, text\\)",
+    "public.review_weekly_report\\(text, text, text, text, text\\)"
+  ]) {
+    assert.match(migration, new RegExp(`revoke execute on function ${signature} from public`, "i"));
+    assert.match(migration, new RegExp(`revoke execute on function ${signature} from anon`, "i"));
+    assert.match(migration, new RegExp(`grant execute on function ${signature} to authenticated`, "i"));
+  }
+
+  [
+    "admin_email",
+    "current_email",
+    '"current_role"',
+    "is_admin",
+    "is_manager",
+    "can_write_tracker",
+    "assigned_to_user\\(jsonb\\)",
+    "can_read_company\\(jsonb\\)",
+    "can_read_company_id\\(text\\)"
+  ].forEach(name => {
+    assert.match(migration, new RegExp(`alter function app_private\\.${name}`));
+    assert.match(migration, /set search_path = app_private, public, pg_temp/i);
+  });
+});

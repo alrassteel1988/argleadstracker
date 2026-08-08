@@ -554,3 +554,260 @@ body.salesman-dashboard-mode .summary-card-details-close {
     min-width: 860px;
   }
 }
+
+/* Salesman Dashboard accessibility color layer.
+   This file loads after the global Bauhaus sheet, so these scoped foreground
+   tokens are the rendered source of truth for the dashboard. */
+body.salesman-dashboard-mode {
+  --salesman-text-primary: #102A43;
+  --salesman-text-heading: #082F49;
+  --salesman-text-secondary: #475569;
+  --salesman-text-meta: #526579;
+  --salesman-text-muted: #64748B;
+  --salesman-text-link: #125E8A;
+  --salesman-text-inverse: #FFFFFF;
+  --salesman-text-inverse-secondary: #D9E4EC;
+  --salesman-text-inverse-muted: #B8C7D1;
+  --salesman-text-critical: #B42318;
+  --salesman-text-warning: #7A4B00;
+  --salesman-text-success: #246B2C;
+}
+
+body.salesman-dashboard-mode .topbar-copy h1,
+body.salesman-dashboard-mode .panel-header h2,
+body.salesman-dashboard-mode .sidebar .brand strong,
+body.salesman-dashboard-mode .sidebar-user-copy strong,
+body.salesman-dashboard-mode .nav-item.active {
+  color: var(--salesman-text-inverse) !important;
+}
+
+body.salesman-dashboard-mode .topbar-copy p,
+body.salesman-dashboard-mode .sidebar .brand span,
+body.salesman-dashboard-mode .nav-group-label,
+body.salesman-dashboard-mode .sidebar-user-copy span,
+body.salesman-dashboard-mode .panel-header span:not(.salesman-live-lead-count) {
+  color: var(--salesman-text-inverse-secondary) !important;
+}
+
+body.salesman-dashboard-mode .nav-item {
+  color: #E6EEF3 !important;
+}
+
+body.salesman-dashboard-mode .nav-item-icon,
+body.salesman-dashboard-mode .sidebar-user-avatar {
+  color: var(--salesman-text-inverse) !important;
+  border-color: #B8C7D1 !important;
+}
+
+body.salesman-dashboard-mode .topbar-actions .smart-search-field input {
+  color: var(--salesman-text-primary) !important;
+}
+
+body.salesman-dashboard-mode .topbar-actions .smart-search-field input::placeholder {
+  color: var(--salesman-text-muted) !important;
+  opacity: 1 !important;
+}
+
+body.salesman-dashboard-mode .topbar :is(.ghost-button, .sync-status-pill) {
+  color: var(--salesman-text-inverse) !important;
+}
+
+body.salesman-dashboard-mode .topbar .primary-button {
+  color: var(--salesman-text-primary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-priority-row .overdue-banner-copy strong {
+  color: var(--salesman-text-critical) !important;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-priority-row .overdue-banner-copy div {
+  color: var(--salesman-text-secondary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-priority-row :is(.overdue-action, .overdue-dismiss) {
+  color: var(--salesman-text-primary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-summary-card-copy .salesman-summary-card-label,
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-info .salesman-summary-card-action {
+  color: var(--salesman-text-link) !important;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-danger :is(.salesman-summary-card-label, .salesman-summary-card-action) {
+  color: var(--salesman-text-critical) !important;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-metric.tone-warm :is(.salesman-summary-card-label, .salesman-summary-card-action) {
+  color: var(--salesman-text-warning) !important;
+}
+
+body.salesman-dashboard-mode .salesman-summary-card-copy strong,
+body.salesman-dashboard-mode .salesman-simplified-metric .salesman-summary-card-chevron {
+  color: var(--salesman-text-primary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-summary-card-copy small {
+  color: var(--salesman-text-secondary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-summary-card-icon {
+  color: var(--salesman-text-inverse) !important;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage .salesman-stage-label {
+  color: var(--salesman-stage-accent) !important;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage:not(.tone-contacted):not(.tone-negotiation):not(.tone-won) {
+  --salesman-stage-accent: #365E19;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage.tone-contacted {
+  --salesman-stage-accent: var(--salesman-text-link);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage.tone-negotiation {
+  --salesman-stage-accent: var(--salesman-text-warning);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage.tone-won {
+  --salesman-stage-accent: var(--salesman-text-success);
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-stage strong {
+  color: var(--salesman-text-primary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage .salesman-stage-action,
+body.salesman-dashboard-mode .salesman-simplified-stage .salesman-stage-icon {
+  color: var(--salesman-stage-accent) !important;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card {
+  --salesman-action-kicker: var(--salesman-text-meta);
+  --salesman-action-title: var(--salesman-text-secondary);
+  --salesman-action-body: #334E68;
+  --salesman-action-company: var(--salesman-text-primary);
+  --salesman-action-detail: var(--salesman-text-secondary);
+  --salesman-action-cta: var(--salesman-text-link);
+  color: var(--salesman-text-primary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-danger {
+  --salesman-action-kicker: var(--salesman-text-critical);
+  --salesman-action-title: var(--salesman-text-secondary);
+  --salesman-action-body: var(--salesman-text-primary);
+  --salesman-action-company: var(--salesman-text-primary);
+  --salesman-action-detail: var(--salesman-text-secondary);
+  --salesman-action-cta: var(--salesman-text-link);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-warm {
+  --salesman-action-kicker: var(--salesman-text-warning);
+  --salesman-action-title: var(--salesman-text-secondary);
+  --salesman-action-body: #334E68;
+  --salesman-action-company: var(--salesman-text-primary);
+  --salesman-action-detail: var(--salesman-text-secondary);
+  --salesman-action-cta: var(--salesman-text-link);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-info {
+  --salesman-action-kicker: var(--salesman-text-link);
+  --salesman-action-title: var(--salesman-text-secondary);
+  --salesman-action-body: #334E68;
+  --salesman-action-company: var(--salesman-text-primary);
+  --salesman-action-detail: var(--salesman-text-secondary);
+  --salesman-action-cta: var(--salesman-text-link);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card.tone-neutral {
+  --salesman-action-kicker: var(--salesman-text-secondary);
+  --salesman-action-title: var(--salesman-text-secondary);
+  --salesman-action-body: #334E68;
+  --salesman-action-company: var(--salesman-text-primary);
+  --salesman-action-detail: var(--salesman-text-secondary);
+  --salesman-action-cta: var(--salesman-text-link);
+}
+
+body.salesman-dashboard-mode .salesman-triage-card:is(.is-dark, .tone-dark, .tone-inverse, [data-contrast="dark"]) {
+  --salesman-action-kicker: var(--salesman-text-inverse-secondary);
+  --salesman-action-title: var(--salesman-text-inverse);
+  --salesman-action-body: var(--salesman-text-inverse-secondary);
+  --salesman-action-company: var(--salesman-text-inverse);
+  --salesman-action-detail: var(--salesman-text-inverse-muted);
+  --salesman-action-cta: var(--salesman-text-inverse);
+  color: var(--salesman-text-inverse) !important;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card :is(.salesman-triage-kicker) {
+  color: var(--salesman-action-kicker) !important;
+  font-weight: 700;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card .salesman-triage-title {
+  color: var(--salesman-action-title) !important;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card :is(.salesman-triage-body, .salesman-triage-body-prefix, .salesman-triage-body-suffix) {
+  color: var(--salesman-action-body) !important;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card .salesman-triage-company {
+  color: var(--salesman-action-company) !important;
+  font-weight: 600;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card .salesman-triage-detail {
+  color: var(--salesman-action-detail) !important;
+}
+
+body.salesman-dashboard-mode .salesman-triage-card small {
+  color: var(--salesman-action-cta) !important;
+  font-weight: 600;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-queue-item strong,
+body.salesman-dashboard-mode .dashboard-live-lead-table td.is-company,
+body.salesman-dashboard-mode .dashboard-live-lead-table .lead-company-name {
+  color: var(--salesman-text-primary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-queue-item p,
+body.salesman-dashboard-mode .dashboard-live-lead-table td,
+body.salesman-dashboard-mode .dashboard-live-lead-table .lead-company-meta {
+  color: var(--salesman-text-secondary) !important;
+}
+
+body.salesman-dashboard-mode .salesman-simplified-queue-item .chip,
+body.salesman-dashboard-mode .lead-table-contact {
+  color: #334E68 !important;
+}
+
+body.salesman-dashboard-mode .lead-table-contact-link,
+body.salesman-dashboard-mode .lead-table-contact-link a,
+body.salesman-dashboard-mode .dashboard-live-lead-table a {
+  color: var(--salesman-text-link) !important;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-live-leads > .panel-header h2,
+body.salesman-dashboard-mode .salesman-dashboard-live-leads .salesman-live-lead-count {
+  color: var(--salesman-text-inverse) !important;
+}
+
+body.salesman-dashboard-mode .salesman-dashboard-live-leads > .panel-header span:not(.salesman-live-lead-count) {
+  color: var(--salesman-text-inverse-secondary) !important;
+}
+
+body.salesman-dashboard-mode .dashboard-live-lead-table th {
+  color: var(--salesman-text-primary) !important;
+}
+
+body.salesman-dashboard-mode :is(button, input, select, textarea, a):focus-visible,
+body.salesman-dashboard-mode [tabindex]:focus-visible {
+  outline-color: var(--salesman-text-link) !important;
+}
+
+body.salesman-dashboard-mode :disabled,
+body.salesman-dashboard-mode [aria-disabled="true"] {
+  color: var(--salesman-text-muted) !important;
+}
