@@ -25,6 +25,10 @@ assert.match(css, /grid-template-columns:\s*minmax\(0, 2fr\) minmax\(330px, 1fr\
 assert.match(css, /\.overdue-banner\.hidden\s*\{[^}]*display:\s*none\s*!important/s, "Hidden overdue alerts must not reserve vertical space");
 assert.match(css, /\.activity-weekly-card\s*\{[^}]*max-height:\s*86px\s*!important/s, "Weekly calendar must remain a compact strip");
 assert.match(css, /\.activity-kpi-copy > strong,[\s\S]*background:\s*transparent\s*!important/, "KPI values must not use large tinted value backgrounds");
+assert.match(css, /Admin Activity framed section titles/, "Admin Activity section title frames must be scoped and documented");
+assert.match(css, /\.activity-weekly-card,[\s\S]*\.activity-log-panel,[\s\S]*\.activity-reminders-panel[\s\S]*> \.activity-panel-cap\s*\{[^}]*border:\s*2px solid #F6AA1C\s*!important;[^}]*background:\s*#FFFFFF\s*!important;[^}]*color:\s*#2C363F\s*!important;/, "Weekly calendar, Activity log, and Reminders headers need the orange framed title treatment");
+assert.match(css, /> \.activity-panel-cap h2\s*\{[^}]*color:\s*#2C363F\s*!important;[^}]*font-size:\s*18px\s*!important;[^}]*font-weight:\s*700\s*!important;/, "Framed Activity section titles must use dark bold text");
+assert.match(css, /> \.activity-panel-cap :is\(\.activity-weekly-subheading, div > span:not\(\.activity-count-pill\)\)\s*\{[^}]*color:\s*#2C363F\s*!important;[^}]*font-size:\s*13px\s*!important;[^}]*font-weight:\s*400\s*!important;[^}]*opacity:\s*1\s*!important;/, "Framed Activity section subtitles must use dark non-faded text");
 assert.match(css, /\.activity-table-row\s*\{[^}]*height:\s*46px/s, "Compact rows must fit five records above the laptop fold");
 assert.match(css, /\.activity-table th\s*\{[^}]*height:\s*30px/s, "The table header needs compact fixed rhythm");
 assert.match(css, /\.activity-panel-cap h2,[\s\S]*color:\s*var\(--activity-latest-ink\)\s*!important/, "White panel caps need readable dark headings");

@@ -1749,3 +1749,69 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
     padding-top: 5px !important;
   }
 }
+
+/* Admin Activity framed section titles: Weekly calendar, Activity log, Reminders only. */
+body.activity-admin-mode :is(
+  .activity-weekly-card,
+  .activity-log-panel,
+  .activity-reminders-panel
+) > .activity-panel-cap {
+  align-items: center !important;
+  min-height: 56px !important;
+  margin: 0 0 11px !important;
+  padding: 8px 14px !important;
+  border: 2px solid #F6AA1C !important;
+  border-radius: 4px !important;
+  background: #FFFFFF !important;
+  box-shadow: none !important;
+  color: #2C363F !important;
+}
+
+body.activity-admin-mode :is(
+  .activity-weekly-card,
+  .activity-log-panel,
+  .activity-reminders-panel
+) > .activity-panel-cap h2 {
+  color: #2C363F !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+}
+
+body.activity-admin-mode :is(
+  .activity-weekly-card,
+  .activity-log-panel,
+  .activity-reminders-panel
+) > .activity-panel-cap :is(.activity-weekly-subheading, div > span:not(.activity-count-pill)) {
+  color: #2C363F !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.25 !important;
+  opacity: 1 !important;
+}
+
+body.activity-admin-mode .activity-log-panel > .activity-panel-cap,
+body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap {
+  min-height: 62px !important;
+}
+
+body.activity-admin-mode .activity-reminders-panel > .activity-panel-cap {
+  margin: -14px -14px 11px !important;
+}
+
+body.activity-admin-mode .activity-weekly-card > .activity-panel-cap {
+  min-height: 58px !important;
+}
+
+body.activity-admin-mode .activity-panel-cap .calendar-toolbar,
+body.activity-admin-mode .activity-panel-cap .activity-panel-actions {
+  align-items: center !important;
+}
+
+body.activity-admin-mode .activity-panel-cap .activity-count-pill {
+  color: #2C363F !important;
+}
+
+body.activity-admin-mode .activity-panel-cap :is(.activity-header-action, .calendar-nav-button, .calendar-range-pill) {
+  border-color: #CBD4DC !important;
+}
