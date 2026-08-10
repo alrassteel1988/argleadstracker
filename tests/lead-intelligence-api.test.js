@@ -139,6 +139,8 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
     assert.equal(cronUnauthorized.response.status, 401);
     const cronAuthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { method: "POST", headers: { Authorization: "Bearer cron-test-secret" }, body: { limit: 1 } });
     assert.equal(cronAuthorized.response.status, 200);
+    const cronGetAuthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { headers: { Authorization: "Bearer cron-test-secret" } });
+    assert.equal(cronGetAuthorized.response.status, 200);
 
     const salesmanAccount = await request(baseUrl, "/api/users", { method: "POST", token: adminToken, body: { name: "Intel Salesman", email: "salesman-intel@alrassteel.test", password: "SalesPass123!", territory: "Abu Dhabi" } });
     assert.equal(salesmanAccount.response.status, 201);

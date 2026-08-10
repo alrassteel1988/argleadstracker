@@ -4963,14 +4963,14 @@ async function handleApi(req, res, url) {
   }
   const db = supabaseEnabled ? null : readDb();
 
-  if (req.method === "POST" && url.pathname === "/api/cron/process-lead-intelligence") {
+  if (["GET", "POST"].includes(req.method) && url.pathname === "/api/cron/process-lead-intelligence") {
     const authHeader = String(req.headers.authorization || "");
     const suppliedSecret = String(url.searchParams.get("secret") || req.headers["x-cron-secret"] || authHeader.replace(/^Bearer\s+/i, "") || "");
     if (!LEAD_INTELLIGENCE_CRON_SECRET || suppliedSecret !== LEAD_INTELLIGENCE_CRON_SECRET) {
       return sendJson(res, 401, { code: "cron_secret_required", error: "Cron authorization required." });
     }
-    const body = await readBody(req).catch(() => ({}));
-    const limit = Math.max(1, Math.min(5, Number(body.limit || 1)));
+    const body = req.method === "POST" ? await readBody(req).catch(() => ({})) : {};
+    const limit = Math.max(1, Math.min(5, Number(body.limit || url.searchParams.get("limit") || 1)));
     const results = [];
     for (let index = 0; index < limit; index += 1) {
       const result = await processOneLeadIntelligenceJob(db, supabaseEnabled);
