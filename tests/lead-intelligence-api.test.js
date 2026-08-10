@@ -99,13 +99,10 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
     assert.equal(initialIntel.response.status, 200);
     assert.equal(initialIntel.data.active_report.status, "queued");
 
-    const duplicateGenerate = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/generate`, { method: "POST", token: adminToken });
-    assert.equal(duplicateGenerate.response.status, 200);
-    assert.equal(duplicateGenerate.data.code, "already_active");
-
-    const processed = await request(baseUrl, "/api/admin/lead-intelligence/process", { method: "POST", token: adminToken, body: { limit: 1 } });
-    assert.equal(processed.response.status, 200, JSON.stringify(processed.data));
-    assert.equal(processed.data.results[0].status, "completed");
+    const generated = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/generate`, { method: "POST", token: adminToken });
+    assert.equal(generated.response.status, 200, JSON.stringify(generated.data));
+    assert.equal(generated.data.code, "completed");
+    assert.equal(generated.data.result.status, "completed");
 
     const completedIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(completedIntel.data.report.status, "completed");
@@ -118,22 +115,23 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
     assert.strictEqual(pdf.data.slice(0, 4).toString(), "%PDF");
 
     const refresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
-    assert.equal(refresh.response.status, 202);
-    assert.equal(refresh.data.state.report.id, currentReportId, "Previous completed report remains visible during refresh.");
-    assert.equal(refresh.data.state.active_report.status, "queued");
+    assert.equal(refresh.response.status, 200);
+    assert.equal(refresh.data.result.status, "completed");
+    assert.notEqual(refresh.data.state.report.id, currentReportId, "Successful refresh should immediately replace the current report.");
+    const refreshedReportId = refresh.data.state.report.id;
 
     providerMode = "invalid";
-    const failedProcess = await request(baseUrl, "/api/admin/lead-intelligence/process", { method: "POST", token: adminToken, body: { limit: 1 } });
-    assert.equal(failedProcess.data.results[0].status, "failed");
+    const failedRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
+    assert.equal(failedRefresh.response.status, 500);
+    assert.equal(failedRefresh.data.result.status, "failed");
     const failedState = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
-    assert.equal(failedState.data.report.id, currentReportId, "Failed refresh must not remove the last successful report.");
+    assert.equal(failedState.data.report.id, refreshedReportId, "Failed refresh must not remove the last successful report.");
     assert.equal(failedState.data.failed_report.status, "failed");
 
-    const retry = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/retry`, { method: "POST", token: adminToken, body: { report_id: failedState.data.failed_report.id } });
-    assert.equal(retry.response.status, 202, JSON.stringify(retry.data));
     providerMode = "success";
-    const retryProcess = await request(baseUrl, "/api/admin/lead-intelligence/process", { method: "POST", token: adminToken, body: { limit: 1 } });
-    assert.equal(retryProcess.data.results[0].status, "completed");
+    const retryProcess = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/retry`, { method: "POST", token: adminToken, body: { report_id: failedState.data.failed_report.id } });
+    assert.equal(retryProcess.response.status, 200, JSON.stringify(retryProcess.data));
+    assert.equal(retryProcess.data.result.status, "completed");
 
     const cronUnauthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { method: "POST" });
     assert.equal(cronUnauthorized.response.status, 401);

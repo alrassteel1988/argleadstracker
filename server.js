@@ -3555,9 +3555,11 @@ async function persistLeadIntelligencePdf(db, report, pdf, supabaseEnabled) {
   return storageKey;
 }
 
-async function processOneLeadIntelligenceJob(db, supabaseEnabled, { fetchImpl = fetch } = {}) {
-  const job = await nextLeadIntelligenceJob(db, supabaseEnabled);
+async function processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetchImpl = fetch } = {}) {
   if (!job) return { processed: 0, status: "idle" };
+  if (String(job.status || "") !== "queued") {
+    return { processed: 0, status: job.status || "active", report: serializeLeadIntelligenceRecord(job) };
+  }
   await updateLeadIntelligenceReport(db, job.id, { status: "researching", started_at: new Date().toISOString(), error_code: "", error_message: "" }, supabaseEnabled);
   try {
     const lead = await leadForIntelligenceJob(db, job, supabaseEnabled);
@@ -3599,6 +3601,11 @@ async function processOneLeadIntelligenceJob(db, supabaseEnabled, { fetchImpl = 
     await updateLeadIntelligenceReport(db, job.id, { status: "failed", error_code: sanitized.code, error_message: sanitized.message, completed_at: new Date().toISOString() }, supabaseEnabled);
     return { processed: 1, status: "failed", error_code: sanitized.code, error_message: sanitized.message };
   }
+}
+
+async function processOneLeadIntelligenceJob(db, supabaseEnabled, { fetchImpl = fetch } = {}) {
+  const job = await nextLeadIntelligenceJob(db, supabaseEnabled);
+  return processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetchImpl });
 }
 
 async function queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled) {
@@ -6535,9 +6542,13 @@ async function handleApi(req, res, url) {
       reason: action,
       retryReportId: action === "retry" ? String(body.report_id || body.reportId || "") : ""
     });
-    return sendJson(res, queued.created ? 202 : 200, {
-      code: queued.created ? "queued" : "already_active",
-      report: serializeLeadIntelligenceRecord(queued.record),
+    const processResult = String(queued.record?.status || "") === "queued"
+      ? await processLeadIntelligenceJobRecord(db, queued.record, supabaseEnabled)
+      : { processed: 0, status: queued.record?.status || "active", report: serializeLeadIntelligenceRecord(queued.record) };
+    return sendJson(res, processResult.status === "failed" ? 500 : 200, {
+      code: processResult.status === "completed" ? "completed" : queued.created ? "queued" : "already_active",
+      report: processResult.report || serializeLeadIntelligenceRecord(queued.record),
+      result: processResult,
       state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, [])
     });
   }
