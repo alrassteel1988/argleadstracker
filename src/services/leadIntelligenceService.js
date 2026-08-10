@@ -111,6 +111,28 @@ function collectResponseUrlCitations(value, citations = []) {
   return citations;
 }
 
+function collectInlineUrlSources(value, sources = [], path = []) {
+  if (!value || typeof value !== "object") return sources;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectInlineUrlSources(item, sources, [...path, String(index)]));
+    return sources;
+  }
+  for (const [key, nested] of Object.entries(value)) {
+    if (typeof nested === "string" && /^https?:\/\/\S+/i.test(nested)) {
+      const sourceKey = [...path, key].join(".");
+      sources.push({
+        url: nested,
+        title: sourceKey.replace(/[._]/g, " "),
+        publisher: "",
+        source_type: "Provider URL field"
+      });
+    } else {
+      collectInlineUrlSources(nested, sources, [...path, key]);
+    }
+  }
+  return sources;
+}
+
 function mergeCitationSources(input, citations = []) {
   const existingSources = asArray(input?.sources);
   if (!citations.length) return input;
@@ -141,7 +163,7 @@ function mergeCitationSources(input, citations = []) {
       verified_information: asArray(researchQuality.verified_information).length
         ? researchQuality.verified_information
         : [{
-            statement: `Public web research returned cited source material for ${safeText(input?.executive_snapshot?.company || input?.company_profile?.company, "this lead")}.`,
+            statement: `Public web research returned URL-backed source material for ${safeText(input?.executive_snapshot?.company || input?.company_profile?.company, "this lead")}.`,
             source_refs: sourceRefs,
             confidence: "Medium"
           }]
@@ -424,7 +446,11 @@ async function generateLeadIntelligenceWithOpenAI({ lead, openAiKey, model = "gp
       error.status = response.status;
       throw error;
     }
-    const parsed = mergeCitationSources(parseJsonText(extractResponseText(payload)), collectResponseUrlCitations(payload));
+    const parsedText = parseJsonText(extractResponseText(payload));
+    const parsed = mergeCitationSources(parsedText, [
+      ...collectResponseUrlCitations(payload),
+      ...collectInlineUrlSources(parsedText)
+    ]);
     const report = assertValidLeadIntelligenceReport(parsed, leadInput);
     return {
       report,

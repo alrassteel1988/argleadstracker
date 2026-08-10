@@ -3345,7 +3345,8 @@ function activeLeadIntelligenceStatuses() {
 
 function sanitizeLeadIntelligenceError(error) {
   const code = String(error?.code || (error?.status === 429 ? "provider_rate_limited" : error?.status === 504 ? "provider_timeout" : "processing_failed")).replace(/[^a-z0-9_:-]/gi, "_").slice(0, 80);
-  const message = String(error?.message || "Lead intelligence generation failed.")
+  const details = Array.isArray(error?.details) && error.details.length ? ` ${error.details.join(" ")}` : "";
+  const message = `${String(error?.message || "Lead intelligence generation failed.")}${details}`
     .replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [redacted]")
     .replace(/sk-[A-Za-z0-9._-]+/g, "[redacted]")
     .slice(0, 500);

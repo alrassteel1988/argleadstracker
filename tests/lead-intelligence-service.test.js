@@ -144,7 +144,7 @@ assert.ok(pdf.toString("utf8").includes("/Subtype /Link"), "Source URLs should b
 assert.ok(pdf.toString("utf8").includes("Not publicly found"));
 
 (async () => {
-  const providerReportWithoutSources = fixtureReport({
+  const providerReportWithInlineUrlOnly = fixtureReport({
     sources: [],
     research_quality: {
       verified_information: [],
@@ -172,19 +172,15 @@ assert.ok(pdf.toString("utf8").includes("Not publicly found"));
           output: [{
             content: [{
               type: "output_text",
-              text: JSON.stringify(providerReportWithoutSources),
-              annotations: [{
-                type: "url_citation",
-                url: "https://example.com/contact",
-                title: "Official company contact page"
-              }]
+              text: JSON.stringify(providerReportWithInlineUrlOnly)
             }]
           }]
         };
       }
     })
   });
-  assert.strictEqual(result.report.sources[0].url, "https://example.com/contact");
+  assert.strictEqual(result.report.sources[0].url, "https://example.com");
+  assert.strictEqual(result.report.sources[0].source_type, "Provider URL field");
   assert.ok(result.report.research_quality.verified_information[0].source_refs.includes("src-1"));
 
   console.log("PASS lead intelligence service");
