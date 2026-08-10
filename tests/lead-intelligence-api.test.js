@@ -144,6 +144,43 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
     assert.equal(retryProcess.response.status, 200, JSON.stringify(retryProcess.data));
     assert.equal(retryProcess.data.result.status, "completed");
 
+    const staleStartedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const staleCreatedAt = new Date(Date.now() + 1000).toISOString();
+    const dbAfterRetry = JSON.parse(fs.readFileSync(dbPath, "utf8"));
+    dbAfterRetry.lead_intelligence_reports.unshift({
+      id: "lir-stale-researching",
+      lead_id: lead.data.id,
+      status: "researching",
+      report_json: null,
+      weighted_score: null,
+      displayed_score: null,
+      priority: "",
+      demand_classification: "",
+      steel_demand: "",
+      buyer_classification: "",
+      workflow_version: "uae-structural-steel-lead-intelligence@2026-08-10",
+      provider_metadata: {},
+      research_timestamp: null,
+      pdf_storage_key: "",
+      pdf_url: "",
+      error_code: "",
+      error_message: "",
+      created_at: staleCreatedAt,
+      started_at: staleStartedAt,
+      completed_at: null,
+      updated_at: staleStartedAt,
+      initiating_user_id: adminLogin.data.user.id,
+      initiated_by: adminLogin.data.user.id,
+      is_current: false,
+      superseded_at: null
+    });
+    fs.writeFileSync(dbPath, JSON.stringify(dbAfterRetry, null, 2));
+    const staleState = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
+    assert.equal(staleState.response.status, 200);
+    assert.equal(staleState.data.active_report, null);
+    assert.equal(staleState.data.failed_report.id, "lir-stale-researching");
+    assert.equal(staleState.data.failed_report.error_code, "stale_worker_interrupted");
+
     const cronUnauthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { method: "POST" });
     assert.equal(cronUnauthorized.response.status, 401);
     const cronAuthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { method: "POST", headers: { Authorization: "Bearer cron-test-secret" }, body: { limit: 1 } });

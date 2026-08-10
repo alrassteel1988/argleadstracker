@@ -3343,6 +3343,15 @@ function activeLeadIntelligenceStatuses() {
   return new Set(["queued", "researching", "generating_pdf"]);
 }
 
+const LEAD_INTELLIGENCE_ACTIVE_STALE_MS = 2 * 60 * 1000;
+
+function isStaleLeadIntelligenceJob(report, now = Date.now()) {
+  const status = String(report?.status || "");
+  if (!["researching", "generating_pdf"].includes(status)) return false;
+  const timestamp = Date.parse(report.updated_at || report.started_at || report.created_at || "");
+  return Number.isFinite(timestamp) && now - timestamp > LEAD_INTELLIGENCE_ACTIVE_STALE_MS;
+}
+
 function sanitizeLeadIntelligenceError(error) {
   const code = String(error?.code || (error?.status === 429 ? "provider_rate_limited" : error?.status === 504 ? "provider_timeout" : "processing_failed")).replace(/[^a-z0-9_:-]/gi, "_").slice(0, 80);
   const details = Array.isArray(error?.details) && error.details.length ? ` ${error.details.join(" ")}` : "";
@@ -3402,7 +3411,17 @@ async function loadLeadIntelligenceReports(db, token, leadId, supabaseEnabled) {
 }
 
 async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems = []) {
-  const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  let reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  const staleActive = reports.find(report => isStaleLeadIntelligenceJob(report));
+  if (staleActive) {
+    await updateLeadIntelligenceReport(db, staleActive.id, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_code: "stale_worker_interrupted",
+      error_message: "Lead intelligence research was interrupted before completion. Please retry the report."
+    }, supabaseEnabled);
+    reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  }
   const active = reports.find(report => activeLeadIntelligenceStatuses().has(report.status)) || null;
   const current = reports.find(report => report.status === "completed" && report.is_current) || reports.find(report => report.status === "completed") || null;
   const failed = reports.find(report => report.status === "failed") || null;
@@ -3470,7 +3489,16 @@ async function queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, opti
   }
   const existing = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
   const active = existing.find(report => activeLeadIntelligenceStatuses().has(report.status));
-  if (active) return { record: active, created: false };
+  if (active && isStaleLeadIntelligenceJob(active)) {
+    await updateLeadIntelligenceReport(db, active.id, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_code: "stale_worker_interrupted",
+      error_message: "Lead intelligence research was interrupted before completion. Please retry the report."
+    }, supabaseEnabled);
+  } else if (active) {
+    return { record: active, created: false };
+  }
   if (options.skipIfAnyReport && existing.length) return { record: existing[0], created: false, skipped: true };
   if (options.retryReportId) {
     const failed = existing.find(report => String(report.id) === String(options.retryReportId) && report.status === "failed");
