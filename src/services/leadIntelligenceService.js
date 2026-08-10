@@ -93,6 +93,62 @@ function normalizeSource(source, index) {
   };
 }
 
+function collectResponseUrlCitations(value, citations = []) {
+  if (!value || typeof value !== "object") return citations;
+  if (Array.isArray(value)) {
+    value.forEach(item => collectResponseUrlCitations(item, citations));
+    return citations;
+  }
+  if (value.type === "url_citation" && value.url) {
+    citations.push({
+      url: value.url,
+      title: value.title || value.label || value.url,
+      publisher: value.publisher || value.source || "",
+      source_type: "Web citation"
+    });
+  }
+  Object.values(value).forEach(item => collectResponseUrlCitations(item, citations));
+  return citations;
+}
+
+function mergeCitationSources(input, citations = []) {
+  const existingSources = asArray(input?.sources);
+  if (!citations.length) return input;
+  const seen = new Set(existingSources.map(source => safeText(source?.url).toLowerCase()).filter(Boolean));
+  const citedSources = citations
+    .filter(citation => {
+      const url = safeText(citation.url).toLowerCase();
+      if (!url || seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    })
+    .map((citation, index) => ({
+      id: safeText(citation.id, `src-${existingSources.length + index + 1}`),
+      title: safeText(citation.title, citation.url),
+      url: safeText(citation.url),
+      publisher: safeText(citation.publisher, UNKNOWN),
+      source_type: safeText(citation.source_type, "Web citation"),
+      access_date: new Date().toISOString().slice(0, 10)
+    }));
+  if (!citedSources.length) return input;
+  const sourceRefs = citedSources.map(source => source.id).slice(0, 3);
+  const researchQuality = input?.research_quality && typeof input.research_quality === "object" ? input.research_quality : {};
+  return {
+    ...input,
+    sources: [...existingSources, ...citedSources],
+    research_quality: {
+      ...researchQuality,
+      verified_information: asArray(researchQuality.verified_information).length
+        ? researchQuality.verified_information
+        : [{
+            statement: `Public web research returned cited source material for ${safeText(input?.executive_snapshot?.company || input?.company_profile?.company, "this lead")}.`,
+            source_refs: sourceRefs,
+            confidence: "Medium"
+          }]
+    }
+  };
+}
+
 function normalizeProject(project) {
   return {
     project_name: safeText(project?.project_name || project?.project, UNKNOWN),
@@ -368,7 +424,7 @@ async function generateLeadIntelligenceWithOpenAI({ lead, openAiKey, model = "gp
       error.status = response.status;
       throw error;
     }
-    const parsed = parseJsonText(extractResponseText(payload));
+    const parsed = mergeCitationSources(parseJsonText(extractResponseText(payload)), collectResponseUrlCitations(payload));
     const report = assertValidLeadIntelligenceReport(parsed, leadInput);
     return {
       report,

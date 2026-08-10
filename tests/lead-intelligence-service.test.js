@@ -5,6 +5,7 @@ const {
   allowedResearchInputFromLead,
   assertValidLeadIntelligenceReport,
   calculateLeadScore,
+  generateLeadIntelligenceWithOpenAI,
   priorityForWeightedScore,
   renderLeadIntelligencePdf
 } = require("../src/services/leadIntelligenceService");
@@ -142,4 +143,52 @@ assert.strictEqual(pdf.slice(0, 4).toString(), "%PDF");
 assert.ok(pdf.toString("utf8").includes("/Subtype /Link"), "Source URLs should be clickable PDF annotations.");
 assert.ok(pdf.toString("utf8").includes("Not publicly found"));
 
-console.log("PASS lead intelligence service");
+(async () => {
+  const providerReportWithoutSources = fixtureReport({
+    sources: [],
+    research_quality: {
+      verified_information: [],
+      reasonable_inferences: [{ statement: "Structural sections may be relevant.", source_refs: ["src-1"], confidence: "Medium" }],
+      not_publicly_found_unverified: [{ statement: "Named procurement manager not publicly found.", source_refs: [], confidence: "Low" }],
+      confidence_summary: {
+        company_identity: "Medium",
+        company_profile: "Medium",
+        project_intelligence: "Low",
+        procurement_contacts: "Low",
+        steel_opportunity_assessment: "Medium"
+      }
+    }
+  });
+  const result = await generateLeadIntelligenceWithOpenAI({
+    lead: { company_name: "Test Steel Contracting LLC", website: "https://example.com" },
+    openAiKey: "test-key",
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          id: "resp-cited",
+          status: "completed",
+          output: [{
+            content: [{
+              type: "output_text",
+              text: JSON.stringify(providerReportWithoutSources),
+              annotations: [{
+                type: "url_citation",
+                url: "https://example.com/contact",
+                title: "Official company contact page"
+              }]
+            }]
+          }]
+        };
+      }
+    })
+  });
+  assert.strictEqual(result.report.sources[0].url, "https://example.com/contact");
+  assert.ok(result.report.research_quality.verified_information[0].source_refs.includes("src-1"));
+
+  console.log("PASS lead intelligence service");
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});
