@@ -77,6 +77,9 @@ function providerFixture() {
 let providerMode = "success";
 global.fetch = async function mockedFetch(url, options) {
   if (String(url).startsWith("https://api.openai.com/")) {
+    if (providerMode === "provider_error") {
+      return { ok: false, status: 502, async json() { return { error: { message: "mock provider failure" } }; } };
+    }
     const validJson = JSON.stringify(providerFixture());
     const outputText = providerMode === "success" ? validJson
       : providerMode === "repairable_json" ? `Here is the reconstructed report:\n\n\`\`\`json\n${validJson.replace(',"executive_snapshot"', ' "executive_snapshot"').replace(/}$/, ',}')}\n\`\`\``
@@ -241,11 +244,19 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const refreshedReportId = refresh.data.state.report.id;
 
     providerMode = "invalid";
+    const lowConfidenceRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
+    assert.equal(lowConfidenceRefresh.response.status, 200, JSON.stringify(lowConfidenceRefresh.data));
+    assert.equal(lowConfidenceRefresh.data.result.status, "completed");
+    assert.equal(lowConfidenceRefresh.data.state.report.priority, "D");
+    assert.equal(lowConfidenceRefresh.data.state.report.summary.sources_count, 1);
+    assert.notEqual(lowConfidenceRefresh.data.state.report.id, refreshedReportId, "Low-confidence report should still become the current report.");
+
+    providerMode = "provider_error";
     const failedRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
     assert.equal(failedRefresh.response.status, 500);
     assert.equal(failedRefresh.data.result.status, "failed");
     const failedState = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
-    assert.equal(failedState.data.report.id, refreshedReportId, "Failed refresh must not remove the last successful report.");
+    assert.equal(failedState.data.report.id, lowConfidenceRefresh.data.state.report.id, "Failed refresh must not remove the last successful report.");
     assert.equal(failedState.data.failed_report.status, "failed");
 
     providerMode = "success";

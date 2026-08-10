@@ -125,8 +125,13 @@ assert.strictEqual(report.procurement_contacts[0].name, UNKNOWN);
 assert.strictEqual(report.sources[0].url, "https://example.com/contact");
 assert.ok(report.research_quality.verified_information[0].source_refs.includes("src-1"));
 
-assert.throws(() => assertValidLeadIntelligenceReport(fixtureReport({ sources: [] })), /failed validation/);
-assert.throws(() => assertValidLeadIntelligenceReport(fixtureReport({ research_quality: { verified_information: [], reasonable_inferences: [], not_publicly_found_unverified: [], confidence_summary: {} } })), /failed validation/);
+const noSourceReport = assertValidLeadIntelligenceReport(fixtureReport({ sources: [] }));
+assert.strictEqual(noSourceReport.sources[0].id, "src-unverified-public-research");
+assert.strictEqual(noSourceReport.research_quality.verified_information[0].confidence, "High");
+
+const noVerifiedFactsReport = assertValidLeadIntelligenceReport(fixtureReport({ research_quality: { verified_information: [], reasonable_inferences: [], not_publicly_found_unverified: [], confidence_summary: {} } }));
+assert.strictEqual(noVerifiedFactsReport.research_quality.verified_information[0].confidence, "Low");
+assert.match(noVerifiedFactsReport.research_quality.verified_information[0].statement, /No independently verified public facts/);
 
 const allowed = allowedResearchInputFromLead({
   company_name: "Allowed Co",
