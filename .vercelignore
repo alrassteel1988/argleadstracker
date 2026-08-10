@@ -6,3 +6,8 @@ node_modules
 data/db.json
 scripts/push-github-api.ps1
 arg leads tracker web
+
+screenshots
+*.zip
+tmp
+outputs

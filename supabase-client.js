@@ -12,7 +12,8 @@ const SERVICE_ROLE_OPERATIONS = new Set([
   "notifications.director_fanout",
   "profiles.admin_update",
   "security.rate_limits",
-  "workflow.activity_managers"
+  "workflow.activity_managers",
+  "lead_intelligence.worker"
 ]);
 
 function isSupabaseConfigured() {
@@ -135,6 +136,49 @@ async function createStorageSignedUrl(objectPath, expiresIn = 3600, token) {
   return createStorageSignedUrlForBucket(SUPABASE_STORAGE_BUCKET, objectPath, expiresIn, token);
 }
 
+
+async function uploadStorageObjectToBucketAsService(bucket, objectPath, content, contentType = "application/octet-stream") {
+  const response = await fetch(`${SUPABASE_URL}${storageObjectUrl(objectPath, bucket)}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": contentType,
+      "x-upsert": "false"
+    },
+    body: content
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || data.error || `Supabase Storage service upload failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+async function createStorageSignedUrlForBucketAsService(bucket, objectPath, expiresIn = 3600) {
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${String(objectPath || "")
+    .split("/")
+    .map(part => encodeURIComponent(part))
+    .join("/")}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ expiresIn })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || data.error || `Supabase Storage service signed URL failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  const signedUrl = data.signedURL || data.signedUrl || "";
+  return signedUrl.startsWith("http") ? signedUrl : `${SUPABASE_URL}${signedUrl}`;
+}
 async function signIn(email, password) {
   return request("/auth/v1/token?grant_type=password", { method: "POST", body: { email, password } });
 }
@@ -224,6 +268,7 @@ module.exports = {
   createAuthUser,
   createStorageSignedUrl,
   createStorageSignedUrlForBucket,
+  createStorageSignedUrlForBucketAsService,
   currentSupabaseUser,
   isSupabaseAdminConfigured,
   isSupabaseConfigured,
@@ -234,5 +279,6 @@ module.exports = {
   signOut,
   updateAuthUser,
   uploadStorageObject,
-  uploadStorageObjectToBucket
+  uploadStorageObjectToBucket,
+  uploadStorageObjectToBucketAsService
 };

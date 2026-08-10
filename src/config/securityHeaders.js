@@ -1,7 +1,7 @@
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'self'",
-  "object-src 'none'",
+  "object-src 'self'",
   "frame-ancestors 'none'",
   "form-action 'self'",
   "script-src 'self' https://cdnjs.cloudflare.com",
@@ -12,7 +12,7 @@ const CONTENT_SECURITY_POLICY = [
   "connect-src 'self'",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
-  "frame-src 'none'"
+  "frame-src 'self'"
 ].join("; ");
 
 const PERMISSIONS_POLICY = [

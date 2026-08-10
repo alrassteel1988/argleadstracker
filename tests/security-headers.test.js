@@ -32,7 +32,7 @@ async function run() {
   });
 
   assert.match(CONTENT_SECURITY_POLICY, /default-src 'self'/);
-  assert.match(CONTENT_SECURITY_POLICY, /object-src 'none'/);
+  assert.match(CONTENT_SECURITY_POLICY, /object-src 'self'/);
   assert.match(CONTENT_SECURITY_POLICY, /frame-ancestors 'none'/);
   assert.match(CONTENT_SECURITY_POLICY, /form-action 'self'/);
   assert.match(CONTENT_SECURITY_POLICY, /script-src 'self' https:\/\/cdnjs\.cloudflare\.com/);

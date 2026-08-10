@@ -23,6 +23,7 @@ const {
   createAuthUser,
   createStorageSignedUrl,
   createStorageSignedUrlForBucket,
+  createStorageSignedUrlForBucketAsService,
   currentSupabaseUser,
   isSupabaseAdminConfigured,
   isSupabaseConfigured,
@@ -33,7 +34,8 @@ const {
   signOut,
   updateAuthUser,
   uploadStorageObject,
-  uploadStorageObjectToBucket
+  uploadStorageObjectToBucket,
+  uploadStorageObjectToBucketAsService
 } = require("./supabase-client");
 const {
   ACTIVITY_DELETION_REASONS,
@@ -108,6 +110,13 @@ const {
   runLeadAiSummary
 } = require("./src/services/leadAiSummaryService");
 const {
+  WORKFLOW_VERSION: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
+  allowedResearchInputFromLead,
+  generateLeadIntelligenceWithOpenAI,
+  renderLeadIntelligencePdf,
+  reportSummary
+} = require("./src/services/leadIntelligenceService");
+const {
   SALESPERSON_AI_ACTIONS,
   runSalespersonAiAction
 } = require("./src/services/salespersonAiActionService");
@@ -150,6 +159,11 @@ const OPENAI_TRANSLATION_MODEL = "whisper-1";
 const OPENAI_ENGLISH_NORMALIZATION_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
 const OPENAI_PMR_ANALYSIS_MODEL = process.env.OPENAI_PMR_ANALYSIS_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
 const OPENAI_LEAD_SUMMARY_MODEL = process.env.OPENAI_LEAD_SUMMARY_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
+const OPENAI_LEAD_INTELLIGENCE_MODEL = process.env.OPENAI_LEAD_INTELLIGENCE_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
+const LEAD_INTELLIGENCE_AUTO_QUEUE = !["0", "false", "off", "no"].includes(String(process.env.ENABLE_LEAD_INTELLIGENCE_AUTO_QUEUE || "true").toLowerCase());
+const LEAD_INTELLIGENCE_BUCKET = process.env.SUPABASE_LEAD_INTELLIGENCE_BUCKET || "lead-intelligence-reports";
+const LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS = Math.max(60, Math.min(3600, Number(process.env.LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS || 600)));
+const LEAD_INTELLIGENCE_CRON_SECRET = process.env.LEAD_INTELLIGENCE_CRON_SECRET || process.env.CRON_SECRET || "";
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "glory@alrassteel.com").trim().toLowerCase();
 const ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || "";
 const SESSION_SECRET = process.env.APP_SESSION_SECRET || "local-development-session-secret-change-me";
@@ -368,6 +382,7 @@ function readDb() {
   db.weekly_report_events = Array.isArray(db.weekly_report_events) ? db.weekly_report_events : [];
   db.market_intelligence = Array.isArray(db.market_intelligence) ? db.market_intelligence : [];
   db.market_intelligence_archive = Array.isArray(db.market_intelligence_archive) ? db.market_intelligence_archive : [];
+  db.lead_intelligence_reports = Array.isArray(db.lead_intelligence_reports) ? db.lead_intelligence_reports : [];
   db.configuration = normalizeConfiguration(db.configuration || {}, defaultCrmConfiguration());
   db.configuration_audit_log = Array.isArray(db.configuration_audit_log) ? db.configuration_audit_log : [];
   db.assistant_audit_logs = Array.isArray(db.assistant_audit_logs) ? db.assistant_audit_logs : [];
@@ -3316,6 +3331,284 @@ async function accessibleLeadById(db, user, leadId, supabaseEnabled) {
   return db.leads.find(item => item.id === leadId && leadBelongsToUser(item, user)) || null;
 }
 
+function leadIntelligenceStorageKey(leadId, reportId) {
+  return `lead-intelligence/${String(leadId).replace(/[^\w-]/g, "_")}/${String(reportId).replace(/[^\w-]/g, "_")}.pdf`;
+}
+
+function leadIntelligenceLocalPath(storageKey) {
+  return path.normalize(path.join(DATA_DIR, storageKey));
+}
+
+function activeLeadIntelligenceStatuses() {
+  return new Set(["queued", "researching", "generating_pdf"]);
+}
+
+function sanitizeLeadIntelligenceError(error) {
+  const code = String(error?.code || (error?.status === 429 ? "provider_rate_limited" : error?.status === 504 ? "provider_timeout" : "processing_failed")).replace(/[^a-z0-9_:-]/gi, "_").slice(0, 80);
+  const message = String(error?.message || "Lead intelligence generation failed.")
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [redacted]")
+    .replace(/sk-[A-Za-z0-9._-]+/g, "[redacted]")
+    .slice(0, 500);
+  return { code, message };
+}
+
+function serializeLeadIntelligenceRecord(record, { includeReport = false } = {}) {
+  if (!record) return null;
+  const report = record.report_json || record.report || null;
+  return {
+    id: record.id,
+    lead_id: record.lead_id,
+    status: record.status,
+    is_current: Boolean(record.is_current),
+    superseded_at: record.superseded_at || null,
+    workflow_version: record.workflow_version || LEAD_INTELLIGENCE_WORKFLOW_VERSION,
+    weighted_score: record.weighted_score ?? report?.lead_score?.weighted_score ?? null,
+    displayed_score: record.displayed_score ?? report?.lead_score?.displayed_score ?? null,
+    priority: record.priority || report?.lead_score?.priority || "",
+    steel_demand: record.steel_demand || report?.executive_snapshot?.steel_demand || "",
+    demand_classification: record.demand_classification || record.steel_demand || report?.executive_snapshot?.steel_demand || "",
+    buyer_classification: record.buyer_classification || report?.executive_snapshot?.buyer_classification || "",
+    research_started_at: record.research_started_at || record.started_at || null,
+    research_completed_at: record.research_completed_at || record.completed_at || null,
+    research_timestamp: record.research_timestamp || report?.research_date || null,
+    created_at: record.created_at || null,
+    started_at: record.started_at || null,
+    completed_at: record.completed_at || null,
+    updated_at: record.updated_at || null,
+    initiated_by: record.initiated_by || record.initiating_user_id || "",
+    pdf_available: Boolean(record.pdf_storage_key || record.pdf_url),
+    pdf_url: record.pdf_storage_key || record.pdf_url ? `/api/leads/${encodeURIComponent(record.lead_id)}/intelligence/pdf/${encodeURIComponent(record.id)}` : "",
+    download_url: record.pdf_storage_key || record.pdf_url ? `/api/leads/${encodeURIComponent(record.lead_id)}/intelligence/pdf/${encodeURIComponent(record.id)}?download=1` : "",
+    error_code: record.error_code || "",
+    error_message: record.error_message || "",
+    provider_metadata: record.provider_metadata || {},
+    summary: reportSummary(report),
+    ...(includeReport ? { report } : {})
+  };
+}
+
+async function loadLeadIntelligenceReports(db, token, leadId, supabaseEnabled) {
+  if (supabaseEnabled) {
+    return rest(`lead_intelligence_reports?lead_id=eq.${encodeURIComponent(leadId)}&select=*&order=created_at.desc`, supabaseDataOptions(token))
+      .catch(error => {
+        if (assistantTableMissing(error, "lead_intelligence_reports")) return [];
+        throw error;
+      });
+  }
+  return (db.lead_intelligence_reports || [])
+    .filter(report => String(report.lead_id) === String(leadId))
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+}
+
+async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems = []) {
+  const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  const active = reports.find(report => activeLeadIntelligenceStatuses().has(report.status)) || null;
+  const current = reports.find(report => report.status === "completed" && report.is_current) || reports.find(report => report.status === "completed") || null;
+  const failed = reports.find(report => report.status === "failed") || null;
+  return {
+    workflow_version: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
+    auto_queue_enabled: LEAD_INTELLIGENCE_AUTO_QUEUE,
+    allowed_research_input: allowedResearchInputFromLead(lead),
+    report: current ? serializeLeadIntelligenceRecord(current) : null,
+    active_report: active ? serializeLeadIntelligenceRecord(active) : null,
+    failed_report: failed ? serializeLeadIntelligenceRecord(failed) : null,
+    history: reports.map(report => serializeLeadIntelligenceRecord(report)).slice(0, 12),
+    market_items: marketItems
+  };
+}
+
+async function insertLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason = "generate", retryOf = "" } = {}) {
+  const now = new Date().toISOString();
+  const record = {
+    id: newRecordId("lir"),
+    lead_id: lead.id,
+    status: "queued",
+    report_json: null,
+    weighted_score: null,
+    displayed_score: null,
+    priority: "",
+    demand_classification: "",
+    steel_demand: "",
+    buyer_classification: "",
+    workflow_version: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
+    provider_metadata: { reason, retry_of: retryOf || "" },
+    research_timestamp: null,
+    pdf_storage_key: "",
+    pdf_url: "",
+    error_code: "",
+    error_message: "",
+    created_at: now,
+    started_at: null,
+    completed_at: null,
+    updated_at: now,
+    initiating_user_id: user.id,
+    initiated_by: user.id,
+    is_current: false,
+    superseded_at: null
+  };
+  if (supabaseEnabled) {
+    const rows = await rest("lead_intelligence_reports?select=*", {
+      method: "POST",
+      ...supabaseDataOptions(user.token),
+      headers: { Prefer: "return=representation" },
+      body: record
+    });
+    return rows[0];
+  }
+  db.lead_intelligence_reports.unshift(record);
+  writeDb(db);
+  return record;
+}
+
+async function queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, options = {}) {
+  if (!allowedResearchInputFromLead(lead).company_name) {
+    const error = new Error("Company name is required to generate lead intelligence.");
+    error.status = 400;
+    error.code = "missing_company_name";
+    throw error;
+  }
+  const existing = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  const active = existing.find(report => activeLeadIntelligenceStatuses().has(report.status));
+  if (active) return { record: active, created: false };
+  if (options.skipIfAnyReport && existing.length) return { record: existing[0], created: false, skipped: true };
+  if (options.retryReportId) {
+    const failed = existing.find(report => String(report.id) === String(options.retryReportId) && report.status === "failed");
+    if (!failed) {
+      const error = new Error("A failed intelligence report was not found for retry.");
+      error.status = 404;
+      error.code = "retry_report_not_found";
+      throw error;
+    }
+  }
+  const record = await insertLeadIntelligenceReport(db, user, lead, supabaseEnabled, {
+    reason: options.reason || "generate",
+    retryOf: options.retryReportId || ""
+  });
+  return { record, created: true };
+}
+
+async function updateLeadIntelligenceReport(db, reportId, patch, supabaseEnabled) {
+  const updated = { ...patch, updated_at: new Date().toISOString() };
+  if (supabaseEnabled) {
+    const rows = await serviceRest("lead_intelligence.worker", `lead_intelligence_reports?id=eq.${encodeURIComponent(reportId)}&select=*`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: updated
+    });
+    return rows[0] || null;
+  }
+  const index = (db.lead_intelligence_reports || []).findIndex(report => String(report.id) === String(reportId));
+  if (index < 0) return null;
+  db.lead_intelligence_reports[index] = { ...db.lead_intelligence_reports[index], ...updated };
+  writeDb(db);
+  return db.lead_intelligence_reports[index];
+}
+
+async function markLeadIntelligenceCurrent(db, leadId, currentReportId, supabaseEnabled) {
+  const now = new Date().toISOString();
+  if (supabaseEnabled) {
+    await serviceRest("lead_intelligence.worker", `lead_intelligence_reports?lead_id=eq.${encodeURIComponent(leadId)}&id=neq.${encodeURIComponent(currentReportId)}&is_current=eq.true`, {
+      method: "PATCH",
+      body: { is_current: false, superseded_at: now, updated_at: now }
+    }).catch(() => null);
+    await serviceRest("lead_intelligence.worker", `lead_intelligence_reports?id=eq.${encodeURIComponent(currentReportId)}`, {
+      method: "PATCH",
+      body: { is_current: true, superseded_at: null, updated_at: now }
+    });
+    return;
+  }
+  (db.lead_intelligence_reports || []).forEach(report => {
+    if (String(report.lead_id) === String(leadId)) {
+      report.is_current = String(report.id) === String(currentReportId);
+      report.superseded_at = report.is_current ? null : (report.superseded_at || now);
+      report.updated_at = now;
+    }
+  });
+  writeDb(db);
+}
+
+async function nextLeadIntelligenceJob(db, supabaseEnabled) {
+  if (supabaseEnabled) {
+    const rows = await serviceRest("lead_intelligence.worker", "lead_intelligence_reports?status=eq.queued&select=*&order=created_at.asc&limit=1");
+    return rows[0] || null;
+  }
+  return (db.lead_intelligence_reports || []).filter(report => report.status === "queued").sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")))[0] || null;
+}
+
+async function leadForIntelligenceJob(db, report, supabaseEnabled) {
+  if (supabaseEnabled) {
+    const rows = await serviceRest("lead_intelligence.worker", `leads?id=eq.${encodeURIComponent(report.lead_id)}&select=*&limit=1`);
+    return rows[0] ? fromSupabaseLead(rows[0]) : null;
+  }
+  return (db.leads || []).find(lead => String(lead.id) === String(report.lead_id)) || null;
+}
+
+async function persistLeadIntelligencePdf(db, report, pdf, supabaseEnabled) {
+  const storageKey = leadIntelligenceStorageKey(report.lead_id, report.id);
+  if (supabaseEnabled) {
+    await uploadStorageObjectToBucketAsService(LEAD_INTELLIGENCE_BUCKET, storageKey, pdf, "application/pdf");
+    return storageKey;
+  }
+  const localPath = leadIntelligenceLocalPath(storageKey);
+  fs.mkdirSync(path.dirname(localPath), { recursive: true });
+  fs.writeFileSync(localPath, pdf);
+  return storageKey;
+}
+
+async function processOneLeadIntelligenceJob(db, supabaseEnabled, { fetchImpl = fetch } = {}) {
+  const job = await nextLeadIntelligenceJob(db, supabaseEnabled);
+  if (!job) return { processed: 0, status: "idle" };
+  await updateLeadIntelligenceReport(db, job.id, { status: "researching", started_at: new Date().toISOString(), error_code: "", error_message: "" }, supabaseEnabled);
+  try {
+    const lead = await leadForIntelligenceJob(db, job, supabaseEnabled);
+    if (!lead) {
+      const error = new Error("Lead was not found for intelligence job.");
+      error.code = "lead_not_found";
+      error.status = 404;
+      throw error;
+    }
+    const result = await generateLeadIntelligenceWithOpenAI({
+      lead,
+      openAiKey: OPENAI_API_KEY,
+      model: OPENAI_LEAD_INTELLIGENCE_MODEL,
+      fetchImpl
+    });
+    await updateLeadIntelligenceReport(db, job.id, { status: "generating_pdf", provider_metadata: result.metadata }, supabaseEnabled);
+    const generatedAt = new Date().toISOString();
+    const pdf = renderLeadIntelligencePdf(result.report, { generatedAt });
+    const storageKey = await persistLeadIntelligencePdf(db, job, pdf, supabaseEnabled);
+    const completed = await updateLeadIntelligenceReport(db, job.id, {
+      status: "completed",
+      report_json: result.report,
+      weighted_score: result.report.lead_score.weighted_score,
+      displayed_score: result.report.lead_score.displayed_score,
+      priority: result.report.lead_score.priority,
+      steel_demand: result.report.executive_snapshot.steel_demand,
+      demand_classification: result.report.executive_snapshot.steel_demand,
+      buyer_classification: result.report.executive_snapshot.buyer_classification,
+      research_timestamp: result.report.research_date,
+      pdf_storage_key: storageKey,
+      completed_at: generatedAt,
+      error_code: "",
+      error_message: ""
+    }, supabaseEnabled);
+    await markLeadIntelligenceCurrent(db, job.lead_id, job.id, supabaseEnabled);
+    return { processed: 1, status: "completed", report: serializeLeadIntelligenceRecord(completed || { ...job, report_json: result.report, pdf_storage_key: storageKey, status: "completed" }) };
+  } catch (error) {
+    const sanitized = sanitizeLeadIntelligenceError(error);
+    await updateLeadIntelligenceReport(db, job.id, { status: "failed", error_code: sanitized.code, error_message: sanitized.message, completed_at: new Date().toISOString() }, supabaseEnabled);
+    return { processed: 1, status: "failed", error_code: sanitized.code, error_message: sanitized.message };
+  }
+}
+
+async function queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled) {
+  if (!LEAD_INTELLIGENCE_AUTO_QUEUE) return null;
+  try {
+    return await queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "auto_new_lead" });
+  } catch {
+    return null;
+  }
+}
 async function persistActivityCollection(db, user, lead, activities, supabaseEnabled) {
   const normalized = ensureActivityIds(activities);
   const lastActivity = normalized.find(activity => !activity.delete_request && !activity.archived)?.at
@@ -4670,6 +4963,22 @@ async function handleApi(req, res, url) {
   }
   const db = supabaseEnabled ? null : readDb();
 
+  if (req.method === "POST" && url.pathname === "/api/cron/process-lead-intelligence") {
+    const authHeader = String(req.headers.authorization || "");
+    const suppliedSecret = String(url.searchParams.get("secret") || req.headers["x-cron-secret"] || authHeader.replace(/^Bearer\s+/i, "") || "");
+    if (!LEAD_INTELLIGENCE_CRON_SECRET || suppliedSecret !== LEAD_INTELLIGENCE_CRON_SECRET) {
+      return sendJson(res, 401, { code: "cron_secret_required", error: "Cron authorization required." });
+    }
+    const body = await readBody(req).catch(() => ({}));
+    const limit = Math.max(1, Math.min(5, Number(body.limit || 1)));
+    const results = [];
+    for (let index = 0; index < limit; index += 1) {
+      const result = await processOneLeadIntelligenceJob(db, supabaseEnabled);
+      results.push(result);
+      if (!result.processed) break;
+    }
+    return sendJson(res, 200, { processed: results.reduce((sum, item) => sum + Number(item.processed || 0), 0), results });
+  }
   if (req.method === "GET" && url.pathname === "/api/health") {
     return sendJson(res, 200, {
       ok: true,
@@ -4713,6 +5022,9 @@ async function handleApi(req, res, url) {
         return sendJson(res, 200, { token: session.access_token, refresh_token: session.refresh_token, user });
       } catch (error) {
         await loginFailureDelay(accountLimit.count);
+        if ([400, 401, 403].includes(Number(error?.status))) {
+          return sendJson(res, 401, { error: "Invalid email or password." });
+        }
         throw error;
       }
     }
@@ -6158,6 +6470,7 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const lead = await saveSupabaseLead(user.token, user, payload);
       scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
+      await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
       return sendJson(res, 201, lead);
     }
     const lead = withAutomaticReminder(normalizeLead(payload), user);
@@ -6170,6 +6483,7 @@ async function handleApi(req, res, url) {
     db.leads.unshift(lead);
     writeDb(db);
     scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
+    await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
     return sendJson(res, 201, leadWithDerivedFields(lead));
   }
 
@@ -6207,9 +6521,79 @@ async function handleApi(req, res, url) {
     } else {
       items = db.market_intelligence || [];
     }
-    return sendJson(res, 200, leadIntelItems(lead, matchIntelligenceToLeads(items, [lead])));
+    const marketItems = leadIntelItems(lead, matchIntelligenceToLeads(items, [lead]));
+    return sendJson(res, 200, await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems));
   }
 
+  const leadIntelligenceActionMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intelligence\/(generate|refresh|retry)$/);
+  if (req.method === "POST" && leadIntelligenceActionMatch) {
+    const lead = await accessibleLeadById(db, user, leadIntelligenceActionMatch[1], supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    const action = leadIntelligenceActionMatch[2];
+    const body = action === "retry" ? await readBody(req) : {};
+    const queued = await queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, {
+      reason: action,
+      retryReportId: action === "retry" ? String(body.report_id || body.reportId || "") : ""
+    });
+    return sendJson(res, queued.created ? 202 : 200, {
+      code: queued.created ? "queued" : "already_active",
+      report: serializeLeadIntelligenceRecord(queued.record),
+      state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, [])
+    });
+  }
+
+  const leadIntelligencePdfMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intelligence\/pdf\/([^/]+)$/);
+  if (req.method === "GET" && leadIntelligencePdfMatch) {
+    const lead = await accessibleLeadById(db, user, leadIntelligencePdfMatch[1], supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+    const report = reports.find(item => String(item.id) === String(leadIntelligencePdfMatch[2]));
+    if (!report || report.status !== "completed" || !(report.pdf_storage_key || report.pdf_url)) {
+      return sendJson(res, 404, { code: "pdf_not_found", error: "Intelligence PDF not found." });
+    }
+    const filename = `${String(lead.company_name || "lead").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "lead"}-intelligence-${String(report.research_timestamp || report.completed_at || "").slice(0, 10) || "report"}.pdf`;
+    if (supabaseEnabled) {
+      const signedUrl = await createStorageSignedUrlForBucketAsService(LEAD_INTELLIGENCE_BUCKET, report.pdf_storage_key, LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS);
+      res.writeHead(302, { Location: signedUrl, "Cache-Control": "private, no-store" });
+      return res.end();
+    }
+    const localPath = leadIntelligenceLocalPath(report.pdf_storage_key || report.pdf_url);
+    if (!localPath.startsWith(DATA_DIR) || !fs.existsSync(localPath)) return sendJson(res, 404, { code: "pdf_missing", error: "Intelligence PDF file is missing." });
+    const body = fs.readFileSync(localPath);
+    if (url.searchParams.get("download")) return sendDownload(res, "application/pdf", filename, body);
+    res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${filename}"`, "Cache-Control": "private, no-store" });
+    return res.end(body);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/lead-intelligence/process") {
+    if (!isAdmin(user)) return sendJson(res, 403, { code: "admin_required", error: "Admin access required." });
+    const body = await readBody(req).catch(() => ({}));
+    const limit = Math.max(1, Math.min(5, Number(body.limit || 1)));
+    const results = [];
+    for (let index = 0; index < limit; index += 1) {
+      const result = await processOneLeadIntelligenceJob(db, supabaseEnabled);
+      results.push(result);
+      if (!result.processed) break;
+    }
+    return sendJson(res, 200, { processed: results.reduce((sum, item) => sum + Number(item.processed || 0), 0), results });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/lead-intelligence/backfill") {
+    if (!isAdmin(user)) return sendJson(res, 403, { code: "admin_required", error: "Admin access required." });
+    const body = await readBody(req).catch(() => ({}));
+    const limit = Math.max(1, Math.min(500, Number(body.limit || 100)));
+    const leads = supabaseEnabled
+      ? (await rest(`leads?select=*&order=created_at.asc&limit=${limit}`, supabaseDataOptions(user.token))).map(fromSupabaseLead)
+      : visibleLeadsForUser(db.leads, user).slice(0, limit);
+    let queued = 0;
+    let existing = 0;
+    for (const lead of leads) {
+      const result = await queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "backfill", skipIfAnyReport: !body.refresh_existing });
+      if (result.created) queued += 1;
+      else existing += 1;
+    }
+    return sendJson(res, 202, { code: "backfill_queued", queued, existing, scanned: leads.length, refresh_existing: Boolean(body.refresh_existing) });
+  }
   const leadHandoffMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/handoffs$/);
   if (req.method === "GET" && leadHandoffMatch) {
     const lead = supabaseEnabled
@@ -7305,4 +7689,5 @@ server.weeklyReportContext = weeklyReportContext;
 server.weeklyReportWorkflow = weeklyReportWorkflow;
 server.normalizeEnglishText = normalizeEnglishText;
 server.transcribeAudio = transcribeAudio;
+server.processOneLeadIntelligenceJob = processOneLeadIntelligenceJob;
 module.exports = server;

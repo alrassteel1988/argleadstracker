@@ -87,6 +87,7 @@ assert.deepStrictEqual(policyFromEnvironment("ai", {
 }), { limit: 7, windowMs: 30_000, blockMs: 45_000 });
 
 assert.strictEqual(requestRateLimitCategory("POST", "/api/ai-assistant/interpret"), "ai");
+assert.strictEqual(requestRateLimitCategory("POST", "/api/leads/lead-1/intelligence/generate"), "ai");
 assert.strictEqual(requestRateLimitCategory("POST", "/api/transcriptions"), "transcription");
 assert.strictEqual(requestRateLimitCategory("POST", "/api/exports/pipeline-report.pdf"), "export");
 assert.strictEqual(requestRateLimitCategory("POST", "/api/pmr-voice-notes"), "upload");

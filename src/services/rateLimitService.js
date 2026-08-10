@@ -136,7 +136,9 @@ function requestRateLimitCategory(method, pathname) {
     path === "/api/agent/query" ||
     path === "/api/salesperson-ai-actions" ||
     path === "/api/ai/lead-summary" ||
-    /\/api\/leads\/[^/]+\/ai-actions$/.test(path)
+    /\/api\/leads\/[^/]+\/ai-actions$/.test(path) ||
+      /\/api\/leads\/[^/]+\/intelligence\/(generate|refresh|retry)$/.test(path) ||
+      path === "/api/admin/lead-intelligence/process"
   )) return "ai";
   if (verb === "POST" && ["/api/transcriptions", "/api/pmrs/analyze-transcript"].includes(path)) return "transcription";
   if ((verb === "GET" || verb === "POST") && path.startsWith("/api/exports/")) return "export";

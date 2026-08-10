@@ -9223,17 +9223,82 @@ function renderDrawerNotes(lead) {
   `;
 }
 
-function renderDrawerIntel(lead) {
-  const items = state.leadDrawerIntel || [];
+function intelligenceSummaryMarkup(report) {
+  if (!report) return "";
+  const summary = report.summary || {};
+  const confidence = summary.confidence_summary || report.confidence_summary || {};
   return `
-    <section class="drawer-section">
+    <div class="lead-intel-summary-grid" aria-label="Lead intelligence summary">
+      <span><b>Research</b><small>${escapeHtml(formatDisplayDate(summary.research_date || report.research_timestamp || report.completed_at || ""))}</small></span>
+      <span><b>Score</b><small>${escapeHtml(String(report.displayed_score || summary.lead_score || "-"))}/10</small></span>
+      <span><b>Priority</b><small>${escapeHtml(report.priority || summary.priority || "-")}</small></span>
+      <span><b>Demand</b><small>${escapeHtml(report.steel_demand || summary.steel_demand || "-")}</small></span>
+      <span><b>Buyer</b><small>${escapeHtml(report.buyer_classification || summary.buyer_classification || "-")}</small></span>
+      <span><b>Confidence</b><small>Identity ${escapeHtml(confidence.company_identity || "-")}</small></span>
+    </div>
+  `;
+}
+
+function leadIntelligenceActionButton(action, leadId, label, tone = "primary-button", reportId = "") {
+  return `<button class="${tone}" type="button" data-lead-intelligence-action="${escapeHtml(action)}" data-lead-id="${escapeHtml(leadId)}" ${reportId ? `data-report-id="${escapeHtml(reportId)}"` : ""}>${escapeHtml(label)}</button>`;
+}
+
+function renderDrawerIntel(lead) {
+  const statePayload = state.leadDrawerIntel && !Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : { market_items: Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : [] };
+  const report = statePayload.report || null;
+  const active = statePayload.active_report || null;
+  const failed = statePayload.failed_report || null;
+  const marketItems = statePayload.market_items || [];
+  const hasPdf = report && report.pdf_available && report.pdf_url;
+  const processing = active && ["queued", "researching", "generating_pdf"].includes(String(active.status));
+  const statusLabel = active ? String(active.status || "queued").replace(/_/g, " ") : "";
+  const failedVisible = failed && !processing;
+  return `
+    <section class="drawer-section lead-intel-section">
       <div class="drawer-tab-heading">
-        <h3>Market Intel</h3>
-        <button class="ghost-button" type="button" data-refresh-lead-intel="${escapeHtml(lead.id)}">Refresh</button>
+        <h3>UAE Structural Steel Lead Intelligence</h3>
+        ${processing ? `<span class="status-pill">${escapeHtml(statusLabel)}</span>` : ""}
       </div>
-      <div class="drawer-list intel-list">
-        ${items.length ? items.map(intelItemMarkup).join("") : `<div class="timeline-empty"><strong>No matched intel yet.</strong><span>Weekly feeds will appear here when sources are configured.</span></div>`}
-      </div>
+      ${!report && !processing && !failedVisible ? `
+        <div class="lead-intel-empty">
+          <strong>No intelligence report yet.</strong>
+          <span>Generate a source-backed UAE structural steel assessment and PDF for this company.</span>
+          <div class="lead-intel-actions">${leadIntelligenceActionButton("generate", lead.id, "Generate Intelligence", "primary-button")}</div>
+        </div>
+      ` : ""}
+      ${processing ? `
+        <div class="lead-intel-processing" role="status" aria-live="polite">
+          <strong>Intelligence report is ${escapeHtml(statusLabel)}.</strong>
+          <span>Started: ${escapeHtml(formatDisplayDate(active.started_at || active.created_at || ""))}</span>
+          ${report ? `<span>The last completed PDF remains available below while refresh is running.</span>` : `<span>Use the admin processor or scheduled job to complete queued research.</span>`}
+        </div>
+      ` : ""}
+      ${failedVisible ? `
+        <div class="lead-intel-failed" role="alert">
+          <strong>Latest intelligence job failed.</strong>
+          <span>${escapeHtml(failed.error_message || "The report could not be generated.")}</span>
+          <div class="lead-intel-actions">${leadIntelligenceActionButton("retry", lead.id, "Retry", "primary-button", failed.id)}</div>
+        </div>
+      ` : ""}
+      ${report ? `
+        ${intelligenceSummaryMarkup(report)}
+        ${hasPdf ? `
+          <div class="lead-intel-actions">
+            <a class="ghost-button" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">Download PDF</a>
+            <a class="ghost-button" href="${escapeHtml(report.pdf_url)}" target="_blank" rel="noopener">Open in new tab</a>
+            ${leadIntelligenceActionButton("refresh", lead.id, "Refresh Intelligence", "primary-button")}
+          </div>
+          <object class="lead-intel-pdf" data="${escapeHtml(report.pdf_url)}" type="application/pdf" aria-label="Embedded lead intelligence PDF">
+            <p class="empty-copy">This browser cannot embed PDFs. <a href="${escapeHtml(report.pdf_url)}" target="_blank" rel="noopener">Open the intelligence PDF in a new tab</a>.</p>
+          </object>
+        ` : `<p class="empty-copy">PDF is not available for this report yet.</p>`}
+      ` : ""}
+      <details class="lead-intel-market-feed">
+        <summary>Matched market feed items</summary>
+        <div class="drawer-list intel-list">
+          ${marketItems.length ? marketItems.map(intelItemMarkup).join("") : `<div class="timeline-empty"><strong>No matched feed items.</strong><span>Weekly feeds will appear here when sources are configured.</span></div>`}
+        </div>
+      </details>
     </section>
   `;
 }
@@ -9427,17 +9492,25 @@ function bindLeadDrawerEvents() {
       }
     });
   });
-  document.querySelectorAll("[data-refresh-lead-intel]").forEach(button => {
+  document.querySelectorAll("[data-lead-intelligence-action]").forEach(button => {
     button.addEventListener("click", async () => {
+      const leadId = button.dataset.leadId;
+      const action = button.dataset.leadIntelligenceAction;
       try {
-        state.leadDrawerIntel = await api(`/api/leads/${button.dataset.refreshLeadIntel}/intel`);
+        button.disabled = true;
+        setToast(action === "refresh" ? "Refreshing intelligence..." : action === "retry" ? "Retrying intelligence..." : "Generating intelligence...", "");
+        const body = action === "retry" ? JSON.stringify({ report_id: button.dataset.reportId || "" }) : undefined;
+        state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(leadId)}/intelligence/${encodeURIComponent(action)}`, { method: "POST", body });
+        state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(leadId)}/intel`);
+        setToast("Intelligence job queued.", "success");
         renderLeadDrawer();
       } catch (error) {
         setToast(error.message, "error");
+      } finally {
+        button.disabled = false;
       }
     });
-  });
-  document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
+  });  document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
     document.querySelector(".drawer-notes-view")?.classList.add("hidden");
     document.querySelector("#drawerNotesForm")?.classList.remove("hidden");
   });
