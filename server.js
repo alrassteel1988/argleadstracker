@@ -7702,4 +7702,5 @@ server.weeklyReportWorkflow = weeklyReportWorkflow;
 server.normalizeEnglishText = normalizeEnglishText;
 server.transcribeAudio = transcribeAudio;
 server.processOneLeadIntelligenceJob = processOneLeadIntelligenceJob;
+server.config = { maxDuration: 120 };
 module.exports = server;
