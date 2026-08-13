@@ -2140,10 +2140,11 @@ function userLeadNames(user) {
 function leadBelongsToUser(lead, user) {
   if (isDirectorOrAdmin(user)) return true;
   if (!lead || !user) return false;
-  const assignedById = lead.assigned_to && String(lead.assigned_to) === String(user.id);
+  const assignedTo = String(lead.assigned_to || "").trim();
+  const assignedById = assignedTo && assignedTo === String(user.id);
+  if (assignedTo) return Boolean(assignedById);
   const assignedByName = Boolean(String(lead.assigned_salesman || "").trim().toLowerCase() && userLeadNames(user).includes(String(lead.assigned_salesman || "").trim().toLowerCase()));
-  const createdById = lead.created_by && String(lead.created_by) === String(user.id);
-  return Boolean(assignedById || assignedByName || createdById);
+  return assignedByName;
 }
 
 function visibleLeadsForUser(leads, user) {
