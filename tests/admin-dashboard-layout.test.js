@@ -9,7 +9,7 @@ const css = fs.readFileSync(path.join(root, "admin-dashboard-clean.css"), "utf8"
 const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /href="admin-dashboard-clean\.css\?v=2"/, "the Admin Dashboard stylesheet must be loaded");
+assert.match(html, /href="\/admin-dashboard-clean\.css\?v=2"/, "the Admin Dashboard stylesheet must be loaded");
 assert.match(html, /id="adminDashboardOverviewSlot"[^>]*aria-label="Dashboard overview"/, "overview region needs an accessible label");
 assert.match(html, /id="adminDashboardTriageRow"[^>]*aria-label="Attention required"/, "attention region needs an accessible label");
 assert.match(html, /id="adminDashboardAnalyticsRow"[^>]*aria-label="Pipeline analytics"/, "analytics region needs an accessible label");
@@ -41,7 +41,7 @@ assert.match(css, /@media \(max-width:\s*700px\)/, "mobile layout breakpoint mus
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v65-network-first-header-frame/, "PWA cache must rotate for the latest UI assets");
+assert.match(sw, /arg-pwa-v66-network-first-header-frame/, "PWA cache must rotate for the latest UI assets");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
 assert.match(vercel, /"src": "admin-dashboard-clean\.css"/, "Vercel must build the dashboard stylesheet");
 assert.match(vercel, /"src": "\/admin-dashboard-clean\.css", "dest": "\/admin-dashboard-clean\.css"/, "Vercel must expose the dashboard stylesheet");

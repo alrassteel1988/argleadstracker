@@ -1170,6 +1170,35 @@ body.lead-detail-mode .lead-detail-view .lead-page-header .chip.warm {
   overflow-wrap: anywhere;
 }
 
+.lead-intel-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.lead-intel-detail-grid span,
+.lead-intel-question-list {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--bauhaus-line, #d9dde5);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.lead-intel-detail-grid b,
+.lead-intel-detail-grid small,
+.lead-intel-question-list {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lead-intel-question-list ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .lead-intel-pdf {
   width: 100%;
   min-height: min(72vh, 820px);

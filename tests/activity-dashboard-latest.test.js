@@ -37,7 +37,7 @@ assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.activity-table td::befo
 assert.doesNotMatch(css, /\.sidebar\b/, "The Activity redesign must not change sidebar sizing");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter:\s*blur|filter:\s*blur/i, "The latest Activity layer must remain flat and opaque");
 assert.match(serviceWorker, /"\/activity-dashboard-latest\.css"/, "The PWA shell must cache the latest Activity layer");
-assert.match(serviceWorker, /arg-pwa-v65-network-first-header-frame/, "The PWA cache must be bumped when Activity CSS changes");
+assert.match(serviceWorker, /arg-pwa-v66-network-first-header-frame/, "The PWA cache must be bumped when Activity CSS changes");
 assert.match(serviceWorker, /\.then\(\(\) => self\.skipWaiting\(\)\)/, "The updated service worker must activate immediately for stale CRM sessions");
 assert.match(serviceWorker, /event\.respondWith\(networkFirst\(request\)\)/, "Same-origin UI assets must prefer the network before cached fallbacks");
 assert.match(vercel, /"src": "activity-dashboard-latest\.css"/, "Vercel must publish the latest Activity layer");

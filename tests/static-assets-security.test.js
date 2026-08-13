@@ -76,9 +76,34 @@ async function run() {
       !vercel.routes.some(route => route.src === "/(.*)" && route.dest === "server.js"),
       "Vercel must not route arbitrary paths to the Node server"
     );
+    const apiHealthIndex = vercel.routes.findIndex(route => route.src === "/api/(.*)" && route.dest === "server.js");
+    const clientJsIndex = vercel.routes.findIndex(route => route.src === "/client.js" && route.dest === "/client.js");
+    const swIndex = vercel.routes.findIndex(route => route.src === "/sw.js" && route.dest === "/sw.js");
+    const cssIndex = vercel.routes.findIndex(route => route.src === "/styles.css" && route.dest === "/styles.css");
+    const manifestIndex = vercel.routes.findIndex(route => route.src === "/manifest.json" && route.dest === "/manifest.json");
+    const iconIndex = vercel.routes.findIndex(route => route.src === "/icons/icon-192.png" && route.dest === "/icons/icon-192.png");
+    const fallbackIndex = vercel.routes.findIndex(route => route.src === "/(.*)" && route.dest === "/index.html");
+
+    assert.ok(apiHealthIndex >= 0, "Vercel must route API requests to the Node server");
+    assert.ok(clientJsIndex >= 0, "Vercel must expose client.js as a real static asset");
+    assert.ok(swIndex >= 0, "Vercel must expose the service worker as a real static asset");
+    assert.ok(cssIndex >= 0, "Vercel must expose CSS assets as real static files");
+    assert.ok(manifestIndex >= 0, "Vercel must expose the manifest as a real static asset");
+    assert.ok(iconIndex >= 0, "Vercel must expose icons as real static assets");
+    assert.ok(fallbackIndex >= 0, "Vercel must retain a final SPA fallback for nested client-side routes");
+    assert.ok(apiHealthIndex < fallbackIndex, "API routes must be evaluated before the SPA fallback");
+    assert.ok(clientJsIndex < fallbackIndex, "client.js must be evaluated before the SPA fallback");
+    assert.ok(swIndex < fallbackIndex, "sw.js must be evaluated before the SPA fallback");
+    assert.ok(cssIndex < fallbackIndex, "CSS assets must be evaluated before the SPA fallback");
+    assert.ok(manifestIndex < fallbackIndex, "manifest.json must be evaluated before the SPA fallback");
+    assert.ok(iconIndex < fallbackIndex, "icons must be evaluated before the SPA fallback");
     assert.ok(
-      vercel.routes.some(route => route.src === "/leads/([^/]+)/?" && route.dest === "/index.html"),
-      "Vercel must retain the lead-detail SPA fallback"
+      vercel.routes.filter(route => route.src === "/(.*)" && route.dest === "/index.html").length === 1,
+      "Vercel must use one final SPA fallback"
+    );
+    assert.ok(
+      !vercel.crons.some(cron => cron.path === "/api/cron/process-lead-intelligence"),
+      "The retired lead-intelligence cron route must remain removed"
     );
     assert.ok(
       vercel.routes.some(route => route.src === "/manifest.json" && route.dest === "/manifest.json"),

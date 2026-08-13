@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v65-network-first-header-frame";
+const CACHE_VERSION = "arg-pwa-v66-network-first-header-frame";
 const APP_SHELL = [
   "/",
   "/index.html",
