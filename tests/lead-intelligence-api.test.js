@@ -21,8 +21,6 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "";
 process.env.OPENAI_API_KEY = "test-openai-key";
 process.env.OPENAI_LEAD_INTELLIGENCE_MODEL = "gpt-4.1-mini";
-process.env.ENABLE_LEAD_INTELLIGENCE_AUTO_QUEUE = "true";
-process.env.LEAD_INTELLIGENCE_CRON_SECRET = "cron-test-secret";
 
 fs.existsSync = function patchedExistsSync(target) {
   if (String(target).endsWith(`${path.sep}.env`)) return false;
@@ -64,8 +62,19 @@ function providerFixture() {
 }
 
 let providerMode = "success";
+let providerDelayMs = 0;
+let providerBodyDelayMatch = "";
+let providerBodyDelayMs = 0;
 global.fetch = async function mockedFetch(url, options) {
   if (String(url).startsWith("https://api.openai.com/")) {
+    const requestBody = typeof options?.body === "string"
+      ? options.body
+      : (Buffer.isBuffer(options?.body) ? options.body.toString("utf8") : "");
+    if (providerBodyDelayMatch && requestBody.includes(providerBodyDelayMatch) && providerBodyDelayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, providerBodyDelayMs));
+    } else if (providerDelayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, providerDelayMs));
+    }
     if (providerMode === "provider_error") {
       return { ok: false, status: 502, async json() { return { error: { message: "mock provider failure" } }; } };
     }
@@ -75,11 +84,52 @@ global.fetch = async function mockedFetch(url, options) {
   return nativeFetch(url, options);
 };
 
-async function request(baseUrl, pathName, { method = "GET", token = "", body, headers = {} } = {}) {
+async function request(baseUrl, pathName, { method = "GET", token = "", csrfToken = "", body, headers = {} } = {}) {
   const response = await nativeFetch(`${baseUrl}${pathName}`, {
     method,
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { "Content-Type": "application/json" } : {}), ...headers },
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...headers
+    },
     body: body ? JSON.stringify(body) : undefined,
+    redirect: "manual"
+  });
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json") ? await response.json() : Buffer.from(await response.arrayBuffer());
+  return { response, data };
+}
+
+function readLocalDb() {
+  return JSON.parse(fs.readFileSync(dbPath, "utf8"));
+}
+
+function listIntelFiles() {
+  if (!fs.existsSync(dataIntelPath)) return [];
+  const files = [];
+  const walk = current => {
+    if (!fs.existsSync(current)) return;
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else files.push(full);
+    }
+  };
+  walk(dataIntelPath);
+  return files.sort();
+}
+
+async function requestBinary(baseUrl, pathName, { method = "POST", token = "", csrfToken = "", body, headers = {} } = {}) {
+  const response = await nativeFetch(`${baseUrl}${pathName}`, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+      ...(method === "POST" ? { "Content-Type": "application/pdf", "x-file-name": "lead-intelligence-summary.pdf" } : {}),
+      ...headers
+    },
+    body,
     redirect: "manual"
   });
   const contentType = response.headers.get("content-type") || "";
@@ -94,55 +144,221 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
     const adminLogin = await request(baseUrl, "/api/auth/login", { method: "POST", body: { email: "admin-intel@alrassteel.test", password: "AdminPass123!" } });
     assert.equal(adminLogin.response.status, 200, JSON.stringify(adminLogin.data));
     const adminToken = adminLogin.data.token;
+    const adminCsrfToken = adminLogin.data.csrf_token;
 
-    const lead = await request(baseUrl, "/api/leads", { method: "POST", token: adminToken, body: { company_name: "API Intelligence Lead LLC", stage: "PROSPECT", territory: "Dubai", website: "https://example.com", sector: "Steel fabrication" } });
+    const lead = await request(baseUrl, "/api/leads", { method: "POST", token: adminToken, csrfToken: adminCsrfToken, body: { company_name: "API Intelligence Lead LLC", stage: "PROSPECT", territory: "Dubai", website: "https://example.com", sector: "Steel fabrication" } });
     assert.equal(lead.response.status, 201, JSON.stringify(lead.data));
+
+    const salesmanAccount = await request(baseUrl, "/api/users", { method: "POST", token: adminToken, csrfToken: adminCsrfToken, body: { name: "Intel Salesman", email: "salesman-intel@alrassteel.test", password: "SalesPass123!", territory: "Abu Dhabi" } });
+    assert.equal(salesmanAccount.response.status, 201);
+    const salesmanLogin = await request(baseUrl, "/api/auth/login", { method: "POST", body: { email: "salesman-intel@alrassteel.test", password: "SalesPass123!" } });
+    assert.equal(salesmanLogin.response.status, 200);
 
     const initialIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(initialIntel.response.status, 200);
-    assert.equal(initialIntel.data.active_report.status, "queued");
+    assert.equal(initialIntel.data.active_report, null);
+    assert.equal(initialIntel.data.report, null);
 
-    const generated = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/generate`, { method: "POST", token: adminToken });
-    assert.equal(generated.response.status, 200, JSON.stringify(generated.data));
-    assert.equal(generated.data.code, "completed");
-    assert.equal(generated.data.result.status, "completed");
+    const pdfText = "API Intelligence Lead LLC company_name API Intelligence Lead LLC stage Prospect territory Dubai sector Steel fabrication email intelligence@api.com phone +971555123456";
+    const firstUpload = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      body: Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 100 >>\nstream\nBT /F1 12 Tf 72 720 Td (${pdfText}) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF`)
+    });
+    assert.equal(firstUpload.response.status, 200, JSON.stringify(firstUpload.data));
 
     const completedIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(completedIntel.data.report.status, "completed");
-    assert.equal(completedIntel.data.report.weighted_score, 7.2);
-    assert.equal(completedIntel.data.report.priority, "B");
+    assert.equal(typeof completedIntel.data.report.weighted_score, "number");
+    assert.ok(completedIntel.data.report.weighted_score > 0);
+    assert.ok(completedIntel.data.report.displayed_score !== null && completedIntel.data.report.displayed_score !== undefined);
+    assert.equal(firstUpload.data.lead.id, lead.data.id);
     const currentReportId = completedIntel.data.report.id;
+    assert.ok(completedIntel.data.report.pdf_url.startsWith(`/api/leads/${lead.data.id}/intelligence/pdf/`));
+    assert.ok(completedIntel.data.report.download_url.startsWith(`/api/leads/${lead.data.id}/intelligence/pdf/`));
+    assert.ok(!completedIntel.data.report.pdf_url.includes("/storage/v1/object/sign/"));
+    const firstDbState = readLocalDb();
+    const firstCurrent = firstDbState.lead_intelligence_reports.find(item => item.id === currentReportId);
+    const firstStorageKey = firstCurrent.pdf_storage_key;
+    const firstPdfPath = path.join(__dirname, "..", "data", firstStorageKey);
+    assert.ok(fs.existsSync(firstPdfPath));
+    assert.equal(firstDbState.lead_intelligence_reports.filter(item => item.lead_id === lead.data.id && item.is_current).length, 1);
 
     const pdf = await request(baseUrl, completedIntel.data.report.download_url, { token: adminToken });
     assert.equal(pdf.response.status, 200);
     assert.strictEqual(pdf.data.slice(0, 4).toString(), "%PDF");
 
-    const refresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
-    assert.equal(refresh.response.status, 200);
-    assert.equal(refresh.data.result.status, "completed");
-    assert.notEqual(refresh.data.state.report.id, currentReportId, "Successful refresh should immediately replace the current report.");
-    const refreshedReportId = refresh.data.state.report.id;
+    const beforeUnauthorizedFiles = listIntelFiles().length;
+    const forbiddenReplace = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, {
+      method: "POST",
+      token: salesmanLogin.data.token,
+      csrfToken: salesmanLogin.data.csrf_token,
+      body: Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 80 >>\nstream\nBT /F1 12 Tf 72 720 Td (${pdfText}) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF`)
+    });
+    assert.equal(forbiddenReplace.response.status, 404);
+    assert.equal(listIntelFiles().length, beforeUnauthorizedFiles);
 
-    providerMode = "invalid";
-    const lowConfidenceRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
-    assert.equal(lowConfidenceRefresh.response.status, 200, JSON.stringify(lowConfidenceRefresh.data));
-    assert.equal(lowConfidenceRefresh.data.result.status, "completed");
-    assert.equal(lowConfidenceRefresh.data.state.report.priority, "D");
-    assert.equal(lowConfidenceRefresh.data.state.report.summary.sources_count, 1);
-    assert.notEqual(lowConfidenceRefresh.data.state.report.id, refreshedReportId, "Low-confidence report should still become the current report.");
+    const invalidType = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      headers: { "Content-Type": "text/plain", "x-file-name": "not-a-pdf.txt" },
+      body: Buffer.from("plain text")
+    });
+    assert.equal(invalidType.response.status, 415);
+    assert.equal(listIntelFiles().length, beforeUnauthorizedFiles);
+
+    const invalidSignature = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      body: Buffer.from("not a pdf payload")
+    });
+    assert.equal(invalidSignature.response.status, 415);
+    assert.equal(listIntelFiles().length, beforeUnauthorizedFiles);
+
+    let oversizeRejected = false;
+    try {
+      const oversizeUpload = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, {
+        method: "POST",
+        token: adminToken,
+        csrfToken: adminCsrfToken,
+        body: Buffer.alloc(8 * 1024 * 1024 + 1, 0x20)
+      });
+      assert.equal(oversizeUpload.response.status, 413);
+      oversizeRejected = true;
+    } catch (error) {
+      oversizeRejected = /fetch failed|socket|UND_ERR_SOCKET/i.test(String(error && (error.message || error)));
+    }
+    assert.equal(oversizeRejected, true);
+    assert.equal(listIntelFiles().length, beforeUnauthorizedFiles);
 
     providerMode = "provider_error";
-    const failedRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
-    assert.equal(failedRefresh.response.status, 500);
-    assert.equal(failedRefresh.data.result.status, "failed");
-    const failedState = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
-    assert.equal(failedState.data.report.id, lowConfidenceRefresh.data.state.report.id, "Failed refresh must not remove the last successful report.");
-    assert.equal(failedState.data.failed_report.status, "failed");
-
+    const providerFailure = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload?apply=false`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      body: Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 80 >>\nstream\nBT /F1 12 Tf 72 720 Td (${pdfText}) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF`)
+    });
+    assert.equal(providerFailure.response.status, 502, JSON.stringify(providerFailure.data));
     providerMode = "success";
-    const retryProcess = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/retry`, { method: "POST", token: adminToken, body: { report_id: failedState.data.failed_report.id } });
-    assert.equal(retryProcess.response.status, 200, JSON.stringify(retryProcess.data));
-    assert.equal(retryProcess.data.result.status, "completed");
+    const afterProviderFailure = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
+    assert.equal(afterProviderFailure.data.report.id, currentReportId);
+    const afterProviderDb = readLocalDb();
+    assert.equal(afterProviderDb.lead_intelligence_reports.find(item => item.id === currentReportId).pdf_storage_key, firstStorageKey);
+    assert.ok(fs.existsSync(firstPdfPath));
+    assert.equal(listIntelFiles().length, 1);
+
+    const originalWriteFileSync = fs.writeFileSync;
+    fs.writeFileSync = function patchedWriteFileSync(target) {
+      if (String(target).includes(`${path.sep}lead-intelligence${path.sep}`)) {
+        throw new Error("simulated candidate upload failure");
+      }
+      return originalWriteFileSync.apply(this, arguments);
+    };
+    const uploadFailure = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload?apply=false`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      body: Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 80 >>\nstream\nBT /F1 12 Tf 72 720 Td (${pdfText}) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF`)
+    });
+    fs.writeFileSync = originalWriteFileSync;
+    assert.equal(uploadFailure.response.status, 500);
+    const afterUploadFailure = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
+    assert.equal(afterUploadFailure.data.report.id, currentReportId);
+    assert.equal(readLocalDb().lead_intelligence_reports.find(item => item.id === currentReportId).pdf_storage_key, firstStorageKey);
+    assert.equal(listIntelFiles().length, 1);
+
+    fs.writeFileSync = function patchedWriteDbOnly(target) {
+      if (String(target) === dbPath) {
+        throw new Error("simulated db update failure");
+      }
+      return originalWriteFileSync.apply(this, arguments);
+    };
+    const dbFailure = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload?apply=false`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      body: Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 80 >>\nstream\nBT /F1 12 Tf 72 720 Td (${pdfText}) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF`)
+    });
+    fs.writeFileSync = originalWriteFileSync;
+    assert.equal(dbFailure.response.status, 500);
+    const afterDbFailure = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
+    assert.equal(afterDbFailure.data.report.id, currentReportId);
+    assert.equal(readLocalDb().lead_intelligence_reports.find(item => item.id === currentReportId).pdf_storage_key, firstStorageKey);
+    assert.equal(listIntelFiles().length, 1);
+
+    const secondUpload = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      body: Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 100 >>\nstream\nBT /F1 12 Tf 72 720 Td (API Intelligence Lead LLC updated report includes updated notes and priority high.) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF")
+    });
+    assert.equal(secondUpload.response.status, 200, JSON.stringify(secondUpload.data));
+    assert.equal(secondUpload.data.report.id, currentReportId, "Re-uploading should retain the same report row for the same lead.");
+    const secondDbState = readLocalDb();
+    const secondCurrent = secondDbState.lead_intelligence_reports.find(item => item.id === currentReportId);
+    assert.notEqual(secondCurrent.pdf_storage_key, firstStorageKey);
+    assert.equal(secondDbState.lead_intelligence_reports.filter(item => item.lead_id === lead.data.id && item.is_current).length, 1);
+    const secondPdfPath = path.join(__dirname, "..", "data", secondCurrent.pdf_storage_key);
+    assert.ok(fs.existsSync(secondPdfPath));
+    assert.ok(!fs.existsSync(firstPdfPath), "Old PDF should be removed after successful replacement.");
+    assert.equal(listIntelFiles().length, 1);
+    assert.ok(secondUpload.data.report.pdf_url.startsWith(`/api/leads/${lead.data.id}/intelligence/pdf/`));
+
+    const cleanupWarnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => cleanupWarnings.push(args.join(" "));
+    const originalUnlinkSync = fs.unlinkSync;
+    fs.unlinkSync = function patchedUnlinkSync(target) {
+      if (String(target).endsWith(secondCurrent.pdf_storage_key.replace(/\//g, path.sep))) {
+        throw new Error("simulated old cleanup failure");
+      }
+      return originalUnlinkSync.apply(this, arguments);
+    };
+    const cleanupFailureUpload = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      body: Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 140 >>\nstream\nBT /F1 12 Tf 72 720 Td (API Intelligence Lead LLC cleanup warning replacement with updated procurement notes and demand summary.) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF")
+    });
+    fs.unlinkSync = originalUnlinkSync;
+    console.warn = originalWarn;
+    assert.equal(cleanupFailureUpload.response.status, 200, JSON.stringify(cleanupFailureUpload.data));
+    const cleanupDbState = readLocalDb();
+    const cleanupCurrent = cleanupDbState.lead_intelligence_reports.find(item => item.id === currentReportId);
+    assert.notEqual(cleanupCurrent.pdf_storage_key, secondCurrent.pdf_storage_key);
+    assert.ok(fs.existsSync(path.join(__dirname, "..", "data", cleanupCurrent.pdf_storage_key)));
+    assert.ok(fs.existsSync(path.join(__dirname, "..", "data", secondCurrent.pdf_storage_key)));
+    assert.ok(cleanupWarnings.some(line => line.includes("lead-intelligence-cleanup")));
+    assert.ok(cleanupWarnings.every(line => !line.includes("/storage/v1/object/sign/") && !line.includes("http")));
+
+    providerBodyDelayMatch = "Concurrent replacement A";
+    providerBodyDelayMs = 200;
+    const concurrentAPromise = requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload?apply=false`, {
+      method: "POST",
+      token: adminToken,
+      csrfToken: adminCsrfToken,
+      body: Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 150 >>\nstream\nBT /F1 12 Tf 72 720 Td (Concurrent replacement A with enough descriptive lead intelligence text to pass extraction thresholds.) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF")
+    });
+    await new Promise(resolve => setTimeout(resolve, 25));
+    const concurrentB = await requestBinary(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload?apply=false`, {
+        method: "POST",
+        token: adminToken,
+        csrfToken: adminCsrfToken,
+        body: Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n2 0 obj\n<< /Length 150 >>\nstream\nBT /F1 12 Tf 72 720 Td (Concurrent replacement B with enough descriptive lead intelligence text to pass extraction thresholds.) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF")
+    });
+    const concurrentA = await concurrentAPromise;
+    providerBodyDelayMatch = "";
+    providerBodyDelayMs = 0;
+    assert.deepEqual([concurrentA.response.status, concurrentB.response.status].sort((a, b) => a - b), [200, 409]);
+    const afterConflictDb = readLocalDb();
+    const afterConflictCurrent = afterConflictDb.lead_intelligence_reports.find(item => item.id === currentReportId);
+    assert.equal(afterConflictDb.lead_intelligence_reports.filter(item => item.lead_id === lead.data.id && item.is_current).length, 1);
+    const conflictFiles = listIntelFiles();
+    assert.equal(conflictFiles.length, 2, "Conflict should delete only the losing candidate while preserving the current file and any earlier cleanup residue.");
+    assert.ok(conflictFiles.some(file => file.endsWith(afterConflictCurrent.pdf_storage_key.replace(/\//g, path.sep))));
 
     const staleStartedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const staleCreatedAt = new Date(Date.now() + 1000).toISOString();
@@ -178,20 +394,16 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
     const staleState = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(staleState.response.status, 200);
     assert.equal(staleState.data.active_report, null);
-    assert.equal(staleState.data.failed_report.id, "lir-stale-researching");
-    assert.equal(staleState.data.failed_report.error_code, "stale_worker_interrupted");
+    const staleFailed = (staleState.data.history || []).find(item => item.id === "lir-stale-researching");
+    assert.ok(staleFailed);
+    assert.equal(staleFailed.error_code, "stale_worker_interrupted");
 
-    const cronUnauthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { method: "POST" });
-    assert.equal(cronUnauthorized.response.status, 401);
-    const cronAuthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { method: "POST", headers: { Authorization: "Bearer cron-test-secret" }, body: { limit: 1 } });
-    assert.equal(cronAuthorized.response.status, 200);
-    const cronGetAuthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { headers: { Authorization: "Bearer cron-test-secret" } });
-    assert.equal(cronGetAuthorized.response.status, 200);
-
-    const salesmanAccount = await request(baseUrl, "/api/users", { method: "POST", token: adminToken, body: { name: "Intel Salesman", email: "salesman-intel@alrassteel.test", password: "SalesPass123!", territory: "Abu Dhabi" } });
-    assert.equal(salesmanAccount.response.status, 201);
-    const salesmanLogin = await request(baseUrl, "/api/auth/login", { method: "POST", body: { email: "salesman-intel@alrassteel.test", password: "SalesPass123!" } });
-    assert.equal(salesmanLogin.response.status, 200);
+    const removedGenerate = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/generate`, { method: "POST", token: adminToken, csrfToken: adminCsrfToken });
+    const removedRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken, csrfToken: adminCsrfToken });
+    const removedRetry = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/retry`, { method: "POST", token: adminToken, csrfToken: adminCsrfToken, body: { report_id: currentReportId } });
+    assert.equal(removedGenerate.response.status, 404);
+    assert.equal(removedRefresh.response.status, 404);
+    assert.equal(removedRetry.response.status, 404);
     const forbiddenIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: salesmanLogin.data.token });
     assert.equal(forbiddenIntel.response.status, 404);
 

@@ -137,14 +137,15 @@ async function createStorageSignedUrl(objectPath, expiresIn = 3600, token) {
 }
 
 
-async function uploadStorageObjectToBucketAsService(bucket, objectPath, content, contentType = "application/octet-stream") {
+async function uploadStorageObjectToBucketAsService(bucket, objectPath, content, contentType = "application/octet-stream", options = {}) {
+  const upsert = options && options.upsert === true;
   const response = await fetch(`${SUPABASE_URL}${storageObjectUrl(objectPath, bucket)}`, {
     method: "POST",
     headers: {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       "Content-Type": contentType,
-      "x-upsert": "false"
+      "x-upsert": upsert ? "true" : "false"
     },
     body: content
   });
@@ -178,6 +179,23 @@ async function createStorageSignedUrlForBucketAsService(bucket, objectPath, expi
   }
   const signedUrl = data.signedURL || data.signedUrl || "";
   return signedUrl.startsWith("http") ? signedUrl : `${SUPABASE_URL}${signedUrl}`;
+}
+
+async function downloadStorageObjectFromBucketAsService(bucket, objectPath) {
+  const response = await fetch(`${SUPABASE_URL}${storageObjectUrl(objectPath, bucket)}`, {
+    method: "GET",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+    }
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const error = new Error(data.message || data.error || `Supabase Storage service download failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return Buffer.from(await response.arrayBuffer());
 }
 async function signIn(email, password) {
   return request("/auth/v1/token?grant_type=password", { method: "POST", body: { email, password } });
@@ -270,6 +288,7 @@ module.exports = {
   createStorageSignedUrlForBucket,
   createStorageSignedUrlForBucketAsService,
   currentSupabaseUser,
+  downloadStorageObjectFromBucketAsService,
   isSupabaseAdminConfigured,
   isSupabaseConfigured,
   listAuthUsers,

@@ -23,8 +23,8 @@ const {
   createAuthUser,
   createStorageSignedUrl,
   createStorageSignedUrlForBucket,
-  createStorageSignedUrlForBucketAsService,
   currentSupabaseUser,
+  downloadStorageObjectFromBucketAsService,
   isSupabaseAdminConfigured,
   isSupabaseConfigured,
   listAuthUsers,
@@ -112,7 +112,10 @@ const {
 const {
   WORKFLOW_VERSION: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
   allowedResearchInputFromLead,
+  assertValidLeadIntelligenceReport,
+  generateLeadIntelligenceWithGemini,
   generateLeadIntelligenceWithOpenAI,
+  parseLeadIntelligencePdfWithOpenAI,
   renderLeadIntelligencePdf,
   reportSummary
 } = require("./src/services/leadIntelligenceService");
@@ -160,10 +163,12 @@ const OPENAI_ENGLISH_NORMALIZATION_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt
 const OPENAI_PMR_ANALYSIS_MODEL = process.env.OPENAI_PMR_ANALYSIS_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
 const OPENAI_LEAD_SUMMARY_MODEL = process.env.OPENAI_LEAD_SUMMARY_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
 const OPENAI_LEAD_INTELLIGENCE_MODEL = process.env.OPENAI_LEAD_INTELLIGENCE_MODEL || process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
-const LEAD_INTELLIGENCE_AUTO_QUEUE = !["0", "false", "off", "no"].includes(String(process.env.ENABLE_LEAD_INTELLIGENCE_AUTO_QUEUE || "true").toLowerCase());
+const SUPABASE_URL = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
+const GEMINI_LEAD_INTELLIGENCE_MODEL = process.env.GEMINI_LEAD_INTELLIGENCE_MODEL || process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const LEAD_INTELLIGENCE_BUCKET = process.env.SUPABASE_LEAD_INTELLIGENCE_BUCKET || "lead-intelligence-reports";
-const LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS = Math.max(60, Math.min(3600, Number(process.env.LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS || 600)));
-const LEAD_INTELLIGENCE_CRON_SECRET = process.env.LEAD_INTELLIGENCE_CRON_SECRET || process.env.CRON_SECRET || "";
+const LEAD_INTELLIGENCE_AUTO_QUEUE = false;
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "glory@alrassteel.com").trim().toLowerCase();
 const ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || "";
 const SESSION_SECRET = process.env.APP_SESSION_SECRET || "local-development-session-secret-change-me";
@@ -171,6 +176,15 @@ const RATE_LIMIT_SECRET_CONFIGURED = Boolean(process.env.RATE_LIMIT_HASH_SECRET 
 const RATE_LIMIT_HASH_SECRET = process.env.RATE_LIMIT_HASH_SECRET || SESSION_SECRET;
 const RATE_LIMIT_TENANT_ID = String(process.env.RATE_LIMIT_TENANT_ID || "arg-leads-tracker").trim();
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+const LOCAL_SESSION_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+const SESSION_ISSUER = "arg-lead-tracker-local";
+const LOCAL_SESSION_CSRF_BYTES = 16;
+const LOGIN_BODY_MAX_BYTES = 32 * 1024;
+const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "").split(",").map(origin => origin.trim()).filter(Boolean);
+const CORS_ALLOW_CREDENTIALS = String(process.env.CORS_ALLOW_CREDENTIALS || "true").toLowerCase() === "true";
+const CORS_MAX_AGE_SECONDS = Number(process.env.CORS_MAX_AGE_SECONDS || 600);
+const CORS_ALLOWED_METHODS = "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS";
+const CORS_ALLOWED_HEADERS = "Authorization, Content-Type, X-CSRF-Token";
 const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "LOST"];
 const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
 const COMPANY_TIERS = ["1", "2", "3"];
@@ -214,6 +228,46 @@ const OPTIONAL_SUPABASE_LEAD_COLUMNS = [
   "key_personnel",
   "recent_projects"
 ];
+
+function requestOrigin(req) {
+  const origin = String(req.headers.origin || "").trim();
+  if (!origin || origin.toLowerCase() === "null") return "";
+  return origin;
+}
+
+function isAllowedApiOrigin(origin, hostHeader) {
+  if (!origin) return false;
+  if (CORS_ALLOWED_ORIGINS.includes(origin)) return true;
+  if (!hostHeader) return false;
+  try {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.host === hostHeader) return true;
+  } catch (error) {
+    return false;
+  }
+  return false;
+}
+
+function applyApiCorsHeaders(req, res) {
+  const origin = requestOrigin(req);
+  if (!origin) return true;
+  if (!isAllowedApiOrigin(origin, String(req.headers.host || ""))) {
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Content-Type", "application/json");
+    res.statusCode = 403;
+    res.end(JSON.stringify({ error: "CORS origin blocked." }));
+    return false;
+  }
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", CORS_ALLOWED_METHODS);
+  res.setHeader("Access-Control-Allow-Headers", CORS_ALLOWED_HEADERS);
+  if (CORS_ALLOW_CREDENTIALS) res.setHeader("Access-Control-Allow-Credentials", "true");
+  if (Number.isFinite(CORS_MAX_AGE_SECONDS) && CORS_MAX_AGE_SECONDS > 0) {
+    res.setHeader("Access-Control-Max-Age", String(CORS_MAX_AGE_SECONDS));
+  }
+  return true;
+}
 
 function defaultCrmConfiguration() {
   return normalizeConfiguration({
@@ -415,6 +469,7 @@ function ensureAdminAccount(db) {
     existing.role = "admin";
     existing.status = "active";
     existing.territory = existing.territory || "All";
+    existing.session_version = normalizeSessionVersion(existing.session_version);
     if (ADMIN_BOOTSTRAP_PASSWORD && !passwordMatches(ADMIN_BOOTSTRAP_PASSWORD, existing.password_hash)) {
       existing.password_hash = hashPassword(ADMIN_BOOTSTRAP_PASSWORD);
       existing.updated_at = new Date().toISOString();
@@ -430,6 +485,7 @@ function ensureAdminAccount(db) {
     role: "admin",
     territory: "All",
     status: "active",
+    session_version: 0,
     password_hash: hashPassword(ADMIN_BOOTSTRAP_PASSWORD),
     created_at: new Date().toISOString()
   });
@@ -440,6 +496,21 @@ function publicUser(user) {
   if (!user) return null;
   const { password_hash, ...safe } = user;
   return safe;
+}
+
+function isSystemProbeSalesmanUser(user = {}) {
+  const text = String(`${user.name || ""} ${user.full_name || ""} ${user.email || ""}`).toLowerCase();
+  const email = String(user.email || "").toLowerCase();
+  const banned = [
+    "adverserial",
+    "adversarial",
+    "browser ready",
+    "browse ready",
+    "go live api",
+    "go live"
+  ];
+  if (/\btest\.|@.+\.test$/.test(email)) return true;
+  return banned.some(keyword => text.includes(keyword));
 }
 
 function salesmanAccountSummary(user, fallback = {}) {
@@ -468,29 +539,94 @@ function ensureActivityIds(activities) {
 }
 
 function issueToken(user) {
+  return createLocalSessionToken(user).token;
+}
+
+function createLocalSessionToken(user, { csrf: csrfToken } = {}) {
+  const now = Date.now();
+  const tokenCsrf = String(csrfToken || crypto.randomBytes(LOCAL_SESSION_CSRF_BYTES).toString("hex"));
   const payload = Buffer.from(JSON.stringify({
     sub: user.id,
     role: user.role,
-    exp: Date.now() + 12 * 60 * 60 * 1000
+    iss: SESSION_ISSUER,
+    iat: now,
+    exp: now + 12 * 60 * 60 * 1000,
+    v: normalizeSessionVersion(user.session_version),
+    csrf: tokenCsrf
   })).toString("base64url");
   const signature = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
-  return `${payload}.${signature}`;
+  return {
+    token: `${payload}.${signature}`,
+    csrf: tokenCsrf
+  };
 }
 
-function currentUser(req, db) {
-  const header = String(req.headers.authorization || "");
-  if (!header.startsWith("Bearer ")) return null;
-  const [payload, signature] = header.slice(7).split(".");
+function parseLocalSessionToken(rawToken) {
+  const [payload, signature] = String(rawToken || "").split(".");
   if (!payload || !signature) return null;
   const expected = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
   if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
   try {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    if (parsed.exp < Date.now()) return null;
-    return db.users.find(user => user.id === parsed.sub && user.status === "active") || null;
-  } catch (error) {
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
     return null;
   }
+}
+
+function normalizeSessionVersion(value) {
+  const parsed = Number.parseInt(String(value || 0), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function isLocalSessionValid(parsed) {
+  const now = Date.now();
+  const iat = Number(parsed?.iat);
+  const exp = Number(parsed?.exp);
+  const version = normalizeSessionVersion(parsed?.v ?? parsed?.version);
+  if (!Number.isFinite(exp) || exp < now) return false;
+  if (Number.isFinite(iat) && iat > now + LOCAL_SESSION_MAX_FUTURE_SKEW_MS) return false;
+  if (String(parsed?.iss || "") !== SESSION_ISSUER) return false;
+  if (typeof parsed?.sub !== "string" || !parsed.sub) return false;
+  if (typeof parsed?.role !== "string" || !parsed.role) return false;
+  return { ...parsed, v: version };
+}
+
+function parseLocalSessionClaim(req) {
+  const header = String(req.headers.authorization || "");
+  if (!header.startsWith("Bearer ")) return null;
+  return isLocalSessionValid(parseLocalSessionToken(header.slice(7)));
+}
+
+function isSafeApiMethod(method) {
+  return ["GET", "HEAD", "OPTIONS"].includes(String(method || "").toUpperCase());
+}
+
+function isCsrfProtectedMutation(pathname, method) {
+  return !isSafeApiMethod(method) && String(pathname || "") !== "/api/auth/login";
+}
+
+function hasValidLocalCsrfHeader(req) {
+  const session = parseLocalSessionClaim(req);
+  const expected = String(session?.csrf || "");
+  if (!expected) return false;
+  const provided = String(req.headers["x-csrf-token"] || "");
+  return provided.length === expected.length && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+}
+
+function currentUser(req, db) {
+  const header = String(req.headers.authorization || "");
+  if (!header.startsWith("Bearer ")) return null;
+  const parsed = parseLocalSessionToken(header.slice(7));
+  const validated = isLocalSessionValid(parsed);
+  if (!validated) return null;
+  const sessionVersion = normalizeSessionVersion(validated.v);
+  return db.users.find(user =>
+    user.id === validated.sub &&
+    user.role === validated.role &&
+    user.status === "active" &&
+    normalizeSessionVersion(user.session_version) === sessionVersion
+  ) || null;
 }
 
 function sendJson(res, status, data) {
@@ -1059,6 +1195,253 @@ function normalizePmrAnalysisDraft(input = {}) {
     draft.notes = "AI could not identify detailed meeting notes from the transcript. Review the transcript before saving.";
   }
   return draft;
+}
+
+function decodePdfTextToken(token = "") {
+  const decodedHex = String(token).replace(/<([0-9A-Fa-f\s]+)>/g, (_, hex) => {
+    const cleanHex = String(hex || "").replace(/[^0-9A-Fa-f]/g, "");
+    if (!cleanHex.length || cleanHex.length % 2) return "";
+    const bytes = [];
+    for (let index = 0; index < cleanHex.length; index += 2) {
+      const pair = cleanHex.slice(index, index + 2);
+      bytes.push(parseInt(pair, 16));
+    }
+    return bytes.length ? Buffer.from(bytes).toString("latin1") : "";
+  });
+  return decodedHex
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t")
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .replace(/\\\\/g, "\\")
+    .replace(/\\([0-7]{1,3})/g, (_, octal) => {
+      const value = Number.parseInt(octal, 8);
+      return Number.isNaN(value) ? "" : String.fromCharCode(value);
+    })
+    .replace(/\\([()\\])/g, "$1");
+}
+
+function extractTextFromPdfBuffer(buffer) {
+  const pdfBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
+  if (!pdfBuffer.length) return "";
+  const source = pdfBuffer.toString("latin1");
+  const lines = [];
+
+  const addLine = value => {
+    const line = String(value || "").replace(/\s+/g, " ").trim();
+    if (line) lines.push(line);
+  };
+
+  for (const match of source.matchAll(/\((?:\\.|[^\\)])*\)\s*Tj/g)) {
+    const text = match[0].replace(/^\(/, "").replace(/\)\s*Tj$/, "");
+    addLine(decodePdfTextToken(text));
+  }
+
+  for (const match of source.matchAll(/\[([\s\S]*?)\]\s*TJ/g)) {
+    const inner = match[1];
+    const tokens = inner.match(/<[^>]+>|\((?:\\.|[^\\)])*\)|-?\d+(?:\.\d+)?/g) || [];
+    const parts = [];
+    for (const token of tokens) {
+      if (/^-?\d+(?:\.\d+)?$/.test(token)) continue;
+      const value = decodePdfTextToken(token);
+      if (value) parts.push(value);
+    }
+    addLine(parts.join(" "));
+  }
+
+  if (!lines.length) {
+    for (const match of source.matchAll(/BT([\s\S]*?)ET/g)) {
+      const chunk = String(match[1] || "");
+      const tokens = chunk.match(/\((?:\\.|[^\\)])*\)/g) || [];
+      tokens.forEach(token => addLine(decodePdfTextToken(token.replace(/^\(/, "").replace(/\)$/, ""))));
+    }
+  }
+
+  return lines.join("\n").slice(0, 24000);
+}
+
+function normalizePdfDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const normalized = raw.replace(/\//g, "-").replace(/,/g, " ");
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function normalizeLeadPatchFromPdfExtraction(input = {}, currentLead = {}) {
+  const extracted = input || {};
+  const patch = {};
+  const pick = (...values) => {
+    for (const value of values) {
+      const normalized = String(value || "").replace(/\s+/g, " ").trim();
+      if (normalized) return normalized;
+    }
+    return "";
+  };
+  const asText = value => {
+    if (Array.isArray(value)) {
+      return value.map(item => String(item || "").trim()).filter(Boolean).join(", ");
+    }
+    return String(value || "").trim();
+  };
+  const setText = (field, value, max = 260) => {
+    const text = String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+    if (text) patch[field] = text;
+  };
+  const stageValue = pick(extracted.stage, extracted.lead_status, extracted.status, extracted.pipeline_stage);
+  if (stageValue) patch.stage = normalizeStageValue(stageValue, currentLead.stage || "NEW");
+
+  setText("company_name", pick(extracted.company_name, extracted.company, extracted.organization_name, extracted.client_name), 220);
+  setText("industry", pick(extracted.industry, extracted.business_type), 160);
+  setText("business_category", pick(extracted.business_category, extracted.business_segment), 200);
+  setText("sector", pick(extracted.sector, extracted.business_category, extracted.industry), 160);
+  setText("contact_person", pick(extracted.contact_person, extracted.contact_name, extracted.primary_contact_name, extracted.primary_contact), 220);
+  setText("primary_contact_title", pick(extracted.primary_contact_title, extracted.primary_title, extracted.contact_title, extracted.title), 180);
+  setText("phone", pick(extracted.phone, extracted.primary_phone, extracted.contact_phone, extracted.main_phone), 80);
+  setText("email", pick(extracted.email, extracted.primary_email, extracted.contact_email), 180);
+  setText("secondary_contact_name", pick(extracted.secondary_contact_name, extracted.alt_contact_name), 220);
+  setText("secondary_contact_title", pick(extracted.secondary_contact_title, extracted.secondary_title, extracted.alt_contact_title), 180);
+  setText("secondary_contact_mobile", pick(extracted.secondary_contact_mobile, extracted.secondary_phone, extracted.alt_contact_phone), 80);
+  setText("secondary_contact_email", pick(extracted.secondary_contact_email, extracted.secondary_email, extracted.alt_contact_email), 180);
+  setText("website", pick(extracted.website, extracted.web, extracted.company_website), 260);
+  setText("location", pick(extracted.location, extracted.city, extracted.region), 260);
+  setText("country_emirate", pick(extracted.country_emirate, extracted.country, extracted.emirate), 260);
+  setText("address", pick(extracted.address, extracted.address_line), 500);
+  setText("activity_purpose", pick(extracted.activity_purpose, extracted.purpose), 160);
+  setText("next_action", pick(extracted.next_action, extracted.follow_up_action, extracted.next_step), 120);
+  setText("quotation_ref", pick(extracted.quotation_ref, extracted.rfq_ref, extracted.quotation_reference), 220);
+  setText("priority", pick(extracted.priority, extracted.priority_level), 20);
+  setText("notes", asText(extracted.notes), 2000);
+  setText("products_services_remarks", pick(extracted.products_services_remarks, extracted.comments, extracted.remark), 2000);
+  setText("tags", asText(pick(extracted.tags, extracted.labels, extracted.keywords)), 260);
+  setText("first_order_date", normalizePdfDate(pick(extracted.first_order_date, extracted.target_start, extracted.target_start_date)), 20);
+  setText("estimated_monthly_volume", pick(extracted.estimated_monthly_volume, extracted.monthly_volume), 220);
+  const dateValue = normalizePdfDate(extracted.next_action_date);
+  if (dateValue) patch.next_action_date = dateValue;
+
+  if (Object.hasOwn(extracted, "estimated_value")) {
+    const estimatedValue = Number(String(extracted.estimated_value || "").replace(/[^0-9.+-]/g, ""));
+    if (Number.isFinite(estimatedValue)) patch.estimated_value = estimatedValue;
+  }
+
+  if (extracted.product_interest !== undefined) {
+    const items = Array.isArray(extracted.product_interest)
+      ? extracted.product_interest
+      : String(extracted.product_interest || "").split(/[,\n]/);
+    const productInterest = items
+      .map(item => String(item || "").trim())
+      .filter(Boolean)
+      .slice(0, 20)
+      .join(", ");
+    if (productInterest) patch.product_interest = productInterest;
+  }
+
+  if (Object.hasOwn(extracted, "next_action")) {
+    const normalized = normalizeNextActionPlan(extracted.next_action);
+    if (normalized) patch.next_action = normalized;
+  }
+  if (Object.hasOwn(extracted, "activity_purpose")) {
+    patch.activity_purpose = normalizeActivityPurpose(extracted.activity_purpose);
+  }
+  return patch;
+}
+
+function normalizeLeadIntelligencePatchValue(field, value) {
+  if (value === undefined || value === null) return "";
+  if (field === "estimated_value") {
+    const normalized = Number(String(value).replace(/[^0-9.+-]/g, ""));
+    return Number.isFinite(normalized) ? String(normalized) : "";
+  }
+  if (field === "stage") return normalizeStageValue(value, "NEW");
+  if (field === "next_action_date" || field === "first_order_date") return normalizePdfDate(value);
+  const normalized = Array.isArray(value)
+    ? value.map(item => String(item || "").trim()).filter(Boolean).join(", ")
+    : String(value).trim();
+  return normalized;
+}
+
+function calculateLeadPatchChanges(currentLead = {}, patch = {}) {
+  const changedFields = [];
+  if (!patch || typeof patch !== "object") {
+    return { changedFields, changedPatch: {} };
+  }
+  const changedPatch = {};
+  for (const [field, value] of Object.entries(patch)) {
+    const expected = normalizeLeadIntelligencePatchValue(field, value);
+    const current = normalizeLeadIntelligencePatchValue(field, currentLead?.[field]);
+    if (expected === current) continue;
+    changedFields.push(field);
+    changedPatch[field] = value;
+  }
+  return { changedFields, changedPatch };
+}
+
+async function analyzeLeadIntelligencePdfText(rawPdfText, currentLead = {}) {
+  if (!OPENAI_API_KEY) {
+    const error = new Error("AI Lead Intelligence PDF processing is not configured. Add OPENAI_API_KEY on the server.");
+    error.status = 503;
+    throw error;
+  }
+  const source = String(rawPdfText || "").trim();
+  if (!source) {
+    const error = new Error("The uploaded PDF appears to be empty.");
+    error.status = 400;
+    throw error;
+  }
+  if (source.length < 60) {
+    const error = new Error("The PDF text is too short to extract useful lead details.");
+    error.status = 400;
+    throw error;
+  }
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: OPENAI_LEAD_INTELLIGENCE_MODEL,
+      instructions: [
+        "You are a CRM data extraction assistant for a sales lead record.",
+        "Read the uploaded lead intelligence report and return only valid JSON.",
+        "Map extracted values to these keys if visible: company_name, company, sector, industry, business_category, country_emirate, location, city, region, address, website, web, company_website, phone, primary_phone, contact_phone, email, primary_email, contact_email, contact_name, contact_person, primary_contact_name, contact_title, primary_title, secondary_contact_name, secondary_contact_title, secondary_contact_mobile, secondary_contact_email, product_interest, estimated_value, estimated_monthly_volume, first_order_date, target_start, target_start_date, stage, lead_status, status, pipeline_stage, next_action, follow_up_action, next_step, next_action_date, priority, priority_level, activity_purpose, purpose, notes, summary, key_findings, quotation_ref, rfq_ref, quotation_reference, products_services_remarks, comments, remark, tags, labels, keywords.",
+        "Use empty string for values not present.",
+        "Do not include any text outside JSON."
+      ].join(" "),
+      input: [
+        `Lead context: ${JSON.stringify({
+          company_name: currentLead.company_name || "",
+          email: currentLead.email || "",
+          phone: currentLead.phone || "",
+          stage: currentLead.stage || ""
+        })}`,
+        `PDF text: ${source.slice(0, 14000)}`
+      ].join("\n\n"),
+      max_output_tokens: 900
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(safeProviderMessage(data.error?.message || "Lead intelligence PDF parsing failed."));
+    error.status = response.status === 429 ? 429 : 502;
+    throw error;
+  }
+  return normalizeLeadPatchFromPdfExtraction(extractJsonObject(responseText(data)), currentLead);
+}
+
+async function parseLeadIntelligenceReportFromPdfText(rawPdfText, currentLead = {}) {
+  const result = await parseLeadIntelligencePdfWithOpenAI({
+    rawPdfText,
+    lead: currentLead,
+    openAiKey: OPENAI_API_KEY,
+    model: OPENAI_LEAD_INTELLIGENCE_MODEL,
+    fetchImpl: fetch
+  });
+  return result.report;
 }
 
 function normalizeStageValue(value, fallback = "NEW") {
@@ -2582,20 +2965,7 @@ async function buildLeadSummaryBundle({ db, user, lead, supabaseEnabled }) {
     ? await supabaseSalesmanAccount(user.token, lead)
     : localSalesmanAccount(db, lead);
 
-  let intel = storedIntel || [];
-  let marketIntelConfigured = Boolean(integrations.keys.zawya && integrations.env.zawyaApiUrl);
-  let marketIntelUnavailableReason = "";
-  try {
-    const fetched = await fetchMarketIntelligence();
-    if (fetched.disabled) {
-      marketIntelConfigured = false;
-      marketIntelUnavailableReason = fetched.reason || "Market intelligence unavailable. ZAWYA/LSEG API is not configured.";
-    } else if (!intel.length) {
-      intel = leadIntelItems(lead, matchIntelligenceToLeads(fetched.items || [], [lead])).slice(0, 8);
-    }
-  } catch (error) {
-    marketIntelUnavailableReason = intel.length ? "Live market intelligence refresh failed. Showing stored matched intelligence only." : safeProviderMessage(error.message || "Market intelligence is temporarily unavailable.");
-  }
+  const intelligenceState = await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, []);
 
   return {
     lead,
@@ -2610,11 +2980,11 @@ async function buildLeadSummaryBundle({ db, user, lead, supabaseEnabled }) {
     stageChanges,
     noteEntries,
     pmrs,
-    intel,
+    intel: storedIntel || [],
     handoffs,
     lastActivityDate: activities[0]?.at || activities[0]?.activity_date || activities[0]?.created_at || lead.last_activity || "",
-    marketIntelConfigured,
-    marketIntelUnavailableReason
+    intelligenceReport: intelligenceState.report || null,
+    intelligenceReportUnavailableReason: intelligenceState.report ? "" : "No intelligence report uploaded yet."
   };
 }
 
@@ -3314,6 +3684,19 @@ function toSupabasePatchPayload(patch) {
   return next;
 }
 
+function toSupabaseLeadUpdatePayload(payload) {
+  const next = { ...payload };
+  if (Object.hasOwn(next, "email")) {
+    if (!Object.hasOwn(next, "contact_email")) next.contact_email = next.email;
+    delete next.email;
+  }
+  if (Object.hasOwn(next, "contact_person")) {
+    if (!Object.hasOwn(next, "contact_name")) next.contact_name = next.contact_person;
+    delete next.contact_person;
+  }
+  return next;
+}
+
 async function persistLeadPatch(db, user, leadId, patch, supabaseEnabled) {
   if (supabaseEnabled) {
     const leads = await patchSupabaseLeadWithOptionalFallback(user.token, leadId, toSupabasePatchPayload(patch));
@@ -3335,8 +3718,33 @@ function leadIntelligenceStorageKey(leadId, reportId) {
   return `lead-intelligence/${String(leadId).replace(/[^\w-]/g, "_")}/${String(reportId).replace(/[^\w-]/g, "_")}.pdf`;
 }
 
+function leadIntelligenceCandidateStorageKey(leadId, reportId) {
+  return `lead-intelligence/${String(leadId).replace(/[^\w-]/g, "_")}/${String(reportId).replace(/[^\w-]/g, "_")}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.pdf`;
+}
+
 function leadIntelligenceLocalPath(storageKey) {
   return path.normalize(path.join(DATA_DIR, storageKey));
+}
+
+function leadIntelligenceStorageObjectUrl(bucket, objectPath) {
+  return `/storage/v1/object/${encodeURIComponent(bucket)}/${String(objectPath || "")
+    .split("/")
+    .map(part => encodeURIComponent(part))
+    .join("/")}`;
+}
+
+function isPdfSignature(buffer) {
+  return Buffer.isBuffer(buffer) && buffer.length >= 5 && buffer.slice(0, 5).toString("utf8") === "%PDF-";
+}
+
+function logLeadIntelligenceCleanupWarning(stage, context = {}, error) {
+  console.warn("[lead-intelligence-cleanup]", JSON.stringify({
+    stage: String(stage || "unknown"),
+    lead_id: String(context.leadId || ""),
+    report_id: String(context.reportId || ""),
+    outcome: "cleanup_failed",
+    message: safeProviderMessage(error?.message || "Cleanup failed.")
+  }));
 }
 
 function activeLeadIntelligenceStatuses() {
@@ -3362,9 +3770,119 @@ function sanitizeLeadIntelligenceError(error) {
   return { code, message };
 }
 
+function asNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseLeadIntelligenceReportJson(value) {
+  if (value == null) return null;
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  try {
+    return JSON.parse(normalized);
+  } catch {
+    return null;
+  }
+}
+
+function getLeadIntelligenceReport(record) {
+  if (!record || typeof record !== "object") return null;
+  const raw = record.report_json ?? record.report;
+  return parseLeadIntelligenceReportJson(raw);
+}
+
+function ensureLeadIntelligenceReportPayload(record = {}) {
+  if (!record || typeof record !== "object") return record;
+  const parsedReport = getLeadIntelligenceReport(record);
+  if (!parsedReport) return record;
+  if (typeof record.report_json === "string" || typeof record.report === "string") {
+    return {
+      ...record,
+      report_json: parsedReport,
+      report: parsedReport
+    };
+  }
+  return record;
+}
+
+function toDisplayScore(value) {
+  const number = Math.round(asNumber(value) ?? NaN);
+  if (!Number.isFinite(number)) return null;
+  return Math.max(1, Math.min(10, number));
+}
+
+function hasLeadIntelligencePayload(record) {
+  const report = getLeadIntelligenceReport(record);
+  if (!report || typeof report !== "object") return false;
+  if (report.executive_snapshot || report.company_profile || report.sales_recommendation || report.project_intelligence || report.procurement_contacts || report.named_contacts || report.structural_steel_opportunity || report.lead_score || report.research_quality) return true;
+  if (Object.keys(report).length > 4) return true;
+  const roots = [
+    report.executive_snapshot,
+    report.company_profile,
+    report.sales_recommendation,
+    report.project_intelligence,
+    report.procurement_contacts,
+    report.named_contacts,
+    report.structural_steel_opportunity,
+    report.lead_score,
+    report.lead_score_sales_plan,
+    report.research_quality,
+    report.sources,
+    report.summary,
+    report.buyer_classification,
+    report.best_verified_channel,
+    report.best_verified_company_contact_channel,
+    report.suggested_opening_message,
+    report.confidence_summary,
+    report.company_name,
+    report.demand_classification,
+    report.steel_demand
+  ];
+  return roots.some(value => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === "object") return Object.keys(value).length > 0;
+    return String(value || "").trim().length > 0;
+  });
+}
+
+function hasLeadIntelligenceReportStructure(record) {
+  const report = getLeadIntelligenceReport(record);
+  if (!report || typeof report !== "object") return false;
+  return Boolean(
+    report.executive_snapshot
+    || report.company_profile
+    || report.sales_recommendation
+    || report.project_intelligence
+    || report.procurement_contacts
+    || report.named_contacts
+    || report.structural_steel_opportunity
+    || report.lead_score
+  );
+}
+
+function buildIntelReportStatePayload(record) {
+  const report = getLeadIntelligenceReport(record) || null;
+  const executive = report?.executive_snapshot || {};
+  const score = report?.lead_score || {};
+  const steelDemand = String(executive.steel_demand || "").trim();
+  return {
+    weightedScore: asNumber(score.weighted_score),
+    displayedScore: toDisplayScore(score.displayed_score),
+    priority: normalizeLeadIntelligenceReportPriority(score?.priority || executive.sales_priority || "", "C"),
+    steelDemand: steelDemand || "",
+    demandClassification: steelDemand || "",
+    buyerClassification: String(executive.buyer_classification || "").trim(),
+    researchDate: report?.research_date || null,
+    report
+  };
+}
+
 function serializeLeadIntelligenceRecord(record, { includeReport = false } = {}) {
   if (!record) return null;
-  const report = record.report_json || record.report || null;
+  const report = getLeadIntelligenceReport(record) || null;
   return {
     id: record.id,
     lead_id: record.lead_id,
@@ -3412,6 +3930,7 @@ async function loadLeadIntelligenceReports(db, token, leadId, supabaseEnabled) {
 
 async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems = []) {
   let reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  reports = reports.map(ensureLeadIntelligenceReportPayload);
   const staleActive = reports.find(report => isStaleLeadIntelligenceJob(report));
   if (staleActive) {
     await updateLeadIntelligenceReport(db, staleActive.id, {
@@ -3421,15 +3940,35 @@ async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, market
       error_message: "Lead intelligence research was interrupted before completion. Please retry the report."
     }, supabaseEnabled);
     reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+    reports = reports.map(ensureLeadIntelligenceReportPayload);
   }
   const active = reports.find(report => activeLeadIntelligenceStatuses().has(report.status)) || null;
-  const current = reports.find(report => report.status === "completed" && report.is_current) || reports.find(report => report.status === "completed") || null;
-  const failed = reports.find(report => report.status === "failed") || null;
+  const processing = Boolean(active && ["queued", "researching", "generating_pdf"].includes(String(active.status)));
+  const completed = reports.filter(report => report.status === "completed");
+  const completedWithPayload = completed.filter(hasLeadIntelligencePayload);
+  const completedWithStructure = completed.filter(hasLeadIntelligenceReportStructure);
+  const completedWithPdf = completed.filter(report => String(report.pdf_storage_key || report.pdf_url || "").trim());
+  const completedCandidates = completedWithPayload.length
+    ? completedWithPayload
+    : (completedWithStructure.length ? completedWithStructure : (completedWithPdf.length ? completedWithPdf : completed));
+  const current = completedCandidates.find(report => report.is_current)
+    || completedCandidates[0]
+    || null;
+  const failedCandidates = reports.filter(report => report.status === "failed");
+  const failedPayload = failedCandidates.find(report => hasLeadIntelligencePayload(report)) || null;
+  const reportForDisplay = current || (processing ? null : (failedPayload || null));
+  const duplicateFailure = candidate => {
+    const message = String(candidate?.error_message || candidate?.error || candidate?.message || "").toLowerCase();
+    return message.includes("resource already exists") || (message.includes("already exists") && message.includes("lead_intelligence"));
+  };
+  const failed = (reportForDisplay || processing)
+    ? null
+    : (failedCandidates.filter(candidate => !duplicateFailure(candidate) || !completedCandidates.length)[0] || null);
   return {
     workflow_version: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
     auto_queue_enabled: LEAD_INTELLIGENCE_AUTO_QUEUE,
     allowed_research_input: allowedResearchInputFromLead(lead),
-    report: current ? serializeLeadIntelligenceRecord(current) : null,
+    report: reportForDisplay ? serializeLeadIntelligenceRecord(reportForDisplay, { includeReport: true }) : null,
     active_report: active ? serializeLeadIntelligenceRecord(active) : null,
     failed_report: failed ? serializeLeadIntelligenceRecord(failed) : null,
     history: reports.map(report => serializeLeadIntelligenceRecord(report)).slice(0, 12),
@@ -3437,16 +3976,40 @@ async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, market
   };
 }
 
-async function insertLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason = "generate", retryOf = "" } = {}) {
+const LEAD_INTELLIGENCE_REPORT_PRIORITIES = new Set(["", "A", "B", "C", "D"]);
+const REPORT_PRIORITY_FROM_LEAD_PRIORITY = {
+  HOT: "A",
+  WARM: "B",
+  NEW: "C",
+  "AT RISK": "D",
+  COLD: "D",
+  LOW: "D",
+  MEDIUM: "C",
+  HIGH: "A"
+};
+
+function normalizeLeadIntelligenceReportPriority(value, fallback = "C") {
+  const normalized = String(value || "").trim();
+  if (!normalized) return fallback;
+  const upper = normalized.toUpperCase();
+  if (LEAD_INTELLIGENCE_REPORT_PRIORITIES.has(upper)) return upper;
+  const mapped = REPORT_PRIORITY_FROM_LEAD_PRIORITY[upper];
+  if (mapped) return mapped;
+  const match = upper.match(/\\b([ABCD])\\b/);
+  if (match) return match[1];
+  return fallback;
+}
+
+async function insertLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason = "generate", retryOf = "", reportId = "" } = {}) {
   const now = new Date().toISOString();
   const record = {
-    id: newRecordId("lir"),
+    id: reportId || newRecordId("lir"),
     lead_id: lead.id,
     status: "queued",
     report_json: null,
     weighted_score: null,
     displayed_score: null,
-    priority: "",
+    priority: normalizeLeadIntelligenceReportPriority(lead?.priority || "", "C"),
     demand_classification: "",
     steel_demand: "",
     buyer_classification: "",
@@ -3518,6 +4081,9 @@ async function queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, opti
 
 async function updateLeadIntelligenceReport(db, reportId, patch, supabaseEnabled) {
   const updated = { ...patch, updated_at: new Date().toISOString() };
+  if (Object.hasOwn(updated, "priority")) {
+    updated.priority = normalizeLeadIntelligenceReportPriority(updated.priority, "C");
+  }
   if (supabaseEnabled) {
     const rows = await serviceRest("lead_intelligence.worker", `lead_intelligence_reports?id=eq.${encodeURIComponent(reportId)}&select=*`, {
       method: "PATCH",
@@ -3531,6 +4097,57 @@ async function updateLeadIntelligenceReport(db, reportId, patch, supabaseEnabled
   db.lead_intelligence_reports[index] = { ...db.lead_intelligence_reports[index], ...updated };
   writeDb(db);
   return db.lead_intelligence_reports[index];
+}
+
+async function conditionalReplaceLeadIntelligenceReport(db, {
+  reportId,
+  leadId,
+  expectedUpdatedAt,
+  expectedPdfStorageKey,
+  patch,
+  supabaseEnabled
+}) {
+  const updated = { ...patch, updated_at: new Date().toISOString() };
+  if (Object.hasOwn(updated, "priority")) {
+    updated.priority = normalizeLeadIntelligenceReportPriority(updated.priority, "C");
+  }
+  if (supabaseEnabled) {
+    const filters = [
+      `id=eq.${encodeURIComponent(reportId)}`,
+      `lead_id=eq.${encodeURIComponent(leadId)}`,
+      "is_current=eq.true",
+      "superseded_at=is.null"
+    ];
+    if (String(expectedUpdatedAt || "").trim()) {
+      filters.push(`updated_at=eq.${encodeURIComponent(expectedUpdatedAt)}`);
+    } else if (String(expectedPdfStorageKey || "").trim()) {
+      filters.push(`pdf_storage_key=eq.${encodeURIComponent(expectedPdfStorageKey)}`);
+    } else {
+      filters.push("pdf_storage_key=is.null");
+    }
+    const rows = await serviceRest("lead_intelligence.worker", `lead_intelligence_reports?${filters.join("&")}&select=*`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: updated
+    });
+    return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  }
+  const localDb = readDb();
+  const index = (localDb.lead_intelligence_reports || []).findIndex(report => (
+    String(report.id) === String(reportId)
+    && String(report.lead_id) === String(leadId)
+    && Boolean(report.is_current)
+    && !report.superseded_at
+    && (
+      String(expectedUpdatedAt || "").trim()
+        ? String(report.updated_at || "") === String(expectedUpdatedAt || "")
+        : String(report.pdf_storage_key || "") === String(expectedPdfStorageKey || "")
+    )
+  ));
+  if (index < 0) return null;
+  localDb.lead_intelligence_reports[index] = { ...localDb.lead_intelligence_reports[index], ...updated };
+  writeDb(localDb);
+  return localDb.lead_intelligence_reports[index];
 }
 
 async function markLeadIntelligenceCurrent(db, leadId, currentReportId, supabaseEnabled) {
@@ -3572,16 +4189,53 @@ async function leadForIntelligenceJob(db, report, supabaseEnabled) {
   return (db.leads || []).find(lead => String(lead.id) === String(report.lead_id)) || null;
 }
 
-async function persistLeadIntelligencePdf(db, report, pdf, supabaseEnabled) {
-  const storageKey = leadIntelligenceStorageKey(report.lead_id, report.id);
+function isLeadIntelligenceStorageDuplicate(error) {
+  const message = String(error?.message || error?.error || "").toLowerCase();
+  const normalizedStatus = String(error?.status || "").trim();
+  return normalizedStatus === "409" || message.includes("already exists") || message.includes("resource already exists");
+}
+
+async function persistLeadIntelligencePdf(db, report, pdf, supabaseEnabled, storageKeyOverride = "") {
+  const storageKey = storageKeyOverride || leadIntelligenceStorageKey(report.lead_id, report.id);
   if (supabaseEnabled) {
-    await uploadStorageObjectToBucketAsService(LEAD_INTELLIGENCE_BUCKET, storageKey, pdf, "application/pdf");
+    try {
+      await uploadStorageObjectToBucketAsService(LEAD_INTELLIGENCE_BUCKET, storageKey, pdf, "application/pdf", { upsert: true });
+    } catch (error) {
+      if (!isLeadIntelligenceStorageDuplicate(error)) throw error;
+    }
     return storageKey;
   }
   const localPath = leadIntelligenceLocalPath(storageKey);
   fs.mkdirSync(path.dirname(localPath), { recursive: true });
   fs.writeFileSync(localPath, pdf);
   return storageKey;
+}
+
+async function deleteLeadIntelligencePdf(storageKey, supabaseEnabled) {
+  const key = String(storageKey || "").trim();
+  if (!key) return false;
+  if (supabaseEnabled) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Supabase Storage cleanup is not configured.");
+    const response = await fetch(`${SUPABASE_URL}${leadIntelligenceStorageObjectUrl(LEAD_INTELLIGENCE_BUCKET, key)}`, {
+      method: "DELETE",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+      }
+    });
+    if (response.status === 404) return false;
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const error = new Error(data.message || data.error || `Supabase Storage delete failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    return true;
+  }
+  const localPath = leadIntelligenceLocalPath(key);
+  if (!localPath.startsWith(DATA_DIR) || !fs.existsSync(localPath)) return false;
+  fs.unlinkSync(localPath);
+  return true;
 }
 
 async function processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetchImpl = fetch } = {}) {
@@ -3613,7 +4267,7 @@ async function processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetc
       report_json: result.report,
       weighted_score: result.report.lead_score.weighted_score,
       displayed_score: result.report.lead_score.displayed_score,
-      priority: result.report.lead_score.priority,
+      priority: normalizeLeadIntelligenceReportPriority(result.report.lead_score?.priority, "C"),
       steel_demand: result.report.executive_snapshot.steel_demand,
       demand_classification: result.report.executive_snapshot.steel_demand,
       buyer_classification: result.report.executive_snapshot.buyer_classification,
@@ -3627,7 +4281,13 @@ async function processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetc
     return { processed: 1, status: "completed", report: serializeLeadIntelligenceRecord(completed || { ...job, report_json: result.report, pdf_storage_key: storageKey, status: "completed" }) };
   } catch (error) {
     const sanitized = sanitizeLeadIntelligenceError(error);
-    await updateLeadIntelligenceReport(db, job.id, { status: "failed", error_code: sanitized.code, error_message: sanitized.message, completed_at: new Date().toISOString() }, supabaseEnabled);
+    await updateLeadIntelligenceReport(db, job.id, {
+      status: "failed",
+      error_code: sanitized.code,
+      error_message: sanitized.message,
+      provider_metadata: error.provider_metadata || job.provider_metadata || {},
+      completed_at: new Date().toISOString()
+    }, supabaseEnabled);
     return { processed: 1, status: "failed", error_code: sanitized.code, error_message: sanitized.message };
   }
 }
@@ -3637,14 +4297,6 @@ async function processOneLeadIntelligenceJob(db, supabaseEnabled, { fetchImpl = 
   return processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetchImpl });
 }
 
-async function queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled) {
-  if (!LEAD_INTELLIGENCE_AUTO_QUEUE) return null;
-  try {
-    return await queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "auto_new_lead" });
-  } catch {
-    return null;
-  }
-}
 async function persistActivityCollection(db, user, lead, activities, supabaseEnabled) {
   const normalized = ensureActivityIds(activities);
   const lastActivity = normalized.find(activity => !activity.delete_request && !activity.archived)?.at
@@ -3916,14 +4568,45 @@ function importedLeadPayload(row, user, importedAt) {
 }
 
 function stripOptionalSupabaseLeadColumns(payload) {
+  return stripSupabaseLeadColumns(payload, OPTIONAL_SUPABASE_LEAD_COLUMNS);
+}
+
+function stripSupabaseLeadColumns(payload, columns = []) {
   const next = { ...payload };
-  OPTIONAL_SUPABASE_LEAD_COLUMNS.forEach(column => delete next[column]);
+  columns.forEach(column => delete next[column]);
   return next;
+}
+
+function missingLeadColumnsFromError(error) {
+  const message = String(error?.message || "");
+  const details = String(error?.details || "");
+  const source = `${message} ${details}`;
+  const columns = new Set();
+  const add = candidate => {
+    const normalized = String(candidate || "").trim();
+    if (!normalized) return;
+    const lower = normalized.toLowerCase();
+    if (/^(lead|leads|users|profiles|activities|activity_purpose)$/.test(lower)) return;
+    columns.add(lower);
+  };
+
+  const columnPatterns = [
+    /column\s+["']([a-z0-9_]+)["']/gi,
+    /column\s+([a-z0-9_]+)\s+does not exist/gi
+  ];
+  for (const pattern of columnPatterns) {
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+      add(match[1]);
+    }
+  }
+  return [...columns];
 }
 
 function optionalLeadColumnMissing(error) {
   const message = String(error?.message || "");
-  return OPTIONAL_SUPABASE_LEAD_COLUMNS.some(column => message.includes(`'${column}'`) || message.includes(`"${column}"`))
+  return missingLeadColumnsFromError(error).length > 0
+    || OPTIONAL_SUPABASE_LEAD_COLUMNS.some(column => message.includes(`'${column}'`) || message.includes(`"${column}"`))
     || /schema cache|column .* does not exist/i.test(message);
 }
 
@@ -3950,6 +4633,14 @@ async function postSupabaseLeadWithServiceFallback(body) {
       body
     });
   } catch (error) {
+    const missingColumns = missingLeadColumnsFromError(error);
+    if (missingColumns.length) {
+      return serviceRest("leads.server_validated_insert", "leads?select=*", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: stripSupabaseLeadColumns(body, missingColumns)
+      });
+    }
     if (!optionalLeadColumnMissing(error)) throw error;
     return serviceRest("leads.server_validated_insert", "leads?select=*", {
       method: "POST",
@@ -3968,6 +4659,15 @@ async function postSupabaseLeadWithOptionalFallback(token, body) {
       body
     });
   } catch (error) {
+    const missingColumns = missingLeadColumnsFromError(error);
+    if (missingColumns.length) {
+      return rest("leads?select=*", {
+        method: "POST",
+        ...supabaseDataOptions(token),
+        headers: { Prefer: "return=representation" },
+        body: stripSupabaseLeadColumns(body, missingColumns)
+      });
+    }
     if (!optionalLeadColumnMissing(error)) throw error;
     return rest("leads?select=*", {
       method: "POST",
@@ -3996,6 +4696,15 @@ async function patchSupabaseLeadWithOptionalFallback(token, id, body) {
       body
     });
   } catch (error) {
+    const missingColumns = missingLeadColumnsFromError(error);
+    if (missingColumns.length) {
+      return rest(`leads?id=eq.${encodeURIComponent(id)}&select=*`, {
+        method: "PATCH",
+        ...supabaseDataOptions(token),
+        headers: { Prefer: "return=representation" },
+        body: stripSupabaseLeadColumns(body, missingColumns)
+      });
+    }
     if (!optionalLeadColumnMissing(error)) throw error;
     return rest(`leads?id=eq.${encodeURIComponent(id)}&select=*`, {
       method: "PATCH",
@@ -4999,26 +5708,26 @@ async function handleApi(req, res, url) {
   }
   const db = supabaseEnabled ? null : readDb();
 
-  if (["GET", "POST"].includes(req.method) && url.pathname === "/api/cron/process-lead-intelligence") {
-    const authHeader = String(req.headers.authorization || "");
-    const suppliedSecret = String(url.searchParams.get("secret") || req.headers["x-cron-secret"] || authHeader.replace(/^Bearer\s+/i, "") || "");
-    if (!LEAD_INTELLIGENCE_CRON_SECRET || suppliedSecret !== LEAD_INTELLIGENCE_CRON_SECRET) {
-      return sendJson(res, 401, { code: "cron_secret_required", error: "Cron authorization required." });
-    }
-    const body = req.method === "POST" ? await readBody(req).catch(() => ({})) : {};
-    const limit = Math.max(1, Math.min(5, Number(body.limit || url.searchParams.get("limit") || 1)));
-    const results = [];
-    for (let index = 0; index < limit; index += 1) {
-      const result = await processOneLeadIntelligenceJob(db, supabaseEnabled);
-      results.push(result);
-      if (!result.processed) break;
-    }
-    return sendJson(res, 200, { processed: results.reduce((sum, item) => sum + Number(item.processed || 0), 0), results });
-  }
   if (req.method === "GET" && url.pathname === "/api/health") {
+    const includePrivateHealth = String(url.searchParams.get("details") || url.searchParams.get("internal") || "").toLowerCase() === "1"
+      || String(url.searchParams.get("details") || url.searchParams.get("internal") || "").toLowerCase() === "true";
+
+    if (!includePrivateHealth) {
+      return sendJson(res, 200, {
+        ok: true,
+        app: "ARG Leads Tracker",
+        status: "healthy",
+        date: new Date().toISOString()
+      });
+    }
+
+    const healthUser = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
+    if (!healthUser) return sendJson(res, 401, { error: "Authentication required." });
+    if (!isDirectorOrAdmin(healthUser)) return sendJson(res, 403, { error: "Admin access required." });
     return sendJson(res, 200, {
       ok: true,
       app: "ARG Leads Tracker",
+      scope: "internal",
       backend: { supabase: supabaseEnabled, admin: isSupabaseAdminConfigured() },
       enrichment: { google_places: googlePlacesConfigured(), hunter: hunterConfigured() },
       transcription: {
@@ -5034,15 +5743,27 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
-    const payload = await readBody(req);
-    const email = String(payload.email || "").trim().toLowerCase();
-    const normalizedAccount = normalizeAccountIdentifier(email) || "missing-account";
+    const loginIp = clientIp(req);
     const ipLimit = await enforceRateLimit(req, res, db, supabaseEnabled, {
       scope: "login:ip",
-      subject: clientIp(req),
+      subject: loginIp,
       policyName: "login_ip"
     });
     if (!ipLimit) return;
+
+    const loginBodyText = (await readRawBody(req, LOGIN_BODY_MAX_BYTES, "Login request body is too large.")).toString("utf8").trim();
+    let payload = {};
+    if (loginBodyText) {
+      try {
+        payload = JSON.parse(loginBodyText);
+      } catch (error) {
+        await loginFailureDelay(ipLimit.count);
+        return sendJson(res, 400, { error: "Invalid request body." });
+      }
+    }
+
+    const email = String(payload.email || "").trim().toLowerCase();
+    const normalizedAccount = normalizeAccountIdentifier(email) || "missing-account";
     const accountLimit = await enforceRateLimit(req, res, db, supabaseEnabled, {
       scope: "login:account",
       subject: normalizedAccount,
@@ -5069,11 +5790,17 @@ async function handleApi(req, res, url) {
       await loginFailureDelay(accountLimit.count);
       return sendJson(res, 401, { error: "Invalid email or password." });
     }
+    user.session_version = normalizeSessionVersion(user.session_version) + 1;
     user.last_login_at = new Date().toISOString();
     user.updated_at = new Date().toISOString();
     writeDb(db);
     await resetDurableRateLimit(db, supabaseEnabled, "login:account", normalizedAccount);
-    return sendJson(res, 200, { token: issueToken(user), user: publicUser(user) });
+    const localSession = createLocalSessionToken(user);
+    return sendJson(res, 200, {
+      token: localSession.token,
+      csrf_token: localSession.csrf,
+      user: publicUser(user)
+    });
   }
 
   const voiceNoteMatch = url.pathname.match(/^\/api\/pmr-voice-notes\/([^/]+)$/);
@@ -5084,13 +5811,29 @@ async function handleApi(req, res, url) {
   const user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
   if (!await enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)) return;
+  if (!supabaseEnabled && isCsrfProtectedMutation(url.pathname, req.method) && !hasValidLocalCsrfHeader(req)) {
+    return sendJson(res, 403, { error: "CSRF token missing or invalid." });
+  }
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     return sendJson(res, 200, { user: publicUser(user) });
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/logout") {
-    if (supabaseEnabled) await signOut(bearerToken(req));
+    if (supabaseEnabled) {
+      const token = bearerToken(req);
+      if (token) await signOut(token);
+    } else {
+      const parsedToken = parseLocalSessionToken(bearerToken(req));
+      const parsedSession = isLocalSessionValid(parsedToken);
+      if (parsedSession) {
+        const user = db.users.find(item => item.id === parsedSession.sub && item.role === parsedSession.role);
+        if (user) {
+          user.session_version = normalizeSessionVersion(user.session_version) + 1;
+          writeDb(db);
+        }
+      }
+    }
     return sendJson(res, 200, { ok: true });
   }
 
@@ -6032,25 +6775,11 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/market-intelligence") {
-    let leads;
-    let items = [];
-    if (supabaseEnabled) {
-      const leadRows = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
-      leads = visibleLeadsForUser(leadRows.map(fromSupabaseLead), user);
-      try {
-        items = await rest("market_intelligence?select=*&order=published_at.desc&limit=100", supabaseDataOptions(user.token));
-      } catch {
-        items = [];
-      }
-    } else {
-      leads = visibleLeadsForUser(db.leads.map(leadWithDerivedFields), user);
-      items = db.market_intelligence || [];
-    }
-    const matched = matchIntelligenceToLeads(items, leads);
     return sendJson(res, 200, {
-      items: visibleIntelItems(leads, matched),
-      heat_map: heatMapFromIntel(matched),
-      disabled: !integrations.marketIntel
+      items: [],
+      heat_map: [],
+      disabled: true,
+      reason: "Live market-intelligence feeds have been retired. Upload an intelligence PDF on the lead record instead."
     });
   }
 
@@ -6060,40 +6789,8 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/market-intelligence/fetch") {
-    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
-    const startedAt = Date.now();
-    let leads;
-    if (supabaseEnabled) {
-      const leadRows = await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token));
-      leads = leadRows.map(fromSupabaseLead);
-    } else {
-      leads = db.leads.map(leadWithDerivedFields);
-    }
-    const fetched = await fetchMarketIntelligence();
-    const matched = matchIntelligenceToLeads(fetched.items, leads);
-    if (supabaseEnabled && matched.length) {
-      try {
-        await rest("market_intelligence?on_conflict=url", {
-          method: "POST",
-          ...supabaseDataOptions(user.token),
-          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-          body: matched
-        });
-      } catch {
-        // Optional feed persistence can be enabled after the migration is applied.
-      }
-    } else if (!supabaseEnabled) {
-      const byUrl = new Map((db.market_intelligence || []).map(item => [item.url || item.id, item]));
-      matched.forEach(item => byUrl.set(item.url || item.id, item));
-      db.market_intelligence = [...byUrl.values()].sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || ""))).slice(0, 300);
-      writeDb(db);
-    }
-    await recordIntegrationLog(db, user, "market_intelligence", "fetch", fetched.disabled ? "disabled" : "success", startedAt, fetched.reason || "", supabaseEnabled);
-    return sendJson(res, 200, {
-      imported: matched.length,
-      disabled: fetched.disabled,
-      reason: fetched.reason || "",
-      items: matched
+    return sendJson(res, 410, {
+      error: "Live market-intelligence feed refresh has been retired. Upload an intelligence PDF on the lead record instead."
     });
   }
 
@@ -6263,7 +6960,7 @@ async function handleApi(req, res, url) {
             status: profile.status,
             last_login_at: authAccount.last_sign_in_at || ""
           });
-        }));
+        }).filter(person => !isSystemProbeSalesmanUser(person)));
       }
       if (req.method === "POST") {
         if (!isSupabaseAdminConfigured()) return sendJson(res, 503, { error: "SUPABASE_SERVICE_ROLE_KEY is required to create salesman accounts." });
@@ -6282,7 +6979,8 @@ async function handleApi(req, res, url) {
     if (req.method === "GET") {
       return sendJson(res, 200, (db.users || [])
         .filter(item => String(item.role || "").toLowerCase() === "salesman")
-        .map(item => salesmanAccountSummary(item)));
+        .map(item => salesmanAccountSummary(item))
+        .filter(item => !isSystemProbeSalesmanUser(item)));
     }
     if (req.method === "POST") {
       const payload = await readBody(req);
@@ -6302,6 +7000,7 @@ async function handleApi(req, res, url) {
         role: "salesman",
         territory: canonicalTerritory(payload.territory || "UAE-North"),
         status: "active",
+        session_version: 0,
         password_hash: hashPassword(password),
         created_at: new Date().toISOString()
       };
@@ -6360,6 +7059,7 @@ async function handleApi(req, res, url) {
         ? "profiles?role=eq.salesman&select=*&order=full_name.asc"
         : `profiles?id=eq.${encodeURIComponent(user.id)}&select=*`;
       const profiles = await rest(profilePath, { token: user.token });
+      const displayProfiles = profiles.map(profile => ({ ...profile, name: profile.full_name }));
       return sendJson(res, 200, {
         stages: COMPANY_STATUSES,
         priorities: configuration.priorities,
@@ -6368,13 +7068,14 @@ async function handleApi(req, res, url) {
         territories: configuration.territories,
         activityTypes: configuration.activityTypes,
         pmr: configuration.pmr,
-        salesmen: profiles.map(profile => ({ ...profile, name: profile.full_name }))
+        salesmen: displayProfiles.filter(person => !isSystemProbeSalesmanUser(person))
       });
     }
     const salesmen = isAdmin(user)
       ? (db.users || [])
         .filter(item => String(item.role || "").toLowerCase() === "salesman")
         .map(publicUser)
+        .filter(item => !isSystemProbeSalesmanUser(item))
       : [publicUser(user)];
     return sendJson(res, 200, {
       stages: COMPANY_STATUSES,
@@ -6399,9 +7100,10 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/leads/duplicates") {
     const name = String(url.searchParams.get("name") || "").trim();
     if (name.length < 4) return sendJson(res, 200, { matches: [] });
-    const leads = supabaseEnabled
+    const baseLeads = supabaseEnabled
       ? (await rest("leads?select=id,company_name,assigned_salesman,assigned_to,website,google_place_id,phone,territory,lead_status", supabaseDataOptions(user.token))).map(fromSupabaseLead)
       : db.leads;
+    const leads = visibleLeadsForUser(baseLeads, user);
     const matches = duplicateLeadMatches(leads, name).map(match => ({
       id: match.id,
       company_name: match.company_name || match.name,
@@ -6506,7 +7208,6 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const lead = await saveSupabaseLead(user.token, user, payload);
       scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
-      await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
       return sendJson(res, 201, lead);
     }
     const lead = withAutomaticReminder(normalizeLead(payload), user);
@@ -6519,7 +7220,6 @@ async function handleApi(req, res, url) {
     db.leads.unshift(lead);
     writeDb(db);
     scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
-    await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
     return sendJson(res, 201, leadWithDerivedFields(lead));
   }
 
@@ -6547,39 +7247,184 @@ async function handleApi(req, res, url) {
       ? await getSupabaseLead(user.token, leadIntelMatch[1], user)
       : db.leads.find(item => item.id === leadIntelMatch[1] && leadBelongsToUser(item, user));
     if (!lead) return leadNotFound(res);
-    let items = [];
-    if (supabaseEnabled) {
-      try {
-        items = await rest("market_intelligence?select=*&order=published_at.desc&limit=100", supabaseDataOptions(user.token));
-      } catch {
-        items = [];
-      }
-    } else {
-      items = db.market_intelligence || [];
-    }
-    const marketItems = leadIntelItems(lead, matchIntelligenceToLeads(items, [lead]));
-    return sendJson(res, 200, await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems));
+    return sendJson(res, 200, await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, []));
   }
 
-  const leadIntelligenceActionMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intelligence\/(generate|refresh|retry)$/);
-  if (req.method === "POST" && leadIntelligenceActionMatch) {
-    const lead = await accessibleLeadById(db, user, leadIntelligenceActionMatch[1], supabaseEnabled);
+  const leadIntelligenceUploadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intelligence\/upload$/);
+  if (req.method === "POST" && leadIntelligenceUploadMatch) {
+    const lead = await accessibleLeadById(db, user, leadIntelligenceUploadMatch[1], supabaseEnabled);
     if (!lead) return leadNotFound(res);
-    const action = leadIntelligenceActionMatch[2];
-    const body = action === "retry" ? await readBody(req) : {};
-    const queued = await queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, {
-      reason: action,
-      retryReportId: action === "retry" ? String(body.report_id || body.reportId || "") : ""
+    const applyRaw = String(url.searchParams?.get("apply") || "true").toLowerCase();
+    const shouldApply = !["0", "false", "off", "no"].includes(applyRaw);
+    const rawContentType = String(req.headers["content-type"] || "application/pdf").split(";")[0].trim().toLowerCase();
+    const contentType = rawContentType === "application/octet-stream" ? "application/pdf" : rawContentType;
+    const rawPdf = await readRawBody(
+      req,
+      MAX_ACTIVITY_ATTACHMENT_BYTES,
+      "Lead intelligence PDF upload failed. The maximum file size is 8 MB."
+    );
+    const validated = validateActivityAttachment({
+      filename: decodeURIComponent(String(req.headers["x-file-name"] || "lead-intelligence.pdf")),
+      contentType,
+      buffer: rawPdf
     });
-    const processResult = String(queued.record?.status || "") === "queued"
-      ? await processLeadIntelligenceJobRecord(db, queued.record, supabaseEnabled)
-      : { processed: 0, status: queued.record?.status || "active", report: serializeLeadIntelligenceRecord(queued.record) };
-    return sendJson(res, processResult.status === "failed" ? 500 : 200, {
-      code: processResult.status === "completed" ? "completed" : queued.created ? "queued" : "already_active",
-      report: processResult.report || serializeLeadIntelligenceRecord(queued.record),
-      result: processResult,
-      state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, [])
-    });
+    const existingReports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+    const existingCompleted = existingReports.find(report => report.status === "completed" && hasLeadIntelligencePayload(report))
+      || existingReports.find(report => report.status === "completed");
+    const existingCurrent = existingReports.find(item => item.is_current) || existingCompleted || null;
+    if (!isPdfSignature(rawPdf)) return sendJson(res, 400, { error: "Uploaded file is not a valid PDF." });
+    const extractedText = extractTextFromPdfBuffer(rawPdf);
+    const reportId = existingCurrent?.id || newRecordId("lir");
+    const expectedUpdatedAt = String(existingCurrent?.updated_at || "");
+    const oldStorageKey = String(existingCurrent?.pdf_storage_key || existingCurrent?.pdf_url || "");
+    const candidateStorageKey = leadIntelligenceCandidateStorageKey(lead.id, reportId);
+    let candidateUploaded = false;
+    try {
+      await persistLeadIntelligencePdf(db, { id: reportId, lead_id: lead.id }, rawPdf, supabaseEnabled, candidateStorageKey);
+      candidateUploaded = true;
+      const patch = await analyzeLeadIntelligencePdfText(extractedText, lead);
+      let parsedReport = null;
+      let parseError = null;
+      try {
+        parsedReport = await parseLeadIntelligenceReportFromPdfText(extractedText, lead);
+      } catch (error) {
+        parseError = error;
+        console.error("Lead intelligence PDF structuring failed:", safeProviderMessage(error?.message || error));
+      }
+      const { changedFields, changedPatch } = calculateLeadPatchChanges(lead, patch);
+      const nextPatch = changedPatch && typeof changedPatch === "object" && !Array.isArray(changedPatch) ? changedPatch : {};
+      const updatedLead = shouldApply && nextPatch && Object.keys(nextPatch).length
+        ? await persistLeadPatch(db, user, lead.id, nextPatch, supabaseEnabled)
+        : null;
+      const finalLead = updatedLead || lead;
+      const completedAt = new Date().toISOString();
+      const fallbackReport = existingCompleted ? getLeadIntelligenceReport(existingCompleted) : null;
+      const baseReport = parsedReport || fallbackReport || null;
+      const finalReport = baseReport
+        ? {
+          ...baseReport,
+          source: parsedReport ? "uploaded_lead_intelligence_pdf" : (fallbackReport ? "uploaded_lead_intelligence_pdf_fallback" : "uploaded_lead_intelligence_pdf"),
+          source_file: validated.filename,
+          extracted_fields: Object.keys(patch || {}),
+          extracted_text_sample: extractedText.slice(0, 1600),
+          extracted_fields_applied: shouldApply ? changedFields : [],
+          applied_fields: shouldApply ? nextPatch : {},
+          applied_field_keys: shouldApply ? changedFields : []
+        }
+        : null;
+      const metrics = buildIntelReportStatePayload(baseReport && typeof baseReport === "object" ? baseReport : null);
+      const existingPayloadPriority = fallbackReport && typeof fallbackReport === "object" ? (fallbackReport?.lead_score?.priority || fallbackReport?.executive_snapshot?.sales_priority || fallbackReport?.executive_snapshot?.priority || finalLead?.priority || "") : "";
+      const reportPriority = normalizeLeadIntelligenceReportPriority(metrics.priority || existingPayloadPriority || finalLead?.priority || "", "C");
+      const completionReady = Boolean(parsedReport || fallbackReport || hasLeadIntelligencePayload(existingCompleted || {}));
+      const reportPatch = completionReady
+        ? {
+          status: "completed",
+          pdf_storage_key: candidateStorageKey,
+          pdf_url: "",
+          report_json: finalReport,
+          weighted_score: metrics.weightedScore,
+          displayed_score: metrics.displayedScore,
+          priority: reportPriority,
+          steel_demand: metrics.steelDemand,
+          demand_classification: metrics.demandClassification,
+          buyer_classification: metrics.buyerClassification,
+          research_timestamp: metrics.researchDate || completedAt,
+          completed_at: completedAt,
+          error_code: "",
+          error_message: "",
+          provider_metadata: {
+            source: parsedReport ? "uploaded_pdf" : "uploaded_pdf_fallback",
+            requested_field_count: Object.keys(patch || {}).length,
+            applied_field_count: shouldApply ? changedFields.length : 0,
+            parsed_report: Boolean(parsedReport),
+            parse_error: parseError ? safeProviderMessage(parseError.message) : "",
+            report_company: metrics.report?.executive_snapshot?.company || metrics.report?.company_profile?.company || finalLead.company_name || ""
+          },
+          is_current: true,
+          superseded_at: null
+        }
+        : {
+          status: "failed",
+          pdf_storage_key: candidateStorageKey,
+          pdf_url: "",
+          report_json: null,
+          weighted_score: null,
+          displayed_score: null,
+          priority: reportPriority,
+          steel_demand: "",
+          demand_classification: "",
+          buyer_classification: "",
+          research_timestamp: completedAt,
+          completed_at: completedAt,
+          error_code: parseError ? "upload_parse_failed" : "upload_no_payload",
+          error_message: parseError
+            ? `Could not parse the uploaded PDF into intelligence JSON: ${safeProviderMessage(parseError.message) || "Please try re-uploading a clearer PDF."}`
+            : "Uploaded PDF content did not contain a valid Lead Intelligence JSON payload.",
+          provider_metadata: {
+            source: "uploaded_pdf",
+            requested_field_count: Object.keys(patch || {}).length,
+            applied_field_count: shouldApply ? changedFields.length : 0,
+            parsed_report: false,
+            parse_error: parseError ? safeProviderMessage(parseError.message) : ""
+          },
+          is_current: true,
+          superseded_at: null
+        };
+      let completedReport = null;
+      if (existingCurrent) {
+        completedReport = await conditionalReplaceLeadIntelligenceReport(db, {
+          reportId,
+          leadId: finalLead.id,
+          expectedUpdatedAt,
+          expectedPdfStorageKey: oldStorageKey,
+          patch: reportPatch,
+          supabaseEnabled
+        });
+        if (!completedReport) {
+          try {
+            await deleteLeadIntelligencePdf(candidateStorageKey, supabaseEnabled);
+          } catch (cleanupError) {
+            logLeadIntelligenceCleanupWarning("candidate_conflict_delete", { leadId: finalLead.id, reportId }, cleanupError);
+          }
+          return sendJson(res, 409, { code: "replacement_conflict", error: "Another intelligence replacement completed first. Please refresh and try again." });
+        }
+      } else {
+        const inserted = await insertLeadIntelligenceReport(db, user, finalLead, supabaseEnabled, { reason: "upload", reportId });
+        completedReport = await updateLeadIntelligenceReport(db, inserted.id, reportPatch, supabaseEnabled);
+      }
+      if (completionReady && !existingCurrent) {
+        await markLeadIntelligenceCurrent(db, finalLead.id, reportId, supabaseEnabled);
+      }
+      if (oldStorageKey && oldStorageKey !== candidateStorageKey) {
+        try {
+          await deleteLeadIntelligencePdf(oldStorageKey, supabaseEnabled);
+        } catch (cleanupError) {
+          logLeadIntelligenceCleanupWarning("old_pdf_delete", { leadId: finalLead.id, reportId }, cleanupError);
+        }
+      }
+      const state = await loadLeadIntelligenceState(db, user, finalLead, supabaseEnabled, []);
+      return sendJson(res, 200, {
+        lead: finalLead,
+        leadIntelligenceUpload: {
+          requested_field_count: Object.keys(patch || {}).length,
+          applied_field_count: shouldApply ? changedFields.length : 0,
+          changed_fields: changedFields,
+          proposed_fields: nextPatch,
+          no_changes: changedFields.length === 0
+        },
+        state,
+        report: serializeLeadIntelligenceRecord(completedReport || { id: reportId, lead_id: finalLead.id, status: "completed", pdf_storage_key: candidateStorageKey, report_json: {} })
+      });
+    } catch (error) {
+      if (candidateUploaded) {
+        try {
+          await deleteLeadIntelligencePdf(candidateStorageKey, supabaseEnabled);
+        } catch (cleanupError) {
+          logLeadIntelligenceCleanupWarning("candidate_failure_delete", { leadId: lead.id, reportId }, cleanupError);
+        }
+      }
+      return sendJson(res, error.status || 500, { error: safeProviderMessage(error.message || "Lead intelligence upload failed.") });
+    }
   }
 
   const leadIntelligencePdfMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intelligence\/pdf\/([^/]+)$/);
@@ -6593,9 +7438,10 @@ async function handleApi(req, res, url) {
     }
     const filename = `${String(lead.company_name || "lead").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "lead"}-intelligence-${String(report.research_timestamp || report.completed_at || "").slice(0, 10) || "report"}.pdf`;
     if (supabaseEnabled) {
-      const signedUrl = await createStorageSignedUrlForBucketAsService(LEAD_INTELLIGENCE_BUCKET, report.pdf_storage_key, LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS);
-      res.writeHead(302, { Location: signedUrl, "Cache-Control": "private, no-store" });
-      return res.end();
+      const body = await downloadStorageObjectFromBucketAsService(LEAD_INTELLIGENCE_BUCKET, report.pdf_storage_key);
+      if (url.searchParams.get("download")) return sendDownload(res, "application/pdf", filename, body);
+      res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${filename}"`, "Cache-Control": "private, no-store", "Content-Length": body.length });
+      return res.end(body);
     }
     const localPath = leadIntelligenceLocalPath(report.pdf_storage_key || report.pdf_url);
     if (!localPath.startsWith(DATA_DIR) || !fs.existsSync(localPath)) return sendJson(res, 404, { code: "pdf_missing", error: "Intelligence PDF file is missing." });
@@ -6605,35 +7451,6 @@ async function handleApi(req, res, url) {
     return res.end(body);
   }
 
-  if (req.method === "POST" && url.pathname === "/api/admin/lead-intelligence/process") {
-    if (!isAdmin(user)) return sendJson(res, 403, { code: "admin_required", error: "Admin access required." });
-    const body = await readBody(req).catch(() => ({}));
-    const limit = Math.max(1, Math.min(5, Number(body.limit || 1)));
-    const results = [];
-    for (let index = 0; index < limit; index += 1) {
-      const result = await processOneLeadIntelligenceJob(db, supabaseEnabled);
-      results.push(result);
-      if (!result.processed) break;
-    }
-    return sendJson(res, 200, { processed: results.reduce((sum, item) => sum + Number(item.processed || 0), 0), results });
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/admin/lead-intelligence/backfill") {
-    if (!isAdmin(user)) return sendJson(res, 403, { code: "admin_required", error: "Admin access required." });
-    const body = await readBody(req).catch(() => ({}));
-    const limit = Math.max(1, Math.min(500, Number(body.limit || 100)));
-    const leads = supabaseEnabled
-      ? (await rest(`leads?select=*&order=created_at.asc&limit=${limit}`, supabaseDataOptions(user.token))).map(fromSupabaseLead)
-      : visibleLeadsForUser(db.leads, user).slice(0, limit);
-    let queued = 0;
-    let existing = 0;
-    for (const lead of leads) {
-      const result = await queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "backfill", skipIfAnyReport: !body.refresh_existing });
-      if (result.created) queued += 1;
-      else existing += 1;
-    }
-    return sendJson(res, 202, { code: "backfill_queued", queued, existing, scanned: leads.length, refresh_existing: Boolean(body.refresh_existing) });
-  }
   const leadHandoffMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/handoffs$/);
   if (req.method === "GET" && leadHandoffMatch) {
     const lead = supabaseEnabled
@@ -6712,9 +7529,16 @@ async function handleApi(req, res, url) {
         delete payload.lost_at;
         delete payload.lost_by;
       }
+      if (Object.hasOwn(payload, "contact_name") && !Object.hasOwn(payload, "contact_person")) {
+        payload.contact_person = payload.contact_name;
+      }
+      if (Object.hasOwn(payload, "contact_email") && !Object.hasOwn(payload, "email")) {
+        payload.email = payload.contact_email;
+      }
       if (payload.company_name && String(payload.company_name).trim() !== String(existing.company_name || "").trim()) {
         payload = await googleEnrichPayload({ ...existing, ...payload, google_place_id: "" }, req);
       }
+      payload = toSupabaseLeadUpdatePayload(payload);
       let handoffEvent = null;
       if (
         isDirectorOrAdmin(user)
@@ -6739,8 +7563,12 @@ async function handleApi(req, res, url) {
       const allowed = [
         "company_name", "industry", "location", "address", "phone", "website", "google_place_id",
         "google_maps_url", "google_rating", "google_review_count", "contact_name", "contact_email",
+        "primary_contact_title",
+        "contact_person", "email",
         "hunter_confidence_score", "lead_status", "notes", "territory", "assigned_salesman", "priority",
         "estimated_value", "product_interest", "activity_purpose", "next_action", "next_action_date", "source",
+        "first_order_date", "estimated_monthly_volume", "quotation_ref", "tags", "sector", "country_emirate", "tier",
+        "secondary_contact_name", "secondary_contact_title", "secondary_contact_mobile", "secondary_contact_email",
         "legal_name", "year_established", "business_category", "opening_hours",
         "steel_products_likely_needed", "competitors_likely_using", "certifications",
         "estimated_scale", "estimated_annual_revenue", "key_personnel", "recent_projects",
@@ -6749,6 +7577,12 @@ async function handleApi(req, res, url) {
         "auto_enrichment", "latitude", "longitude", "assigned_to", "activities"
       ].filter(field => isDirectorOrAdmin(user) || !["assigned_salesman", "assigned_to", "created_by", "territory"].includes(field));
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
+      if (Object.hasOwn(payload, "email") && !Object.hasOwn(updates, "contact_email") && Object.hasOwn(payload, "email")) {
+        updates.contact_email = payload.email;
+      }
+      if (Object.hasOwn(payload, "contact_person") && !Object.hasOwn(updates, "contact_name") && Object.hasOwn(payload, "contact_person")) {
+        updates.contact_name = payload.contact_person;
+      }
       const leads = await patchSupabaseLeadWithOptionalFallback(user.token, leadMatch[1], updates);
       if (!leads[0]) return sendJson(res, 404, { error: "Lead not found" });
       if (handoffEvent) {
@@ -6766,6 +7600,12 @@ async function handleApi(req, res, url) {
     const lead = db.leads.find(item => item.id === leadMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
     payload = prepareLeadPayloadForUser(payload, user, lead);
+    if (Object.hasOwn(payload, "contact_name") && !Object.hasOwn(payload, "contact_person")) {
+      payload.contact_person = payload.contact_name;
+    }
+    if (Object.hasOwn(payload, "contact_email") && !Object.hasOwn(payload, "email")) {
+      payload.email = payload.contact_email;
+    }
     const stageProvided = Boolean(payload.stage || payload.lead_status);
     if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
       payload = await googleEnrichPayload({ ...lead, ...payload, google_place_id: "" }, req);
@@ -7475,11 +8315,11 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, {
         leadId: lead.id,
         fingerprint,
-        generated_at: new Date().toISOString(),
+        generated_at: bundle.intelligenceReport?.research_timestamp || bundle.intelligenceReport?.completed_at || bundle.intelligenceReport?.created_at || new Date().toISOString(),
         provider: result.provider,
         model: result.model,
-        market_intelligence_configured: bundle.marketIntelConfigured,
-        market_intelligence_unavailable_reason: bundle.marketIntelUnavailableReason,
+        market_intelligence_configured: Boolean(bundle.intelligenceReport),
+        market_intelligence_unavailable_reason: "",
         summary: result.summary
       });
     } catch (error) {
@@ -7692,6 +8532,12 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (url.pathname.startsWith("/api/")) {
+      if (!applyApiCorsHeaders(req, res)) return;
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, { "Content-Length": "0" });
+        res.end();
+        return;
+      }
       await handleApi(req, res, url);
     } else {
       serveStatic(req, res, url);

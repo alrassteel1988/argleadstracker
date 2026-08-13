@@ -1,18 +1,15 @@
 # UAE Structural Steel Lead Intelligence
 
-ARG Leads Tracker generates lead intelligence as a server-side, versioned workflow. The browser never receives OpenAI keys, Supabase service-role keys, raw storage object keys, or privileged database errors.
+ARG Leads Tracker generates lead intelligence as a server-side, versioned workflow. The browser never receives AI provider keys, Supabase service-role keys, raw storage object keys, or privileged database errors.
 
 ## Configuration
 
 Required server-side values:
 
-- `OPENAI_API_KEY`: enables the research provider call.
-- `OPENAI_LEAD_INTELLIGENCE_MODEL`: model used for this workflow, default `gpt-4.1-mini`.
-- `ENABLE_LEAD_INTELLIGENCE_AUTO_QUEUE`: `true` queues a report after each new lead is saved. Set `false` only when cost control requires manual generation.
+- `OPENAI_API_KEY` and `OPENAI_LEAD_INTELLIGENCE_MODEL`, default `gpt-4.1-mini`.
+- Lead Intelligence reports are created from uploaded Lead Intelligence summary PDFs in the lead edit form.
 - `SUPABASE_LEAD_INTELLIGENCE_BUCKET`: private PDF bucket, default `lead-intelligence-reports`.
 - `SUPABASE_SERVICE_ROLE_KEY`: required in production for the background worker to claim jobs and write private PDF objects.
-- `LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS`: short-lived PDF view/download URL TTL, default `600`.
-- `LEAD_INTELLIGENCE_CRON_SECRET` or `CRON_SECRET`: bearer secret for `/api/cron/process-lead-intelligence`.
 
 Apply `supabase/migrations/20260810093647_lead_intelligence_reports.sql` before enabling production generation. It creates `lead_intelligence_reports`, indexes, RLS policies, and the private storage bucket.
 
@@ -35,43 +32,15 @@ The AI provider must return structured JSON first. The server validates it, reco
 
 ## Job Processing
 
-Lead creation queues a `queued` report when `ENABLE_LEAD_INTELLIGENCE_AUTO_QUEUE=true`. Opening the Intel tab does not automatically spend provider tokens; it shows a Generate action if no report exists.
+Opening the Intel tab does not automatically spend provider tokens; upload a summary PDF from the lead edit form to populate the intelligence report.
 
-Process jobs with either authenticated admin access:
+Admin can reprocess an uploaded report by uploading a newer summary PDF for the same lead.
 
-```powershell
-$body = @{ limit = 1 } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "$BASE/api/admin/lead-intelligence/process" -Headers @{ Authorization = "Bearer $TOKEN" } -ContentType "application/json" -Body $body
-```
-
-Or with Vercel Cron/server secret:
-
-```http
-POST /api/cron/process-lead-intelligence
-Authorization: Bearer <LEAD_INTELLIGENCE_CRON_SECRET>
-Content-Type: application/json
-
-{ "limit": 1 }
-```
-
-Each request processes at most 5 jobs. Keep the Vercel cron cadence conservative because each job performs cost-bearing web research and PDF generation.
-
-## Backfill
-
-Admin-only backfill queues existing leads idempotently. By default it skips leads that already have any intelligence history, so completed reports are not replaced accidentally.
-
-```powershell
-$body = @{ limit = 100 } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "$BASE/api/admin/lead-intelligence/backfill" -Headers @{ Authorization = "Bearer $TOKEN" } -ContentType "application/json" -Body $body
-```
-
-To intentionally refresh existing leads during backfill, include `refresh_existing = $true`.
+Each report upload triggers parsing, field extraction, and PDF generation/update in one request.
 
 ## Versioning and Retry
 
-Refresh creates a new report row. Completed report versions are preserved; only the latest completed report is marked current. A failed refresh records a sanitized error and leaves the previous successful PDF visible in the Intel tab.
-
-Retry requires the failed report id and creates a new queued job. Duplicate button clicks return the active job instead of creating duplicates.
+Upload creates a new report row. Completed report versions are preserved; only the latest completed report is marked current.
 
 ## PDF Access
 

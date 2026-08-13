@@ -1,5 +1,3 @@
-const integrations = require("../config/integrations");
-
 const GEO_CENTROIDS = {
   UAE: { lat: 24.4539, lng: 54.3773 },
   Dubai: { lat: 25.2048, lng: 55.2708 },
@@ -100,20 +98,11 @@ function heatMapFromIntel(items) {
 }
 
 async function fetchMarketIntelligence() {
-  if (!integrations.marketIntel || !integrations.env.zawyaApiUrl || !integrations.keys.zawya) {
-    return { items: [], disabled: true, reason: "ZAWYA_API_KEY or ZAWYA_API_URL is not configured." };
-  }
-  const response = await fetch(integrations.env.zawyaApiUrl, {
-    headers: { Authorization: `Bearer ${integrations.env.zawyaKey}` }
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(data.error || "Market intelligence fetch failed.");
-    error.status = response.status;
-    throw error;
-  }
-  const rawItems = Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [];
-  return { items: rawItems.map(item => normalizeIntelItem(item, "Zawya")), disabled: false };
+  return {
+    items: [],
+    disabled: true,
+    reason: "Live market-intelligence feeds have been retired. Upload an intelligence PDF on the lead record instead."
+  };
 }
 
 module.exports = {

@@ -108,6 +108,8 @@ const state = {
   },
   leadFormStep: 0,
   leadFormDetailsOpen: { company: false, contact: false, followup: false },
+  leadIntelligencePendingPdf: null,
+  leadIntelligencePendingPatch: null,
   leadDrawerOpen: false,
   leadDrawerTab: "overview",
   leadDrawerLoading: false,
@@ -491,6 +493,9 @@ const els = {
   leadStepBack: document.querySelector("#leadStepBack"),
   leadStepNext: document.querySelector("#leadStepNext"),
   leadSubmitButton: document.querySelector("#leadSubmitButton"),
+  leadIntelligencePdfInput: document.querySelector("#leadIntelligencePdfInput"),
+  leadIntelligenceUpdateButton: document.querySelector("#leadIntelligenceUpdateButton"),
+  leadIntelligenceUploadStatus: document.querySelector("#leadIntelligenceUploadStatus"),
   formSalesman: document.querySelector("#formSalesman"),
   formStage: document.querySelector("#formStage"),
   formPriority: document.querySelector("#formPriority"),
@@ -615,6 +620,7 @@ const els = {
 };
 
 const SESSION_KEY = "arg_crm_session";
+const SESSION_CSRF_KEY = "arg_crm_csrf";
 let currentView = "dashboard";
 const leadFormTouched = new Set();
 const leadEnrichmentCache = new Map();
@@ -760,6 +766,8 @@ const KANBAN_STAGES = [
   { key: "WON", label: "Won", color: "stage-won", aliases: ["WON", "ACTIVE"] },
   { key: "LOST", label: "Lost", color: "stage-lost", aliases: ["LOST", "DORMANT", "AT RISK"] }
 ];
+const CANONICAL_STAGE_KEYS = KANBAN_STAGES.map(stage => stage.key);
+const CANONICAL_STAGE_SET = new Set(CANONICAL_STAGE_KEYS);
 
 const STAGE_ALIAS_MAP = new Map(
   KANBAN_STAGES.flatMap(stage => stage.aliases.map(alias => [String(alias).trim().toUpperCase(), stage.key]))
@@ -780,6 +788,18 @@ function isPrivilegedDashboardRole(role = state.currentUser?.role) {
 function normalizeStageKey(stage, fallback = "NEW") {
   const normalized = String(stage || "").trim().toUpperCase();
   return STAGE_ALIAS_MAP.get(normalized) || fallback;
+}
+
+function canonicalStageKeys(values = []) {
+  const found = new Set();
+  (Array.isArray(values) ? values : []).forEach(value => {
+    const key = normalizeStageKey(value, "");
+    if (CANONICAL_STAGE_SET.has(key)) {
+      found.add(key);
+    }
+  });
+  const ordered = CANONICAL_STAGE_KEYS.filter(key => found.has(key));
+  return ordered.length ? ordered : CANONICAL_STAGE_KEYS.slice();
 }
 
 const NEXT_ACTION_PLAN_OPTIONS = ["To Call", "To Send Email", "To Visit"];
@@ -1013,6 +1033,8 @@ async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   const token = sessionStorage.getItem(SESSION_KEY);
   if (token) headers.Authorization = `Bearer ${token}`;
+  const csrfToken = sessionStorage.getItem(SESSION_CSRF_KEY);
+  if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
   if (options.body && typeof options.body === "string" && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
@@ -1024,6 +1046,93 @@ async function api(path, options = {}) {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(result.error || `Request failed: ${response.status}`);
+    error.status = response.status;
+    error.details = result;
+    throw error;
+  }
+  return result;
+}
+
+function normalizeLeadIntelligencePdfUpload(file) {
+  if (!(file instanceof File)) return null;
+  if (!file.size) return null;
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name)
+    ? file
+    : null;
+}
+
+function normalizeLeadIntelligencePatch(patch) {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) return {};
+  return Object.fromEntries(
+    Object.entries(patch)
+      .filter(([key]) => typeof key === "string" && key.length)
+      .map(([key, value]) => [key, Array.isArray(value) ? value.join(", ") : value ?? ""])
+      .map(([key, value]) => [key, String(value)])
+  );
+}
+
+function setLeadIntelligenceUploadStatus(message) {
+  if (!els.leadIntelligenceUploadStatus) return;
+  els.leadIntelligenceUploadStatus.textContent = message || "";
+}
+
+function syncLeadIntelligenceUpdateButton() {
+  if (!els.leadIntelligenceUpdateButton) return;
+  const hasEditingLead = Boolean(state.editingLeadId);
+  const hasPdf = state.leadIntelligencePendingPdf instanceof File;
+  els.leadIntelligenceUpdateButton.classList.toggle("hidden", !hasEditingLead);
+  els.leadIntelligenceUpdateButton.disabled = !hasEditingLead || !hasPdf;
+}
+
+function applyLeadIntelligencePatchToForm(changes) {
+  const patch = normalizeLeadIntelligencePatch(changes);
+  const keys = [];
+  Object.entries(patch).forEach(([field, value]) => {
+    if (field === "product_interest") {
+      renderLeadProductInterestOptions(value);
+      leadFormTouched.add(field);
+      keys.push(field);
+      return;
+    }
+    const input = els.leadForm?.elements?.[field];
+    if (!input) return;
+    if (input.tagName === "SELECT") {
+      ensureLeadFormSelectValue(field, value, input.value || "");
+      leadFormTouched.add(field);
+      keys.push(field);
+      return;
+    }
+    input.value = String(value ?? "");
+    leadFormTouched.add(field);
+    keys.push(field);
+  });
+  if (keys.length) renderLeadFormWizard();
+  return keys;
+}
+
+function clearLeadIntelligenceUploadState() {
+  state.leadIntelligencePendingPdf = null;
+  state.leadIntelligencePendingPatch = null;
+  if (els.leadIntelligencePdfInput) els.leadIntelligencePdfInput.value = "";
+  setLeadIntelligenceUploadStatus("");
+  syncLeadIntelligenceUpdateButton();
+}
+
+async function uploadLeadIntelligencePdf(leadId, file, { apply = true } = {}) {
+  const token = sessionStorage.getItem(SESSION_KEY);
+  const applyValue = apply === false ? "false" : "true";
+  const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/intelligence/upload?apply=${applyValue}`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "Content-Type": file.type || "application/pdf",
+      "x-file-name": encodeURIComponent(file.name || "lead-intelligence.pdf")
+    },
+    body: file
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.error || `Upload failed: ${response.status}`);
     error.status = response.status;
     error.details = result;
     throw error;
@@ -1195,9 +1304,15 @@ function renderLeadAiSummaryPanel(lead, options = {}) {
   } else if (summary) {
     body = [
       leadAiCard("Current Lead Status", `<p>${escapeHtml(summary.current_lead_status || "No summary available.")}</p>`, { tone: "status" }),
-      leadAiCard("Market Intelligence", `
-        <p>${escapeHtml(summary.market_intelligence || "Market intelligence unavailable.")}</p>
+      leadAiCard("Lead Intelligence Summary", `
+        <p>${escapeHtml(summary.market_intelligence || "No intelligence report uploaded yet.")}</p>
         ${summaryState.marketIntelUnavailableReason ? `<div class="lead-ai-note">${escapeHtml(summaryState.marketIntelUnavailableReason)}</div>` : ""}
+        ${state.selectedId ? `
+          <div class="lead-intel-actions" data-lead-intelligence-upload-shell="summary">
+            <button class="ghost-button" type="button" data-open-lead-intelligence-upload="true">Upload Intelligence Report (PDF)</button>
+            <input class="hidden" type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload-input="true" data-lead-id="${escapeHtml(state.selectedId)}">
+          </div>
+        ` : ""}
       `, { tone: "intel" }),
       leadAiCard("Salesman Engagement History", `<p>${escapeHtml(summary.salesman_engagement_history || "No engagement history recorded.")}</p>`, { tone: "engagement" }),
       leadAiCard("Risks / Attention Needed", summaryList(summary.risks_attention_needed, "risk"), { tone: "risk" }),
@@ -1230,7 +1345,7 @@ function renderLeadAiSummaryPanel(lead, options = {}) {
       </div>
       <div class="lead-ai-title-copy">
         <h2>${escapeHtml(lead.company_name || "Lead summary")}</h2>
-        <p>Executive snapshot of CRM history, follow-up risk, and market signals.</p>
+        <p>Executive snapshot of CRM history, follow-up risk, and uploaded intelligence.</p>
       </div>
     </header>
     <div class="lead-ai-toolbar">
@@ -1511,6 +1626,48 @@ async function downloadExport(path, fallbackName, options = {}) {
   const link = document.createElement("a");
   link.href = url;
   link.download = match?.[1] || fallbackName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function fetchAuthenticatedBlob(path, fallbackError = "Download failed") {
+  const token = sessionStorage.getItem(SESSION_KEY);
+  const response = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw new Error(result.error || `${fallbackError}: ${response.status}`);
+  }
+  return {
+    blob: await response.blob(),
+    disposition: response.headers.get("Content-Disposition") || response.headers.get("content-disposition") || ""
+  };
+}
+
+function filenameFromDisposition(disposition, fallbackName) {
+  return disposition.match(/filename="?([^"]+)"?/i)?.[1] || fallbackName;
+}
+
+async function openAuthenticatedPdf(path) {
+  const { blob } = await fetchAuthenticatedBlob(path, "PDF could not be opened");
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank", "noopener");
+  if (!opened) {
+    URL.revokeObjectURL(url);
+    throw new Error("Popup blocked. Allow popups for this site and try again.");
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+async function downloadAuthenticatedPdf(path, fallbackName) {
+  const { blob, disposition } = await fetchAuthenticatedBlob(path, "PDF could not be downloaded");
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filenameFromDisposition(disposition, fallbackName || "lead-intelligence.pdf");
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -2643,7 +2800,7 @@ function renderMobileMap() {
     return `
       <article class="pending-item">
         <strong>${escapeHtml(lead.company_name)}</strong>
-        <span>${escapeHtml([lead.stage, lead.territory, lead.last_activity].filter(Boolean).join(" - "))}</span>
+        <span>${escapeHtml([stageDisplayLabel(lead.stage), lead.territory, lead.last_activity].filter(Boolean).join(" - "))}</span>
         <div class="pending-actions">
           <a class="ghost-button" href="${escapeHtml(lead.google_maps_url || navUrl)}" target="_blank" rel="noopener">Open map</a>
           <a class="primary-button" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener">Navigate</a>
@@ -2746,11 +2903,11 @@ function renderPipelineMetrics(metrics = {}, insight = "") {
   const trend = metrics.activity_trend;
   const trendClass = trend == null ? "neutral" : trend >= 0 ? "up" : "down";
   const trendText = trend == null ? "No last-month baseline" : `${trend >= 0 ? "Up" : "Down"} ${Math.abs(trend)}%`;
-  const bars = (state.settings.stages || Object.keys(byStatus)).map(status => {
+  const bars = canonicalStageKeys([...(state.settings.stages || []), ...Object.keys(byStatus)]).map(status => {
     const count = Number(byStatus[status] || 0);
     return `
       <div class="pipeline-health-row">
-        <span>${escapeHtml(status)}</span>
+        <span>${escapeHtml(stageDisplayLabel(status))}</span>
         <i><b style="width:${Math.max(4, (count / max) * 100)}%"></b></i>
         <strong>${count}</strong>
       </div>
@@ -2806,7 +2963,7 @@ function aiFooterMarkup(action) {
     return `${base}<button class="primary-button" type="button" data-ai-copy>Copy</button><button class="ghost-button" type="button" data-ai-set-next>Set as next action</button>`;
   }
   if (action === "email" || action === "draft_email") {
-    return `${base}<button class="primary-button" type="button" data-ai-copy>Copy email</button><button class="ghost-button" type="button" data-ai-mailto>Open in mail app</button>`;
+    return `${base}<button class="primary-button" type="button" data-ai-copy>Copy email</button><button class="ghost-button" type="button" data-ai-mailto>Open in Outlook draft</button>`;
   }
   return `${base}<button class="primary-button" type="button" data-ai-copy>Copy</button><button class="ghost-button" type="button" data-ai-save-notes>Save to notes</button>`;
 }
@@ -2979,8 +3136,30 @@ async function saveAiOutputToNotes() {
 function openAiMail() {
   const lead = aiLead();
   const draft = parseEmailDraft(state.aiAction.output);
-  const url = `mailto:${encodeURIComponent(lead.email || "")}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+  const url = outlookComposeUrlForLead(
+    lead,
+    { subject: draft.subject, body: draft.body, cc: lead.salesman_email || "" }
+  );
+  if (url === "#") {
+    setToast("No email address is available for this lead.", "error");
+    return;
+  }
   window.location.href = url;
+}
+
+function outlookComposeUrlForLead(lead, draft = {}) {
+  const toAddress = String(draft.to || lead?.email || "").trim();
+  if (!toAddress) return "#";
+  const assigned = salesmanByName(lead?.assigned_salesman || "");
+  const fromAddress = String(assigned?.email || "").trim();
+  const params = new URLSearchParams({ to: toAddress });
+  const fromClause = fromAddress ? `from=${encodeURIComponent(fromAddress)}` : "";
+  if (fromClause) params.set("from", fromAddress);
+  if (String(draft.subject || "").trim()) params.set("subject", String(draft.subject || "").trim());
+  if (String(draft.body || "").trim()) params.set("body", String(draft.body || "").trim());
+  if (String(draft.cc || "").trim()) params.set("cc", String(draft.cc || "").trim());
+  if (String(draft.bcc || "").trim()) params.set("bcc", String(draft.bcc || "").trim());
+  return `https://outlook.office.com/mail/0/deeplink/compose?${params.toString()}`;
 }
 
 function openFlagAttentionModal(lead) {
@@ -3102,6 +3281,7 @@ function setLeadFormMode(mode = "create") {
   if (els.leadSubmitButton) {
     els.leadSubmitButton.textContent = mode === "edit" ? "Save Changes" : "Save Lead";
   }
+  syncLeadIntelligenceUpdateButton();
 }
 
 function activityRecordingElapsedSeconds(session = activityModalRecorder) {
@@ -3392,6 +3572,7 @@ function resetLeadFormForNewLead() {
   renderDuplicateWarning();
   setEnrichmentStatus("Type a company name to fetch Google business info.");
   renderLeadFormWizard();
+  clearLeadIntelligenceUploadState();
 }
 
 function applyLeadEnrichment(enrichment, { overwrite = false } = {}) {
@@ -4190,7 +4371,7 @@ function filteredLeads() {
       lead.stage
     ].join(" ").toLowerCase();
     const matchesQuery = !query || text.includes(query);
-    const matchesStage = state.filters.stage === "all" || lead.stage === state.filters.stage;
+    const matchesStage = state.filters.stage === "all" || normalizeStageKey(lead.stage) === state.filters.stage;
     const matchesSalesman = state.filters.salesman === "all" || lead.assigned_salesman === state.filters.salesman;
     const matchesPriority = state.filters.priority === "all" || lead.priority === state.filters.priority;
     const territoryOptions = [
@@ -5154,8 +5335,8 @@ function closeSummaryCardDetails({ restoreFocus = true } = {}) {
 }
 
 function summaryStageFilterValue(stageKey) {
-  const matchingLead = state.leads.find(lead => normalizeStageKey(lead.stage) === stageKey);
-  return matchingLead?.stage || stageDisplayLabel(stageKey);
+  const key = normalizeStageKey(stageKey, "all");
+  return CANONICAL_STAGE_SET.has(key) ? key : "all";
 }
 
 function openSummaryDetailsFullList() {
@@ -5926,6 +6107,21 @@ function salesmanName(person) {
   return typeof person === "string" ? person : person.name || person.full_name || person.email || "Unassigned";
 }
 
+function isLikelyProbeSalesman(person) {
+  const text = String(typeof person === "string" ? person : `${person.name || ""} ${person.full_name || ""} ${person.email || ""}`).toLowerCase();
+  const email = String(typeof person === "string" ? "" : person.email || "").toLowerCase();
+  const bannedPatterns = [
+    "adverserial",
+    "adversarial",
+    "browser ready",
+    "browse ready",
+    "go live api",
+    "go live"
+  ];
+  if (/\btest\.|@.+\.test$/.test(email)) return true;
+  return bannedPatterns.some(pattern => text.includes(pattern));
+}
+
 function analyticsSalesmen() {
   const people = [...(state.settings.salesmen || [])];
   const known = new Set(people.map(person => salesmanName(person).toLowerCase()));
@@ -6011,7 +6207,7 @@ function salesmanPerformanceRows() {
     const accountStatus = String(typeof person === "string" ? "active" : person.status || "active").toLowerCase();
     const assignedLeads = state.leads.filter(lead => leadMatchesSalesman(lead, person));
     const generatedLeads = state.leads.filter(lead => leadGeneratedBySalesman(lead, person));
-    const filteredStageLeads = stage === "all" ? assignedLeads : assignedLeads.filter(lead => lead.stage === stage);
+    const filteredStageLeads = stage === "all" ? assignedLeads : assignedLeads.filter(lead => normalizeStageKey(lead.stage) === stage);
     const activities = assignedLeads.flatMap(lead => Array.isArray(lead.activities) ? lead.activities : [])
       .filter(activity => !activity.delete_request);
     const followupsCompleted = activities.filter(completedFollowupActivity).length;
@@ -7737,11 +7933,12 @@ function renderDashboardView() {
     });
   });
 
-  els.dashboardStatus.innerHTML = (state.settings.stages || []).map(stage => {
-    const count = state.leads.filter(lead => lead.stage === stage).length;
+  const dashboardStageKeys = canonicalStageKeys(state.settings.stages);
+  els.dashboardStatus.innerHTML = dashboardStageKeys.map(stage => {
+    const count = state.leads.filter(lead => normalizeStageKey(lead.stage) === stage).length;
     return `
       <article class="status-card">
-        <span class="meta-label">${escapeHtml(stage)}</span>
+        <span class="meta-label">${escapeHtml(stageDisplayLabel(stage))}</span>
         <strong>${count}</strong>
       </article>
     `;
@@ -7777,12 +7974,12 @@ function renderMarketIntelPanel() {
   if (els.marketIntelTitle) els.marketIntelTitle.textContent = admin ? "Last 7 days across territories" : "Signals matched to your prospects";
   const items = (state.marketIntel.items || []).slice(0, admin ? 8 : 5);
   if (state.marketIntel.disabled) {
-    els.marketIntelFeed.innerHTML = `<p class="empty-copy">Market intelligence feed is disabled until ZAWYA_API_KEY and feed URL are configured.</p>`;
+    els.marketIntelFeed.innerHTML = `<p class="empty-copy">Live market-intelligence feeds have been retired. Upload an intelligence PDF on the lead record instead.</p>`;
     return;
   }
   els.marketIntelFeed.innerHTML = items.length
     ? items.map(intelItemMarkup).join("")
-    : `<p class="empty-copy">No market intelligence items matched yet. Weekly feeds will appear here after sources are configured.</p>`;
+    : `<p class="empty-copy">No uploaded intelligence summaries are available in this view yet.</p>`;
 }
 
 function snapshotValue(snapshot, key, fallback = "Not recorded") {
@@ -8122,7 +8319,7 @@ function pipelineLeadRowMarkup(lead) {
 
 function pipelineFilterHeaderMarkup() {
   const nextActions = state.leads.map(lead => leadActionPlanState(lead).action);
-  const stages = [...(state.settings.stages || []), ...state.leads.map(lead => lead.stage)];
+  const stages = canonicalStageKeys([...(state.settings.stages || []), ...state.leads.map(lead => lead.stage)]);
   const priorities = [...(state.settings.priorities || []), ...state.leads.map(lead => lead.priority)];
   const territories = [...(state.settings.territories || []), ...state.leads.flatMap(lead => [lead.territory, inferEmirate(lead)])];
   const salesmen = [...(state.settings.salesmen || []).map(salesmanName), ...state.leads.map(lead => lead.assigned_salesman)];
@@ -8947,6 +9144,15 @@ function renderDrawerOverview(lead) {
   const locationLine = [lead.location, lead.country_emirate, lead.address].filter(Boolean).join(" - ");
   const lastActivity = lead.last_activity ? `${daysAgoLabel(lead.last_activity)}` : "No activity yet";
   const estimatedValue = formatAED(lead.estimated_value);
+  const outlookEmailHref = outlookComposeUrlForLead(lead);
+  const secondaryOutlookEmailHref = lead.secondary_contact_email
+    ? outlookComposeUrlForLead({ ...lead, email: lead.secondary_contact_email })
+    : "#";
+  const intelPayload = state.leadDrawerIntel && !Array.isArray(state.leadDrawerIntel)
+    ? state.leadDrawerIntel
+    : { market_items: Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : [] };
+  const intelReport = intelPayload.report || (intelPayload.active_report?.status === "completed" ? intelPayload.active_report : null);
+  const intelPdfUrl = intelReport?.pdf_available && intelReport?.pdf_url ? intelReport.pdf_url : "";
   const overviewSnapshot = `
     <section class="drawer-section drawer-overview-hero drawer-overview-panel drawer-overview-panel--snapshot">
       <div class="drawer-tab-heading">
@@ -8963,7 +9169,8 @@ function renderDrawerOverview(lead) {
       </div>
       <div class="drawer-primary-actions">
         <a class="ghost-button" href="${lead.phone ? `tel:${escapeHtml(lead.phone)}` : "#"}">Call</a>
-        <a class="ghost-button" href="${lead.email ? `mailto:${escapeHtml(lead.email)}` : "#"}">Email</a>
+        <a class="ghost-button" href="${outlookEmailHref}" ${outlookEmailHref !== "#" ? 'target="_blank" rel="noopener noreferrer"' : ""}>Email</a>
+        ${intelPdfUrl ? `<button class="ghost-button" type="button" data-lead-intelligence-pdf="open" data-pdf-url="${escapeHtml(intelPdfUrl)}">View Intelligence PDF</button>` : ""}
         <button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Add New Activity</button>
         <button class="primary-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit Lead</button>
       </div>
@@ -8982,7 +9189,7 @@ function renderDrawerOverview(lead) {
       <div class="drawer-field-grid">
         ${detailField("Primary contact", primaryContact, { auto: autoField(lead, "key_personnel") })}
         ${detailField("Phone", lead.phone, lead.phone ? { href: `tel:${lead.phone}`, linkTone: "blue" } : {})}
-        ${detailField("Email", lead.email, lead.email ? { href: `mailto:${lead.email}`, linkTone: "blue" } : {})}
+        ${detailField("Email", lead.email, lead.email ? { href: outlookEmailHref, external: true, linkTone: "blue" } : {})}
         ${detailField("Website", lead.website, lead.website ? { href: lead.website, external: true } : {})}
         ${detailField("Google Maps", lead.google_maps_url ? "Open map" : "", lead.google_maps_url ? { href: lead.google_maps_url, external: true } : {})}
         ${detailField("Assigned salesman", lead.assigned_salesman)}
@@ -9030,7 +9237,7 @@ function renderDrawerOverview(lead) {
         <div class="drawer-field-grid">
           ${detailField("Secondary contact", secondaryContact)}
           ${detailField("Secondary phone", lead.secondary_contact_mobile, lead.secondary_contact_mobile ? { href: `tel:${lead.secondary_contact_mobile}` } : {})}
-          ${detailField("Secondary email", lead.secondary_contact_email, lead.secondary_contact_email ? { href: `mailto:${lead.secondary_contact_email}` } : {})}
+          ${detailField("Secondary email", lead.secondary_contact_email, lead.secondary_contact_email ? { href: secondaryOutlookEmailHref, external: true } : {})}
         </div>
         <div class="drawer-tags">${tagPills(lead.tags)}</div>
         <p class="drawer-remarks">${autoField(lead, "recent_projects") ? `<span class="auto-tag">Auto</span> ` : ""}${escapeHtml(lead.products_services_remarks || "No products/services remarks added.")}</p>
@@ -9219,28 +9426,416 @@ function renderDrawerNotes(lead) {
         <button class="primary-button" type="submit">Save Notes</button>
       </form>
       ${lead.voice_note_url ? `<audio class="activity-audio" controls src="${escapeHtml(lead.voice_note_url)}"></audio>` : ""}
-    </section>
+  </section>
   `;
 }
 
+function parseLeadIntelligenceReport(record) {
+  if (!record) return {};
+  const payload = record?.report ?? record;
+  if (typeof payload === "string") {
+    try {
+      return JSON.parse(payload) || {};
+    } catch {
+      return {};
+    }
+  }
+  if (payload?.report && typeof payload.report === "object" && !payload.executive_snapshot && !payload.company_profile) {
+    return parseLeadIntelligenceReport(payload.report);
+  }
+  return payload || {};
+}
+
+function isIntelPlaceholder(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return true;
+  if (text === "not publicly found" || text === "not found" || text === "unknown" || text === "n/a" || text === "na" || text === "-" || text === "none") return true;
+  if (/(steelstockist\.com|alrassteel\.com|04\s*886\s*0366)/i.test(text)) return true;
+  return false;
+}
+
+function intelTextFromValue(value) {
+  if (value == null) return "";
+  if (Array.isArray(value)) {
+    const values = value
+      .map(item => intelTextFromValue(item))
+      .filter(Boolean)
+      .map(item => String(item).trim())
+      .filter(Boolean);
+    return values.join(", ");
+  }
+  if (typeof value === "object") {
+    if (value.name) return String(value.name);
+    if (value.company_name) return String(value.company_name);
+    if (value.company) return String(value.company);
+    if (value.label) return String(value.label);
+    if (value.text) return String(value.text);
+    if (value.material) return String(value.material);
+    if (value.phone || value.business_phone || value.business_telephone) return String(value.phone || value.business_phone || value.business_telephone);
+    if (value.email || value.business_email || value.contact_email) return String(value.email || value.business_email || value.contact_email);
+    if (value.linkedin || value.linkedin_url || value.linkedIn || value.linkedIn_url) return String(value.linkedin || value.linkedin_url || value.linkedIn || value.linkedIn_url);
+    return "";
+  }
+  return String(value).trim();
+}
+
+function pickIntelField(...values) {
+  for (const value of values) {
+    const text = intelTextFromValue(value);
+    if (text && !isIntelPlaceholder(text)) return text;
+  }
+  return "Not publicly found";
+}
+
+function getIntelFieldFromPath(value, path = "") {
+  if (!value || typeof value !== "object" || !path) return undefined;
+  return String(path).split(".").reduce((next, key) => {
+    if (next == null) return undefined;
+    return next[key];
+  }, value);
+}
+
+function pickIntelFieldPaths(report, ...paths) {
+  const values = paths.map(value => {
+    if (typeof value !== "string") return value;
+    return getIntelFieldFromPath(report, value);
+  });
+  return pickIntelField(...values);
+}
+
 function intelligenceSummaryMarkup(report) {
-  if (!report) return "";
-  const summary = report.summary || {};
-  const confidence = summary.confidence_summary || report.confidence_summary || {};
+  const reportData = parseLeadIntelligenceReport(report);
+  if (!reportData || !Object.keys(reportData).length) return "";
+  const summary = reportData.summary || {};
+  const confidenceSummary = reportData.research_quality?.confidence_summary || reportData.summary?.confidence_summary || reportData.confidence_summary || {};
+  const identityConfidence = pickIntelField(
+    confidenceSummary.company_identity,
+    reportData.research_quality?.company_identity,
+    reportData.confidence_summary?.company_identity,
+    reportData.summary?.company_identity,
+    reportData.confidence?.company_identity
+  );
+  const fallbackScore = pickIntelField(
+    reportData.lead_score?.displayed_score,
+    reportData.summary?.lead_score,
+    reportData.executive_snapshot?.lead_score,
+    reportData.displayed_score
+  );
+  const priority = pickIntelField(
+    reportData.lead_score?.priority,
+    reportData.summary?.priority,
+    reportData.executive_snapshot?.sales_priority,
+    reportData.summary?.sales_priority,
+    reportData.executive_snapshot?.priority,
+    reportData.priority
+  );
+  const demand = pickIntelField(
+    reportData.executive_snapshot?.steel_demand,
+    reportData.structural_steel_opportunity?.steel_demand,
+    reportData.steel_demand,
+    summary.steel_demand,
+    reportData.demand,
+    reportData.demand_classification,
+    reportData.summary?.demand,
+    reportData.summary?.demand_classification
+  );
+  const buyer = pickIntelField(
+    reportData.executive_snapshot?.buyer_classification,
+    reportData.buyer_classification?.classification,
+    reportData.summary?.buyer_classification,
+    reportData.buyer_classification
+  );
   return `
     <div class="lead-intel-summary-grid" aria-label="Lead intelligence summary">
-      <span><b>Research</b><small>${escapeHtml(formatDisplayDate(summary.research_date || report.research_timestamp || report.completed_at || ""))}</small></span>
-      <span><b>Score</b><small>${escapeHtml(String(report.displayed_score || summary.lead_score || "-"))}/10</small></span>
-      <span><b>Priority</b><small>${escapeHtml(report.priority || summary.priority || "-")}</small></span>
-      <span><b>Demand</b><small>${escapeHtml(report.steel_demand || summary.steel_demand || "-")}</small></span>
-      <span><b>Buyer</b><small>${escapeHtml(report.buyer_classification || summary.buyer_classification || "-")}</small></span>
-      <span><b>Confidence</b><small>Identity ${escapeHtml(confidence.company_identity || "-")}</small></span>
+      <span><b>Research</b><small>${escapeHtml(formatDisplayDate(summary.research_date || reportData.research_timestamp || reportData.completed_at || ""))}</small></span>
+      <span><b>Score</b><small>${escapeHtml(String(fallbackScore))}/10</small></span>
+      <span><b>Priority</b><small>${escapeHtml(priority)}</small></span>
+      <span><b>Demand</b><small>${escapeHtml(demand)}</small></span>
+      <span><b>Buyer</b><small>${escapeHtml(buyer)}</small></span>
+      <span><b>Confidence</b><small>Identity ${escapeHtml(identityConfidence)}</small></span>
     </div>
   `;
 }
 
-function leadIntelligenceActionButton(action, leadId, label, tone = "primary-button", reportId = "") {
-  return `<button class="${tone}" type="button" data-lead-intelligence-action="${escapeHtml(action)}" data-lead-id="${escapeHtml(leadId)}" ${reportId ? `data-report-id="${escapeHtml(reportId)}"` : ""}>${escapeHtml(label)}</button>`;
+function intelligenceDetailsMarkup(record) {
+  const report = parseLeadIntelligenceReport(record?.report || record);
+  if (!report || !Object.keys(report).length) return "";
+  const executive = report.executive_snapshot || {};
+  const profile = report.company_profile || {};
+  const salesRecommendation = report.sales_recommendation || {};
+  const project = report.project_intelligence || {};
+  const buyer = report.buyer_classification || {};
+  const UNKNOWN = "Not publicly found";
+  const contactList = Array.isArray(report.procurement_contacts) ? report.procurement_contacts : [];
+  const namedContacts = Array.isArray(report.named_contacts) ? report.named_contacts : [];
+  const contactQuestions = Array.isArray(report.qualification_questions) ? report.qualification_questions : [];
+  const summary = report.summary || {};
+  const qualitySummary = report.research_quality?.confidence_summary || report.confidence_summary || {};
+  const contactProfile = asArray(report.procurement_contacts || report.procurement_commercial_contacts || []);
+  const namedContactPool = asArray(report.named_contacts || report.procurement_contacts || report.procurement_commercial_contacts || []);
+
+  const resolveContact = contact => {
+    if (!contact || typeof contact !== "object") return "";
+    const linkedin = pickIntelField(
+      contact.linkedin,
+      contact.linkedin_url,
+      contact.linkedIn,
+      contact.linkedIn_url,
+      contact.public_professional_source,
+      contact.contact_linkedin,
+      contact.profile_url,
+      contact.linkedin_profile
+    );
+    const role = pickIntelField(
+      contact.role,
+      contact.position,
+      contact.title,
+      contact.job_title,
+      contact.contact_title,
+      contact.designation,
+      contact.department,
+      contact.function,
+      contact.level
+    );
+    const name = pickIntelField(
+      contact.name,
+      contact.contact_name,
+      contact.contactPerson,
+      contact.contact_person,
+      contact.contact_person_name,
+      contact.full_name,
+      contact.person_name,
+      contact.primary_contact_name
+    );
+    const phone = pickIntelField(
+      contact.mobile_primary,
+      contact.business_telephone,
+      contact.telephone,
+      contact.phone,
+      contact.business_phone,
+      contact.mobile,
+      contact.contact_phone,
+      contact.mobile_number,
+      contact.phone_number
+    );
+    const email = pickIntelField(
+      contact.business_email,
+      contact.email,
+      contact.contact_email,
+      contact.contact_email_address,
+      contact.contact_email_address_text,
+      contact.email_address,
+      contact.primary_email
+    );
+    const channels = [phone, email, linkedin].filter(Boolean).join(" | ");
+    const channel = [role, channels].filter(Boolean).join(" - ");
+    const org = pickIntelField(contact.company, contact.organization, contact.business_name);
+    if (!name && !org) return "";
+    const titled = [name, org].filter(Boolean).join(" - ");
+    return `${titled}${channel ? ` (${channel})` : ""}`.trim();
+  };
+
+  const listText = (value, fallback = UNKNOWN) => {
+    if (Array.isArray(value)) {
+      const values = value.map(item => intelTextFromValue(item)).filter(Boolean).filter(v => !isIntelPlaceholder(v));
+      return values.length ? values.join(", ") : "";
+    }
+    const text = pickIntelField(value);
+    return text === UNKNOWN ? "" : text;
+  };
+
+  const namedContactFromPayload = pickIntelFieldPaths(
+    report,
+    "named_procurement_contact.name",
+    "named_procurement_contact.contact_name",
+    "named_procurement_contact.full_name",
+    "named_procurement_contact.person_name",
+    "named_procurement_contact.contact_person"
+  );
+
+  const bestVerifiedChannel = pickIntelField(
+    report.best_verified_channel,
+    report.best_verified_company_contact_channel,
+    report.best_verified_approach_channel,
+    report.contact_channel,
+    report.contact_strategy,
+    executive.best_entry_point
+  );
+  const bestEntryPoint = pickIntelField(
+    executive.best_entry_point,
+    executive.best_sales_entry_point,
+    report.best_sales_entry_point,
+    salesRecommendation.best_person_department_to_approach,
+    report.best_person,
+    report.best_sales_person
+  );
+  const structuralRelationship = pickIntelField(
+    profile.structural_steel_relationship,
+    executive.structural_steel_relationship,
+    report.structural_steel_relationship,
+    report.company_profile?.structural_steel_relationship,
+    summary.structural_steel_relationship
+  );
+  const resolvedCompany = pickIntelField(
+    profile.company,
+    executive.company,
+    report.company,
+    report.company_name,
+    report.company_profile?.legal_name,
+    profile.legal_name,
+    executive.legal_name,
+    profile.name
+  );
+  const headquarters = pickIntelField(profile.headquarters, report.headquarters, executive.headquarters, project.project_headquarters);
+  const mainActivities = pickIntelField(
+    profile.main_activities,
+    profile.services_evidenced,
+    profile.main_products_services,
+    profile.industries_served,
+    summary.main_activities,
+    executive.main_activities,
+    executive.company_main_activities,
+    project.operational_scope
+  );
+  const bestSalesAngle = pickIntelField(
+    executive.primary_sales_angle,
+    report.primary_sales_angle,
+    salesRecommendation.recommended_sales_angle,
+    salesRecommendation.commercial_angle,
+    report.suggested_sales_angle,
+    project.sales_angle,
+    salesRecommendation.sales_angle,
+    summary.primary_sales_angle
+  );
+  const recommendedAction = pickIntelField(
+    executive.recommended_first_action,
+    salesRecommendation.suggested_next_action,
+    salesRecommendation.next_milestone,
+    report.suggested_next_action,
+    report.recommended_first_action
+  );
+  const openingMessage = pickIntelField(
+    salesRecommendation.suggested_opening_message_angle,
+    report.suggested_opening_message,
+    executive.suggested_opening_message,
+    report.suggested_opening_message_text,
+    salesRecommendation.suggested_message,
+    report.opening_message,
+    summary.suggested_opening_message
+  );
+  const company = pickIntelField(
+    executive.company,
+    profile.company,
+    report.company_name,
+    report.company,
+    profile.legal_name,
+    report.legal_name,
+    executive.legal_name
+  );
+  const companyType = pickIntelField(executive.company_type, profile.company_type, report.company_type);
+  const buyerClassification = pickIntelField(
+    executive.buyer_classification,
+    buyer.classification,
+    report.buyer_classification?.classification,
+    report.buyer_classification?.type,
+    report.buyer_classification,
+    report.buyer_classification
+  );
+  const bestOpportunity = pickIntelField(
+    executive.top_opportunity,
+    report.top_opportunity,
+    salesRecommendation.top_opportunity,
+    project.top_opportunity,
+    summary.top_opportunity,
+    report.opportunity
+  );
+  const procurementAccessibility = pickIntelField(
+    executive.procurement_accessibility,
+    project.procurement_accessibility,
+    report.procurement_accessibility,
+    summary.procurement_accessibility,
+    report.best_entry_strategy
+  );
+  const demand = pickIntelField(
+    executive.steel_demand,
+    project.steel_demand,
+    report.steel_demand,
+    report.demand_classification,
+    summary.steel_demand,
+    report.demand,
+    project.demand
+  );
+  const keyLimitation = pickIntelField(
+    executive.key_limitation,
+    report.key_limitation,
+    project.key_limitations,
+    report.structural_steel_opportunity?.key_limitation,
+    report.structural_steel_opportunity?.key_limitations,
+    summary.key_limitation,
+    summary.key_limitations
+  );
+  const namedContact = pickIntelField(
+    namedContactFromPayload,
+    resolveContact(report.best_named_contact),
+    resolveContact(contactProfile[0]),
+    resolveContact(namedContactPool[0]),
+    resolveContact(contactProfile[1]),
+    resolveContact(namedContactPool[1]),
+    resolveContact(contactProfile[2]),
+    resolveContact(namedContactPool[2]),
+    report.contact_name,
+    summary.named_procurement_contact
+  );
+  const confidence = pickIntelField(
+    qualitySummary.company_identity,
+    report.research_quality?.confidence_summary?.company_identity,
+    report.confidence_summary?.company_identity,
+    report.confidence_summary?.identity,
+    report.summary?.company_identity
+  );
+  const rows = [
+    ["Company", resolvedCompany],
+    ["Company type", companyType],
+    ["Demand", demand],
+    ["Best sales entry point", bestEntryPoint],
+    ["Top opportunity", bestOpportunity],
+    ["Procurement accessibility", procurementAccessibility],
+    ["Primary sales angle", bestSalesAngle],
+    ["Buyer classification", buyerClassification],
+    ["Key limitation", keyLimitation],
+    ["Recommended first action", recommendedAction],
+    ["Headquarters", pickIntelField(profile.headquarters, report.address, profile.address, executive.headquarters, project.project_headquarters)],
+    ["Main activities", listText(profile.main_activities) || listText(mainActivities)],
+    ["Best verified channel", bestVerifiedChannel],
+    ["Named procurement contact", namedContact],
+    ["Suggested opening message", openingMessage],
+    ["Website", pickIntelField(profile.website, profile.contact_page, report.website, report.website_url, profile.website_url, report.web, report.company_website)],
+    ["Telephone", listText([profile.telephone, profile.phone, report.phone, report.telephone, report.contact_phone, report.primary_phone, report.mobile, report.mobile_number], ", ")],
+    ["General email", listText([profile.general_email, profile.email, report.email, report.general_email, report.contact_email])],
+    ["Structural steel relationship", structuralRelationship],
+    ["Confidence", confidence],
+    ["Procurement channel confidence", pickIntelField(
+      qualitySummary.procurement_contacts,
+      qualitySummary.project_intelligence,
+      qualitySummary.steel_opportunity_assessment,
+      report.research_quality?.confidence_summary?.procurement_contacts,
+      report.research_quality?.confidence_summary?.project_intelligence,
+      report.research_quality?.confidence_summary?.steel_opportunity_assessment
+    )]
+  ];
+  return `
+    <div class="lead-intel-detail-grid" aria-label="Lead intelligence executive fields">
+      ${rows.map(([label, value]) => `
+        <span><b>${escapeHtml(label)}</b><small>${escapeHtml(value || UNKNOWN)}</small></span>
+      `).join("")}
+    </div>
+    ${contactQuestions.length ? `
+      <div class="lead-intel-question-list">
+        <b>Qualification questions</b>
+        <ul>${contactQuestions.slice(0, 6).map(question => `<li>${escapeHtml(question)}</li>`).join("")}</ul>
+      </div>
+    ` : ""}
+  `;
 }
 
 function renderDrawerIntel(lead) {
@@ -9252,9 +9847,10 @@ function renderDrawerIntel(lead) {
   const hasPdf = report && report.pdf_available && report.pdf_url;
   const processing = active && ["queued", "researching", "generating_pdf"].includes(String(active.status));
   const statusLabel = active ? String(active.status || "queued").replace(/_/g, " ") : "";
-  const failedVisible = failed && !processing;
+  const failedVisible = !report && failed && !processing;
+  const pdfFilename = `${String(lead.company_name || "lead").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "lead"}-intelligence.pdf`;
   return `
-    <section class="drawer-section lead-intel-section">
+    <section class="drawer-section lead-intel-section" data-lead-intelligence-upload-shell="drawer">
       <div class="drawer-tab-heading">
         <h3>UAE Structural Steel Lead Intelligence</h3>
         ${processing ? `<span class="status-pill">${escapeHtml(statusLabel)}</span>` : ""}
@@ -9262,45 +9858,133 @@ function renderDrawerIntel(lead) {
       ${!report && !processing && !failedVisible ? `
         <div class="lead-intel-empty">
           <strong>No intelligence report yet.</strong>
-          <span>Generate a source-backed UAE structural steel assessment and PDF for this company.</span>
-          <div class="lead-intel-actions">${leadIntelligenceActionButton("generate", lead.id, "Generate Intelligence", "primary-button")}</div>
+          <span>No intelligence report uploaded yet.</span>
+          <div class="lead-intel-actions">
+            <button class="ghost-button" type="button" data-open-lead-intelligence-upload="true">Upload Intelligence Report (PDF)</button>
+          </div>
         </div>
       ` : ""}
       ${processing ? `
         <div class="lead-intel-processing" role="status" aria-live="polite">
           <strong>Intelligence report is ${escapeHtml(statusLabel)}.</strong>
           <span>Started: ${escapeHtml(formatDisplayDate(active.started_at || active.created_at || ""))}</span>
-          ${report ? `<span>The last completed PDF remains available below while refresh is running.</span>` : `<span>Use the admin processor or scheduled job to complete queued research.</span>`}
+          <span>Legacy queue processing is handled outside the Lead Intelligence upload workflow.</span>
         </div>
       ` : ""}
       ${failedVisible ? `
         <div class="lead-intel-failed" role="alert">
           <strong>Latest intelligence job failed.</strong>
           <span>${escapeHtml(failed.error_message || "The report could not be generated.")}</span>
-          <div class="lead-intel-actions">${leadIntelligenceActionButton("retry", lead.id, "Retry", "primary-button", failed.id)}</div>
         </div>
       ` : ""}
       ${report ? `
         ${intelligenceSummaryMarkup(report)}
+        ${intelligenceDetailsMarkup(report)}
+        <div class="lead-intel-actions">
+          <button class="ghost-button" type="button" data-open-lead-intelligence-upload="true">Upload Intelligence Report (PDF)</button>
+          ${hasPdf ? `
+            <button class="ghost-button" type="button" data-lead-intelligence-pdf="download" data-pdf-url="${escapeHtml(report.download_url)}" data-pdf-filename="${escapeHtml(pdfFilename)}">Download PDF</button>
+            <button class="ghost-button" type="button" data-lead-intelligence-pdf="open" data-pdf-url="${escapeHtml(report.pdf_url)}">Open in new tab</button>
+          ` : ""}
+        </div>
         ${hasPdf ? `
-          <div class="lead-intel-actions">
-            <a class="ghost-button" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">Download PDF</a>
-            <a class="ghost-button" href="${escapeHtml(report.pdf_url)}" target="_blank" rel="noopener">Open in new tab</a>
-            ${leadIntelligenceActionButton("refresh", lead.id, "Refresh Intelligence", "primary-button")}
+          <div class="lead-intel-pdf-shell">
+            <p class="empty-copy" data-lead-intelligence-pdf-status>Loading PDF preview...</p>
+            <iframe class="lead-intel-pdf hidden" data-lead-intelligence-pdf-preview="${escapeHtml(report.pdf_url)}" title="Embedded lead intelligence PDF"></iframe>
           </div>
-          <object class="lead-intel-pdf" data="${escapeHtml(report.pdf_url)}" type="application/pdf" aria-label="Embedded lead intelligence PDF">
-            <p class="empty-copy">This browser cannot embed PDFs. <a href="${escapeHtml(report.pdf_url)}" target="_blank" rel="noopener">Open the intelligence PDF in a new tab</a>.</p>
-          </object>
         ` : `<p class="empty-copy">PDF is not available for this report yet.</p>`}
       ` : ""}
-      <details class="lead-intel-market-feed">
-        <summary>Matched market feed items</summary>
-        <div class="drawer-list intel-list">
-          ${marketItems.length ? marketItems.map(intelItemMarkup).join("") : `<div class="timeline-empty"><strong>No matched feed items.</strong><span>Weekly feeds will appear here when sources are configured.</span></div>`}
-        </div>
-      </details>
+      <input class="hidden" type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload-input="true" data-lead-id="${escapeHtml(lead.id)}">
+      ${report ? `<p class="empty-copy">Uploading a newer PDF replaces the current intelligence report for this lead.</p>` : ""}
     </section>
   `;
+}
+
+function hydrateLeadIntelligencePdfPreviews(root = document) {
+  root.querySelectorAll("[data-lead-intelligence-pdf-preview]").forEach(async preview => {
+    const path = preview.dataset.leadIntelligencePdfPreview;
+    if (!path || preview.dataset.pdfPreviewLoaded === path) return;
+    preview.dataset.pdfPreviewLoaded = path;
+    const shell = preview.closest(".lead-intel-pdf-shell");
+    const status = shell?.querySelector("[data-lead-intelligence-pdf-status]");
+    try {
+      const { blob } = await fetchAuthenticatedBlob(path, "PDF preview could not be loaded");
+      const previousUrl = preview.dataset.objectUrl;
+      const objectUrl = URL.createObjectURL(blob);
+      preview.src = objectUrl;
+      preview.dataset.objectUrl = objectUrl;
+      preview.classList.remove("hidden");
+      if (status) status.classList.add("hidden");
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+    } catch {
+      preview.removeAttribute("data-pdf-preview-loaded");
+      if (status) status.textContent = "PDF preview could not be loaded. Use Open in new tab to view the intelligence PDF.";
+    }
+  });
+}
+
+function bindLeadIntelligencePdfButtons(root = document) {
+  root.querySelectorAll("[data-lead-intelligence-pdf]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const path = button.dataset.pdfUrl;
+      if (!path) return;
+      try {
+        button.disabled = true;
+        if (button.dataset.leadIntelligencePdf === "download") {
+          await downloadAuthenticatedPdf(path, button.dataset.pdfFilename || "lead-intelligence.pdf");
+        } else {
+          await openAuthenticatedPdf(path);
+        }
+      } catch (error) {
+        setToast(error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+  root.querySelectorAll("[data-open-lead-intelligence-upload]").forEach(button => {
+    button.addEventListener("click", () => {
+      const shell = button.closest("[data-lead-intelligence-upload-shell]");
+      const input = shell?.querySelector("[data-lead-intelligence-upload-input]") || root.querySelector("[data-lead-intelligence-upload-input]");
+      if (input) input.click();
+    });
+  });
+  root.querySelectorAll("[data-lead-intelligence-upload-input]").forEach(input => {
+    input.addEventListener("change", async event => {
+      const file = normalizeLeadIntelligencePdfUpload(event.currentTarget.files?.[0] || null);
+      const leadId = event.currentTarget.dataset.leadId || state.selectedId || "";
+      if (!leadId) {
+        setToast("Open a lead before uploading intelligence.", "error");
+        event.currentTarget.value = "";
+        return;
+      }
+      if (!file) {
+        setToast("Select a PDF report to upload.", "error");
+        event.currentTarget.value = "";
+        return;
+      }
+      try {
+        setToast("Uploading intelligence PDF...", "");
+        const uploaded = await uploadLeadIntelligencePdf(leadId, file, { apply: true });
+        const updatedLead = uploaded?.lead || null;
+        if (updatedLead) {
+          const lead = state.leads.find(item => item.id === updatedLead.id);
+          if (lead) Object.assign(lead, updatedLead);
+        }
+        if (state.selectedId === leadId) {
+          state.leadDrawerIntel = uploaded?.state || state.leadDrawerIntel;
+          state.leadDrawerTab = "intel";
+          await loadLeadAiSummary(leadId, { force: true });
+          render();
+        }
+        setToast("Intelligence report uploaded and parsed.", "success");
+      } catch (error) {
+        setToast(error.message || "Could not upload intelligence report.", "error");
+      } finally {
+        event.currentTarget.value = "";
+      }
+    });
+  });
 }
 
 function renderLeadDrawer() {
@@ -9362,7 +10046,7 @@ function renderLeadDrawer() {
         </div>
       </div>
       <div class="drawer-badges">
-        ${admin ? `<select class="drawer-stage-select ${drawerStageClass(lead.stage)}" id="drawerStageSelect">${(state.settings.stages || []).map(stage => `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(drawerStageLabel(stage))}</option>`).join("")}</select>` : `<span class="drawer-stage-pill ${drawerStageClass(lead.stage)}">${escapeHtml(drawerStageLabel(lead.stage))}</span>`}
+        ${admin ? `<select class="drawer-stage-select ${drawerStageClass(lead.stage)}" id="drawerStageSelect">${canonicalStageKeys(state.settings.stages).map(stage => `<option value="${escapeHtml(stage)}" ${stage === normalizeStageKey(lead.stage, "NEW") ? "selected" : ""}>${escapeHtml(drawerStageLabel(stage))}</option>`).join("")}</select>` : `<span class="drawer-stage-pill ${drawerStageClass(lead.stage)}">${escapeHtml(drawerStageLabel(lead.stage))}</span>`}
         <span class="chip ${priorityClass(lead.priority)}">${escapeHtml(lead.priority || "Cold")}</span>
         <span class="chip">${escapeHtml(formatAED(lead.estimated_value))}</span>
       </div>
@@ -9404,7 +10088,7 @@ function bindLeadDrawerEvents() {
     const stage = event.target.value;
     const lead = state.leads.find(item => item.id === leadId);
     if (!lead) return;
-    const previous = lead.stage;
+    const previous = normalizeStageKey(lead.stage, "NEW");
     try {
       const result = await saveStageWithLostPrompt(lead, stage);
       if (result.cancelled) {
@@ -9492,25 +10176,9 @@ function bindLeadDrawerEvents() {
       }
     });
   });
-  document.querySelectorAll("[data-lead-intelligence-action]").forEach(button => {
-    button.addEventListener("click", async () => {
-      const leadId = button.dataset.leadId;
-      const action = button.dataset.leadIntelligenceAction;
-      try {
-        button.disabled = true;
-        setToast(action === "refresh" ? "Refreshing intelligence..." : action === "retry" ? "Retrying intelligence..." : "Generating intelligence...", "");
-        const body = action === "retry" ? JSON.stringify({ report_id: button.dataset.reportId || "" }) : undefined;
-        state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(leadId)}/intelligence/${encodeURIComponent(action)}`, { method: "POST", body });
-        state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(leadId)}/intel`);
-        setToast("Intelligence job queued.", "success");
-        renderLeadDrawer();
-      } catch (error) {
-        setToast(error.message, "error");
-      } finally {
-        button.disabled = false;
-      }
-    });
-  });  document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
+  bindLeadIntelligencePdfButtons();
+  hydrateLeadIntelligencePdfPreviews();
+  document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
     document.querySelector(".drawer-notes-view")?.classList.add("hidden");
     document.querySelector("#drawerNotesForm")?.classList.remove("hidden");
   });
@@ -9892,13 +10560,14 @@ function openLeadEdit(leadId) {
   const lead = state.leads.find(item => item.id === leadId);
   if (!lead) return;
   state.editingLeadId = leadId;
-  state.editingOriginalStage = lead.stage || "";
+  state.editingOriginalStage = normalizeStageKey(lead.stage, "NEW");
   state.editingLostData = null;
   setLeadFormMode("edit");
   resetLeadWizardState();
   leadFormTouched.clear();
   resetLeadEnrichmentSession();
   els.leadForm.reset();
+  clearLeadIntelligenceUploadState();
   Object.entries(lead).forEach(([key, value]) => {
     if (key === "product_interest") return;
     const field = els.leadForm.elements[key];
@@ -10068,9 +10737,11 @@ async function moveKanbanLead(leadId, stage) {
 
 function salesmenDirectoryPeople() {
   const accounts = (state.userAccounts || [])
-    .filter(person => String(person.role || "salesman").toLowerCase() === "salesman");
+    .filter(person => String(person.role || "salesman").toLowerCase() === "salesman")
+    .filter(person => !isLikelyProbeSalesman(person));
   const analytics = analyticsSalesmen().filter(person => salesmanName(person) !== "Unassigned");
-  const analyticsByName = new Map(analytics.map(person => [salesmanName(person).toLowerCase(), person]));
+  const filteredAnalytics = analytics.filter(person => !isLikelyProbeSalesman(person));
+  const analyticsByName = new Map(filteredAnalytics.map(person => [salesmanName(person).toLowerCase(), person]));
   const source = accounts.length ? accounts : analytics;
   const seen = new Set();
   return source.map(person => {
@@ -10116,7 +10787,7 @@ function salesmenDirectoryRows() {
     const accountStatus = String(typeof person === "string" ? "active" : person.status || "active").toLowerCase();
     const stageLeadCount = state.performanceStage === "all"
       ? ownedLeads.length
-      : ownedLeads.filter(lead => String(lead.stage || "").toLowerCase() === String(state.performanceStage || "").toLowerCase()).length;
+      : ownedLeads.filter(lead => normalizeStageKey(lead.stage) === String(state.performanceStage || "").toUpperCase()).length;
     let statusKey = "active";
     let statusLabel = "Active";
     if (["inactive", "disabled"].includes(accountStatus)) {
@@ -10367,7 +11038,7 @@ function renderSalesmenMetrics(rows) {
   const activeRows = rows.filter(row => !["inactive", "on-leave"].includes(row.statusKey));
   const activeTerritories = new Set(activeRows.map(row => row.territory).filter(Boolean));
   const totalTerritories = new Set([...(state.settings.territories || []), ...rows.map(row => row.territory).filter(Boolean)]).size;
-  if (els.salesmenMetricTotal) els.salesmenMetricTotal.textContent = rows.length;
+  if (els.salesmenMetricTotal) els.salesmenMetricTotal.textContent = activeRows.length;
   if (els.salesmenMetricTerritories) els.salesmenMetricTerritories.textContent = activeTerritories.size;
   if (els.salesmenMetricTerritoriesMeta) els.salesmenMetricTerritoriesMeta.textContent = `of ${totalTerritories} total`;
   if (els.salesmenMetricOverdue) els.salesmenMetricOverdue.textContent = rows.reduce((sum, row) => sum + row.overdueFollowups, 0);
@@ -10985,7 +11656,7 @@ function inferEmirate(lead) {
 function portfolioFilteredLeads() {
   const filters = state.portfolioFilters;
   return state.leads.filter(lead => {
-    const matchesStage = filters.stage === "all" || lead.stage === filters.stage;
+    const matchesStage = filters.stage === "all" || normalizeStageKey(lead.stage) === filters.stage;
     const country = inferCountry(lead);
     const emirate = inferEmirate(lead);
     const matchesCountry = filters.country === "all" || country === filters.country;
@@ -12929,8 +13600,9 @@ function renderDetail() {
     return;
   }
 
-  const stageOptions = state.settings.stages.map(stage =>
-    `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(stage)}</option>`
+  const leadStageKey = normalizeStageKey(lead.stage, "NEW");
+  const stageOptions = canonicalStageKeys(state.settings.stages).map(stage =>
+    `<option value="${escapeHtml(stage)}" ${stage === leadStageKey ? "selected" : ""}>${escapeHtml(drawerStageLabel(stage))}</option>`
   ).join("");
   const activities = (lead.activities || []).map((activity, index) => activityItemMarkup(activity, lead.id, index)).join("");
   const reminders = remindersForLead(lead);
@@ -13040,7 +13712,7 @@ function renderDetail() {
     const stage = document.querySelector("#detailStage").value;
     const result = await saveStageWithLostPrompt(lead, stage);
     if (result.cancelled) {
-      document.querySelector("#detailStage").value = lead.stage;
+      document.querySelector("#detailStage").value = leadStageKey;
       return;
     }
     await loadLeads();
@@ -13525,15 +14197,16 @@ function startOverdueRefresh() {
 async function loadWorkspace() {
   await loadIntegrationStatus();
   state.settings = await api("/api/settings");
+  const canonicalStages = canonicalStageKeys(state.settings.stages);
   await fetchSalesmanAccounts();
   const marketNewsPromise = !isSalesmanRole()
     ? Promise.resolve()
     : fetchMarketNews();
-  fillSelect(els.performanceStageFilter, state.settings.stages, "All Stages");
+  fillSelect(els.performanceStageFilter, canonicalStages, "All Stages");
   els.performanceStageFilter.value = state.performanceStage;
   fillSelect(els.marketSnapshotSalesmanFilter, state.settings.salesmen || [], "All salesmen");
   if (els.marketSnapshotSalesmanFilter) els.marketSnapshotSalesmanFilter.value = state.marketSnapshotSalesman || "all";
-  fillSelect(els.portfolioStageFilter, state.settings.stages, "All Stages");
+  fillSelect(els.portfolioStageFilter, canonicalStages, "All Stages");
   els.portfolioReportView.value = state.portfolioFilters.reportView;
   els.portfolioStageFilter.value = state.portfolioFilters.stage;
   els.portfolioCountryFilter.value = state.portfolioFilters.country;
@@ -13542,7 +14215,7 @@ async function loadWorkspace() {
   if (!isAdminOrManager()) {
     els.formSalesman.value = state.currentUser.name;
   }
-  fillSelect(els.formStage, state.settings.stages);
+  fillSelect(els.formStage, canonicalStages);
   fillSelect(els.formPriority, state.settings.priorities);
   fillSelect(els.formSector, state.settings.sectors || []);
   fillSelect(els.formTier, state.settings.tiers || []);
@@ -13576,6 +14249,7 @@ async function init() {
     await loadWorkspace();
   } catch {
     sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_CSRF_KEY);
     showLogin("Please sign in to continue.");
   }
 }
@@ -13985,6 +14659,9 @@ document.addEventListener("click", async event => {
 });
 
 function openNewLeadForm() {
+  state.editingLeadId = "";
+  state.editingOriginalStage = "";
+  state.editingLostData = null;
   resetLeadFormForNewLead();
   els.leadDialog.showModal();
 }
@@ -13996,6 +14673,7 @@ document.querySelector("#closeLeadForm").addEventListener("click", () => {
   state.editingOriginalStage = "";
   state.editingLostData = null;
   resetLeadEnrichmentSession();
+  clearLeadIntelligenceUploadState();
   els.leadDialog.close();
 });
 els.leadStepper?.addEventListener("click", event => {
@@ -14038,7 +14716,7 @@ els.formStage?.addEventListener("change", async event => {
   if (isLostStageValue(state.editingOriginalStage)) return;
   const result = await promptLostReason(lead);
   if (!result) {
-    event.target.value = state.editingOriginalStage || lead.stage || event.target.value;
+    event.target.value = normalizeStageKey(state.editingOriginalStage, normalizeStageKey(lead.stage, "NEW")) || event.target.value;
     state.editingLostData = null;
     return;
   }
@@ -14159,6 +14837,11 @@ els.loginForm.addEventListener("submit", async event => {
     });
     sessionStorage.removeItem(OVERDUE_BANNER_KEY);
     sessionStorage.setItem(SESSION_KEY, result.token);
+    if (result.csrf_token) {
+      sessionStorage.setItem(SESSION_CSRF_KEY, result.csrf_token);
+    } else {
+      sessionStorage.removeItem(SESSION_CSRF_KEY);
+    }
     els.loginForm.reset();
     showApp(result.user);
     await loadWorkspace();
@@ -14210,6 +14893,7 @@ els.logoutButton.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
   } finally {
     sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_CSRF_KEY);
     showLogin();
   }
 });
@@ -14687,36 +15371,105 @@ document.querySelector("#recordLeadVoice").addEventListener("click", () => {
   });
 });
 
+els.leadIntelligencePdfInput?.addEventListener("change", event => {
+  const file = normalizeLeadIntelligencePdfUpload(event.currentTarget?.files?.[0]);
+  if (event.currentTarget?.files?.[0] && !file) {
+    setLeadIntelligenceUploadStatus("Only PDF files can be used for intelligence update.");
+    state.leadIntelligencePendingPdf = null;
+    state.leadIntelligencePendingPatch = null;
+  } else {
+    state.leadIntelligencePendingPdf = file;
+    state.leadIntelligencePendingPatch = null;
+    setLeadIntelligenceUploadStatus(
+      file
+        ? "PDF selected. Click Update Lead to review AI field updates."
+        : "Lead Intelligence PDF cleared."
+    );
+  }
+  syncLeadIntelligenceUpdateButton();
+});
+
+els.leadIntelligenceUpdateButton?.addEventListener("click", async () => {
+  if (!state.editingLeadId) {
+    setLeadIntelligenceUploadStatus("Save the lead first, then click Update Lead.");
+    return;
+  }
+  const file = normalizeLeadIntelligencePdfUpload(state.leadIntelligencePendingPdf || null);
+  if (!file) {
+    setLeadIntelligenceUploadStatus("Select a Lead Intelligence PDF before updating.");
+    return;
+  }
+  const button = els.leadIntelligenceUpdateButton;
+  const previousText = button?.textContent || "Update Lead";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Updating...";
+  }
+  setLeadIntelligenceUploadStatus("Running AI review of selected PDF...");
+  try {
+    const uploaded = await uploadLeadIntelligencePdf(state.editingLeadId, file, { apply: false });
+    const summary = uploaded?.leadIntelligenceUpload || {};
+    const proposed = normalizeLeadIntelligencePatch(summary.proposed_fields || summary.applied_fields || {});
+    const applied = Object.keys(proposed).length;
+    state.leadIntelligencePendingPatch = proposed;
+    if (uploaded.state) state.leadDrawerIntel = uploaded.state;
+    if (!applied) {
+      setLeadIntelligenceUploadStatus("No new Lead Intelligence fields were recognized.");
+      return;
+    }
+    const changedFields = applyLeadIntelligencePatchToForm(proposed);
+    setLeadIntelligenceUploadStatus(`${changedFields.length || applied} field(s) updated from PDF. Save to keep them.`);
+  } catch (error) {
+    state.leadIntelligencePendingPatch = null;
+    setLeadIntelligenceUploadStatus(`Could not update from PDF: ${error.message}`);
+  } finally {
+    if (button) {
+      button.textContent = previousText;
+      button.disabled = false;
+    }
+    syncLeadIntelligenceUpdateButton();
+  }
+});
+
 els.leadForm.addEventListener("submit", async event => {
   event.preventDefault();
+  const submitButton = event.currentTarget?.querySelector('button[type="submit"]') || null;
+  if (submitButton) submitButton.disabled = true;
+  const wasEditing = Boolean(state.editingLeadId);
+  let lead = null;
   const formData = new FormData(els.leadForm);
+  const rawLeadIntelligencePdf = formData.get("lead_intelligence_pdf");
+  const intelligencePdf = normalizeLeadIntelligencePdfUpload(rawLeadIntelligencePdf);
+  if (rawLeadIntelligencePdf instanceof File && rawLeadIntelligencePdf.size > 0 && !intelligencePdf) {
+    throw new Error("Only PDF files can be used for intelligence import.");
+  }
   const payload = Object.fromEntries(formData.entries());
+  delete payload.lead_intelligence_pdf;
   payload.product_interest = formData.getAll("product_interest").map(value => String(value || "").trim()).filter(Boolean).join(", ");
   payload.estimated_value = Number(payload.estimated_value || 0);
   if (!isAdminOrManager() && state.currentUser) {
     payload.assigned_salesman = state.currentUser.name || state.currentUser.email || payload.assigned_salesman;
     payload.territory = state.currentUser.territory || payload.territory;
   }
-  let lead;
-  if (state.editingLeadId) {
-    try {
+  try {
+    if (wasEditing) {
       const existing = state.leads.find(item => item.id === state.editingLeadId);
-      if (existing && isLostStageValue(payload.stage) && !isLostStageValue(state.editingOriginalStage)) {
+      if (!existing) {
+        throw new Error("Lead not found for update.");
+      }
+      if (isLostStageValue(payload.stage) && !isLostStageValue(state.editingOriginalStage)) {
         if (!state.editingLostData) {
           state.editingLostData = await promptLostReason(existing);
         }
         if (!state.editingLostData) {
           payload.stage = state.editingOriginalStage || existing.stage;
           els.leadForm.elements.stage.value = payload.stage;
+          setToast("Lead update was not completed.", "error");
           return;
         }
         Object.assign(payload, state.editingLostData);
       }
-      if (
-        existing
-        && isAdminOrManager()
-        && String(payload.assigned_salesman || "").trim() !== String(existing.assigned_salesman || "").trim()
-      ) {
+      if (isAdminOrManager() && String(payload.assigned_salesman || "").trim() !== String(existing.assigned_salesman || "").trim()) {
         const note = await promptHandoff(existing, payload.assigned_salesman);
         if (!note) {
           els.leadForm.elements.assigned_salesman.value = existing.assigned_salesman || els.leadForm.elements.assigned_salesman.value;
@@ -14725,41 +15478,58 @@ els.leadForm.addEventListener("submit", async event => {
         payload.handoff_note = note;
       }
       lead = await api(`/api/leads/${encodeURIComponent(state.editingLeadId)}`, { method: "PATCH", body: JSON.stringify(payload) });
-      state.selectedId = lead.id;
+    } else {
+      try {
+        lead = await api("/api/leads", { method: "POST", body: JSON.stringify(payload) });
+      } catch (error) {
+        if (error.status === 409 && error.details?.duplicate) {
+          const duplicate = error.details.duplicate;
+          const isFromAnotherSalesman = duplicate.owner_type === "other_salesman";
+          const ownerName = duplicate.owner_name || duplicate.assigned_salesman || "another account";
+          const proceed = window.confirm(
+            `Possible duplicate found: ${duplicate.company_name}. It appears to be linked to ${ownerName}.${isFromAnotherSalesman ? " It is linked to another salesman. " : " "}Do you still want to create a separate lead?`
+          );
+          if (!proceed) return;
+          lead = await api("/api/leads", { method: "POST", body: JSON.stringify({ ...payload, allow_duplicate: true }) });
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    state.selectedId = lead.id;
+    const hadIntelligencePatch = Boolean(state.leadIntelligencePendingPatch && Object.keys(state.leadIntelligencePendingPatch).length);
+    const savedLeadId = String(lead?.id || state.editingLeadId || "").trim();
+    const detailRoute = savedLeadId ? leadRouteUrl(savedLeadId, "overview") : "";
+    if (wasEditing) {
       state.editingLeadId = "";
       state.editingOriginalStage = "";
       state.editingLostData = null;
-      els.leadDialog.close();
-      await loadLeads();
-      openLeadDrawer(lead.id, "overview");
-      setToast("Lead updated.", "success");
-    } catch (error) {
-      setEnrichmentStatus(error.message, "error");
-    }
-    return;
-  }
-  try {
-    lead = await api("/api/leads", { method: "POST", body: JSON.stringify(payload) });
-  } catch (error) {
-    if (error.status === 409 && error.details?.duplicate) {
-      const duplicate = error.details.duplicate;
-      const isFromAnotherSalesman = duplicate.owner_type === "other_salesman";
-      const ownerName = duplicate.owner_name || duplicate.assigned_salesman || "another account";
-      const proceed = window.confirm(
-        `Possible duplicate found: ${duplicate.company_name}. It appears to be linked to ${ownerName}.${isFromAnotherSalesman ? " It is linked to another salesman. " : " "}Do you still want to create a separate lead?`
-      );
-      if (!proceed) return;
-      lead = await api("/api/leads", { method: "POST", body: JSON.stringify({ ...payload, allow_duplicate: true }) });
     } else {
-      setEnrichmentStatus(error.message, "error");
-      return;
+      resetLeadFormForNewLead();
     }
+    els.leadDialog.close();
+    await loadLeads();
+    if (savedLeadId) {
+      openLeadDrawer(savedLeadId, "overview", { replaceHistory: true });
+      if (detailRoute && `${window.location.pathname}${window.location.search}` !== detailRoute) {
+        window.location.replace(detailRoute);
+        return;
+      }
+    }
+    clearLeadIntelligenceUploadState();
+    if (intelligencePdf && !hadIntelligencePatch) {
+      setToast(wasEditing ? "Lead saved. Run Update Lead to apply AI fields before saving." : "Lead created.", "success");
+    } else if (hadIntelligencePatch) {
+      setToast(wasEditing ? "Lead and AI-updated fields saved." : "Lead created with AI-updated fields.", "success");
+    } else {
+      setToast(wasEditing ? "Lead updated." : "Lead created.", "success");
+    }
+  } catch (error) {
+    setEnrichmentStatus(error.message, "error");
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
-  state.selectedId = lead.id;
-  resetLeadFormForNewLead();
-  els.leadDialog.close();
-  await loadLeads();
-  openLeadDrawer(lead.id, "overview");
 });
 
 function pmrPayloadFromForm() {

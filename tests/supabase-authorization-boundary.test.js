@@ -10,6 +10,7 @@ process.env.SUPABASE_STORAGE_BUCKET = "pmr-voice-notes";
 
 const {
   createStorageSignedUrl,
+  downloadStorageObjectFromBucketAsService,
   rest,
   serviceRest,
   uploadStorageObject
@@ -21,6 +22,17 @@ function jsonResponse(body = []) {
     status: 200,
     async json() {
       return body;
+    }
+  };
+}
+
+function binaryResponse(body = "file-bytes") {
+  const bytes = new TextEncoder().encode(body);
+  return {
+    ok: true,
+    status: 200,
+    async arrayBuffer() {
+      return bytes.buffer;
     }
   };
 }
@@ -115,6 +127,26 @@ test("Storage upload and signing use the user's JWT, not service role", async t 
     assert.equal(call.options.headers.apikey, "anon-key");
     assert.equal(call.options.headers.Authorization, "Bearer salesman.jwt.token");
   });
+});
+
+test("lead intelligence server storage download uses service role and does not redirect browsers", async t => {
+  const calls = [];
+  t.mock.method(global, "fetch", async (url, options) => {
+    calls.push({ url, options });
+    return binaryResponse("%PDF-test");
+  });
+
+  const body = await downloadStorageObjectFromBucketAsService("lead-intelligence-reports", "lead-1/report.pdf");
+
+  assert.equal(body.slice(0, 4).toString(), "%PDF");
+  assert.equal(calls.length, 1);
+  assert.match(String(calls[0].url), /\/storage\/v1\/object\/lead-intelligence-reports\/lead-1\/report\.pdf$/);
+  assert.equal(calls[0].options.headers.apikey, "service.role.signature");
+  assert.equal(calls[0].options.headers.Authorization, "Bearer service.role.signature");
+
+  const serverSource = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+  assert.match(serverSource, /downloadStorageObjectFromBucketAsService\(LEAD_INTELLIGENCE_BUCKET,\s*report\.pdf_storage_key\)/);
+  assert.doesNotMatch(serverSource, /leadIntelligencePdfMatch[\s\S]{0,900}writeHead\(302/);
 });
 
 test("server defaults CRM data access to the authenticated token", () => {

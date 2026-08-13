@@ -68,6 +68,43 @@ function normalizeSources(value, bundle) {
     .filter(item => item.label);
 }
 
+function pickText(...values) {
+  for (const value of values) {
+    const text = safeText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeReportObject(record) {
+  if (!record || typeof record !== "object") return {};
+  if (record.report && typeof record.report === "object") return record.report;
+  if (record.report_json && typeof record.report_json === "object") return record.report_json;
+  return record;
+}
+
+function uploadedIntelligenceSnapshot(bundle) {
+  const record = bundle.intelligenceReport || null;
+  const report = normalizeReportObject(record);
+  if (!record || !Object.keys(report).length) return null;
+  const executive = report.executive_snapshot || {};
+  const profile = report.company_profile || {};
+  const sales = report.sales_recommendation || {};
+  const leadScore = report.lead_score || {};
+  const researchQuality = report.research_quality || {};
+  return {
+    uploaded_at: pickText(record.research_timestamp, record.completed_at, record.created_at),
+    lead_score: pickText(executive.lead_score, leadScore.displayed_score, record.displayed_score),
+    buyer_classification: pickText(executive.buyer_classification, report.buyer_classification?.classification, record.buyer_classification),
+    steel_demand: pickText(executive.steel_demand, report.steel_demand, record.steel_demand, record.demand_classification),
+    bottom_line: pickText(executive.bottom_line, report.summary?.bottom_line),
+    company: pickText(executive.company, profile.company, report.company_name, report.company),
+    top_opportunity: pickText(executive.top_opportunity, report.top_opportunity, sales.top_opportunity),
+    recommended_first_action: pickText(executive.recommended_first_action, sales.suggested_next_action, report.recommended_first_action),
+    confidence: pickText(researchQuality.overall_confidence, researchQuality.confidence_summary?.company_identity)
+  };
+}
+
 function buildLeadSummaryContext(bundle) {
   const lead = bundle.lead || {};
   return {
@@ -156,17 +193,11 @@ function buildLeadSummaryContext(bundle) {
       notes: safeText(pmr.notes),
       transcript_excerpt: safeText(pmr.voice_note_transcript).slice(0, 500)
     })),
-    intel_status: {
-      configured: Boolean(bundle.marketIntelConfigured),
-      unavailable_reason: safeText(bundle.marketIntelUnavailableReason)
+    intelligence_report_status: {
+      uploaded: Boolean(bundle.intelligenceReport),
+      unavailable_reason: safeText(bundle.intelligenceReportUnavailableReason)
     },
-    market_intelligence: take(bundle.intel, 8).map(item => ({
-      title: safeText(item.title),
-      summary: safeText(item.summary),
-      source: safeText(item.source),
-      published_at: safeText(item.published_at || item.fetched_at),
-      url: safeText(item.url)
-    }))
+    intelligence_report: uploadedIntelligenceSnapshot(bundle)
   };
 }
 
@@ -175,6 +206,7 @@ function fallbackLeadSummary(bundle) {
   const latestActivity = (bundle.activities || [])[0];
   const latestReminder = (bundle.reminders || [])[0];
   const latestPmr = (bundle.pmrs || [])[0];
+  const intelligence = uploadedIntelligenceSnapshot(bundle);
   const risks = [];
   const dataGaps = [];
   const today = new Date().toISOString().slice(0, 10);
@@ -194,8 +226,8 @@ function fallbackLeadSummary(bundle) {
   if (!(bundle.pmrs || []).length) {
     dataGaps.push("No PMR records filed.");
   }
-  if (!bundle.marketIntelConfigured) {
-    dataGaps.push(bundle.marketIntelUnavailableReason || "Market intelligence unavailable. ZAWYA/LSEG API is not configured.");
+  if (!intelligence) {
+    dataGaps.push(bundle.intelligenceReportUnavailableReason || "No intelligence report uploaded yet.");
   }
   if (!lead.estimated_value) {
     dataGaps.push("Open pipeline value is not recorded.");
@@ -207,9 +239,15 @@ function fallbackLeadSummary(bundle) {
       lead.estimated_value ? `Open pipeline value is recorded at ${lead.estimated_value}.` : "No open pipeline value is recorded.",
       lead.next_action ? `The next planned action is ${lead.next_action}${lead.next_action_date ? ` on ${lead.next_action_date}` : ""}.` : "No next action has been recorded yet."
     ].join(" "),
-    market_intelligence: bundle.marketIntelConfigured
-      ? ((bundle.intel && bundle.intel[0] && safeText(bundle.intel[0].summary || bundle.intel[0].title)) || "No matched market intelligence was found for this lead.")
-      : "Market intelligence unavailable. ZAWYA/LSEG API is not configured.",
+    market_intelligence: intelligence
+      ? [
+        intelligence.lead_score ? `Lead score ${intelligence.lead_score}.` : "",
+        intelligence.buyer_classification ? `Buyer classification: ${intelligence.buyer_classification}.` : "",
+        intelligence.steel_demand ? `Structural steel demand: ${intelligence.steel_demand}.` : "",
+        intelligence.bottom_line || "",
+        intelligence.recommended_first_action ? `Recommended first action: ${intelligence.recommended_first_action}.` : ""
+      ].filter(Boolean).join(" ")
+      : "No intelligence report uploaded yet.",
     salesman_engagement_history: [
       `${lead.assigned_salesman || bundle.salesman?.name || "The assigned salesman"} registered or owns this lead${lead.created_at ? ` since ${shortDate(lead.created_at)}` : ""}.`,
       latestActivity
@@ -240,7 +278,7 @@ function summaryPrompt(bundle) {
     `Use exactly these top-level keys: ${JSON_KEYS.join(", ")}.`,
     "Rules:",
     "- Never invent calls, meetings, quotes, commitments, contacts, or market facts.",
-    "- Use only the supplied CRM and market-intelligence context.",
+    "- Use only the supplied CRM and uploaded intelligence-report context.",
     "- If data is missing, state that clearly in the relevant field and list it in data_gaps.",
     "- risks_attention_needed and data_gaps must be arrays of short strings.",
     "- sources must be an array of objects with label and url keys.",

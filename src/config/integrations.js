@@ -10,7 +10,6 @@ function enabled(name, fallback) {
 
 const GOOGLE_PLACES_KEY = value("GOOGLE_PLACES_API_KEY") || value("REACT_APP_GOOGLE_PLACES_API_KEY");
 const ANTHROPIC_KEY = value("ANTHROPIC_API_KEY");
-const ZAWYA_KEY = value("ZAWYA_API_KEY");
 const NEWS_API_KEY = value("NEWS_API_KEY") || value("NEWSAPI_KEY");
 const ERP_BASE_URL = value("ERP_API_BASE_URL");
 const ERP_KEY = value("ERP_API_KEY");
@@ -20,26 +19,26 @@ const integrations = {
   claudeEnrichment: enabled("ENABLE_CLAUDE_ENRICHMENT", Boolean(ANTHROPIC_KEY)),
   claudeWebSearch: enabled("ENABLE_ANTHROPIC_WEB_SEARCH", Boolean(ANTHROPIC_KEY)),
   aiAgent: enabled("ENABLE_AI_AGENT", Boolean(ANTHROPIC_KEY)),
-  marketIntel: enabled("ENABLE_MARKET_INTEL", Boolean(ZAWYA_KEY)),
+  marketIntel: false,
   marketNews: enabled("ENABLE_MARKET_NEWS", Boolean(NEWS_API_KEY)),
   erp: enabled("ENABLE_ERP_LOOKUP", true),
   linkedin: enabled("ENABLE_LINKEDIN_SEARCH", true),
   keys: {
     googlePlaces: Boolean(GOOGLE_PLACES_KEY),
     anthropic: Boolean(ANTHROPIC_KEY),
-    zawya: Boolean(ZAWYA_KEY),
+    zawya: false,
     newsApi: Boolean(NEWS_API_KEY),
     erp: Boolean(ERP_BASE_URL && ERP_KEY)
   },
   env: {
     googlePlacesKey: GOOGLE_PLACES_KEY,
     anthropicKey: ANTHROPIC_KEY,
-    zawyaKey: ZAWYA_KEY,
+    zawyaKey: "",
     newsApiKey: NEWS_API_KEY,
     erpBaseUrl: ERP_BASE_URL,
     erpApiKey: ERP_KEY,
     anthropicModel: value("ANTHROPIC_MODEL") || "claude-sonnet-4-6",
-    zawyaApiUrl: value("ZAWYA_API_URL") || value("ZAWYA_FEED_URL")
+    zawyaApiUrl: ""
   }
 };
 
