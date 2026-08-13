@@ -13,3 +13,9 @@ artifacts/salesman-ai-walkthrough/local-server.pid
 .vercel
 outputs/
 tmp/
+.npm-cache/
+.tmp-npm-cache/
+.tmp/
+tmp_*_debug.js
+argleads tracker.zip
+Codex-Prompt-Lead-Intelligence-*.docx

@@ -30,11 +30,12 @@ const server = require("../server");
 fs.existsSync = originalExistsSync;
 fs.readFileSync = originalReadFileSync;
 
-async function request(baseUrl, pathName, { method = "GET", token = "", body } = {}) {
+async function request(baseUrl, pathName, { method = "GET", token = "", csrfToken = "", body } = {}) {
   const response = await fetch(`${baseUrl}${pathName}`, {
     method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       ...(body ? { "Content-Type": "application/json" } : {})
     },
     body: body ? JSON.stringify(body) : undefined
@@ -53,10 +54,22 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     });
     assert.equal(adminLogin.response.status, 200, JSON.stringify(adminLogin.data));
     const adminToken = adminLogin.data.token;
+    const adminCsrfToken = adminLogin.data.csrf_token;
+
+    const salesmanAccountWithoutCsrf = await request(baseUrl, "/api/users", {
+      method: "POST",
+      token: adminToken,
+      body: { name: "E2E Salesman", email: "salesman-e2e@alrassteel.test", password: "SalesPass123!", territory: "UAE-North" }
+    });
+    assert.equal(salesmanAccountWithoutCsrf.response.status, 403);
+    const usersAfterMissingCsrf = await request(baseUrl, "/api/users", { token: adminToken });
+    assert.equal(usersAfterMissingCsrf.response.status, 200);
+    assert.equal(usersAfterMissingCsrf.data.some(user => String(user.email || "").toLowerCase() === "salesman-e2e@alrassteel.test"), false);
 
     const salesmanAccount = await request(baseUrl, "/api/users", {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { name: "E2E Salesman", email: "salesman-e2e@alrassteel.test", password: "SalesPass123!", territory: "UAE-North" }
     });
     assert.equal(salesmanAccount.response.status, 201);
@@ -64,6 +77,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const dormantAccount = await request(baseUrl, "/api/users", {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { name: "Dormant E2E Salesman", email: "dormant-salesman-e2e@alrassteel.test", password: "DormantPass123!", territory: "Saudi" }
     });
     assert.equal(dormantAccount.response.status, 201);
@@ -71,6 +85,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const deactivateWithoutPassword = await request(baseUrl, `/api/users/${dormantAccount.data.id}`, {
       method: "PATCH",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { status: "inactive" }
     });
     assert.equal(deactivateWithoutPassword.response.status, 403);
@@ -78,6 +93,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const deactivatedAccount = await request(baseUrl, `/api/users/${dormantAccount.data.id}`, {
       method: "PATCH",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { status: "inactive", admin_password: "AdminPass123!" }
     });
     assert.equal(deactivatedAccount.response.status, 200, JSON.stringify(deactivatedAccount.data));
@@ -92,6 +108,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const ownLead = await request(baseUrl, "/api/leads", {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { company_name: "Own E2E Lead", assigned_salesman: "E2E Salesman", stage: "PROSPECT", territory: "UAE-North" }
     });
     assert.equal(ownLead.response.status, 201);
@@ -99,6 +116,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const otherLead = await request(baseUrl, "/api/leads", {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { company_name: "Other E2E Lead", assigned_salesman: "Other Salesman", stage: "PROSPECT", territory: "UAE-South" }
     });
     assert.equal(otherLead.response.status, 201);
@@ -109,6 +127,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     });
     assert.equal(salesmanLogin.response.status, 200);
     const salesmanToken = salesmanLogin.data.token;
+    const salesmanCsrfToken = salesmanLogin.data.csrf_token;
 
     const salesmanConfigState = await request(baseUrl, "/api/configuration-agent/state", { token: salesmanToken });
     assert.equal(salesmanConfigState.response.status, 403);
@@ -120,6 +139,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const configProposal = await request(baseUrl, "/api/configuration-agent/propose", {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { prompt: "Add Qatar to territories" }
     });
     assert.equal(configProposal.response.status, 200, JSON.stringify(configProposal.data));
@@ -128,6 +148,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const applyWithoutPassword = await request(baseUrl, "/api/configuration-agent/apply", {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { changes: configProposal.data.changes }
     });
     assert.equal(applyWithoutPassword.response.status, 403);
@@ -135,6 +156,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const appliedConfig = await request(baseUrl, "/api/configuration-agent/apply", {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: {
         changes: configProposal.data.changes,
         proposal_id: configProposal.data.id,
@@ -160,6 +182,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const salesmanCreatedLead = await request(baseUrl, "/api/leads", {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: {
         company_name: "Salesman Created E2E Lead",
         assigned_salesman: "Other Salesman",
@@ -203,6 +226,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const forbiddenPatch = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
       method: "PATCH",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: { notes: "Should not be allowed" }
     });
     assert.equal(forbiddenPatch.response.status, 404);
@@ -210,6 +234,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const invalidStructuredActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: {
         id: "act-invalid-structured",
         structured_activity: true,
@@ -224,6 +249,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const forbiddenStructuredActivity = await request(baseUrl, `/api/leads/${otherLead.data.id}/activities`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: {
         id: "act-forbidden-structured",
         structured_activity: true,
@@ -246,6 +272,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const structuredActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: structuredActivityPayload
     });
     assert.equal(structuredActivity.response.status, 201, JSON.stringify(structuredActivity.data));
@@ -259,6 +286,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const structuredActivityRetry = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: structuredActivityPayload
     });
     assert.equal(structuredActivityRetry.response.status, 200);
@@ -268,6 +296,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const adminStructuredActivity = await request(baseUrl, `/api/leads/${otherLead.data.id}/activities`, {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: {
         id: "act-admin-structured",
         structured_activity: true,
@@ -284,6 +313,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const handoffWithoutNote = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
       method: "PATCH",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { assigned_salesman: "E2E Salesman" }
     });
     assert.equal(handoffWithoutNote.response.status, 400);
@@ -291,6 +321,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const handoffWithNote = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
       method: "PATCH",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: {
         assigned_salesman: "E2E Salesman",
         handoff_note: "Reassigning to UAE North owner for immediate follow-up and quotation registration."
@@ -308,6 +339,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const directDeleteAsSalesman = await request(baseUrl, `/api/leads/${ownLead.data.id}`, {
       method: "DELETE",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: { admin_password: "SalesPass123!" }
     });
     assert.equal(directDeleteAsSalesman.response.status, 403);
@@ -315,6 +347,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const activity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: { type: "Note", text: "Salesman wants to revise this later" }
     });
     assert.equal(activity.response.status, 201);
@@ -322,6 +355,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const correction = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/0`, {
       method: "PATCH",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: { type: "Note", text: "Corrected note appended without changing the original" }
     });
     assert.equal(correction.response.status, 201, JSON.stringify(correction.data));
@@ -332,6 +366,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const directActivityDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/1`, {
       method: "DELETE",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { admin_password: "AdminPass123!" }
     });
     assert.equal(directActivityDelete.response.status, 405);
@@ -339,6 +374,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const activityDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: { target_type: "activity", activity_index: 1, reason: "Duplicate activity entry" }
     });
     assert.equal(activityDeleteRequest.response.status, 201, JSON.stringify(activityDeleteRequest.data));
@@ -347,6 +383,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const approveWithoutPassword = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${activityDeleteRequest.data.request.id}/approve`, {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: {}
     });
     assert.equal(approveWithoutPassword.response.status, 403);
@@ -354,6 +391,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const approveActivityDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${activityDeleteRequest.data.request.id}/approve`, {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { admin_password: "AdminPass123!" }
     });
     assert.equal(approveActivityDelete.response.status, 200, JSON.stringify(approveActivityDelete.data));
@@ -363,6 +401,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const meetingActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: { type: "Site Visit", text: "Met procurement team to discuss steel requirements" }
     });
     assert.equal(meetingActivity.response.status, 201, JSON.stringify(meetingActivity.data));
@@ -370,6 +409,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const linkedPmr = await request(baseUrl, `/api/leads/${ownLead.data.id}/pmrs`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: {
         activity_id: meetingActivity.data.activity.id,
         meeting_date: "2026-06-16",
@@ -386,6 +426,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const autoLinkedPmr = await request(baseUrl, `/api/leads/${ownLead.data.id}/pmrs`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: {
         meeting_date: "2026-06-17",
         relationship_heat_score: "3",
@@ -400,6 +441,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const leadDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: { target_type: "lead", reason: "Created during test by mistake" }
     });
     assert.equal(leadDeleteRequest.response.status, 201);
@@ -407,6 +449,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const rejectLeadDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${leadDeleteRequest.data.request.id}/reject`, {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { admin_password: "AdminPass123!", note: "Keep for follow-up" }
     });
     assert.equal(rejectLeadDelete.response.status, 200);
@@ -415,6 +458,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const secondLeadDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
       method: "POST",
       token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
       body: { target_type: "lead", reason: "Confirmed duplicate" }
     });
     assert.equal(secondLeadDeleteRequest.response.status, 201);
@@ -422,6 +466,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body } =
     const approveLeadDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${secondLeadDeleteRequest.data.request.id}/approve`, {
       method: "POST",
       token: adminToken,
+      csrfToken: adminCsrfToken,
       body: { admin_password: "AdminPass123!" }
     });
     assert.equal(approveLeadDelete.response.status, 200);
