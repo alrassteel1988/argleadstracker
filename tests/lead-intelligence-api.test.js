@@ -42,6 +42,9 @@ const server = require("../server");
 
 assert.ok(leadIntelligencePdfRoute.includes("const storageResponse = await fetch(signedUrl);"), "Supabase PDFs must be fetched server-side through the authorized app route");
 assert.ok(!/res\.writeHead\(302,\s*\{\s*Location:\s*signedUrl/.test(leadIntelligencePdfRoute), "The app must not redirect browsers to signed Supabase PDF URLs");
+assert.ok(leadIntelligencePdfRoute.includes("|| currentReport;"), "stale PDF route references must fall back to the authorized lead's current completed report");
+assert.ok(serverSource.includes("function leadIntelligencePdfStorageKeys(report)"), "PDF delivery must try legacy and canonical storage keys");
+assert.ok(serverSource.includes("function currentCompletedLeadIntelligenceReport(reports)"), "the current completed report lookup must ignore legacy string false values");
 
 fs.existsSync = originalExistsSync;
 fs.readFileSync = originalReadFileSync;
@@ -134,9 +137,12 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const uploaded = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "API Intelligence Lead LLC structural steel opportunity and procurement recommendation.");
     assert.equal(uploaded.response.status, 200, JSON.stringify(uploaded.data));
     assert.equal(uploaded.data.report.status, "completed");
+    assert.equal(uploaded.data.report.is_current, true, "uploaded report must be marked current");
+    assert.ok(uploaded.data.report.pdf_available, "uploaded report must persist a PDF storage reference");
     assert.ok(uploaded.data.report.report.executive_snapshot, "uploaded extraction must be saved in report_json");
     const uploadedIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(uploadedIntel.data.report.id, uploaded.data.report.id);
+    assert.equal(uploadedIntel.data.report.status, "completed", "Intel reload must return the saved completed upload");
     assert.ok(uploadedIntel.data.report.report.sales_recommendation, "Intel tab payload must expose saved extracted fields");
     assert.notEqual(uploadedIntel.data.report.id, currentReportId, "upload must replace the current intelligence report");
     const anonymousPdf = await request(baseUrl, uploaded.data.report.download_url);
@@ -220,6 +226,9 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const legacyFilenamePdf = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/pdf/${encodeURIComponent(`${completedIntel.data.report.id}.pdf`)}`, { token: adminToken });
     assert.equal(legacyFilenamePdf.response.status, 200, "legacy PDF filename routes must resolve to the lead's current completed report");
     assert.strictEqual(legacyFilenamePdf.data.slice(0, 4).toString(), "%PDF");
+    const staleHyphenatedPdf = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/pdf/legacy-upload-name-with-hyphens`, { token: adminToken });
+    assert.equal(staleHyphenatedPdf.response.status, 200, "hyphenated stale PDF route references must resolve to the current completed report");
+    assert.strictEqual(staleHyphenatedPdf.data.slice(0, 4).toString(), "%PDF");
     fs.rmSync(path.join(dataIntelPath, lead.data.id, `${completedIntel.data.report.id}.pdf`), { force: true });
     const missingPdfFile = await request(baseUrl, completedIntel.data.report.download_url, { token: adminToken });
     assert.equal(missingPdfFile.response.status, 404);

@@ -12,7 +12,7 @@ const CONTENT_SECURITY_POLICY = [
   "connect-src 'self'",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
-  "frame-src 'self'"
+  "frame-src 'self' blob:"
 ].join("; ");
 
 const PERMISSIONS_POLICY = [
