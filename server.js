@@ -113,6 +113,7 @@ const {
   WORKFLOW_VERSION: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
   allowedResearchInputFromLead,
   generateLeadIntelligenceWithOpenAI,
+  parseLeadIntelligencePdfWithOpenAI,
   renderLeadIntelligencePdf,
   reportSummary
 } = require("./src/services/leadIntelligenceService");
@@ -2574,6 +2575,7 @@ async function supabaseSalesmanAccount(token, lead) {
 
 async function buildLeadSummaryBundle({ db, user, lead, supabaseEnabled }) {
   const { pmrs, intel: storedIntel, handoffs } = await buildCompanyAiBundle({ db, user, lead, supabaseEnabled });
+  const intelligenceState = await loadLeadIntelligenceState(db, user, lead, supabaseEnabled);
   const activities = leadActivitiesNewestFirst(lead);
   const reminders = activities.filter(isReminderLikeActivity).map(normalizeReminderHistory);
   const followups = reminders.filter(activity =>
@@ -2620,6 +2622,7 @@ async function buildLeadSummaryBundle({ db, user, lead, supabaseEnabled }) {
     noteEntries,
     pmrs,
     intel,
+    intelligenceReport: intelligenceState.report?.report || null,
     handoffs,
     lastActivityDate: activities[0]?.at || activities[0]?.activity_date || activities[0]?.created_at || lead.last_activity || "",
     marketIntelConfigured,
@@ -3348,6 +3351,18 @@ function leadIntelligenceLocalPath(storageKey) {
   return path.normalize(path.join(DATA_DIR, storageKey));
 }
 
+function isPdfUpload(buffer) {
+  return Buffer.isBuffer(buffer) && buffer.length >= 5 && buffer.subarray(0, 5).toString("utf8") === "%PDF-";
+}
+
+// A lightweight text hint improves text-PDF imports; scanned PDFs are sent to
+// the model as a file and do not depend on this extraction succeeding.
+function leadIntelligencePdfText(buffer) {
+  return Buffer.from(buffer || []).toString("latin1")
+    .match(/\((?:\\.|[^\\)])*\)\s*Tj/g)?.map(value => value.replace(/^\(/, "").replace(/\)\s*Tj$/, ""))
+    .join("\n").slice(0, 18000) || "";
+}
+
 function activeLeadIntelligenceStatuses() {
   return new Set(["queued", "researching", "generating_pdf"]);
 }
@@ -3418,7 +3433,7 @@ async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, market
     workflow_version: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
     auto_queue_enabled: LEAD_INTELLIGENCE_AUTO_QUEUE,
     allowed_research_input: allowedResearchInputFromLead(lead),
-    report: current ? serializeLeadIntelligenceRecord(current) : null,
+    report: current ? serializeLeadIntelligenceRecord(current, { includeReport: true }) : null,
     active_report: active ? serializeLeadIntelligenceRecord(active) : null,
     failed_report: failed ? serializeLeadIntelligenceRecord(failed) : null,
     history: reports.map(report => serializeLeadIntelligenceRecord(report)).slice(0, 12),
@@ -6556,6 +6571,37 @@ async function handleApi(req, res, url) {
     }
     const marketItems = leadIntelItems(lead, matchIntelligenceToLeads(items, [lead]));
     return sendJson(res, 200, await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems));
+  }
+
+  const leadIntelligenceUploadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intelligence\/upload$/);
+  if (req.method === "POST" && leadIntelligenceUploadMatch) {
+    const lead = await accessibleLeadById(db, user, leadIntelligenceUploadMatch[1], supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    const pdf = await readRawBody(req, MAX_ACTIVITY_ATTACHMENT_BYTES, "Lead intelligence PDF upload failed. The maximum file size is 8 MB.");
+    if (!isPdfUpload(pdf)) return sendJson(res, 400, { error: "Uploaded file is not a valid PDF." });
+    const filename = decodeURIComponent(String(req.headers["x-file-name"] || "lead-intelligence.pdf")).slice(0, 180);
+    const parsed = await parseLeadIntelligencePdfWithOpenAI({
+      rawPdfText: leadIntelligencePdfText(pdf), pdfBuffer: pdf, filename, lead,
+      openAiKey: OPENAI_API_KEY, model: OPENAI_LEAD_INTELLIGENCE_MODEL
+    });
+    const existing = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+    const inserted = await insertLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "pdf_upload" });
+    const storageKey = await persistLeadIntelligencePdf(db, inserted, pdf, supabaseEnabled);
+    const report = parsed.report;
+    const completed = await updateLeadIntelligenceReport(db, inserted.id, {
+      status: "completed", report_json: report, weighted_score: report.lead_score.weighted_score,
+      displayed_score: report.lead_score.displayed_score, priority: report.lead_score.priority,
+      steel_demand: report.executive_snapshot.steel_demand, demand_classification: report.executive_snapshot.steel_demand,
+      buyer_classification: report.executive_snapshot.buyer_classification, research_timestamp: report.research_date,
+      pdf_storage_key: storageKey, completed_at: new Date().toISOString(), error_code: "", error_message: "",
+      provider_metadata: { source: "uploaded_pdf", filename }
+    }, supabaseEnabled);
+    await markLeadIntelligenceCurrent(db, lead.id, inserted.id, supabaseEnabled);
+    return sendJson(res, 200, {
+      report: serializeLeadIntelligenceRecord(completed, { includeReport: true }),
+      replaced_report_id: existing.find(item => item.is_current)?.id || null,
+      state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, [])
+    });
   }
 
   const leadIntelligenceActionMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intelligence\/(generate|refresh|retry)$/);

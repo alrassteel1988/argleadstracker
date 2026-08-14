@@ -84,6 +84,12 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
   return { response, data };
 }
 
+async function requestPdf(baseUrl, pathName, token, text) {
+  const pdf = Buffer.from(`%PDF-1.4\n1 0 obj\n<<>>\nendobj\n2 0 obj\n<< /Length ${text.length + 30} >>\nstream\nBT /F1 12 Tf 72 720 Td (${text}) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF`);
+  const response = await nativeFetch(`${baseUrl}${pathName}`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/pdf", "X-File-Name": "uploaded-intel.pdf" }, body: pdf });
+  return { response, data: await response.json() };
+}
+
 (async () => {
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -109,6 +115,15 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
     assert.equal(completedIntel.data.report.weighted_score, 7.2);
     assert.equal(completedIntel.data.report.priority, "B");
     const currentReportId = completedIntel.data.report.id;
+
+    const uploaded = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "API Intelligence Lead LLC structural steel opportunity and procurement recommendation.");
+    assert.equal(uploaded.response.status, 200, JSON.stringify(uploaded.data));
+    assert.equal(uploaded.data.report.status, "completed");
+    assert.ok(uploaded.data.report.report.executive_snapshot, "uploaded extraction must be saved in report_json");
+    const uploadedIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
+    assert.equal(uploadedIntel.data.report.id, uploaded.data.report.id);
+    assert.ok(uploadedIntel.data.report.report.sales_recommendation, "Intel tab payload must expose saved extracted fields");
+    assert.notEqual(uploadedIntel.data.report.id, currentReportId, "upload must replace the current intelligence report");
 
     const pdf = await request(baseUrl, completedIntel.data.report.download_url, { token: adminToken });
     assert.equal(pdf.response.status, 200);

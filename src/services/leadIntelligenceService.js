@@ -394,6 +394,63 @@ async function generateLeadIntelligenceWithOpenAI({ lead, openAiKey, model = "gp
   }
 }
 
+// PDF imports use the same validated report shape as generated intelligence.  When
+// the PDF has no extractable text (for example, a scanned report), Responses can
+// read the attached PDF directly instead of silently producing an empty report.
+async function parseLeadIntelligencePdfWithOpenAI({ rawPdfText, pdfBuffer, filename = "lead-intelligence.pdf", lead, openAiKey, model = "gpt-4.1-mini", fetchImpl = fetch, timeoutMs = 90_000 }) {
+  if (!openAiKey) {
+    const error = new Error("AI Lead Intelligence PDF processing is not configured. Add OPENAI_API_KEY on the server.");
+    error.status = 503;
+    throw error;
+  }
+  const source = safeText(rawPdfText);
+  const hasPdfBuffer = Buffer.isBuffer(pdfBuffer) && pdfBuffer.length > 4;
+  if (!source && !hasPdfBuffer) {
+    const error = new Error("The uploaded PDF appears to be empty.");
+    error.status = 400;
+    throw error;
+  }
+  const leadInput = allowedResearchInputFromLead(lead);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl("https://api.openai.com/v1/responses", {
+      method: "POST",
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        input: [{ role: "user", content: [{
+          type: "input_text",
+          text: [
+            "Reconstruct the uploaded UAE structural steel lead intelligence report.",
+            "Return only JSON matching the supplied CRM schema. Do not invent facts; use 'Not publicly found' for absent values.",
+            `Lead context: ${JSON.stringify(leadInput)}`,
+            source ? `Extracted PDF text: ${source.slice(0, 18000)}` : "Read the attached PDF directly."
+          ].join("\n\n")
+        }, ...(hasPdfBuffer ? [{ type: "input_file", filename, file_data: `data:application/pdf;base64,${pdfBuffer.toString("base64")}` }] : [])] }],
+        text: { format: { type: "json_schema", name: "lead_intelligence_pdf", schema: openAiJsonSchema(), strict: false } },
+        max_output_tokens: 9000
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.error?.message || `OpenAI lead intelligence PDF parsing failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    return { report: assertValidLeadIntelligenceReport(parseJsonText(extractResponseText(payload)), leadInput) };
+  } catch (error) {
+    if (error.name === "AbortError") {
+      error = new Error("Lead intelligence provider request timed out.");
+      error.status = 504;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function pdfEscape(value) {
   return String(value ?? "").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
@@ -560,6 +617,7 @@ module.exports = {
   calculateLeadScore,
   displayedScore,
   generateLeadIntelligenceWithOpenAI,
+  parseLeadIntelligencePdfWithOpenAI,
   normalizeLeadIntelligenceReport,
   priorityForWeightedScore,
   renderLeadIntelligencePdf,
