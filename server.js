@@ -6666,8 +6666,16 @@ async function handleApi(req, res, url) {
     const filename = `${String(lead.company_name || "lead").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "lead"}-intelligence-${String(report.research_timestamp || report.completed_at || "").slice(0, 10) || "report"}.pdf`;
     if (supabaseEnabled) {
       const signedUrl = await createStorageSignedUrlForBucketAsService(LEAD_INTELLIGENCE_BUCKET, report.pdf_storage_key, LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS);
-      res.writeHead(302, { Location: signedUrl, "Cache-Control": "private, no-store" });
-      return res.end();
+      const storageResponse = await fetch(signedUrl);
+      if (!storageResponse.ok) {
+        const error = new Error("Lead intelligence PDF is temporarily unavailable.");
+        error.status = storageResponse.status === 404 ? 404 : 502;
+        throw error;
+      }
+      const body = Buffer.from(await storageResponse.arrayBuffer());
+      if (url.searchParams.get("download")) return sendDownload(res, "application/pdf", filename, body);
+      res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${filename}"`, "Cache-Control": "private, no-store" });
+      return res.end(body);
     }
     const localPath = leadIntelligenceLocalPath(report.pdf_storage_key || report.pdf_url);
     if (!localPath.startsWith(DATA_DIR) || !fs.existsSync(localPath)) return sendJson(res, 404, { code: "pdf_missing", error: "Intelligence PDF file is missing." });
