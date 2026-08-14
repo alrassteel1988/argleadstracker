@@ -9262,6 +9262,12 @@ function leadIntelligenceActionButton(action, leadId, label, tone = "primary-but
   return `<button class="${tone}" type="button" data-lead-intelligence-action="${escapeHtml(action)}" data-lead-id="${escapeHtml(leadId)}" ${reportId ? `data-report-id="${escapeHtml(reportId)}"` : ""}>${escapeHtml(label)}</button>`;
 }
 
+function leadIntelligenceUploadMarkup(leadId, { role = state.currentUser?.role, hasReport = false, processing = false } = {}) {
+  if (!isPrivilegedDashboardRole(role)) return "";
+  const label = hasReport || processing ? "Replace PDF" : "Upload PDF";
+  return `<label class="primary-button lead-intel-upload-control">${label}<input type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload="${escapeHtml(leadId)}"></label>`;
+}
+
 function renderDrawerIntel(lead) {
   const statePayload = state.leadDrawerIntel && !Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : { market_items: Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : [] };
   const report = statePayload.report || null;
@@ -9272,13 +9278,14 @@ function renderDrawerIntel(lead) {
   const processing = active && ["queued", "researching", "generating_pdf"].includes(String(active.status));
   const statusLabel = active ? String(active.status || "queued").replace(/_/g, " ") : "";
   const failedVisible = failed && !processing;
+  const uploadControl = leadIntelligenceUploadMarkup(lead.id, { hasReport: Boolean(report), processing });
   return `
     <section class="drawer-section lead-intel-section">
       <div class="drawer-tab-heading">
         <h3>UAE Structural Steel Lead Intelligence</h3>
         ${processing ? `<span class="status-pill">${escapeHtml(statusLabel)}</span>` : ""}
       </div>
-      <label class="lead-intel-upload-control">Upload intelligence PDF<input type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload="${escapeHtml(lead.id)}"></label>
+      ${uploadControl ? `<div class="lead-intel-actions">${uploadControl}</div>` : ""}
       ${!report && !processing && !failedVisible ? `
         <div class="lead-intel-empty">
           <strong>No intelligence report yet.</strong>
