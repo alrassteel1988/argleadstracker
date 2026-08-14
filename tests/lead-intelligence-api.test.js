@@ -137,9 +137,12 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const uploaded = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "API Intelligence Lead LLC structural steel opportunity and procurement recommendation.");
     assert.equal(uploaded.response.status, 200, JSON.stringify(uploaded.data));
     assert.equal(uploaded.data.report.status, "completed");
+    assert.equal(uploaded.data.report.is_current, true, "uploaded report must be marked current");
+    assert.ok(uploaded.data.report.pdf_available, "uploaded report must persist a PDF storage reference");
     assert.ok(uploaded.data.report.report.executive_snapshot, "uploaded extraction must be saved in report_json");
     const uploadedIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(uploadedIntel.data.report.id, uploaded.data.report.id);
+    assert.equal(uploadedIntel.data.report.status, "completed", "Intel reload must return the saved completed upload");
     assert.ok(uploadedIntel.data.report.report.sales_recommendation, "Intel tab payload must expose saved extracted fields");
     assert.notEqual(uploadedIntel.data.report.id, currentReportId, "upload must replace the current intelligence report");
     const anonymousPdf = await request(baseUrl, uploaded.data.report.download_url);

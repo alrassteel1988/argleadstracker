@@ -9639,19 +9639,24 @@ function bindLeadDrawerEvents() {
   });
   document.querySelectorAll("[data-lead-intelligence-upload]").forEach(input => {
     input.addEventListener("change", async event => {
-      const file = event.currentTarget.files?.[0];
-      if (!file) return;
+      // currentTarget is cleared by the browser after the synchronous event
+      // dispatch. Keep the input and lead id before awaiting the upload.
+      const uploadInput = event.currentTarget;
+      const uploadedLeadId = String(uploadInput?.dataset.leadIntelligenceUpload || "");
+      const file = uploadInput?.files?.[0];
+      if (!file || !uploadedLeadId) return;
       try {
+        uploadInput.disabled = true;
         setToast("Extracting and saving intelligence PDF...", "");
-        const result = await uploadLeadIntelligencePdf(event.currentTarget.dataset.leadIntelligenceUpload, file);
-        state.leadDrawerIntel = result.state;
-        const uploadedLeadId = String(event.currentTarget.dataset.leadIntelligenceUpload);
+        await uploadLeadIntelligencePdf(uploadedLeadId, file);
+        // Reload the persisted report rather than relying on the upload
+        // response, so the Intel tab always reflects the saved current row.
+        state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(uploadedLeadId)}/intel`);
         leadAiSummaryCache.delete(uploadedLeadId);
         await loadLeadAiSummary(uploadedLeadId, { force: true });
         setToast("Intelligence PDF saved to the Intel card and AI summary context.", "success");
         renderLeadDrawer();
       } catch (error) {
-        const uploadedLeadId = String(event.currentTarget.dataset.leadIntelligenceUpload);
         try {
           state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(uploadedLeadId)}/intel`);
           renderLeadDrawer();
@@ -9659,6 +9664,8 @@ function bindLeadDrawerEvents() {
           // Preserve the original upload error when the state refresh is unavailable.
         }
         setToast(error.message, "error");
+      } finally {
+        if (uploadInput.isConnected) uploadInput.disabled = false;
       }
     });
   });
