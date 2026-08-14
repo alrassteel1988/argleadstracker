@@ -5,6 +5,11 @@ const path = require("path");
 const nativeFetch = global.fetch;
 const originalExistsSync = fs.existsSync;
 const originalReadFileSync = fs.readFileSync;
+const serverSource = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+const leadIntelligencePdfRoute = serverSource.slice(
+  serverSource.indexOf("const leadIntelligencePdfMatch"),
+  serverSource.indexOf('if (req.method === "POST" && url.pathname === "/api/admin/lead-intelligence/process")')
+);
 const dbPath = path.join(__dirname, "..", "data", "db.json");
 const dataIntelPath = path.join(__dirname, "..", "data", "lead-intelligence");
 const originalDb = fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : null;
@@ -34,6 +39,9 @@ fs.readFileSync = function patchedReadFileSync(target) {
 };
 
 const server = require("../server");
+
+assert.ok(leadIntelligencePdfRoute.includes("const storageResponse = await fetch(signedUrl);"), "Supabase PDFs must be fetched server-side through the authorized app route");
+assert.ok(!/res\.writeHead\(302,\s*\{\s*Location:\s*signedUrl/.test(leadIntelligencePdfRoute), "The app must not redirect browsers to signed Supabase PDF URLs");
 
 fs.existsSync = originalExistsSync;
 fs.readFileSync = originalReadFileSync;
