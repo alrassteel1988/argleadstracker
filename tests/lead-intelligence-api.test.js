@@ -70,6 +70,7 @@ global.fetch = async function mockedFetch(url, options) {
     const outputText = providerMode === "success" ? validJson
       : providerMode === "repairable_json" ? `Here is the reconstructed report:\n\n\`\`\`json\n${validJson.replace(',"executive_snapshot"', ' "executive_snapshot"').replace(/}$/, ',}')}\n\`\`\``
       : providerMode === "repairable_array_json" ? validJson.replace('["Steel fabrication"]', '["Steel fabrication" "Structural steel supply"]')
+      : providerMode === "pdf_missing_validation_evidence" ? JSON.stringify({ ...providerFixture(), sources: [], research_quality: { ...providerFixture().research_quality, verified_information: [] } })
       : providerMode === "repairable_newline_json" ? validJson.replace("Structural steel supply", "Structural steel\nsupply")
       : providerMode === "malformed_json" ? '{"research_date":"2026-08-10","executive_snapshot":'
       : JSON.stringify({ sources: [] });
@@ -130,6 +131,16 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.equal(uploadedIntel.data.report.id, uploaded.data.report.id);
     assert.ok(uploadedIntel.data.report.report.sales_recommendation, "Intel tab payload must expose saved extracted fields");
     assert.notEqual(uploadedIntel.data.report.id, currentReportId, "upload must replace the current intelligence report");
+    const anonymousPdf = await request(baseUrl, uploaded.data.report.download_url);
+    assert.equal(anonymousPdf.response.status, 401, "PDF delivery must remain protected without a bearer token");
+
+    providerMode = "pdf_missing_validation_evidence";
+    const evidenceFallbackUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF without web citations.");
+    assert.equal(evidenceFallbackUpload.response.status, 200, JSON.stringify(evidenceFallbackUpload.data));
+    assert.equal(evidenceFallbackUpload.data.report.status, "completed");
+    assert.equal(evidenceFallbackUpload.data.report.report.sources[0].source_type, "Uploaded PDF", "uploaded PDF provenance must satisfy PDF-only validation without exposing the report publicly");
+    const evidenceFallbackReportId = evidenceFallbackUpload.data.report.id;
+    providerMode = "success";
 
     const queuedPdfLead = await request(baseUrl, "/api/leads", {
       method: "POST", token: adminToken,
@@ -161,7 +172,7 @@ async function requestPdf(baseUrl, pathName, token, text) {
 
     const adminReplacement = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Replacement API Intelligence Lead LLC PDF with procurement and structural steel details.");
     assert.equal(adminReplacement.response.status, 200, JSON.stringify(adminReplacement.data));
-    assert.equal(adminReplacement.data.replaced_report_id, uploaded.data.report.id, "admin upload must replace the current PDF");
+    assert.equal(adminReplacement.data.replaced_report_id, evidenceFallbackReportId, "admin upload must replace the current PDF");
 
     providerMode = "repairable_json";
     const repairedUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Repairable JSON intelligence PDF.");

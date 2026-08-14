@@ -447,6 +447,32 @@ function parseJsonText(text) {
   }
 }
 
+function withUploadedPdfValidationEvidence(input, filename) {
+  const report = input && typeof input === "object" ? { ...input } : {};
+  const sources = asArray(report.sources);
+  if (!sources.length) {
+    sources.push({
+      id: "src-uploaded-pdf",
+      title: `Uploaded PDF: ${safeText(filename, "lead-intelligence.pdf")}`,
+      url: UNKNOWN,
+      publisher: "Uploaded CRM document",
+      source_type: "Uploaded PDF",
+      access_date: new Date().toISOString().slice(0, 10)
+    });
+  }
+  report.sources = sources;
+  const researchQuality = report.research_quality && typeof report.research_quality === "object" ? { ...report.research_quality } : {};
+  if (!asArray(researchQuality.verified_information || report.verified_facts).length) {
+    researchQuality.verified_information = [{
+      statement: "Information was extracted from the uploaded PDF and should be reviewed against the original document.",
+      source_refs: [safeText(sources[0]?.id, "src-uploaded-pdf")],
+      confidence: "Medium"
+    }];
+  }
+  report.research_quality = researchQuality;
+  return report;
+}
+
 async function generateLeadIntelligenceWithOpenAI({ lead, openAiKey, model = "gpt-4.1-mini", fetchImpl = fetch, timeoutMs = 90_000 }) {
   if (!openAiKey) {
     const error = new Error("Lead intelligence research is not configured. Add OPENAI_API_KEY on the server.");
@@ -555,7 +581,8 @@ async function parseLeadIntelligencePdfWithOpenAI({ rawPdfText, pdfBuffer, filen
       error.status = response.status;
       throw error;
     }
-    return { report: assertValidLeadIntelligenceReport(parseJsonText(extractResponseText(payload)), leadInput) };
+    const parsed = parseJsonText(extractResponseText(payload));
+    return { report: assertValidLeadIntelligenceReport(withUploadedPdfValidationEvidence(parsed, filename), leadInput) };
   } catch (error) {
     if (error.name === "AbortError") {
       error = new Error("Lead intelligence provider request timed out.");
@@ -735,6 +762,7 @@ module.exports = {
   generateLeadIntelligenceWithOpenAI,
   parseJsonText,
   parseLeadIntelligencePdfWithOpenAI,
+  withUploadedPdfValidationEvidence,
   normalizeLeadIntelligenceReport,
   priorityForWeightedScore,
   renderLeadIntelligencePdf,

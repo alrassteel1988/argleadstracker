@@ -1822,6 +1822,60 @@ async function uploadLeadIntelligencePdf(leadId, file) {
   return result;
 }
 
+async function fetchAuthenticatedBlob(url) {
+  const token = sessionStorage.getItem(SESSION_KEY) || "";
+  const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw new Error(result.error || `Intelligence PDF request failed: ${response.status}`);
+  }
+  return response.blob();
+}
+
+function blobDownloadName(url) {
+  return url.includes("download=1") ? "lead-intelligence.pdf" : "lead-intelligence-preview.pdf";
+}
+
+async function downloadAuthenticatedPdf(url) {
+  const blobUrl = URL.createObjectURL(await fetchAuthenticatedBlob(url));
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = blobDownloadName(url);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
+async function openAuthenticatedPdf(url, popup = null) {
+  try {
+    const blobUrl = URL.createObjectURL(await fetchAuthenticatedBlob(url));
+    if (popup) {
+      popup.opener = null;
+      popup.location.replace(blobUrl);
+    } else {
+      window.open(blobUrl, "_blank", "noopener");
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+  } catch (error) {
+    popup?.close();
+    throw error;
+  }
+}
+
+async function hydrateLeadIntelligencePdfPreviews() {
+  const previews = [...document.querySelectorAll("iframe[data-lead-intelligence-pdf-preview]")];
+  await Promise.all(previews.map(async preview => {
+    try {
+      const blobUrl = URL.createObjectURL(await fetchAuthenticatedBlob(preview.dataset.leadIntelligencePdfPreview));
+      preview.src = blobUrl;
+      preview.dataset.blobUrl = blobUrl;
+    } catch {
+      preview.replaceWith(Object.assign(document.createElement("p"), { className: "empty-copy", textContent: "PDF preview is unavailable. Use Open in new tab." }));
+    }
+  }));
+}
+
 async function loadActivityAudioSources() {
   const players = [...document.querySelectorAll("audio[data-voice-note-id]")].filter(player => player.dataset.voiceNoteId);
   await Promise.all(players.map(async player => {
@@ -9322,13 +9376,11 @@ function renderDrawerIntel(lead) {
         ${report.report ? `<div class="lead-intel-detail-grid"><span><b>Opportunity</b><small>${escapeHtml(report.report.executive_snapshot?.top_opportunity || report.report.sales_recommendation?.recommended_sales_angle || "Not publicly found")}</small></span><span><b>Next action</b><small>${escapeHtml(report.report.sales_recommendation?.suggested_next_action || "Not publicly found")}</small></span><span><b>Company profile</b><small>${escapeHtml((report.report.company_profile?.main_activities || []).join(", ") || "Not publicly found")}</small></span></div>` : ""}
         ${hasPdf ? `
           <div class="lead-intel-actions">
-            <a class="ghost-button" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">Download PDF</a>
-            <a class="ghost-button" href="${escapeHtml(report.pdf_url)}" target="_blank" rel="noopener">Open in new tab</a>
+            <button class="ghost-button" type="button" data-lead-intelligence-pdf-download="${escapeHtml(report.download_url)}">Download PDF</button>
+            <button class="ghost-button" type="button" data-lead-intelligence-pdf-open="${escapeHtml(report.pdf_url)}">Open in new tab</button>
             ${leadIntelligenceActionButton("refresh", lead.id, "Refresh Intelligence", "primary-button")}
           </div>
-          <object class="lead-intel-pdf" data="${escapeHtml(report.pdf_url)}" type="application/pdf" aria-label="Embedded lead intelligence PDF">
-            <p class="empty-copy">This browser cannot embed PDFs. <a href="${escapeHtml(report.pdf_url)}" target="_blank" rel="noopener">Open the intelligence PDF in a new tab</a>.</p>
-          </object>
+          <iframe class="lead-intel-pdf" data-lead-intelligence-pdf-preview="${escapeHtml(report.pdf_url)}" title="Embedded lead intelligence PDF"></iframe>
         ` : `<p class="empty-copy">PDF is not available for this report yet.</p>`}
       ` : ""}
       <details class="lead-intel-market-feed">
@@ -9410,9 +9462,29 @@ function renderLeadDrawer() {
   `;
   renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });
   bindLeadDrawerEvents();
+  hydrateLeadIntelligencePdfPreviews();
 }
 
 function bindLeadDrawerEvents() {
+  document.querySelectorAll("[data-lead-intelligence-pdf-download]").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        await downloadAuthenticatedPdf(button.dataset.leadIntelligencePdfDownload);
+      } catch (error) {
+        setToast(error.message, "error");
+      }
+    });
+  });
+  document.querySelectorAll("[data-lead-intelligence-pdf-open]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const popup = window.open("", "_blank");
+      try {
+        await openAuthenticatedPdf(button.dataset.leadIntelligencePdfOpen, popup);
+      } catch (error) {
+        setToast(error.message, "error");
+      }
+    });
+  });
   document.querySelector("#leadDetailBack")?.addEventListener("click", () => {
     closeLeadDrawer({ useBrowserBack: true });
   });
