@@ -217,6 +217,13 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const pdf = await request(baseUrl, completedIntel.data.report.download_url, { token: adminToken });
     assert.equal(pdf.response.status, 200);
     assert.strictEqual(pdf.data.slice(0, 4).toString(), "%PDF");
+    const legacyFilenamePdf = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/pdf/${encodeURIComponent(`${completedIntel.data.report.id}.pdf`)}`, { token: adminToken });
+    assert.equal(legacyFilenamePdf.response.status, 200, "legacy PDF filename routes must resolve to the lead's current completed report");
+    assert.strictEqual(legacyFilenamePdf.data.slice(0, 4).toString(), "%PDF");
+    fs.rmSync(path.join(dataIntelPath, lead.data.id, `${completedIntel.data.report.id}.pdf`), { force: true });
+    const missingPdfFile = await request(baseUrl, completedIntel.data.report.download_url, { token: adminToken });
+    assert.equal(missingPdfFile.response.status, 404);
+    assert.equal(missingPdfFile.data.error, "PDF file not found, please re-upload.");
 
     const refresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
     assert.equal(refresh.response.status, 200);
