@@ -16,11 +16,11 @@ const leads = [
 
 assert.deepEqual(server.visibleLeadsForUser(leads, admin).map(lead => lead.id), ["lead-1", "lead-2", "lead-3", "lead-4", "lead-5", "lead-6"]);
 assert.deepEqual(server.visibleLeadsForUser(leads, director).map(lead => lead.id), ["lead-1", "lead-2", "lead-3", "lead-4", "lead-5", "lead-6"]);
-assert.deepEqual(server.visibleLeadsForUser(leads, salesman).map(lead => lead.id), ["lead-2", "lead-3", "lead-4", "lead-6"]);
+assert.deepEqual(server.visibleLeadsForUser(leads, salesman).map(lead => lead.id), ["lead-2", "lead-3", "lead-4"]);
 assert.equal(server.leadBelongsToUser(leads[0], salesman), false);
 assert.equal(server.leadBelongsToUser(leads[1], salesman), true);
 assert.equal(server.leadBelongsToUser(leads[3], salesman), true);
-assert.equal(server.leadBelongsToUser(leads[5], salesman), true);
+assert.equal(server.leadBelongsToUser(leads[5], salesman), false);
 
 const newLeadPayload = server.prepareLeadPayloadForUser({ company_name: "New Lead", assigned_salesman: "Rafiq Ali", territory: "Saudi" }, salesman);
 assert.equal(newLeadPayload.assigned_salesman, "Ahmed Khan");
