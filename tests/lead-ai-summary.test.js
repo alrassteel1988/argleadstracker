@@ -52,14 +52,23 @@ const bundle = {
   marketIntelUnavailableReason: ""
 };
 
+bundle.intelligenceReport = {
+  research_date: "2026-08-10",
+  executive_snapshot: { top_opportunity: "Uploaded structural steel package", steel_demand: "HIGH" },
+  sales_recommendation: { recommended_sales_angle: "Call procurement" },
+  lead_score: { displayed_score: 8 }
+};
+
 const context = buildLeadSummaryContext(bundle);
 assert.strictEqual(context.lead.company_name, "ACA Steel Contracting LLC");
 assert.strictEqual(context.activity_summary.calls, 1);
+assert.strictEqual(context.uploaded_pdf_intelligence.executive_snapshot.top_opportunity, "Uploaded structural steel package");
 
 const fallback = fallbackLeadSummary(bundle);
 assert.ok(fallback.current_lead_status.includes("PROSPECT"));
 assert.ok(Array.isArray(fallback.risks_attention_needed));
 assert.ok(Array.isArray(fallback.data_gaps));
+assert.match(fallback.market_intelligence, /Uploaded structural steel package/);
 
 async function mockFetch() {
   return {

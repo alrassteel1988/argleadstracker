@@ -160,6 +160,16 @@ function buildLeadSummaryContext(bundle) {
       configured: Boolean(bundle.marketIntelConfigured),
       unavailable_reason: safeText(bundle.marketIntelUnavailableReason)
     },
+    uploaded_pdf_intelligence: bundle.intelligenceReport ? {
+      research_date: safeText(bundle.intelligenceReport.research_date),
+      executive_snapshot: bundle.intelligenceReport.executive_snapshot || {},
+      company_profile: bundle.intelligenceReport.company_profile || {},
+      project_intelligence: bundle.intelligenceReport.project_intelligence || {},
+      procurement_contacts: take(bundle.intelligenceReport.procurement_contacts, 6),
+      structural_steel_opportunity: bundle.intelligenceReport.structural_steel_opportunity || {},
+      sales_recommendation: bundle.intelligenceReport.sales_recommendation || {},
+      lead_score: bundle.intelligenceReport.lead_score || {}
+    } : null,
     market_intelligence: take(bundle.intel, 8).map(item => ({
       title: safeText(item.title),
       summary: safeText(item.summary),
@@ -207,7 +217,9 @@ function fallbackLeadSummary(bundle) {
       lead.estimated_value ? `Open pipeline value is recorded at ${lead.estimated_value}.` : "No open pipeline value is recorded.",
       lead.next_action ? `The next planned action is ${lead.next_action}${lead.next_action_date ? ` on ${lead.next_action_date}` : ""}.` : "No next action has been recorded yet."
     ].join(" "),
-    market_intelligence: bundle.marketIntelConfigured
+    market_intelligence: bundle.intelligenceReport
+      ? safeText(bundle.intelligenceReport.executive_snapshot?.top_opportunity || bundle.intelligenceReport.sales_recommendation?.recommended_sales_angle || bundle.intelligenceReport.structural_steel_opportunity?.buying_pattern_opportunity || "Uploaded PDF intelligence is available for this lead.")
+      : bundle.marketIntelConfigured
       ? ((bundle.intel && bundle.intel[0] && safeText(bundle.intel[0].summary || bundle.intel[0].title)) || "No matched market intelligence was found for this lead.")
       : "Market intelligence unavailable. ZAWYA/LSEG API is not configured.",
     salesman_engagement_history: [

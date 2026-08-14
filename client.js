@@ -1792,6 +1792,25 @@ function activityAudioMarkup(activity) {
   return `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(voiceNoteId)}" ${source}></audio>`;
 }
 
+async function uploadLeadIntelligencePdf(leadId, file) {
+  if (!(file instanceof File) || !/\.pdf$/i.test(file.name || "") && file.type !== "application/pdf") {
+    throw new Error("Choose a PDF intelligence report.");
+  }
+  const token = sessionStorage.getItem(SESSION_KEY) || "";
+  const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/intelligence/upload`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "Content-Type": "application/pdf",
+      "X-File-Name": encodeURIComponent(file.name)
+    },
+    body: file
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Intelligence PDF upload failed.");
+  return result;
+}
+
 async function loadActivityAudioSources() {
   const players = [...document.querySelectorAll("audio[data-voice-note-id]")].filter(player => player.dataset.voiceNoteId);
   await Promise.all(players.map(async player => {
@@ -9259,6 +9278,7 @@ function renderDrawerIntel(lead) {
         <h3>UAE Structural Steel Lead Intelligence</h3>
         ${processing ? `<span class="status-pill">${escapeHtml(statusLabel)}</span>` : ""}
       </div>
+      <label class="lead-intel-upload-control">Upload intelligence PDF<input type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload="${escapeHtml(lead.id)}"></label>
       ${!report && !processing && !failedVisible ? `
         <div class="lead-intel-empty">
           <strong>No intelligence report yet.</strong>
@@ -9282,6 +9302,7 @@ function renderDrawerIntel(lead) {
       ` : ""}
       ${report ? `
         ${intelligenceSummaryMarkup(report)}
+        ${report.report ? `<div class="lead-intel-detail-grid"><span><b>Opportunity</b><small>${escapeHtml(report.report.executive_snapshot?.top_opportunity || report.report.sales_recommendation?.recommended_sales_angle || "Not publicly found")}</small></span><span><b>Next action</b><small>${escapeHtml(report.report.sales_recommendation?.suggested_next_action || "Not publicly found")}</small></span><span><b>Company profile</b><small>${escapeHtml((report.report.company_profile?.main_activities || []).join(", ") || "Not publicly found")}</small></span></div>` : ""}
         ${hasPdf ? `
           <div class="lead-intel-actions">
             <a class="ghost-button" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">Download PDF</a>
@@ -9510,7 +9531,26 @@ function bindLeadDrawerEvents() {
         button.disabled = false;
       }
     });
-  });  document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
+  });
+  document.querySelectorAll("[data-lead-intelligence-upload]").forEach(input => {
+    input.addEventListener("change", async event => {
+      const file = event.currentTarget.files?.[0];
+      if (!file) return;
+      try {
+        setToast("Extracting and saving intelligence PDF...", "");
+        const result = await uploadLeadIntelligencePdf(event.currentTarget.dataset.leadIntelligenceUpload, file);
+        state.leadDrawerIntel = result.state;
+        const uploadedLeadId = String(event.currentTarget.dataset.leadIntelligenceUpload);
+        leadAiSummaryCache.delete(uploadedLeadId);
+        await loadLeadAiSummary(uploadedLeadId, { force: true });
+        setToast("Intelligence PDF saved to the Intel card and AI summary context.", "success");
+        renderLeadDrawer();
+      } catch (error) {
+        setToast(error.message, "error");
+      }
+    });
+  });
+  document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
     document.querySelector(".drawer-notes-view")?.classList.add("hidden");
     document.querySelector("#drawerNotesForm")?.classList.remove("hidden");
   });
