@@ -9262,8 +9262,7 @@ function leadIntelligenceActionButton(action, leadId, label, tone = "primary-but
   return `<button class="${tone}" type="button" data-lead-intelligence-action="${escapeHtml(action)}" data-lead-id="${escapeHtml(leadId)}" ${reportId ? `data-report-id="${escapeHtml(reportId)}"` : ""}>${escapeHtml(label)}</button>`;
 }
 
-function leadIntelligenceUploadMarkup(leadId, { role = state.currentUser?.role, hasReport = false, processing = false } = {}) {
-  if (!isPrivilegedDashboardRole(role)) return "";
+function leadIntelligenceUploadMarkup(leadId, { hasReport = false, processing = false } = {}) {
   const label = hasReport || processing ? "Replace PDF" : "Upload PDF";
   return `<label class="primary-button lead-intel-upload-control">${label}<input type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload="${escapeHtml(leadId)}"></label>`;
 }

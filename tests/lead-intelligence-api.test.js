@@ -125,6 +125,10 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.ok(uploadedIntel.data.report.report.sales_recommendation, "Intel tab payload must expose saved extracted fields");
     assert.notEqual(uploadedIntel.data.report.id, currentReportId, "upload must replace the current intelligence report");
 
+    const adminReplacement = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Replacement API Intelligence Lead LLC PDF with procurement and structural steel details.");
+    assert.equal(adminReplacement.response.status, 200, JSON.stringify(adminReplacement.data));
+    assert.equal(adminReplacement.data.replaced_report_id, uploaded.data.report.id, "admin upload must replace the current PDF");
+
     const pdf = await request(baseUrl, completedIntel.data.report.download_url, { token: adminToken });
     assert.equal(pdf.response.status, 200);
     assert.strictEqual(pdf.data.slice(0, 4).toString(), "%PDF");
@@ -159,8 +163,27 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.equal(salesmanAccount.response.status, 201);
     const salesmanLogin = await request(baseUrl, "/api/auth/login", { method: "POST", body: { email: "salesman-intel@alrassteel.test", password: "SalesPass123!" } });
     assert.equal(salesmanLogin.response.status, 200);
-    const forbiddenIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: salesmanLogin.data.token });
+    const salesmanToken = salesmanLogin.data.token;
+    const salesmanLead = await request(baseUrl, "/api/leads", {
+      method: "POST",
+      token: salesmanToken,
+      body: { company_name: "Salesman Intelligence Lead LLC", stage: "PROSPECT", territory: "Abu Dhabi" }
+    });
+    assert.equal(salesmanLead.response.status, 201, JSON.stringify(salesmanLead.data));
+    assert.equal(salesmanLead.data.assigned_to, salesmanAccount.data.id, "salesman-created lead must retain current assignment");
+
+    const salesmanUpload = await requestPdf(baseUrl, `/api/leads/${salesmanLead.data.id}/intelligence/upload`, salesmanToken, "Salesman Intelligence Lead LLC uploaded PDF describing a structural steel opportunity.");
+    assert.equal(salesmanUpload.response.status, 200, JSON.stringify(salesmanUpload.data));
+    assert.equal(salesmanUpload.data.report.status, "completed");
+    assert.ok(salesmanUpload.data.state.report.report.executive_snapshot, "salesman upload must update Intel Card fields");
+    const salesmanSummary = await request(baseUrl, "/api/ai/lead-summary", { method: "POST", token: salesmanToken, body: { leadId: salesmanLead.data.id } });
+    assert.equal(salesmanSummary.response.status, 200, JSON.stringify(salesmanSummary.data));
+    assert.match(salesmanSummary.data.summary.market_intelligence, /Structural steel supply/, "Lead Overview summary must use the uploaded PDF intelligence context");
+
+    const forbiddenIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: salesmanToken });
     assert.equal(forbiddenIntel.response.status, 404);
+    const forbiddenUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, salesmanToken, "Unauthorized replacement attempt.");
+    assert.equal(forbiddenUpload.response.status, 404, JSON.stringify(forbiddenUpload.data));
 
     console.log("PASS lead intelligence API");
   } finally {

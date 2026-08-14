@@ -32,7 +32,7 @@ function sourceFunction(name) {
 
 const leadIntelligenceUploadMarkup = new Function(
   "escapeHtml",
-  `${sourceFunction("normalizeRoleValue")}\n${sourceFunction("isPrivilegedDashboardRole")}\n${sourceFunction("leadIntelligenceUploadMarkup")}\nreturn leadIntelligenceUploadMarkup;`
+  `${sourceFunction("leadIntelligenceUploadMarkup")}\nreturn leadIntelligenceUploadMarkup;`
 )(value => String(value));
 
 assert.ok(clientSource.includes("function renderDrawerIntel"));
@@ -63,6 +63,8 @@ const researchingReportUpload = leadIntelligenceUploadMarkup("lead-aca", { role:
 assert.match(researchingReportUpload, /Replace PDF/);
 assert.match(researchingReportUpload, /data-lead-intelligence-upload="lead-aca"/);
 
-assert.equal(leadIntelligenceUploadMarkup("lead-aca", { role: "salesman", hasReport: true }), "");
+const salesmanReportUpload = leadIntelligenceUploadMarkup("lead-aca", { role: "salesman", hasReport: true });
+assert.match(salesmanReportUpload, /Replace PDF/);
+assert.match(salesmanReportUpload, /data-lead-intelligence-upload="lead-aca"/);
 
 console.log("PASS lead intelligence Intel tab UI contract");

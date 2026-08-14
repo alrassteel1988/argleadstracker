@@ -6585,6 +6585,7 @@ async function handleApi(req, res, url) {
       openAiKey: OPENAI_API_KEY, model: OPENAI_LEAD_INTELLIGENCE_MODEL
     });
     const existing = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+    const replacedReportId = existing.find(item => item.is_current)?.id || null;
     const inserted = await insertLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "pdf_upload" });
     const storageKey = await persistLeadIntelligencePdf(db, inserted, pdf, supabaseEnabled);
     const report = parsed.report;
@@ -6599,7 +6600,7 @@ async function handleApi(req, res, url) {
     await markLeadIntelligenceCurrent(db, lead.id, inserted.id, supabaseEnabled);
     return sendJson(res, 200, {
       report: serializeLeadIntelligenceRecord(completed, { includeReport: true }),
-      replaced_report_id: existing.find(item => item.is_current)?.id || null,
+      replaced_report_id: replacedReportId,
       state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, [])
     });
   }
