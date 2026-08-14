@@ -1134,7 +1134,18 @@ function leadAiGeneratedLabel(value) {
 function summaryList(items, tone = "") {
   const rows = asArray(items).filter(Boolean);
   if (!rows.length) return `<p class="lead-ai-empty-copy">No items noted.</p>`;
-  return `<ul class="lead-ai-list ${tone}">${rows.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+  return `<ul class="lead-ai-list ${tone}">${rows.map(item => `<li>${escapeHtml(summaryText(item))}</li>`).join("")}</ul>`;
+}
+
+function summaryText(value) {
+  if (Array.isArray(value)) return value.map(item => summaryText(item)).filter(Boolean).join("; ");
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, item]) => `${key.replace(/[_-]+/g, " ")}: ${summaryText(item)}`)
+      .filter(Boolean)
+      .join("; ");
+  }
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 function sourceList(items) {
@@ -1194,16 +1205,16 @@ function renderLeadAiSummaryPanel(lead, options = {}) {
     `;
   } else if (summary) {
     body = [
-      leadAiCard("Current Lead Status", `<p>${escapeHtml(summary.current_lead_status || "No summary available.")}</p>`, { tone: "status" }),
+      leadAiCard("Current Lead Status", `<p>${escapeHtml(summaryText(summary.current_lead_status) || "No summary available.")}</p>`, { tone: "status" }),
       leadAiCard("Market Intelligence", `
-        <p>${escapeHtml(summary.market_intelligence || "Market intelligence unavailable.")}</p>
+        <p>${escapeHtml(summaryText(summary.market_intelligence) || "Market intelligence unavailable.")}</p>
         ${summaryState.marketIntelUnavailableReason ? `<div class="lead-ai-note">${escapeHtml(summaryState.marketIntelUnavailableReason)}</div>` : ""}
       `, { tone: "intel" }),
-      leadAiCard("Salesman Engagement History", `<p>${escapeHtml(summary.salesman_engagement_history || "No engagement history recorded.")}</p>`, { tone: "engagement" }),
+      leadAiCard("Salesman Engagement History", `<p>${escapeHtml(summaryText(summary.salesman_engagement_history) || "No engagement history recorded.")}</p>`, { tone: "engagement" }),
       leadAiCard("Risks / Attention Needed", summaryList(summary.risks_attention_needed, "risk"), { tone: "risk" }),
       leadAiCard("Recommended Next Action", `
-        <p class="lead-ai-action-copy">${escapeHtml(summary.recommended_next_action || "No next action recommended yet.")}</p>
-        ${summary.suggested_follow_up_message ? `<div class="lead-ai-followup"><span class="meta-label">Suggested follow-up message</span><p>${escapeHtml(summary.suggested_follow_up_message)}</p></div>` : ""}
+        <p class="lead-ai-action-copy">${escapeHtml(summaryText(summary.recommended_next_action) || "No next action recommended yet.")}</p>
+        ${summary.suggested_follow_up_message ? `<div class="lead-ai-followup"><span class="meta-label">Suggested follow-up message</span><p>${escapeHtml(summaryText(summary.suggested_follow_up_message))}</p></div>` : ""}
       `, { tone: "action" }),
       leadAiCard("Data Gaps", summaryList(summary.data_gaps), { tone: "neutral" }),
       leadAiCard("Sources", sourceList(summary.sources), { meta: stale ? "Needs refresh" : "Current" })
@@ -9552,6 +9563,13 @@ function bindLeadDrawerEvents() {
         setToast("Intelligence PDF saved to the Intel card and AI summary context.", "success");
         renderLeadDrawer();
       } catch (error) {
+        const uploadedLeadId = String(event.currentTarget.dataset.leadIntelligenceUpload);
+        try {
+          state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(uploadedLeadId)}/intel`);
+          renderLeadDrawer();
+        } catch {
+          // Preserve the original upload error when the state refresh is unavailable.
+        }
         setToast(error.message, "error");
       }
     });

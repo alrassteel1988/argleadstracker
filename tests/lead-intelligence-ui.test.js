@@ -36,9 +36,12 @@ const leadIntelligenceUploadMarkup = new Function(
 )(value => String(value));
 
 assert.ok(clientSource.includes("function renderDrawerIntel"));
+assert.ok(clientSource.includes("function summaryText(value)"));
+assert.ok(clientSource.includes("summaryText(summary.salesman_engagement_history)"));
 assert.ok(clientSource.includes("leadIntelligenceUploadMarkup(lead.id, { hasReport: Boolean(report), processing })"));
 assert.ok(clientSource.includes("/intelligence/upload"));
 assert.ok(clientSource.includes("Intelligence PDF saved to the Intel card and AI summary context."));
+assert.ok(clientSource.includes("state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(uploadedLeadId)}/intel`);"), "failed PDF uploads must refresh the Intel state instead of leaving a stale queued status");
 assert.ok(clientSource.includes("report.report.executive_snapshot"));
 assert.ok(clientSource.includes("No intelligence report yet."));
 assert.ok(clientSource.includes("Generate Intelligence"));

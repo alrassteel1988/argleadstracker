@@ -69,6 +69,7 @@ global.fetch = async function mockedFetch(url, options) {
     const validJson = JSON.stringify(providerFixture());
     const outputText = providerMode === "success" ? validJson
       : providerMode === "repairable_json" ? `Here is the reconstructed report:\n\n\`\`\`json\n${validJson.replace(',"executive_snapshot"', ' "executive_snapshot"').replace(/}$/, ',}')}\n\`\`\``
+      : providerMode === "repairable_array_json" ? validJson.replace('["Steel fabrication"]', '["Steel fabrication" "Structural steel supply"]')
       : providerMode === "repairable_newline_json" ? validJson.replace("Structural steel supply", "Structural steel\nsupply")
       : providerMode === "malformed_json" ? '{"research_date":"2026-08-10","executive_snapshot":'
       : JSON.stringify({ sources: [] });
@@ -130,6 +131,34 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.ok(uploadedIntel.data.report.report.sales_recommendation, "Intel tab payload must expose saved extracted fields");
     assert.notEqual(uploadedIntel.data.report.id, currentReportId, "upload must replace the current intelligence report");
 
+    const queuedPdfLead = await request(baseUrl, "/api/leads", {
+      method: "POST", token: adminToken,
+      body: { company_name: "Queued PDF Intelligence Lead LLC", stage: "PROSPECT", territory: "Dubai" }
+    });
+    assert.equal(queuedPdfLead.response.status, 201, JSON.stringify(queuedPdfLead.data));
+    const queuedBeforePdfUpload = await request(baseUrl, `/api/leads/${queuedPdfLead.data.id}/intel`, { token: adminToken });
+    assert.equal(queuedBeforePdfUpload.data.active_report.status, "queued");
+    const queuedPdfUpload = await requestPdf(baseUrl, `/api/leads/${queuedPdfLead.data.id}/intelligence/upload`, adminToken, "Queued PDF Intelligence Lead LLC structural steel opportunity.");
+    assert.equal(queuedPdfUpload.response.status, 200, JSON.stringify(queuedPdfUpload.data));
+    assert.equal(queuedPdfUpload.data.report.status, "completed");
+    assert.equal(queuedPdfUpload.data.state.active_report, null, "successful PDF upload must retire the older queued job");
+    assert.equal(queuedPdfUpload.data.state.report.id, queuedPdfUpload.data.report.id, "uploaded PDF report must be current");
+    assert.equal(queuedPdfUpload.data.state.failed_report, null, "a completed PDF upload must not surface its retired queue as a failure");
+
+    const failedPdfLead = await request(baseUrl, "/api/leads", {
+      method: "POST", token: adminToken,
+      body: { company_name: "Failed PDF Intelligence Lead LLC", stage: "PROSPECT", territory: "Dubai" }
+    });
+    assert.equal(failedPdfLead.response.status, 201, JSON.stringify(failedPdfLead.data));
+    providerMode = "malformed_json";
+    const failedQueuedPdfUpload = await requestPdf(baseUrl, `/api/leads/${failedPdfLead.data.id}/intelligence/upload`, adminToken, "Failed PDF Intelligence Lead LLC.");
+    assert.equal(failedQueuedPdfUpload.response.status, 422, JSON.stringify(failedQueuedPdfUpload.data));
+    const failedQueuedPdfState = await request(baseUrl, `/api/leads/${failedPdfLead.data.id}/intel`, { token: adminToken });
+    assert.equal(failedQueuedPdfState.data.active_report, null, "failed PDF parsing must not leave the initial job queued");
+    assert.equal(failedQueuedPdfState.data.failed_report.status, "failed");
+    assert.match(failedQueuedPdfState.data.failed_report.error_message, /malformed JSON.*could not be safely repaired/i);
+    providerMode = "success";
+
     const adminReplacement = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Replacement API Intelligence Lead LLC PDF with procurement and structural steel details.");
     assert.equal(adminReplacement.response.status, 200, JSON.stringify(adminReplacement.data));
     assert.equal(adminReplacement.data.replaced_report_id, uploaded.data.report.id, "admin upload must replace the current PDF");
@@ -144,6 +173,12 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.equal(repairedSummary.response.status, 200, JSON.stringify(repairedSummary.data));
     assert.match(repairedSummary.data.summary.market_intelligence, /Structural steel supply/, "Lead Overview summary must use repaired PDF intelligence context");
     const repairedReportId = repairedUpload.data.report.id;
+
+    providerMode = "repairable_array_json";
+    const repairedArrayUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF with missing array JSON comma.");
+    assert.equal(repairedArrayUpload.response.status, 200, JSON.stringify(repairedArrayUpload.data));
+    assert.deepEqual(repairedArrayUpload.data.report.report.company_profile.main_activities, ["Steel fabrication", "Structural steel supply"], "safe JSON repair must restore missing commas between model array values");
+    providerMode = "success";
 
     providerMode = "repairable_newline_json";
     const repairedNewlineUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF with a model JSON line-break defect.");

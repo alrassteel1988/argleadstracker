@@ -372,6 +372,8 @@ function repairJsonObject(text) {
   let output = "";
   let quoted = false;
   let escaped = false;
+  const containers = [];
+  const needsSeparator = () => /["}\]0-9el]/.test(output.trimEnd().slice(-1));
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index];
     if (quoted) {
@@ -400,12 +402,14 @@ function repairJsonObject(text) {
     if (character === '"') {
       const end = stringEnd(source, index);
       const isObjectKey = end >= 0 && nextNonWhitespace(source, end + 1) === ":";
-      const previous = output.trimEnd().slice(-1);
-      if (isObjectKey && /["}\]0-9el]/.test(previous)) output += ",";
+      if (needsSeparator() && (isObjectKey || containers.at(-1) === "[")) output += ",";
       output += character;
       quoted = true;
       continue;
     }
+    if ((character === "{" || character === "[") && needsSeparator()) output += ",";
+    if (character === "{" || character === "[") containers.push(character);
+    if (character === "}" || character === "]") containers.pop();
     if (character === ",") {
       const next = nextNonWhitespace(source, index + 1);
       if (next === "}" || next === "]") continue;
