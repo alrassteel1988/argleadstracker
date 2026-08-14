@@ -83,8 +83,8 @@ async function mockFetch() {
                 text: JSON.stringify({
                   current_lead_status: "Lead is early-stage and needs qualification.",
                   market_intelligence: "Construction activity remains relevant in Dubai.",
-                  salesman_engagement_history: "Alex owns the lead and logged one call.",
-                  risks_attention_needed: ["No quote has been issued yet."],
+                  salesman_engagement_history: { owner: "Alex", latest_activity: "One call logged" },
+                  risks_attention_needed: [{ issue: "No quote has been issued yet." }],
                   recommended_next_action: "Call procurement and confirm current requirement.",
                   suggested_follow_up_message: "Hello team, may we confirm your current steel requirement?",
                   confidence: "High",
@@ -110,6 +110,9 @@ async function mockFetch() {
   assert.strictEqual(result.provider, "openai");
   assert.strictEqual(result.summary.confidence, "High");
   assert.strictEqual(result.summary.sources[0].label, "Dubai contractor activity");
+  assert.match(result.summary.salesman_engagement_history, /owner: Alex/i);
+  assert.ok(!result.summary.salesman_engagement_history.includes("[object Object]"));
+  assert.deepStrictEqual(result.summary.risks_attention_needed, ["issue: No quote has been issued yet."]);
 
   const fallbackResult = await runLeadAiSummary({ bundle, openAiKey: "" });
   assert.strictEqual(fallbackResult.provider, "fallback");

@@ -3428,7 +3428,8 @@ async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, market
   const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
   const active = reports.find(report => activeLeadIntelligenceStatuses().has(report.status)) || null;
   const current = reports.find(report => report.status === "completed" && report.is_current) || reports.find(report => report.status === "completed") || null;
-  const failed = reports.find(report => report.status === "failed") || null;
+  const latestTerminal = reports.find(report => report.status === "completed" || report.status === "failed") || null;
+  const failed = latestTerminal?.status === "failed" ? latestTerminal : null;
   return {
     workflow_version: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
     auto_queue_enabled: LEAD_INTELLIGENCE_AUTO_QUEUE,
@@ -3526,6 +3527,19 @@ async function updateLeadIntelligenceReport(db, reportId, patch, supabaseEnabled
   db.lead_intelligence_reports[index] = { ...db.lead_intelligence_reports[index], ...updated };
   writeDb(db);
   return db.lead_intelligence_reports[index];
+}
+
+async function failActiveLeadIntelligenceReports(db, user, leadId, supabaseEnabled, { code, message }) {
+  const reports = await loadLeadIntelligenceReports(db, user.token, leadId, supabaseEnabled);
+  const activeReports = reports.filter(report => activeLeadIntelligenceStatuses().has(report.status));
+  if (!activeReports.length) return [];
+  const completedAt = new Date().toISOString();
+  return Promise.all(activeReports.map(report => updateLeadIntelligenceReport(db, report.id, {
+    status: "failed",
+    error_code: code,
+    error_message: message,
+    completed_at: completedAt
+  }, supabaseEnabled)));
 }
 
 async function markLeadIntelligenceCurrent(db, leadId, currentReportId, supabaseEnabled) {
@@ -6580,11 +6594,26 @@ async function handleApi(req, res, url) {
     const pdf = await readRawBody(req, MAX_ACTIVITY_ATTACHMENT_BYTES, "Lead intelligence PDF upload failed. The maximum file size is 8 MB.");
     if (!isPdfUpload(pdf)) return sendJson(res, 400, { error: "Uploaded file is not a valid PDF." });
     const filename = decodeURIComponent(String(req.headers["x-file-name"] || "lead-intelligence.pdf")).slice(0, 180);
-    const parsed = await parseLeadIntelligencePdfWithOpenAI({
-      rawPdfText: leadIntelligencePdfText(pdf), pdfBuffer: pdf, filename, lead,
-      openAiKey: OPENAI_API_KEY, model: OPENAI_LEAD_INTELLIGENCE_MODEL
+    let parsed;
+    try {
+      parsed = await parseLeadIntelligencePdfWithOpenAI({
+        rawPdfText: leadIntelligencePdfText(pdf), pdfBuffer: pdf, filename, lead,
+        openAiKey: OPENAI_API_KEY, model: OPENAI_LEAD_INTELLIGENCE_MODEL
+      });
+    } catch (error) {
+      const sanitized = sanitizeLeadIntelligenceError(error);
+      await failActiveLeadIntelligenceReports(db, user, lead.id, supabaseEnabled, {
+        code: sanitized.code,
+        message: sanitized.message
+      });
+      throw error;
+    }
+    await failActiveLeadIntelligenceReports(db, user, lead.id, supabaseEnabled, {
+      code: "superseded_by_pdf_upload",
+      message: "Superseded by uploaded PDF processing."
     });
     const existing = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+    const replacedReportId = existing.find(item => item.is_current)?.id || null;
     const inserted = await insertLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "pdf_upload" });
     const storageKey = await persistLeadIntelligencePdf(db, inserted, pdf, supabaseEnabled);
     const report = parsed.report;
@@ -6599,7 +6628,7 @@ async function handleApi(req, res, url) {
     await markLeadIntelligenceCurrent(db, lead.id, inserted.id, supabaseEnabled);
     return sendJson(res, 200, {
       report: serializeLeadIntelligenceRecord(completed, { includeReport: true }),
-      replaced_report_id: existing.find(item => item.is_current)?.id || null,
+      replaced_report_id: replacedReportId,
       state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, [])
     });
   }

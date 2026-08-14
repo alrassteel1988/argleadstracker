@@ -321,14 +321,156 @@ function extractResponseText(payload) {
   return chunks.join("\n").trim();
 }
 
+function firstJsonObject(text) {
+  const raw = String(text || "").trim();
+  const start = raw.indexOf("{");
+  if (start < 0) return "";
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = start; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return raw.slice(start, index + 1);
+    }
+  }
+  return raw.slice(start);
+}
+
+function stringEnd(text, start) {
+  let escaped = false;
+  for (let index = start + 1; index < text.length; index += 1) {
+    if (escaped) escaped = false;
+    else if (text[index] === "\\") escaped = true;
+    else if (text[index] === '"') return index;
+  }
+  return -1;
+}
+
+function nextNonWhitespace(text, start) {
+  for (let index = start; index < text.length; index += 1) {
+    if (!/\s/.test(text[index])) return text[index];
+  }
+  return "";
+}
+
+// The model is asked for strict JSON, but it can still emit a fenced object,
+// a trailing comma, omit a comma before the next object key, or include a raw
+// line break in a string. Repair only those unambiguous structural defects;
+// never evaluate model text as code or attempt to infer missing data.
+function repairJsonObject(text) {
+  const source = firstJsonObject(text);
+  let output = "";
+  let quoted = false;
+  let escaped = false;
+  const containers = [];
+  const needsSeparator = () => /["}\]0-9el]/.test(output.trimEnd().slice(-1));
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (quoted) {
+      if (character === "\n") {
+        output += "\\n";
+        continue;
+      }
+      if (character === "\r") {
+        output += "\\r";
+        continue;
+      }
+      if (character === "\t") {
+        output += "\\t";
+        continue;
+      }
+      if (character.charCodeAt(0) < 0x20) {
+        output += `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+        continue;
+      }
+      output += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') {
+      const end = stringEnd(source, index);
+      const isObjectKey = end >= 0 && nextNonWhitespace(source, end + 1) === ":";
+      if (needsSeparator() && (isObjectKey || containers.at(-1) === "[")) output += ",";
+      output += character;
+      quoted = true;
+      continue;
+    }
+    if ((character === "{" || character === "[") && needsSeparator()) output += ",";
+    if (character === "{" || character === "[") containers.push(character);
+    if (character === "}" || character === "]") containers.pop();
+    if (character === ",") {
+      const next = nextNonWhitespace(source, index + 1);
+      if (next === "}" || next === "]") continue;
+    }
+    output += character;
+  }
+  return output.trim();
+}
+
 function parseJsonText(text) {
   const raw = String(text || "").trim();
-  if (!raw) throw new Error("AI provider returned no structured report text.");
-  try { return JSON.parse(raw); } catch (error) {
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) throw error;
-    return JSON.parse(match[0]);
+  if (!raw) {
+    const error = new Error("Lead intelligence validation failed: the AI response was empty.");
+    error.code = "model_json_invalid";
+    error.status = 422;
+    error.details = ["The AI response did not contain a JSON report."];
+    throw error;
   }
+  const candidate = firstJsonObject(raw) || raw;
+  try {
+    return JSON.parse(candidate);
+  } catch (initialError) {
+    try {
+      return JSON.parse(repairJsonObject(candidate));
+    } catch (repairError) {
+      const error = new Error("Lead intelligence validation failed: the AI response contained malformed JSON that could not be safely repaired. Please retry the upload.");
+      error.code = "model_json_invalid";
+      error.status = 422;
+      error.details = [
+        "The AI response was not valid JSON after safe repair.",
+        `Parser detail: ${String(repairError?.message || initialError?.message || "invalid JSON").slice(0, 180)}`
+      ];
+      throw error;
+    }
+  }
+}
+
+function withUploadedPdfValidationEvidence(input, filename) {
+  const report = input && typeof input === "object" ? { ...input } : {};
+  const sources = asArray(report.sources);
+  if (!sources.length) {
+    sources.push({
+      id: "src-uploaded-pdf",
+      title: `Uploaded PDF: ${safeText(filename, "lead-intelligence.pdf")}`,
+      url: UNKNOWN,
+      publisher: "Uploaded CRM document",
+      source_type: "Uploaded PDF",
+      access_date: new Date().toISOString().slice(0, 10)
+    });
+  }
+  report.sources = sources;
+  const researchQuality = report.research_quality && typeof report.research_quality === "object" ? { ...report.research_quality } : {};
+  if (!asArray(researchQuality.verified_information || report.verified_facts).length) {
+    researchQuality.verified_information = [{
+      statement: "Information was extracted from the uploaded PDF and should be reviewed against the original document.",
+      source_refs: [safeText(sources[0]?.id, "src-uploaded-pdf")],
+      confidence: "Medium"
+    }];
+  }
+  report.research_quality = researchQuality;
+  return report;
 }
 
 async function generateLeadIntelligenceWithOpenAI({ lead, openAiKey, model = "gpt-4.1-mini", fetchImpl = fetch, timeoutMs = 90_000 }) {
@@ -439,7 +581,8 @@ async function parseLeadIntelligencePdfWithOpenAI({ rawPdfText, pdfBuffer, filen
       error.status = response.status;
       throw error;
     }
-    return { report: assertValidLeadIntelligenceReport(parseJsonText(extractResponseText(payload)), leadInput) };
+    const parsed = parseJsonText(extractResponseText(payload));
+    return { report: assertValidLeadIntelligenceReport(withUploadedPdfValidationEvidence(parsed, filename), leadInput) };
   } catch (error) {
     if (error.name === "AbortError") {
       error = new Error("Lead intelligence provider request timed out.");
@@ -617,7 +760,9 @@ module.exports = {
   calculateLeadScore,
   displayedScore,
   generateLeadIntelligenceWithOpenAI,
+  parseJsonText,
   parseLeadIntelligencePdfWithOpenAI,
+  withUploadedPdfValidationEvidence,
   normalizeLeadIntelligenceReport,
   priorityForWeightedScore,
   renderLeadIntelligencePdf,

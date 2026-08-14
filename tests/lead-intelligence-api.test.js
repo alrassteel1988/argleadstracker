@@ -66,7 +66,14 @@ function providerFixture() {
 let providerMode = "success";
 global.fetch = async function mockedFetch(url, options) {
   if (String(url).startsWith("https://api.openai.com/")) {
-    const outputText = providerMode === "success" ? JSON.stringify(providerFixture()) : JSON.stringify({ sources: [] });
+    const validJson = JSON.stringify(providerFixture());
+    const outputText = providerMode === "success" ? validJson
+      : providerMode === "repairable_json" ? `Here is the reconstructed report:\n\n\`\`\`json\n${validJson.replace(',"executive_snapshot"', ' "executive_snapshot"').replace(/}$/, ',}')}\n\`\`\``
+      : providerMode === "repairable_array_json" ? validJson.replace('["Steel fabrication"]', '["Steel fabrication" "Structural steel supply"]')
+      : providerMode === "pdf_missing_validation_evidence" ? JSON.stringify({ ...providerFixture(), sources: [], research_quality: { ...providerFixture().research_quality, verified_information: [] } })
+      : providerMode === "repairable_newline_json" ? validJson.replace("Structural steel supply", "Structural steel\nsupply")
+      : providerMode === "malformed_json" ? '{"research_date":"2026-08-10","executive_snapshot":'
+      : JSON.stringify({ sources: [] });
     return { ok: true, status: 200, async json() { return { id: `resp-${providerMode}`, status: "completed", usage: { input_tokens: 10, output_tokens: 20 }, output: [{ content: [{ type: "output_text", text: outputText }] }] }; } };
   }
   return nativeFetch(url, options);
@@ -124,6 +131,80 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.equal(uploadedIntel.data.report.id, uploaded.data.report.id);
     assert.ok(uploadedIntel.data.report.report.sales_recommendation, "Intel tab payload must expose saved extracted fields");
     assert.notEqual(uploadedIntel.data.report.id, currentReportId, "upload must replace the current intelligence report");
+    const anonymousPdf = await request(baseUrl, uploaded.data.report.download_url);
+    assert.equal(anonymousPdf.response.status, 401, "PDF delivery must remain protected without a bearer token");
+
+    providerMode = "pdf_missing_validation_evidence";
+    const evidenceFallbackUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF without web citations.");
+    assert.equal(evidenceFallbackUpload.response.status, 200, JSON.stringify(evidenceFallbackUpload.data));
+    assert.equal(evidenceFallbackUpload.data.report.status, "completed");
+    assert.equal(evidenceFallbackUpload.data.report.report.sources[0].source_type, "Uploaded PDF", "uploaded PDF provenance must satisfy PDF-only validation without exposing the report publicly");
+    const evidenceFallbackReportId = evidenceFallbackUpload.data.report.id;
+    providerMode = "success";
+
+    const queuedPdfLead = await request(baseUrl, "/api/leads", {
+      method: "POST", token: adminToken,
+      body: { company_name: "Queued PDF Intelligence Lead LLC", stage: "PROSPECT", territory: "Dubai" }
+    });
+    assert.equal(queuedPdfLead.response.status, 201, JSON.stringify(queuedPdfLead.data));
+    const queuedBeforePdfUpload = await request(baseUrl, `/api/leads/${queuedPdfLead.data.id}/intel`, { token: adminToken });
+    assert.equal(queuedBeforePdfUpload.data.active_report.status, "queued");
+    const queuedPdfUpload = await requestPdf(baseUrl, `/api/leads/${queuedPdfLead.data.id}/intelligence/upload`, adminToken, "Queued PDF Intelligence Lead LLC structural steel opportunity.");
+    assert.equal(queuedPdfUpload.response.status, 200, JSON.stringify(queuedPdfUpload.data));
+    assert.equal(queuedPdfUpload.data.report.status, "completed");
+    assert.equal(queuedPdfUpload.data.state.active_report, null, "successful PDF upload must retire the older queued job");
+    assert.equal(queuedPdfUpload.data.state.report.id, queuedPdfUpload.data.report.id, "uploaded PDF report must be current");
+    assert.equal(queuedPdfUpload.data.state.failed_report, null, "a completed PDF upload must not surface its retired queue as a failure");
+
+    const failedPdfLead = await request(baseUrl, "/api/leads", {
+      method: "POST", token: adminToken,
+      body: { company_name: "Failed PDF Intelligence Lead LLC", stage: "PROSPECT", territory: "Dubai" }
+    });
+    assert.equal(failedPdfLead.response.status, 201, JSON.stringify(failedPdfLead.data));
+    providerMode = "malformed_json";
+    const failedQueuedPdfUpload = await requestPdf(baseUrl, `/api/leads/${failedPdfLead.data.id}/intelligence/upload`, adminToken, "Failed PDF Intelligence Lead LLC.");
+    assert.equal(failedQueuedPdfUpload.response.status, 422, JSON.stringify(failedQueuedPdfUpload.data));
+    const failedQueuedPdfState = await request(baseUrl, `/api/leads/${failedPdfLead.data.id}/intel`, { token: adminToken });
+    assert.equal(failedQueuedPdfState.data.active_report, null, "failed PDF parsing must not leave the initial job queued");
+    assert.equal(failedQueuedPdfState.data.failed_report.status, "failed");
+    assert.match(failedQueuedPdfState.data.failed_report.error_message, /malformed JSON.*could not be safely repaired/i);
+    providerMode = "success";
+
+    const adminReplacement = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Replacement API Intelligence Lead LLC PDF with procurement and structural steel details.");
+    assert.equal(adminReplacement.response.status, 200, JSON.stringify(adminReplacement.data));
+    assert.equal(adminReplacement.data.replaced_report_id, evidenceFallbackReportId, "admin upload must replace the current PDF");
+
+    providerMode = "repairable_json";
+    const repairedUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Repairable JSON intelligence PDF.");
+    assert.equal(repairedUpload.response.status, 200, JSON.stringify(repairedUpload.data));
+    assert.ok(repairedUpload.data.report.report.executive_snapshot, "safe JSON repair must populate the Intel Card report");
+    assert.ok(repairedUpload.data.state.report.report.sales_recommendation, "Intel Card state must use the repaired PDF report");
+    providerMode = "success";
+    const repairedSummary = await request(baseUrl, "/api/ai/lead-summary", { method: "POST", token: adminToken, body: { leadId: lead.data.id } });
+    assert.equal(repairedSummary.response.status, 200, JSON.stringify(repairedSummary.data));
+    assert.match(repairedSummary.data.summary.market_intelligence, /Structural steel supply/, "Lead Overview summary must use repaired PDF intelligence context");
+    const repairedReportId = repairedUpload.data.report.id;
+
+    providerMode = "repairable_array_json";
+    const repairedArrayUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF with missing array JSON comma.");
+    assert.equal(repairedArrayUpload.response.status, 200, JSON.stringify(repairedArrayUpload.data));
+    assert.deepEqual(repairedArrayUpload.data.report.report.company_profile.main_activities, ["Steel fabrication", "Structural steel supply"], "safe JSON repair must restore missing commas between model array values");
+    providerMode = "success";
+
+    providerMode = "repairable_newline_json";
+    const repairedNewlineUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF with a model JSON line-break defect.");
+    assert.equal(repairedNewlineUpload.response.status, 200, JSON.stringify(repairedNewlineUpload.data));
+    assert.match(repairedNewlineUpload.data.report.report.executive_snapshot.top_opportunity, /Structural steel\s+supply/, "safe JSON repair must preserve a line break within a model string");
+    providerMode = "success";
+    const repairedNewlineReportId = repairedNewlineUpload.data.report.id;
+
+    providerMode = "malformed_json";
+    const malformedUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Unrepairable JSON intelligence PDF.");
+    assert.equal(malformedUpload.response.status, 422, JSON.stringify(malformedUpload.data));
+    assert.match(malformedUpload.data.error, /malformed JSON.*could not be safely repaired/i);
+    const afterMalformedUpload = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
+    assert.equal(afterMalformedUpload.data.report.id, repairedNewlineReportId, "failed PDF JSON validation must preserve the saved current report");
+    providerMode = "success";
 
     const pdf = await request(baseUrl, completedIntel.data.report.download_url, { token: adminToken });
     assert.equal(pdf.response.status, 200);
@@ -159,8 +240,27 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.equal(salesmanAccount.response.status, 201);
     const salesmanLogin = await request(baseUrl, "/api/auth/login", { method: "POST", body: { email: "salesman-intel@alrassteel.test", password: "SalesPass123!" } });
     assert.equal(salesmanLogin.response.status, 200);
-    const forbiddenIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: salesmanLogin.data.token });
+    const salesmanToken = salesmanLogin.data.token;
+    const salesmanLead = await request(baseUrl, "/api/leads", {
+      method: "POST",
+      token: salesmanToken,
+      body: { company_name: "Salesman Intelligence Lead LLC", stage: "PROSPECT", territory: "Abu Dhabi" }
+    });
+    assert.equal(salesmanLead.response.status, 201, JSON.stringify(salesmanLead.data));
+    assert.equal(salesmanLead.data.assigned_to, salesmanAccount.data.id, "salesman-created lead must retain current assignment");
+
+    const salesmanUpload = await requestPdf(baseUrl, `/api/leads/${salesmanLead.data.id}/intelligence/upload`, salesmanToken, "Salesman Intelligence Lead LLC uploaded PDF describing a structural steel opportunity.");
+    assert.equal(salesmanUpload.response.status, 200, JSON.stringify(salesmanUpload.data));
+    assert.equal(salesmanUpload.data.report.status, "completed");
+    assert.ok(salesmanUpload.data.state.report.report.executive_snapshot, "salesman upload must update Intel Card fields");
+    const salesmanSummary = await request(baseUrl, "/api/ai/lead-summary", { method: "POST", token: salesmanToken, body: { leadId: salesmanLead.data.id } });
+    assert.equal(salesmanSummary.response.status, 200, JSON.stringify(salesmanSummary.data));
+    assert.match(salesmanSummary.data.summary.market_intelligence, /Structural steel supply/, "Lead Overview summary must use the uploaded PDF intelligence context");
+
+    const forbiddenIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: salesmanToken });
     assert.equal(forbiddenIntel.response.status, 404);
+    const forbiddenUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, salesmanToken, "Unauthorized replacement attempt.");
+    assert.equal(forbiddenUpload.response.status, 404, JSON.stringify(forbiddenUpload.data));
 
     console.log("PASS lead intelligence API");
   } finally {

@@ -1148,6 +1148,27 @@ body.lead-detail-mode .lead-detail-view .lead-page-header .chip.warm {
   align-items: center;
 }
 
+.lead-intel-upload-control {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.lead-intel-upload-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lead-intel-upload-control:focus-within {
+  outline: 2px solid var(--lead-bauhaus-blue, #2563eb);
+  outline-offset: 2px;
+}
+
 .lead-intel-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

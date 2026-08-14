@@ -1134,7 +1134,18 @@ function leadAiGeneratedLabel(value) {
 function summaryList(items, tone = "") {
   const rows = asArray(items).filter(Boolean);
   if (!rows.length) return `<p class="lead-ai-empty-copy">No items noted.</p>`;
-  return `<ul class="lead-ai-list ${tone}">${rows.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+  return `<ul class="lead-ai-list ${tone}">${rows.map(item => `<li>${escapeHtml(summaryText(item))}</li>`).join("")}</ul>`;
+}
+
+function summaryText(value) {
+  if (Array.isArray(value)) return value.map(item => summaryText(item)).filter(Boolean).join("; ");
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, item]) => `${key.replace(/[_-]+/g, " ")}: ${summaryText(item)}`)
+      .filter(Boolean)
+      .join("; ");
+  }
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 function sourceList(items) {
@@ -1194,16 +1205,16 @@ function renderLeadAiSummaryPanel(lead, options = {}) {
     `;
   } else if (summary) {
     body = [
-      leadAiCard("Current Lead Status", `<p>${escapeHtml(summary.current_lead_status || "No summary available.")}</p>`, { tone: "status" }),
+      leadAiCard("Current Lead Status", `<p>${escapeHtml(summaryText(summary.current_lead_status) || "No summary available.")}</p>`, { tone: "status" }),
       leadAiCard("Market Intelligence", `
-        <p>${escapeHtml(summary.market_intelligence || "Market intelligence unavailable.")}</p>
+        <p>${escapeHtml(summaryText(summary.market_intelligence) || "Market intelligence unavailable.")}</p>
         ${summaryState.marketIntelUnavailableReason ? `<div class="lead-ai-note">${escapeHtml(summaryState.marketIntelUnavailableReason)}</div>` : ""}
       `, { tone: "intel" }),
-      leadAiCard("Salesman Engagement History", `<p>${escapeHtml(summary.salesman_engagement_history || "No engagement history recorded.")}</p>`, { tone: "engagement" }),
+      leadAiCard("Salesman Engagement History", `<p>${escapeHtml(summaryText(summary.salesman_engagement_history) || "No engagement history recorded.")}</p>`, { tone: "engagement" }),
       leadAiCard("Risks / Attention Needed", summaryList(summary.risks_attention_needed, "risk"), { tone: "risk" }),
       leadAiCard("Recommended Next Action", `
-        <p class="lead-ai-action-copy">${escapeHtml(summary.recommended_next_action || "No next action recommended yet.")}</p>
-        ${summary.suggested_follow_up_message ? `<div class="lead-ai-followup"><span class="meta-label">Suggested follow-up message</span><p>${escapeHtml(summary.suggested_follow_up_message)}</p></div>` : ""}
+        <p class="lead-ai-action-copy">${escapeHtml(summaryText(summary.recommended_next_action) || "No next action recommended yet.")}</p>
+        ${summary.suggested_follow_up_message ? `<div class="lead-ai-followup"><span class="meta-label">Suggested follow-up message</span><p>${escapeHtml(summaryText(summary.suggested_follow_up_message))}</p></div>` : ""}
       `, { tone: "action" }),
       leadAiCard("Data Gaps", summaryList(summary.data_gaps), { tone: "neutral" }),
       leadAiCard("Sources", sourceList(summary.sources), { meta: stale ? "Needs refresh" : "Current" })
@@ -1809,6 +1820,60 @@ async function uploadLeadIntelligencePdf(leadId, file) {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || "Intelligence PDF upload failed.");
   return result;
+}
+
+async function fetchAuthenticatedBlob(url) {
+  const token = sessionStorage.getItem(SESSION_KEY) || "";
+  const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw new Error(result.error || `Intelligence PDF request failed: ${response.status}`);
+  }
+  return response.blob();
+}
+
+function blobDownloadName(url) {
+  return url.includes("download=1") ? "lead-intelligence.pdf" : "lead-intelligence-preview.pdf";
+}
+
+async function downloadAuthenticatedPdf(url) {
+  const blobUrl = URL.createObjectURL(await fetchAuthenticatedBlob(url));
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = blobDownloadName(url);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
+async function openAuthenticatedPdf(url, popup = null) {
+  try {
+    const blobUrl = URL.createObjectURL(await fetchAuthenticatedBlob(url));
+    if (popup) {
+      popup.opener = null;
+      popup.location.replace(blobUrl);
+    } else {
+      window.open(blobUrl, "_blank", "noopener");
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+  } catch (error) {
+    popup?.close();
+    throw error;
+  }
+}
+
+async function hydrateLeadIntelligencePdfPreviews() {
+  const previews = [...document.querySelectorAll("iframe[data-lead-intelligence-pdf-preview]")];
+  await Promise.all(previews.map(async preview => {
+    try {
+      const blobUrl = URL.createObjectURL(await fetchAuthenticatedBlob(preview.dataset.leadIntelligencePdfPreview));
+      preview.src = blobUrl;
+      preview.dataset.blobUrl = blobUrl;
+    } catch {
+      preview.replaceWith(Object.assign(document.createElement("p"), { className: "empty-copy", textContent: "PDF preview is unavailable. Use Open in new tab." }));
+    }
+  }));
 }
 
 async function loadActivityAudioSources() {
@@ -9262,6 +9327,11 @@ function leadIntelligenceActionButton(action, leadId, label, tone = "primary-but
   return `<button class="${tone}" type="button" data-lead-intelligence-action="${escapeHtml(action)}" data-lead-id="${escapeHtml(leadId)}" ${reportId ? `data-report-id="${escapeHtml(reportId)}"` : ""}>${escapeHtml(label)}</button>`;
 }
 
+function leadIntelligenceUploadMarkup(leadId, { hasReport = false, processing = false } = {}) {
+  const label = hasReport || processing ? "Replace PDF" : "Upload PDF";
+  return `<label class="primary-button lead-intel-upload-control">${label}<input type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload="${escapeHtml(leadId)}"></label>`;
+}
+
 function renderDrawerIntel(lead) {
   const statePayload = state.leadDrawerIntel && !Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : { market_items: Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : [] };
   const report = statePayload.report || null;
@@ -9272,13 +9342,14 @@ function renderDrawerIntel(lead) {
   const processing = active && ["queued", "researching", "generating_pdf"].includes(String(active.status));
   const statusLabel = active ? String(active.status || "queued").replace(/_/g, " ") : "";
   const failedVisible = failed && !processing;
+  const uploadControl = leadIntelligenceUploadMarkup(lead.id, { hasReport: Boolean(report), processing });
   return `
     <section class="drawer-section lead-intel-section">
       <div class="drawer-tab-heading">
         <h3>UAE Structural Steel Lead Intelligence</h3>
         ${processing ? `<span class="status-pill">${escapeHtml(statusLabel)}</span>` : ""}
       </div>
-      <label class="lead-intel-upload-control">Upload intelligence PDF<input type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload="${escapeHtml(lead.id)}"></label>
+      ${uploadControl ? `<div class="lead-intel-actions">${uploadControl}</div>` : ""}
       ${!report && !processing && !failedVisible ? `
         <div class="lead-intel-empty">
           <strong>No intelligence report yet.</strong>
@@ -9305,13 +9376,11 @@ function renderDrawerIntel(lead) {
         ${report.report ? `<div class="lead-intel-detail-grid"><span><b>Opportunity</b><small>${escapeHtml(report.report.executive_snapshot?.top_opportunity || report.report.sales_recommendation?.recommended_sales_angle || "Not publicly found")}</small></span><span><b>Next action</b><small>${escapeHtml(report.report.sales_recommendation?.suggested_next_action || "Not publicly found")}</small></span><span><b>Company profile</b><small>${escapeHtml((report.report.company_profile?.main_activities || []).join(", ") || "Not publicly found")}</small></span></div>` : ""}
         ${hasPdf ? `
           <div class="lead-intel-actions">
-            <a class="ghost-button" href="${escapeHtml(report.download_url)}" target="_blank" rel="noopener">Download PDF</a>
-            <a class="ghost-button" href="${escapeHtml(report.pdf_url)}" target="_blank" rel="noopener">Open in new tab</a>
+            <button class="ghost-button" type="button" data-lead-intelligence-pdf-download="${escapeHtml(report.download_url)}">Download PDF</button>
+            <button class="ghost-button" type="button" data-lead-intelligence-pdf-open="${escapeHtml(report.pdf_url)}">Open in new tab</button>
             ${leadIntelligenceActionButton("refresh", lead.id, "Refresh Intelligence", "primary-button")}
           </div>
-          <object class="lead-intel-pdf" data="${escapeHtml(report.pdf_url)}" type="application/pdf" aria-label="Embedded lead intelligence PDF">
-            <p class="empty-copy">This browser cannot embed PDFs. <a href="${escapeHtml(report.pdf_url)}" target="_blank" rel="noopener">Open the intelligence PDF in a new tab</a>.</p>
-          </object>
+          <iframe class="lead-intel-pdf" data-lead-intelligence-pdf-preview="${escapeHtml(report.pdf_url)}" title="Embedded lead intelligence PDF"></iframe>
         ` : `<p class="empty-copy">PDF is not available for this report yet.</p>`}
       ` : ""}
       <details class="lead-intel-market-feed">
@@ -9393,9 +9462,29 @@ function renderLeadDrawer() {
   `;
   renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });
   bindLeadDrawerEvents();
+  hydrateLeadIntelligencePdfPreviews();
 }
 
 function bindLeadDrawerEvents() {
+  document.querySelectorAll("[data-lead-intelligence-pdf-download]").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        await downloadAuthenticatedPdf(button.dataset.leadIntelligencePdfDownload);
+      } catch (error) {
+        setToast(error.message, "error");
+      }
+    });
+  });
+  document.querySelectorAll("[data-lead-intelligence-pdf-open]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const popup = window.open("", "_blank");
+      try {
+        await openAuthenticatedPdf(button.dataset.leadIntelligencePdfOpen, popup);
+      } catch (error) {
+        setToast(error.message, "error");
+      }
+    });
+  });
   document.querySelector("#leadDetailBack")?.addEventListener("click", () => {
     closeLeadDrawer({ useBrowserBack: true });
   });
@@ -9546,6 +9635,13 @@ function bindLeadDrawerEvents() {
         setToast("Intelligence PDF saved to the Intel card and AI summary context.", "success");
         renderLeadDrawer();
       } catch (error) {
+        const uploadedLeadId = String(event.currentTarget.dataset.leadIntelligenceUpload);
+        try {
+          state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(uploadedLeadId)}/intel`);
+          renderLeadDrawer();
+        } catch {
+          // Preserve the original upload error when the state refresh is unavailable.
+        }
         setToast(error.message, "error");
       }
     });

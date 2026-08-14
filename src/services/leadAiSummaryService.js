@@ -11,6 +11,13 @@ const JSON_KEYS = [
 ];
 
 function safeText(value) {
+  if (Array.isArray(value)) return value.map(item => safeText(item)).filter(Boolean).join("; ");
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, item]) => `${key.replace(/[_-]+/g, " ")}: ${safeText(item)}`)
+      .filter(Boolean)
+      .join("; ");
+  }
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
