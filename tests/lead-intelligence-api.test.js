@@ -66,7 +66,12 @@ function providerFixture() {
 let providerMode = "success";
 global.fetch = async function mockedFetch(url, options) {
   if (String(url).startsWith("https://api.openai.com/")) {
-    const outputText = providerMode === "success" ? JSON.stringify(providerFixture()) : JSON.stringify({ sources: [] });
+    const validJson = JSON.stringify(providerFixture());
+    const outputText = providerMode === "success" ? validJson
+      : providerMode === "repairable_json" ? `Here is the reconstructed report:\n\n\`\`\`json\n${validJson.replace(',"executive_snapshot"', ' "executive_snapshot"').replace(/}$/, ',}')}\n\`\`\``
+      : providerMode === "repairable_newline_json" ? validJson.replace("Structural steel supply", "Structural steel\nsupply")
+      : providerMode === "malformed_json" ? '{"research_date":"2026-08-10","executive_snapshot":'
+      : JSON.stringify({ sources: [] });
     return { ok: true, status: 200, async json() { return { id: `resp-${providerMode}`, status: "completed", usage: { input_tokens: 10, output_tokens: 20 }, output: [{ content: [{ type: "output_text", text: outputText }] }] }; } };
   }
   return nativeFetch(url, options);
@@ -128,6 +133,32 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const adminReplacement = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Replacement API Intelligence Lead LLC PDF with procurement and structural steel details.");
     assert.equal(adminReplacement.response.status, 200, JSON.stringify(adminReplacement.data));
     assert.equal(adminReplacement.data.replaced_report_id, uploaded.data.report.id, "admin upload must replace the current PDF");
+
+    providerMode = "repairable_json";
+    const repairedUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Repairable JSON intelligence PDF.");
+    assert.equal(repairedUpload.response.status, 200, JSON.stringify(repairedUpload.data));
+    assert.ok(repairedUpload.data.report.report.executive_snapshot, "safe JSON repair must populate the Intel Card report");
+    assert.ok(repairedUpload.data.state.report.report.sales_recommendation, "Intel Card state must use the repaired PDF report");
+    providerMode = "success";
+    const repairedSummary = await request(baseUrl, "/api/ai/lead-summary", { method: "POST", token: adminToken, body: { leadId: lead.data.id } });
+    assert.equal(repairedSummary.response.status, 200, JSON.stringify(repairedSummary.data));
+    assert.match(repairedSummary.data.summary.market_intelligence, /Structural steel supply/, "Lead Overview summary must use repaired PDF intelligence context");
+    const repairedReportId = repairedUpload.data.report.id;
+
+    providerMode = "repairable_newline_json";
+    const repairedNewlineUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF with a model JSON line-break defect.");
+    assert.equal(repairedNewlineUpload.response.status, 200, JSON.stringify(repairedNewlineUpload.data));
+    assert.match(repairedNewlineUpload.data.report.report.executive_snapshot.top_opportunity, /Structural steel\s+supply/, "safe JSON repair must preserve a line break within a model string");
+    providerMode = "success";
+    const repairedNewlineReportId = repairedNewlineUpload.data.report.id;
+
+    providerMode = "malformed_json";
+    const malformedUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Unrepairable JSON intelligence PDF.");
+    assert.equal(malformedUpload.response.status, 422, JSON.stringify(malformedUpload.data));
+    assert.match(malformedUpload.data.error, /malformed JSON.*could not be safely repaired/i);
+    const afterMalformedUpload = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
+    assert.equal(afterMalformedUpload.data.report.id, repairedNewlineReportId, "failed PDF JSON validation must preserve the saved current report");
+    providerMode = "success";
 
     const pdf = await request(baseUrl, completedIntel.data.report.download_url, { token: adminToken });
     assert.equal(pdf.response.status, 200);
