@@ -44,6 +44,7 @@ assert.ok(leadIntelligencePdfRoute.includes("const storageResponse = await fetch
 assert.ok(!/res\.writeHead\(302,\s*\{\s*Location:\s*signedUrl/.test(leadIntelligencePdfRoute), "The app must not redirect browsers to signed Supabase PDF URLs");
 assert.ok(leadIntelligencePdfRoute.includes("|| currentReport;"), "stale PDF route references must fall back to the authorized lead's current completed report");
 assert.ok(serverSource.includes("function leadIntelligencePdfStorageKeys(report)"), "PDF delivery must try legacy and canonical storage keys");
+assert.ok(serverSource.includes("function currentCompletedLeadIntelligenceReport(reports)"), "the current completed report lookup must ignore legacy string false values");
 
 fs.existsSync = originalExistsSync;
 fs.readFileSync = originalReadFileSync;

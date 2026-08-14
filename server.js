@@ -3394,6 +3394,16 @@ function activeLeadIntelligenceStatuses() {
   return new Set(["queued", "researching", "generating_pdf"]);
 }
 
+function isCurrentLeadIntelligenceReport(report) {
+  return report?.is_current === true || String(report?.is_current || "").toLowerCase() === "true";
+}
+
+function currentCompletedLeadIntelligenceReport(reports) {
+  return reports.find(report => report.status === "completed" && isCurrentLeadIntelligenceReport(report))
+    || reports.find(report => report.status === "completed")
+    || null;
+}
+
 function sanitizeLeadIntelligenceError(error) {
   const code = String(error?.code || (error?.status === 429 ? "provider_rate_limited" : error?.status === 504 ? "provider_timeout" : "processing_failed")).replace(/[^a-z0-9_:-]/gi, "_").slice(0, 80);
   const message = String(error?.message || "Lead intelligence generation failed.")
@@ -3454,7 +3464,7 @@ async function loadLeadIntelligenceReports(db, token, leadId, supabaseEnabled) {
 async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems = []) {
   const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
   const active = reports.find(report => activeLeadIntelligenceStatuses().has(report.status)) || null;
-  const current = reports.find(report => report.status === "completed" && report.is_current) || reports.find(report => report.status === "completed") || null;
+  const current = currentCompletedLeadIntelligenceReport(reports);
   const latestTerminal = reports.find(report => report.status === "completed" || report.status === "failed") || null;
   const failed = latestTerminal?.status === "failed" ? latestTerminal : null;
   return {
@@ -6687,7 +6697,7 @@ async function handleApi(req, res, url) {
     if (!lead) return leadNotFound(res);
     const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
     const requestedReference = decodeURIComponent(String(leadIntelligencePdfMatch[2] || ""));
-    const currentReport = reports.find(item => item.status === "completed" && item.is_current) || reports.find(item => item.status === "completed");
+    const currentReport = currentCompletedLeadIntelligenceReport(reports);
     const report = reports.find(item => String(item.id) === requestedReference)
       || reports.find(item => String(item.pdf_storage_key || "") === requestedReference)
       || reports.find(item => path.basename(String(item.pdf_storage_key || item.pdf_url || "")) === requestedReference)

@@ -42,11 +42,14 @@ assert.ok(clientSource.includes("summaryText(summary.salesman_engagement_history
 assert.ok(clientSource.includes("leadIntelligenceUploadMarkup(lead.id, { hasReport: Boolean(report), processing })"));
 assert.ok(clientSource.includes("/intelligence/upload"));
 assert.ok(clientSource.includes("function fetchAuthenticatedBlob(url)"));
+assert.ok(clientSource.includes("error.status = response.status"), "PDF delivery failures must retain the HTTP status for missing-file handling");
 assert.ok(clientSource.includes("function downloadAuthenticatedPdf(url)"));
 assert.ok(clientSource.includes("function openAuthenticatedPdf(url, popup = null)"));
 assert.ok(clientSource.includes("data-lead-intelligence-pdf-download"));
 assert.ok(clientSource.includes("data-lead-intelligence-pdf-open"));
 assert.ok(clientSource.includes("data-lead-intelligence-pdf-preview"));
+assert.ok(clientSource.includes("leadIntelligenceMissingPdfUrls: new Set()"), "missing PDFs must not be retried on every Intel tab render");
+assert.ok(clientSource.includes("PDF file not found, please re-upload."), "the Intel tab must show a clear missing-PDF recovery message");
 assert.ok(!clientSource.includes('href="${escapeHtml(report.download_url)}"'), "protected PDFs must not use direct navigation links");
 assert.ok(securityHeadersSource.includes("frame-src 'self' blob:"), "the authenticated blob-backed PDF preview must be allowed without permitting Supabase domains");
 assert.ok(clientSource.includes("Intelligence PDF saved to the Intel card and AI summary context."));

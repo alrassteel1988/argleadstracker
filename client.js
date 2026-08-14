@@ -113,6 +113,7 @@ const state = {
   leadDrawerLoading: false,
   leadDrawerPmrs: [],
   leadDrawerIntel: [],
+  leadIntelligenceMissingPdfUrls: new Set(),
   leadDrawerHandoffs: [],
   leadAiSummary: {
     visible: true,
@@ -1827,9 +1828,17 @@ async function fetchAuthenticatedBlob(url) {
   const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
-    throw new Error(result.error || `Intelligence PDF request failed: ${response.status}`);
+    const error = new Error(result.error || `Intelligence PDF request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return response.blob();
+}
+
+function markLeadIntelligencePdfMissing(url) {
+  if (!url) return;
+  state.leadIntelligenceMissingPdfUrls.add(url);
+  if (state.leadDrawerTab === "intel") renderLeadDrawer();
 }
 
 function blobDownloadName(url) {
@@ -1870,7 +1879,11 @@ async function hydrateLeadIntelligencePdfPreviews() {
       const blobUrl = URL.createObjectURL(await fetchAuthenticatedBlob(preview.dataset.leadIntelligencePdfPreview));
       preview.src = blobUrl;
       preview.dataset.blobUrl = blobUrl;
-    } catch {
+    } catch (error) {
+      if (error.status === 404) {
+        markLeadIntelligencePdfMissing(preview.dataset.leadIntelligencePdfPreview);
+        return;
+      }
       preview.replaceWith(Object.assign(document.createElement("p"), { className: "empty-copy", textContent: "PDF preview is unavailable. Use Open in new tab." }));
     }
   }));
@@ -9338,7 +9351,8 @@ function renderDrawerIntel(lead) {
   const active = statePayload.active_report || null;
   const failed = statePayload.failed_report || null;
   const marketItems = statePayload.market_items || [];
-  const hasPdf = report && report.pdf_available && report.pdf_url;
+  const missingPdf = Boolean(report?.pdf_url && state.leadIntelligenceMissingPdfUrls.has(report.pdf_url));
+  const hasPdf = report && report.pdf_available && report.pdf_url && !missingPdf;
   const processing = active && ["queued", "researching", "generating_pdf"].includes(String(active.status));
   const statusLabel = active ? String(active.status || "queued").replace(/_/g, " ") : "";
   const failedVisible = failed && !processing;
@@ -9381,7 +9395,7 @@ function renderDrawerIntel(lead) {
             ${leadIntelligenceActionButton("refresh", lead.id, "Refresh Intelligence", "primary-button")}
           </div>
           <iframe class="lead-intel-pdf" data-lead-intelligence-pdf-preview="${escapeHtml(report.pdf_url)}" title="Embedded lead intelligence PDF"></iframe>
-        ` : `<p class="empty-copy">PDF is not available for this report yet.</p>`}
+        ` : `<p class="empty-copy">${missingPdf ? "PDF file not found, please re-upload." : "PDF is not available for this report yet."}</p>`}
       ` : ""}
       <details class="lead-intel-market-feed">
         <summary>Matched market feed items</summary>
@@ -9471,6 +9485,7 @@ function bindLeadDrawerEvents() {
       try {
         await downloadAuthenticatedPdf(button.dataset.leadIntelligencePdfDownload);
       } catch (error) {
+        if (error.status === 404) markLeadIntelligencePdfMissing(button.dataset.leadIntelligencePdfDownload);
         setToast(error.message, "error");
       }
     });
@@ -9481,6 +9496,7 @@ function bindLeadDrawerEvents() {
       try {
         await openAuthenticatedPdf(button.dataset.leadIntelligencePdfOpen, popup);
       } catch (error) {
+        if (error.status === 404) markLeadIntelligencePdfMissing(button.dataset.leadIntelligencePdfOpen);
         setToast(error.message, "error");
       }
     });
