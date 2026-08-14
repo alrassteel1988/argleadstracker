@@ -71,7 +71,7 @@
     { "src": "/icons/icon-maskable-512.png", "dest": "/icons/icon-maskable-512.png" },
     { "src": "/icons/shortcut-focus.png", "dest": "/icons/shortcut-focus.png" },
     { "src": "/icons/shortcut-log.png", "dest": "/icons/shortcut-log.png" },
-    { "src": "/leads/([^/]+)/?", "dest": "/index.html" }
+    { "src": "/leads/([^/]+)/?$", "dest": "/index.html" }
   ],
   "crons": [
     {

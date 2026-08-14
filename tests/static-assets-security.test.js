@@ -77,9 +77,13 @@ async function run() {
       "Vercel must not route arbitrary paths to the Node server"
     );
     assert.ok(
-      vercel.routes.some(route => route.src === "/leads/([^/]+)/?" && route.dest === "/index.html"),
+      vercel.routes.some(route => route.src === "/leads/([^/]+)/?$" && route.dest === "/index.html"),
       "Vercel must retain the lead-detail SPA fallback"
     );
+    const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
+    for (const asset of ["/styles.css", "/client.js", "/favicon.svg", "/manifest.json"]) {
+      assert.ok(index.includes(`\"${asset}`), `Index assets must be root-relative: ${asset}`);
+    }
     assert.ok(
       vercel.routes.some(route => route.src === "/manifest.json" && route.dest === "/manifest.json"),
       "Vercel must serve the PWA manifest explicitly"
