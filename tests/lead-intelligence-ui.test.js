@@ -5,6 +5,7 @@ const path = require("path");
 const root = path.join(__dirname, "..");
 const clientSource = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const cssSource = fs.readFileSync(path.join(root, "lead-detail-readability.css"), "utf8");
+const securityHeadersSource = fs.readFileSync(path.join(root, "src", "config", "securityHeaders.js"), "utf8");
 
 function sourceFunction(name) {
   const start = clientSource.indexOf(`function ${name}(`);
@@ -47,6 +48,7 @@ assert.ok(clientSource.includes("data-lead-intelligence-pdf-download"));
 assert.ok(clientSource.includes("data-lead-intelligence-pdf-open"));
 assert.ok(clientSource.includes("data-lead-intelligence-pdf-preview"));
 assert.ok(!clientSource.includes('href="${escapeHtml(report.download_url)}"'), "protected PDFs must not use direct navigation links");
+assert.ok(securityHeadersSource.includes("frame-src 'self' blob:"), "the authenticated blob-backed PDF preview must be allowed without permitting Supabase domains");
 assert.ok(clientSource.includes("Intelligence PDF saved to the Intel card and AI summary context."));
 assert.ok(clientSource.includes("state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(uploadedLeadId)}/intel`);"), "failed PDF uploads must refresh the Intel state instead of leaving a stale queued status");
 assert.ok(clientSource.includes("report.report.executive_snapshot"));
