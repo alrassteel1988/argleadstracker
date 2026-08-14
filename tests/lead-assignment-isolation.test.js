@@ -76,12 +76,41 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(alexLogin.response.status, 200, JSON.stringify(alexLogin.data));
     const alex = { token: alexLogin.data.token, csrfToken: alexLogin.data.csrf_token };
 
+    const salesmanCannotCreateUser = await request(baseUrl, "/api/users", {
+      method: "POST",
+      ...alex,
+      body: { name: "Forbidden User", email: "forbidden-isolation@alrassteel.test", password: "ForbiddenPass123!" }
+    });
+    assert.equal(salesmanCannotCreateUser.response.status, 403, JSON.stringify(salesmanCannotCreateUser.data));
+
+    const salesmanCannotUpdateBhatia = await request(baseUrl, `/api/users/${encodeURIComponent(bhatiaAccount.data.id)}`, {
+      method: "PATCH",
+      ...alex,
+      body: { name: "P.N. Bhatia Changed", territory: "Saudi", role: "manager" }
+    });
+    assert.equal(salesmanCannotUpdateBhatia.response.status, 403, JSON.stringify(salesmanCannotUpdateBhatia.data));
+
+    const adminUpdatesSalesmanProfile = await request(baseUrl, `/api/users/${encodeURIComponent(bhatiaAccount.data.id)}`, {
+      method: "PATCH",
+      ...admin,
+      body: { name: "P.N. Bhatia", territory: "UAE-South", role: "salesman", admin_password: "AdminPass123!" }
+    });
+    assert.equal(adminUpdatesSalesmanProfile.response.status, 200, JSON.stringify(adminUpdatesSalesmanProfile.data));
+    assert.equal(adminUpdatesSalesmanProfile.data.territory, "UAE-South");
+
     const createdByAlex = await request(baseUrl, "/api/leads", {
       method: "POST",
       ...alex,
       body: { company_name: "ACA Steel Constructions Contracting LLC", stage: "PROSPECT" }
     });
     assert.equal(createdByAlex.response.status, 201, JSON.stringify(createdByAlex.data));
+
+    const salesmanCannotReassign = await request(baseUrl, `/api/leads/${encodeURIComponent(createdByAlex.data.id)}`, {
+      method: "PATCH",
+      ...alex,
+      body: { assigned_to: bhatiaAccount.data.id, assigned_salesman: "P.N. Bhatia" }
+    });
+    assert.equal(salesmanCannotReassign.response.status, 403, JSON.stringify(salesmanCannotReassign.data));
 
     const reassignedToBhatia = await request(baseUrl, `/api/leads/${encodeURIComponent(createdByAlex.data.id)}`, {
       method: "PATCH",
