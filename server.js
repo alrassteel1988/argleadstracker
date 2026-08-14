@@ -6659,16 +6659,24 @@ async function handleApi(req, res, url) {
     const lead = await accessibleLeadById(db, user, leadIntelligencePdfMatch[1], supabaseEnabled);
     if (!lead) return leadNotFound(res);
     const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
-    const report = reports.find(item => String(item.id) === String(leadIntelligencePdfMatch[2]));
-    if (!report || report.status !== "completed" || !(report.pdf_storage_key || report.pdf_url)) {
-      return sendJson(res, 404, { code: "pdf_not_found", error: "Intelligence PDF not found." });
+    const requestedReference = decodeURIComponent(String(leadIntelligencePdfMatch[2] || ""));
+    const currentReport = reports.find(item => item.status === "completed" && item.is_current) || reports.find(item => item.status === "completed");
+    const report = reports.find(item => String(item.id) === requestedReference)
+      || reports.find(item => String(item.pdf_storage_key || "") === requestedReference)
+      || reports.find(item => path.basename(String(item.pdf_storage_key || item.pdf_url || "")) === requestedReference)
+      || (/\.pdf$/i.test(requestedReference) ? currentReport : null);
+    if (!report || report.status !== "completed") {
+      return sendJson(res, 404, { code: "pdf_report_not_found", error: "Intelligence PDF report not found." });
+    }
+    if (!(report.pdf_storage_key || report.pdf_url)) {
+      return sendJson(res, 404, { code: "pdf_missing", error: "PDF file not found, please re-upload." });
     }
     const filename = `${String(lead.company_name || "lead").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "lead"}-intelligence-${String(report.research_timestamp || report.completed_at || "").slice(0, 10) || "report"}.pdf`;
     if (supabaseEnabled) {
       const signedUrl = await createStorageSignedUrlForBucketAsService(LEAD_INTELLIGENCE_BUCKET, report.pdf_storage_key, LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS);
       const storageResponse = await fetch(signedUrl);
       if (!storageResponse.ok) {
-        const error = new Error("Lead intelligence PDF is temporarily unavailable.");
+        const error = new Error(storageResponse.status === 404 ? "PDF file not found, please re-upload." : "Lead intelligence PDF is temporarily unavailable.");
         error.status = storageResponse.status === 404 ? 404 : 502;
         throw error;
       }
@@ -6678,7 +6686,7 @@ async function handleApi(req, res, url) {
       return res.end(body);
     }
     const localPath = leadIntelligenceLocalPath(report.pdf_storage_key || report.pdf_url);
-    if (!localPath.startsWith(DATA_DIR) || !fs.existsSync(localPath)) return sendJson(res, 404, { code: "pdf_missing", error: "Intelligence PDF file is missing." });
+    if (!localPath.startsWith(DATA_DIR) || !fs.existsSync(localPath)) return sendJson(res, 404, { code: "pdf_missing", error: "PDF file not found, please re-upload." });
     const body = fs.readFileSync(localPath);
     if (url.searchParams.get("download")) return sendDownload(res, "application/pdf", filename, body);
     res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${filename}"`, "Cache-Control": "private, no-store" });
