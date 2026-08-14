@@ -1715,6 +1715,14 @@ function isDirectorOrAdmin(user) {
   return ["admin", "director", "manager"].includes(String(user?.role || "").toLowerCase());
 }
 
+function requestedLeadReassignment(payload, lead) {
+  if (!payload || !lead) return false;
+  if (Object.hasOwn(payload, "assigned_to")
+    && String(payload.assigned_to || "").trim() !== String(lead.assigned_to || "").trim()) return true;
+  return Object.hasOwn(payload, "assigned_salesman")
+    && String(payload.assigned_salesman || "").trim().toLowerCase() !== String(lead.assigned_salesman || "").trim().toLowerCase();
+}
+
 function canonicalTerritory(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -6212,7 +6220,7 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/users") {
-    if (user.role !== "admin") return sendJson(res, 403, { error: "Admin access required." });
+    if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Management access required." });
     if (supabaseEnabled) {
       if (req.method === "GET") {
         const profiles = await rest("profiles?role=eq.salesman&select=*&order=full_name.asc", { token: user.token });
@@ -6288,15 +6296,25 @@ async function handleApi(req, res, url) {
 
   const userMatch = url.pathname.match(/^\/api\/users\/([^/]+)$/);
   if (req.method === "PATCH" && userMatch) {
-    if (user.role !== "admin") return sendJson(res, 403, { error: "Admin access required." });
+    if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Management access required." });
     const payload = await readBody(req);
-    if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
+    if (isAdmin(user) && !await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
       return sendJson(res, 403, { error: "Admin password confirmation is required to update a user." });
     }
     const targetId = decodeURIComponent(userMatch[1]);
     if (String(targetId) === String(user.id)) return sendJson(res, 400, { error: "Admins cannot deactivate their own account." });
     const status = String(payload.status || "").trim().toLowerCase();
-    if (!["active", "inactive"].includes(status)) return sendJson(res, 400, { error: "Status must be active or inactive." });
+    if (status && !["active", "inactive"].includes(status)) return sendJson(res, 400, { error: "Status must be active or inactive." });
+    const profilePatch = {
+      ...(payload.name || payload.full_name ? { full_name: String(payload.name || payload.full_name).trim() } : {}),
+      ...(payload.territory ? { territory: canonicalTerritory(payload.territory) } : {}),
+      ...(status ? { status } : {}),
+      ...(Object.hasOwn(payload, "role") ? { role: String(payload.role || "").trim().toLowerCase() } : {})
+    };
+    if (profilePatch.role && !["salesman", "manager", "director"].includes(profilePatch.role)) {
+      return sendJson(res, 400, { error: "Salesman roles must be salesman, manager, or director." });
+    }
+    if (!Object.keys(profilePatch).length) return sendJson(res, 400, { error: "Provide a supported salesman profile field to update." });
 
     if (supabaseEnabled) {
       const existingRows = await serviceRest("profiles.admin_update", `profiles?id=eq.${encodeURIComponent(targetId)}&select=id,full_name,role,territory,status&limit=1`);
@@ -6307,9 +6325,9 @@ async function handleApi(req, res, url) {
       const rows = await serviceRest("profiles.admin_update", `profiles?id=eq.${encodeURIComponent(targetId)}&select=*`, {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
-        body: { status }
+        body: profilePatch
       });
-      await updateAuthUser(targetId, status === "inactive" ? { ban_duration: "876000h" } : { ban_duration: "none" }).catch(() => null);
+      if (status) await updateAuthUser(targetId, status === "inactive" ? { ban_duration: "876000h" } : { ban_duration: "none" }).catch(() => null);
       return sendJson(res, 200, salesmanAccountSummary(rows[0]));
     }
 
@@ -6318,9 +6336,16 @@ async function handleApi(req, res, url) {
     if (String(account.role || "").toLowerCase() !== "salesman") {
       return sendJson(res, 400, { error: "Only salesman accounts can be updated from this endpoint." });
     }
-    account.status = status;
+    if (profilePatch.full_name) account.name = profilePatch.full_name;
+    if (profilePatch.territory) account.territory = profilePatch.territory;
+    if (profilePatch.role) account.role = profilePatch.role;
+    if (status) account.status = status;
     const salesmanRecord = (db.salesmen || []).find(item => item.id === targetId || String(item.email || "").toLowerCase() === String(account.email || "").toLowerCase());
-    if (salesmanRecord) salesmanRecord.status = status;
+    if (salesmanRecord) {
+      if (profilePatch.full_name) salesmanRecord.name = profilePatch.full_name;
+      if (profilePatch.territory) salesmanRecord.territory = profilePatch.territory;
+      if (status) salesmanRecord.status = status;
+    }
     writeDb(db);
     return sendJson(res, 200, salesmanAccountSummary(account));
   }
@@ -6670,6 +6695,9 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const existing = await getSupabaseLead(user.token, leadMatch[1], user);
       if (!existing) return leadNotFound(res);
+      if (!isDirectorOrAdmin(user) && requestedLeadReassignment(payload, existing)) {
+        return sendJson(res, 403, { error: "Only management can reassign a lead." });
+      }
       payload = prepareLeadPayloadForUser(payload, user, existing);
       const stageProvided = Boolean(payload.stage || payload.lead_status);
       if (payload.stage || payload.lead_status) {
@@ -6737,6 +6765,9 @@ async function handleApi(req, res, url) {
     }
     const lead = db.leads.find(item => item.id === leadMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    if (!isDirectorOrAdmin(user) && requestedLeadReassignment(payload, lead)) {
+      return sendJson(res, 403, { error: "Only management can reassign a lead." });
+    }
     payload = prepareLeadPayloadForUser(payload, user, lead);
     const stageProvided = Boolean(payload.stage || payload.lead_status);
     if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
