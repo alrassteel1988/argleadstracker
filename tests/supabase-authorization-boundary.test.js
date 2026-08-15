@@ -104,17 +104,18 @@ test("Storage upload and signing use the user's JWT, not service role", async t 
   const calls = [];
   t.mock.method(global, "fetch", async (url, options) => {
     calls.push({ url, options });
-    return jsonResponse(url.includes("/sign/") ? { signedURL: "/storage/signed/file" } : {});
+    return jsonResponse(url.includes("/sign/") ? { signedURL: "/object/sign/pmr-voice-notes/user-id/note.webm?token=abc" } : {});
   });
 
   await uploadStorageObject("user-id/note.webm", Buffer.from("voice"), "audio/webm", "salesman.jwt.token");
-  await createStorageSignedUrl("user-id/note.webm", 300, "salesman.jwt.token");
+  const signedUrl = await createStorageSignedUrl("user-id/note.webm", 300, "salesman.jwt.token");
 
   assert.equal(calls.length, 2);
   calls.forEach(call => {
     assert.equal(call.options.headers.apikey, "anon-key");
     assert.equal(call.options.headers.Authorization, "Bearer salesman.jwt.token");
   });
+  assert.equal(signedUrl, "https://example.supabase.co/storage/v1/object/sign/pmr-voice-notes/user-id/note.webm?token=abc");
 });
 
 test("server defaults CRM data access to the authenticated token", () => {

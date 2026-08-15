@@ -151,6 +151,9 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.equal(uploaded.data.report.is_current, true, "uploaded report must be marked current");
     assert.ok(uploaded.data.report.pdf_available, "uploaded report must persist a PDF storage reference");
     assert.ok(uploaded.data.report.report.executive_snapshot, "uploaded extraction must be saved in report_json");
+    const immediateUploadedPdf = await request(baseUrl, uploaded.data.report.pdf_url, { token: adminToken });
+    assert.equal(immediateUploadedPdf.response.status, 200, "a freshly uploaded PDF must be viewable immediately through the protected stream");
+    assert.equal(immediateUploadedPdf.data.subarray(0, 5).toString("utf8"), "%PDF-", "the immediate protected stream must return the uploaded PDF bytes");
     const uploadedIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(uploadedIntel.data.report.id, uploaded.data.report.id);
     assert.equal(uploadedIntel.data.report.status, "completed", "Intel reload must return the saved completed upload");

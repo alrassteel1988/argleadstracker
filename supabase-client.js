@@ -129,7 +129,7 @@ async function createStorageSignedUrlForBucket(bucket, objectPath, expiresIn = 3
     throw error;
   }
   const signedUrl = data.signedURL || data.signedUrl || "";
-  return signedUrl.startsWith("http") ? signedUrl : `${SUPABASE_URL}${signedUrl}`;
+  return absoluteStorageSignedUrl(signedUrl);
 }
 
 async function createStorageSignedUrl(objectPath, expiresIn = 3600, token) {
@@ -177,7 +177,18 @@ async function createStorageSignedUrlForBucketAsService(bucket, objectPath, expi
     throw error;
   }
   const signedUrl = data.signedURL || data.signedUrl || "";
-  return signedUrl.startsWith("http") ? signedUrl : `${SUPABASE_URL}${signedUrl}`;
+  return absoluteStorageSignedUrl(signedUrl);
+}
+
+// Supabase Storage returns either an absolute URL, a /storage/v1/... path, or
+// (on current Storage API versions) a path rooted at /object/sign/.... The
+// latter is relative to the Storage API, not the Supabase project origin.
+function absoluteStorageSignedUrl(signedUrl) {
+  const value = String(signedUrl || "").trim();
+  if (/^https?:\/\//i.test(value)) return value;
+  if (!value) return SUPABASE_URL;
+  if (value.startsWith("/storage/v1/")) return `${SUPABASE_URL}${value}`;
+  return `${SUPABASE_URL}/storage/v1${value.startsWith("/") ? value : `/${value}`}`;
 }
 async function signIn(email, password) {
   return request("/auth/v1/token?grant_type=password", { method: "POST", body: { email, password } });
