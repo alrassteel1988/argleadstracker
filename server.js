@@ -114,6 +114,7 @@ const {
 const {
   WORKFLOW_VERSION: LEAD_INTELLIGENCE_WORKFLOW_VERSION,
   allowedResearchInputFromLead,
+  extractIntelCardFieldsFromPdfText,
   generateLeadIntelligenceWithOpenAI,
   parseLeadIntelligencePdfWithOpenAI,
   renderLeadIntelligencePdf,
@@ -3345,6 +3346,10 @@ function leadIntelligenceLocalPath(storageKey) {
   return path.normalize(path.join(DATA_DIR, storageKey));
 }
 
+function leadIntelligencePdfChecksum(buffer) {
+  return crypto.createHash("sha256").update(Buffer.from(buffer || [])).digest("hex");
+}
+
 function leadIntelligencePdfStorageKeys(report) {
   const keys = [];
   const add = value => {
@@ -3385,15 +3390,24 @@ async function leadIntelligencePdfText(buffer) {
     const parsed = await pdfParse(pdfBytes);
     const text = String(parsed?.text || "").replace(/\r\n?/g, "\n").trim();
     const document = await pdfjs.getDocument({ data: new Uint8Array(pdfBytes) });
-    const annotations = await Promise.all(Array.from({ length: document.numPages }, async (_, index) => {
+    const pageDetails = await Promise.all(Array.from({ length: document.numPages }, async (_, index) => {
       const page = await document.getPage(index + 1);
-      return page.getAnnotations();
+      const [content, annotations] = await Promise.all([page.getTextContent(), page.getAnnotations()]);
+      return {
+        text: content.items.map(item => String(item.str || "")).filter(Boolean).join(" ").trim(),
+        annotations
+      };
     }));
-    const links = [...new Set(annotations.flat().map(item => String(item.url || item.unsafeUrl || "").trim()).filter(url => /^https?:\/\//i.test(url)))];
+    const pageMarkedText = pageDetails
+      .map((page, index) => `[PDF PAGE ${index + 1}]\n${page.text}`)
+      .filter(page => !/^\[PDF PAGE \d+\]\s*$/i.test(page))
+      .join("\n\n");
+    const links = [...new Set(pageDetails.flatMap(page => page.annotations).map(item => String(item.url || item.unsafeUrl || "").trim()).filter(url => /^https?:\/\//i.test(url)))];
     // Some PDF writers store citation URLs only as link annotations, not in
     // the content stream. Preserve those as a Sources addendum for both the
     // model and public-source recovery while keeping labels in the text above.
-    return links.length ? `${text}\n\nSources\nLinked PDF annotations:\n${links.join("\n")}` : text;
+    const extracted = pageMarkedText || text;
+    return links.length ? `${extracted}\n\nSources\nLinked PDF annotations:\n${links.join("\n")}` : extracted;
   } catch (error) {
     const fallback = Buffer.from(buffer || []).toString("latin1")
       .match(/\((?:\\.|[^\\)])*\)\s*Tj/g)?.map(value => value.replace(/^\(/, "").replace(/\)\s*Tj$/, ""))
@@ -3647,14 +3661,91 @@ async function leadForIntelligenceJob(db, report, supabaseEnabled) {
 
 async function persistLeadIntelligencePdf(db, report, pdf, supabaseEnabled) {
   const storageKey = leadIntelligenceStorageKey(report.lead_id, report.id);
+  const checksum = leadIntelligencePdfChecksum(pdf);
   if (supabaseEnabled) {
     await uploadStorageObjectToBucketAsService(LEAD_INTELLIGENCE_BUCKET, storageKey, pdf, "application/pdf");
-    return storageKey;
+    // A successful upload response alone is insufficient: verify that the
+    // lead/report-specific object reads back as the exact received PDF before
+    // it can be associated with a completed report.
+    const signedUrl = await createStorageSignedUrlForBucketAsService(
+      LEAD_INTELLIGENCE_BUCKET,
+      storageKey,
+      LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS
+    );
+    const storedResponse = await fetch(signedUrl, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" }
+    });
+    if (!storedResponse.ok) {
+      const error = new Error("Lead intelligence PDF could not be verified after storage.");
+      error.code = "pdf_storage_verification_failed";
+      error.status = 502;
+      throw error;
+    }
+    const storedPdf = Buffer.from(await storedResponse.arrayBuffer());
+    if (leadIntelligencePdfChecksum(storedPdf) !== checksum) {
+      const error = new Error("Lead intelligence PDF storage verification failed: stored content did not match the uploaded file.");
+      error.code = "pdf_storage_integrity_mismatch";
+      error.status = 502;
+      throw error;
+    }
+    return { storageKey, checksum };
   }
   const localPath = leadIntelligenceLocalPath(storageKey);
   fs.mkdirSync(path.dirname(localPath), { recursive: true });
   fs.writeFileSync(localPath, pdf);
-  return storageKey;
+  return { storageKey, checksum };
+}
+
+// Re-extraction reads the existing protected object without changing its key,
+// contents, signed-route behavior, or storage metadata.
+async function storedLeadIntelligencePdfBuffer(report, supabaseEnabled) {
+  const storageKeys = leadIntelligencePdfStorageKeys(report);
+  for (const storageKey of storageKeys) {
+    try {
+      if (supabaseEnabled) {
+        const signedUrl = await createStorageSignedUrlForBucketAsService(
+          LEAD_INTELLIGENCE_BUCKET,
+          storageKey,
+          LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS
+        );
+        const response = await fetch(signedUrl, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
+        if (response.ok) return Buffer.from(await response.arrayBuffer());
+        if (response.status !== 404) throw new Error("Lead intelligence PDF is temporarily unavailable.");
+      } else {
+        const localPath = leadIntelligenceLocalPath(storageKey);
+        if (localPath.startsWith(DATA_DIR) && fs.existsSync(localPath)) return fs.readFileSync(localPath);
+      }
+    } catch (error) {
+      if (error?.status && error.status === 404) continue;
+      throw error;
+    }
+  }
+  const error = new Error("PDF file not found, please re-upload.");
+  error.status = 404;
+  throw error;
+}
+
+async function refreshUploadedPdfIntelCardFields(db, user, lead, report, supabaseEnabled) {
+  const pdf = await storedLeadIntelligencePdfBuffer(report, supabaseEnabled);
+  const rawPdfText = await leadIntelligencePdfText(pdf);
+  const savedReport = report.report_json || report.report || {};
+  const intelCard = extractIntelCardFieldsFromPdfText(rawPdfText, {
+    score_display: savedReport.lead_score?.displayed_score,
+    priority: savedReport.lead_score?.priority,
+    steel_demand: savedReport.executive_snapshot?.steel_demand,
+    buyer_classification: savedReport.executive_snapshot?.buyer_classification,
+    steel_opportunity_confidence: savedReport.research_quality?.confidence_summary?.steel_opportunity_assessment
+  });
+  const updated = await updateLeadIntelligenceReport(db, report.id, {
+    report_json: { ...savedReport, intel_card: intelCard },
+    provider_metadata: {
+      ...(report.provider_metadata || {}),
+      intel_card_reextracted_at: new Date().toISOString(),
+      intel_card_extraction: "pdf_section_targeted"
+    }
+  }, supabaseEnabled);
+  return serializeLeadIntelligenceRecord(updated, { includeReport: true });
 }
 
 async function processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetchImpl = fetch } = {}) {
@@ -3680,7 +3771,7 @@ async function processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetc
     await updateLeadIntelligenceReport(db, job.id, { status: "generating_pdf", provider_metadata: result.metadata }, supabaseEnabled);
     const generatedAt = new Date().toISOString();
     const pdf = renderLeadIntelligencePdf(result.report, { generatedAt });
-    const storageKey = await persistLeadIntelligencePdf(db, job, pdf, supabaseEnabled);
+    const persistedPdf = await persistLeadIntelligencePdf(db, job, pdf, supabaseEnabled);
     const completed = await updateLeadIntelligenceReport(db, job.id, {
       status: "completed",
       report_json: result.report,
@@ -3691,13 +3782,14 @@ async function processLeadIntelligenceJobRecord(db, job, supabaseEnabled, { fetc
       demand_classification: result.report.executive_snapshot.steel_demand,
       buyer_classification: result.report.executive_snapshot.buyer_classification,
       research_timestamp: result.report.research_date,
-      pdf_storage_key: storageKey,
+      pdf_storage_key: persistedPdf.storageKey,
       completed_at: generatedAt,
       error_code: "",
-      error_message: ""
+      error_message: "",
+      provider_metadata: { ...result.metadata, pdf_sha256: persistedPdf.checksum }
     }, supabaseEnabled);
     await markLeadIntelligenceCurrent(db, job.lead_id, job.id, supabaseEnabled);
-    return { processed: 1, status: "completed", report: serializeLeadIntelligenceRecord(completed || { ...job, report_json: result.report, pdf_storage_key: storageKey, status: "completed" }) };
+    return { processed: 1, status: "completed", report: serializeLeadIntelligenceRecord(completed || { ...job, report_json: result.report, pdf_storage_key: persistedPdf.storageKey, status: "completed" }) };
   } catch (error) {
     const sanitized = sanitizeLeadIntelligenceError(error);
     await updateLeadIntelligenceReport(db, job.id, { status: "failed", error_code: sanitized.code, error_message: sanitized.message, completed_at: new Date().toISOString() }, supabaseEnabled);
@@ -6670,15 +6762,15 @@ async function handleApi(req, res, url) {
     const existing = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
     const replacedReportId = existing.find(item => item.is_current)?.id || null;
     const inserted = await insertLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "pdf_upload" });
-    const storageKey = await persistLeadIntelligencePdf(db, inserted, pdf, supabaseEnabled);
+    const persistedPdf = await persistLeadIntelligencePdf(db, inserted, pdf, supabaseEnabled);
     const report = parsed.report;
     const completed = await updateLeadIntelligenceReport(db, inserted.id, {
       status: "completed", report_json: report, weighted_score: report.lead_score.weighted_score,
       displayed_score: report.lead_score.displayed_score, priority: report.lead_score.priority,
       steel_demand: report.executive_snapshot.steel_demand, demand_classification: report.executive_snapshot.steel_demand,
       buyer_classification: report.executive_snapshot.buyer_classification, research_timestamp: report.research_date,
-      pdf_storage_key: storageKey, completed_at: new Date().toISOString(), error_code: "", error_message: "",
-      provider_metadata: { source: "uploaded_pdf", filename }
+      pdf_storage_key: persistedPdf.storageKey, completed_at: new Date().toISOString(), error_code: "", error_message: "",
+      provider_metadata: { source: "uploaded_pdf", filename, pdf_sha256: persistedPdf.checksum }
     }, supabaseEnabled);
     await markLeadIntelligenceCurrent(db, lead.id, inserted.id, supabaseEnabled);
     return sendJson(res, 200, {
@@ -6693,6 +6785,27 @@ async function handleApi(req, res, url) {
     const lead = await accessibleLeadById(db, user, leadIntelligenceActionMatch[1], supabaseEnabled);
     if (!lead) return leadNotFound(res);
     const action = leadIntelligenceActionMatch[2];
+    const existingReports = action === "refresh"
+      ? await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled)
+      : [];
+    const uploadedPdfReport = action === "refresh"
+      ? currentCompletedLeadIntelligenceReport(existingReports)
+      : null;
+    if (uploadedPdfReport?.provider_metadata?.source === "uploaded_pdf") {
+      if (!String(uploadedPdfReport.provider_metadata?.pdf_sha256 || "").trim()) {
+        return sendJson(res, 409, {
+          code: "pdf_storage_unverified",
+          error: "This legacy uploaded PDF must be re-uploaded and verified before it can be re-extracted."
+        });
+      }
+      const refreshed = await refreshUploadedPdfIntelCardFields(db, user, lead, uploadedPdfReport, supabaseEnabled);
+      return sendJson(res, 200, {
+        code: "completed",
+        report: refreshed,
+        result: { processed: 1, status: "completed", mode: "pdf_section_reextraction", report: refreshed },
+        state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled)
+      });
+    }
     const body = action === "retry" ? await readBody(req) : {};
     const queued = await queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, {
       reason: action,
@@ -6734,7 +6847,10 @@ async function handleApi(req, res, url) {
       for (const storageKey of storageKeys) {
         try {
           const signedUrl = await createStorageSignedUrlForBucketAsService(LEAD_INTELLIGENCE_BUCKET, storageKey, LEAD_INTELLIGENCE_SIGNED_URL_TTL_SECONDS);
-          const storageResponse = await fetch(signedUrl);
+          const storageResponse = await fetch(signedUrl, {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache" }
+          });
           if (storageResponse.ok) {
             body = Buffer.from(await storageResponse.arrayBuffer());
             break;
@@ -6758,6 +6874,19 @@ async function handleApi(req, res, url) {
       }
     }
     if (!body) return sendJson(res, 404, { code: "pdf_missing", error: "PDF file not found, please re-upload." });
+    const expectedChecksum = String(report.provider_metadata?.pdf_sha256 || "").trim();
+    if (report.provider_metadata?.source === "uploaded_pdf" && !expectedChecksum) {
+      return sendJson(res, 409, {
+        code: "pdf_storage_unverified",
+        error: "This legacy uploaded PDF cannot be served until it is re-uploaded and verified."
+      });
+    }
+    if (expectedChecksum && leadIntelligencePdfChecksum(body) !== expectedChecksum) {
+      return sendJson(res, 409, {
+        code: "pdf_storage_integrity_mismatch",
+        error: "The stored PDF did not match this lead's uploaded report. Please re-upload the report."
+      });
+    }
     if (url.searchParams.get("download")) return sendDownload(res, "application/pdf", filename, body);
     res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${filename}"`, "Cache-Control": "private, no-store" });
     return res.end(body);

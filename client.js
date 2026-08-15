@@ -9339,14 +9339,15 @@ function intelligenceSummaryMarkup(report) {
   if (!report) return "";
   const summary = report.summary || {};
   const confidence = summary.confidence_summary || report.confidence_summary || {};
+  const card = summary.intel_card || report.report?.intel_card || report.intel_card || {};
   return `
     <div class="lead-intel-summary-grid" aria-label="Lead intelligence summary">
       <span><b>Research</b><small>${escapeHtml(formatDisplayDate(summary.research_date || report.research_timestamp || report.completed_at || ""))}</small></span>
-      <span><b>Score</b><small>${escapeHtml(String(report.displayed_score || summary.lead_score || "-"))}/10</small></span>
-      <span><b>Priority</b><small>${escapeHtml(report.priority || summary.priority || "-")}</small></span>
-      <span><b>Demand</b><small>${escapeHtml(report.steel_demand || summary.steel_demand || "-")}</small></span>
-      <span><b>Buyer</b><small>${escapeHtml(report.buyer_classification || summary.buyer_classification || "-")}</small></span>
-      <span><b>Confidence</b><small>Identity ${escapeHtml(confidence.company_identity || "-")}</small></span>
+      <span><b>Score</b><small>${escapeHtml(String(card.score_display ?? report.displayed_score ?? summary.lead_score ?? "-"))}/10</small></span>
+      <span><b>Priority</b><small>${escapeHtml(card.priority || report.priority || summary.priority || "-")}</small></span>
+      <span><b>Demand</b><small>${escapeHtml(card.steel_demand || report.steel_demand || summary.steel_demand || "-")}</small></span>
+      <span><b>Buyer</b><small>${escapeHtml(card.buyer_classification || report.buyer_classification || summary.buyer_classification || "-")}</small></span>
+      <span><b>Confidence</b><small>Steel opportunity ${escapeHtml(card.steel_opportunity_confidence || confidence.steel_opportunity_assessment || "-")}</small></span>
     </div>
   `;
 }
