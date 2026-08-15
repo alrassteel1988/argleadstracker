@@ -7,7 +7,8 @@ const {
   calculateLeadScore,
   priorityForWeightedScore,
   publicSourcesFromPdfText,
-  renderLeadIntelligencePdf
+  renderLeadIntelligencePdf,
+  withPdfCitationValidationEvidence
 } = require("../src/services/leadIntelligenceService");
 
 function fixtureReport(overrides = {}) {
@@ -134,6 +135,9 @@ assert.strictEqual(numberedSources.length, 8, "case- and whitespace-tolerant Sou
 assert.strictEqual(numberedSources[0].url, "https://source-1.example.com/profile");
 assert.strictEqual(numberedSources[7].url, "https://source-8.example.com/certification");
 assert.strictEqual(publicSourcesFromPdfText("Sources\n1. No link here.").length, 0, "a source heading without public URLs must not bypass validation");
+const citationEvidence = withPdfCitationValidationEvidence({ sources: [{ id: "src-pdf-1", url: "https://example.com/public" }], research_quality: {} });
+assert.strictEqual(citationEvidence.research_quality.verified_information[0].source_refs[0], "src-pdf-1", "a verified-information fallback requires an actual public PDF source");
+assert.deepStrictEqual(withPdfCitationValidationEvidence({ sources: [], research_quality: {} }).research_quality, {}, "a source-less PDF must not receive validation evidence");
 
 const allowed = allowedResearchInputFromLead({
   company_name: "Allowed Co",
