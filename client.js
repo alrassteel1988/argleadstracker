@@ -1841,6 +1841,13 @@ function markLeadIntelligencePdfMissing(url) {
   if (state.leadDrawerTab === "intel") renderLeadDrawer();
 }
 
+function clearLeadIntelligencePdfMissing(leadId) {
+  const prefix = `/api/leads/${encodeURIComponent(leadId)}/intelligence/pdf/`;
+  state.leadIntelligenceMissingPdfUrls = new Set(
+    [...state.leadIntelligenceMissingPdfUrls].filter(url => !String(url).includes(prefix))
+  );
+}
+
 function blobDownloadName(url) {
   return url.includes("download=1") ? "lead-intelligence.pdf" : "lead-intelligence-preview.pdf";
 }
@@ -8764,7 +8771,10 @@ function loadLeadDetailData(leadId) {
           }))
         : [];
       state.leadDrawerPmrs = [...pendingPmrs, ...syncedPmrs];
-      if (results[1].status === "fulfilled") state.leadDrawerIntel = results[1].value || [];
+      if (results[1].status === "fulfilled") {
+        clearLeadIntelligencePdfMissing(leadId);
+        state.leadDrawerIntel = results[1].value || [];
+      }
       if (results[2].status === "fulfilled") state.leadDrawerHandoffs = results[2].value || [];
     })
     .finally(() => {
@@ -9345,12 +9355,16 @@ function leadIntelligenceUploadMarkup(leadId, { hasReport = false, processing = 
   return `<label class="primary-button lead-intel-upload-control">${label}<input type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload="${escapeHtml(leadId)}"></label>`;
 }
 
+function leadIntelligencePdfViewerMarkup(report, hasPdf) {
+  if (!hasPdf) return `<button class="ghost-button" type="button" disabled aria-disabled="true">View PDF</button><span class="empty-copy">No report uploaded yet.</span>`;
+  return `<a class="ghost-button" href="#" target="_blank" rel="noopener noreferrer" data-lead-intelligence-pdf-open="${escapeHtml(report.pdf_url)}">View PDF</a>`;
+}
+
 function renderDrawerIntel(lead) {
-  const statePayload = state.leadDrawerIntel && !Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : { market_items: Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : [] };
+  const statePayload = state.leadDrawerIntel && !Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : {};
   const report = statePayload.report || null;
   const active = statePayload.active_report || null;
   const failed = statePayload.failed_report || null;
-  const marketItems = statePayload.market_items || [];
   const missingPdf = Boolean(report?.pdf_url && state.leadIntelligenceMissingPdfUrls.has(report.pdf_url));
   const hasPdf = report && report.pdf_available && report.pdf_url && !missingPdf;
   const processing = active && ["queued", "researching", "generating_pdf"].includes(String(active.status));
@@ -9391,18 +9405,16 @@ function renderDrawerIntel(lead) {
         ${hasPdf ? `
           <div class="lead-intel-actions">
             <button class="ghost-button" type="button" data-lead-intelligence-pdf-download="${escapeHtml(report.download_url)}">Download PDF</button>
-            <button class="ghost-button" type="button" data-lead-intelligence-pdf-open="${escapeHtml(report.pdf_url)}">Open in new tab</button>
             ${leadIntelligenceActionButton("refresh", lead.id, "Refresh Intelligence", "primary-button")}
           </div>
           <iframe class="lead-intel-pdf" data-lead-intelligence-pdf-preview="${escapeHtml(report.pdf_url)}" title="Embedded lead intelligence PDF"></iframe>
         ` : `<p class="empty-copy">${missingPdf ? "PDF file not found, please re-upload." : "PDF is not available for this report yet."}</p>`}
       ` : ""}
-      <details class="lead-intel-market-feed">
-        <summary>Matched market feed items</summary>
-        <div class="drawer-list intel-list">
-          ${marketItems.length ? marketItems.map(intelItemMarkup).join("") : `<div class="timeline-empty"><strong>No matched feed items.</strong><span>Weekly feeds will appear here when sources are configured.</span></div>`}
-        </div>
-      </details>
+      <section class="lead-intel-market-feed" aria-label="Market Intelligence PDF">
+        <h4>Market Intelligence</h4>
+        <p>View the current source-backed intelligence report for this lead.</p>
+        <div class="lead-intel-actions">${leadIntelligencePdfViewerMarkup(report, hasPdf)}</div>
+      </section>
     </section>
   `;
 }
@@ -9491,7 +9503,8 @@ function bindLeadDrawerEvents() {
     });
   });
   document.querySelectorAll("[data-lead-intelligence-pdf-open]").forEach(button => {
-    button.addEventListener("click", async () => {
+    button.addEventListener("click", async event => {
+      event.preventDefault();
       const popup = window.open("", "_blank");
       try {
         await openAuthenticatedPdf(button.dataset.leadIntelligencePdfOpen, popup);
@@ -9627,6 +9640,7 @@ function bindLeadDrawerEvents() {
         setToast(action === "refresh" ? "Refreshing intelligence..." : action === "retry" ? "Retrying intelligence..." : "Generating intelligence...", "");
         const body = action === "retry" ? JSON.stringify({ report_id: button.dataset.reportId || "" }) : undefined;
         state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(leadId)}/intelligence/${encodeURIComponent(action)}`, { method: "POST", body });
+        clearLeadIntelligencePdfMissing(leadId);
         state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(leadId)}/intel`);
         setToast("Intelligence job queued.", "success");
         renderLeadDrawer();
@@ -9651,6 +9665,7 @@ function bindLeadDrawerEvents() {
         await uploadLeadIntelligencePdf(uploadedLeadId, file);
         // Reload the persisted report rather than relying on the upload
         // response, so the Intel tab always reflects the saved current row.
+        clearLeadIntelligencePdfMissing(uploadedLeadId);
         state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(uploadedLeadId)}/intel`);
         leadAiSummaryCache.delete(uploadedLeadId);
         await loadLeadAiSummary(uploadedLeadId, { force: true });

@@ -55,20 +55,48 @@ const bundle = {
 bundle.intelligenceReport = {
   research_date: "2026-08-10",
   executive_snapshot: { top_opportunity: "Uploaded structural steel package", steel_demand: "HIGH" },
-  sales_recommendation: { recommended_sales_angle: "Call procurement" },
-  lead_score: { displayed_score: 8 }
+  company_profile: { company_type: "Structural steel fabricator", headquarters: "Dubai", main_activities: ["Fabrication", "Erection"] },
+  structural_steel_opportunity: { buying_pattern_opportunity: "Package-based structural steel procurement" },
+  sales_recommendation: { recommended_sales_angle: "Call procurement", suggested_next_action: "Ask procurement for the next tender package" },
+  lead_score: { displayed_score: 8 },
+  research_quality: {
+    not_publicly_found_unverified: [{ statement: "Named procurement manager was not publicly verified." }],
+    confidence_summary: { company_identity: "High", project_intelligence: "Low" }
+  },
+  sources: [{ title: "Official company profile", url: "https://example.com/profile" }]
 };
 
 const context = buildLeadSummaryContext(bundle);
 assert.strictEqual(context.lead.company_name, "ACA Steel Contracting LLC");
 assert.strictEqual(context.activity_summary.calls, 1);
 assert.strictEqual(context.uploaded_pdf_intelligence.executive_snapshot.top_opportunity, "Uploaded structural steel package");
+assert.strictEqual(context.uploaded_pdf_intelligence.sources[0].url, "https://example.com/profile");
 
 const fallback = fallbackLeadSummary(bundle);
 assert.ok(fallback.current_lead_status.includes("PROSPECT"));
 assert.ok(Array.isArray(fallback.risks_attention_needed));
 assert.ok(Array.isArray(fallback.data_gaps));
 assert.match(fallback.market_intelligence, /Uploaded structural steel package/);
+assert.match(fallback.current_lead_status, /Structural steel fabricator/);
+assert.match(fallback.recommended_next_action, /To Call/, "existing CRM next actions must remain primary");
+assert.strictEqual(fallback.sources[0].url, "https://example.com/profile");
+assert.ok(fallback.risks_attention_needed.some(item => /PDF research gap: Named procurement manager/.test(item)), "PDF research quality gaps must surface in Overall Summary risks");
+
+const pdfOnlyBundle = {
+  ...bundle,
+  lead: { ...bundle.lead, next_action: "", next_action_date: "" },
+  intel: [],
+  marketIntelConfigured: false,
+  marketIntelUnavailableReason: ""
+};
+const pdfOnlyFallback = fallbackLeadSummary(pdfOnlyBundle);
+assert.match(pdfOnlyFallback.market_intelligence, /Uploaded structural steel package/);
+assert.match(pdfOnlyFallback.recommended_next_action, /Ask procurement for the next tender package/);
+assert.strictEqual(pdfOnlyFallback.sources[0].url, "https://example.com/profile");
+
+const noIntelFallback = fallbackLeadSummary({ ...pdfOnlyBundle, intelligenceReport: null });
+assert.strictEqual(noIntelFallback.confidence, "Low");
+assert.ok(noIntelFallback.data_gaps.some(item => /Insufficient external intelligence/.test(item)));
 
 async function mockFetch() {
   return {

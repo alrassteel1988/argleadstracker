@@ -67,6 +67,13 @@ function normalizeSources(value, bundle) {
     })
     .filter(item => item?.label);
   if (cleaned.length) return cleaned.slice(0, 8);
+  const pdfSources = take(bundle.intelligenceReport?.sources, 8)
+    .map(item => ({
+      label: safeText(item.title || item.publisher || "Uploaded PDF source"),
+      url: safeText(item.url)
+    }))
+    .filter(item => item.label);
+  if (pdfSources.length) return pdfSources;
   return take(bundle.intel, 4)
     .map(item => ({
       label: safeText(item.title || item.source || "Market intelligence"),
@@ -175,7 +182,9 @@ function buildLeadSummaryContext(bundle) {
       procurement_contacts: take(bundle.intelligenceReport.procurement_contacts, 6),
       structural_steel_opportunity: bundle.intelligenceReport.structural_steel_opportunity || {},
       sales_recommendation: bundle.intelligenceReport.sales_recommendation || {},
-      lead_score: bundle.intelligenceReport.lead_score || {}
+      lead_score: bundle.intelligenceReport.lead_score || {},
+      research_quality: bundle.intelligenceReport.research_quality || {},
+      sources: take(bundle.intelligenceReport.sources, 8)
     } : null,
     market_intelligence: take(bundle.intel, 8).map(item => ({
       title: safeText(item.title),
@@ -189,6 +198,22 @@ function buildLeadSummaryContext(bundle) {
 
 function fallbackLeadSummary(bundle) {
   const lead = bundle.lead || {};
+  const pdfIntel = bundle.intelligenceReport || null;
+  const pdfOpportunity = safeText(
+    pdfIntel?.executive_snapshot?.top_opportunity
+    || pdfIntel?.structural_steel_opportunity?.buying_pattern_opportunity
+    || pdfIntel?.sales_recommendation?.recommended_sales_angle
+  );
+  const pdfProfile = safeText([
+    pdfIntel?.company_profile?.company_type,
+    pdfIntel?.company_profile?.headquarters,
+    pdfIntel?.company_profile?.main_activities
+  ]);
+  const pdfNextAction = safeText(pdfIntel?.sales_recommendation?.suggested_next_action);
+  const pdfResearchGaps = take(pdfIntel?.research_quality?.not_publicly_found_unverified, 3)
+    .map(item => safeText(item?.statement || item))
+    .filter(Boolean);
+  const pdfConfidence = pdfIntel?.research_quality?.confidence_summary || {};
   const latestActivity = (bundle.activities || [])[0];
   const latestReminder = (bundle.reminders || [])[0];
   const latestPmr = (bundle.pmrs || [])[0];
@@ -211,24 +236,31 @@ function fallbackLeadSummary(bundle) {
   if (!(bundle.pmrs || []).length) {
     dataGaps.push("No PMR records filed.");
   }
-  if (!bundle.marketIntelConfigured) {
-    dataGaps.push(bundle.marketIntelUnavailableReason || "Market intelligence unavailable. ZAWYA/LSEG API is not configured.");
-  }
+  if (!pdfIntel && !(bundle.intel || []).length) dataGaps.push("No uploaded PDF intelligence or stored market intelligence is available.");
   if (!lead.estimated_value) {
     dataGaps.push("Open pipeline value is not recorded.");
+  }
+  if (!pdfIntel && !(bundle.intel || []).length) {
+    dataGaps.push("Insufficient external intelligence: no uploaded PDF intelligence or matched market intelligence is available.");
+  }
+  if (pdfResearchGaps.length) risks.push(...pdfResearchGaps.map(gap => `PDF research gap: ${gap}`));
+  if (pdfIntel && Object.values(pdfConfidence).some(value => String(value).toLowerCase() === "low")) {
+    risks.push("Uploaded PDF research has low-confidence areas; verify the cited details before outreach.");
   }
 
   return {
     current_lead_status: [
       `${lead.company_name || "This lead"} is currently in ${lead.stage || lead.lead_status || "an unclassified"} stage.`,
       lead.estimated_value ? `Open pipeline value is recorded at ${lead.estimated_value}.` : "No open pipeline value is recorded.",
-      lead.next_action ? `The next planned action is ${lead.next_action}${lead.next_action_date ? ` on ${lead.next_action_date}` : ""}.` : "No next action has been recorded yet."
+      pdfProfile ? `Uploaded PDF company profile: ${pdfProfile}.` : "No uploaded PDF company profile is available.",
+      pdfOpportunity ? `PDF intelligence identifies: ${pdfOpportunity}.` : "No PDF opportunity has been identified.",
+      lead.next_action ? `The next planned CRM action is ${lead.next_action}${lead.next_action_date ? ` on ${lead.next_action_date}` : ""}.` : pdfNextAction ? `Uploaded PDF recommends: ${pdfNextAction}.` : "No next action has been recorded yet."
     ].join(" "),
-    market_intelligence: bundle.intelligenceReport
-      ? safeText(bundle.intelligenceReport.executive_snapshot?.top_opportunity || bundle.intelligenceReport.sales_recommendation?.recommended_sales_angle || bundle.intelligenceReport.structural_steel_opportunity?.buying_pattern_opportunity || "Uploaded PDF intelligence is available for this lead.")
+    market_intelligence: pdfIntel
+      ? safeText(pdfOpportunity || "Uploaded PDF intelligence is available for this lead.")
       : bundle.marketIntelConfigured
       ? ((bundle.intel && bundle.intel[0] && safeText(bundle.intel[0].summary || bundle.intel[0].title)) || "No matched market intelligence was found for this lead.")
-      : "Market intelligence unavailable. ZAWYA/LSEG API is not configured.",
+      : "No uploaded PDF intelligence or stored market intelligence is available for this lead.",
     salesman_engagement_history: [
       `${lead.assigned_salesman || bundle.salesman?.name || "The assigned salesman"} registered or owns this lead${lead.created_at ? ` since ${shortDate(lead.created_at)}` : ""}.`,
       latestActivity
@@ -243,10 +275,12 @@ function fallbackLeadSummary(bundle) {
     ].join(" "),
     risks_attention_needed: risks.length ? risks : ["No critical risk was detected from the current CRM record."],
     recommended_next_action: lead.next_action
-      ? `${lead.next_action}${lead.next_action_date ? ` by ${lead.next_action_date}` : ""}. Confirm live steel requirements, buyer ownership, and quotation timing.`
+      ? `${lead.next_action}${lead.next_action_date ? ` by ${lead.next_action_date}` : ""}. ${pdfNextAction && !safeText(lead.next_action).toLowerCase().includes(pdfNextAction.toLowerCase()) ? `PDF recommendation: ${pdfNextAction}. ` : ""}Confirm live steel requirements, buyer ownership, and quotation timing.`
+      : pdfNextAction
+      ? `${pdfNextAction} Confirm the live requirement, buyer ownership, and quotation timing before acting.`
       : "Call the primary contact, confirm current steel requirements, identify the decision-maker, and schedule the next follow-up.",
     suggested_follow_up_message: `Hello ${lead.contact_person || "team"}, this is ${lead.assigned_salesman || "the Al Ras Steel team"} following up on ${lead.company_name || "your requirement"}. Could you please confirm any current steel requirement, the right procurement contact, and the next quotation step?`,
-    confidence: risks.length >= 2 || dataGaps.length >= 2 ? "Medium" : "High",
+    confidence: !pdfIntel && !(bundle.intel || []).length ? "Low" : risks.length >= 2 || dataGaps.length >= 2 ? "Medium" : "High",
     data_gaps: dataGaps,
     sources: normalizeSources([], bundle)
   };
@@ -259,7 +293,7 @@ function summaryPrompt(bundle) {
     `Use exactly these top-level keys: ${JSON_KEYS.join(", ")}.`,
     "Rules:",
     "- Never invent calls, meetings, quotes, commitments, contacts, or market facts.",
-    "- Use only the supplied CRM and market-intelligence context.",
+    "- Use only the supplied CRM, uploaded-PDF intelligence, and market-intelligence context.",
     "- If data is missing, state that clearly in the relevant field and list it in data_gaps.",
     "- risks_attention_needed and data_gaps must be arrays of short strings.",
     "- sources must be an array of objects with label and url keys.",

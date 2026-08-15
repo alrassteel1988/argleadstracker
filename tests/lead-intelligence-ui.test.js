@@ -35,6 +35,11 @@ const leadIntelligenceUploadMarkup = new Function(
   "escapeHtml",
   `${sourceFunction("leadIntelligenceUploadMarkup")}\nreturn leadIntelligenceUploadMarkup;`
 )(value => String(value));
+const leadIntelligencePdfViewerMarkup = new Function(
+  "escapeHtml",
+  `${sourceFunction("leadIntelligencePdfViewerMarkup")}\nreturn leadIntelligencePdfViewerMarkup;`
+)(value => String(value));
+const renderDrawerIntelSource = sourceFunction("renderDrawerIntel");
 
 assert.ok(clientSource.includes("function renderDrawerIntel"));
 assert.ok(clientSource.includes("function summaryText(value)"));
@@ -64,7 +69,11 @@ assert.ok(clientSource.includes("Intelligence report is ${escapeHtml(statusLabel
 assert.ok(clientSource.includes("Latest intelligence job failed."));
 assert.ok(clientSource.includes("Refresh Intelligence"));
 assert.ok(clientSource.includes("Download PDF"));
-assert.ok(clientSource.includes("Open in new tab"));
+assert.ok(clientSource.includes("function leadIntelligencePdfViewerMarkup(report, hasPdf)"));
+assert.ok(clientSource.includes("clearLeadIntelligencePdfMissing(uploadedLeadId);"), "a successful upload must clear stale missing-file state before reloading the report");
+assert.ok(!renderDrawerIntelSource.includes("market_items"), "the Intel tab must not consume the market feed");
+assert.ok(!renderDrawerIntelSource.includes("ZAWYA"), "the Intel tab must not reference Zawya");
+assert.ok(!renderDrawerIntelSource.includes("Matched market feed items"), "the former Zawya-backed Intel block must be removed");
 assert.ok(clientSource.includes("data-lead-intelligence-action"));
 assert.ok(clientSource.includes("/intelligence/${encodeURIComponent(action)}"));
 assert.ok(clientSource.includes("/api/leads/${encodeURIComponent(leadId)}/intel"));
@@ -83,5 +92,16 @@ assert.match(researchingReportUpload, /data-lead-intelligence-upload="lead-aca"/
 const salesmanReportUpload = leadIntelligenceUploadMarkup("lead-aca", { role: "salesman", hasReport: true });
 assert.match(salesmanReportUpload, /Replace PDF/);
 assert.match(salesmanReportUpload, /data-lead-intelligence-upload="lead-aca"/);
+
+const pdfViewer = leadIntelligencePdfViewerMarkup({ pdf_url: "/api/leads/lead-aca/intelligence/pdf/report-1" }, true);
+assert.match(pdfViewer, /View PDF/);
+assert.match(pdfViewer, /target="_blank"/);
+assert.match(pdfViewer, /rel="noopener noreferrer"/);
+assert.match(pdfViewer, /data-lead-intelligence-pdf-open="\/api\/leads\/lead-aca\/intelligence\/pdf\/report-1"/);
+assert.ok(!pdfViewer.includes("supabase"), "PDF viewing must use the app's authenticated streaming route");
+
+const noPdfViewer = leadIntelligencePdfViewerMarkup(null, false);
+assert.match(noPdfViewer, /disabled/);
+assert.match(noPdfViewer, /No report uploaded yet/);
 
 console.log("PASS lead intelligence Intel tab UI contract");

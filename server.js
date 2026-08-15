@@ -2,6 +2,8 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const pdfParse = require("pdf-parse");
+const pdfjs = require("pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js");
 
 function bootstrapEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -2593,20 +2595,12 @@ async function buildLeadSummaryBundle({ db, user, lead, supabaseEnabled }) {
     ? await supabaseSalesmanAccount(user.token, lead)
     : localSalesmanAccount(db, lead);
 
-  let intel = storedIntel || [];
-  let marketIntelConfigured = Boolean(integrations.keys.zawya && integrations.env.zawyaApiUrl);
-  let marketIntelUnavailableReason = "";
-  try {
-    const fetched = await fetchMarketIntelligence();
-    if (fetched.disabled) {
-      marketIntelConfigured = false;
-      marketIntelUnavailableReason = fetched.reason || "Market intelligence unavailable. ZAWYA/LSEG API is not configured.";
-    } else if (!intel.length) {
-      intel = leadIntelItems(lead, matchIntelligenceToLeads(fetched.items || [], [lead])).slice(0, 8);
-    }
-  } catch (error) {
-    marketIntelUnavailableReason = intel.length ? "Live market intelligence refresh failed. Showing stored matched intelligence only." : safeProviderMessage(error.message || "Market intelligence is temporarily unavailable.");
-  }
+  // Lead summaries use the saved CRM record, its stored intelligence report,
+  // and existing matched items only. Do not make a live provider call while
+  // rendering a single lead summary: an uploaded PDF is the primary source.
+  const intel = storedIntel || [];
+  const marketIntelConfigured = false;
+  const marketIntelUnavailableReason = "";
 
   return {
     lead,
@@ -3382,12 +3376,46 @@ function isPdfUpload(buffer) {
   return Buffer.isBuffer(buffer) && buffer.length >= 5 && buffer.subarray(0, 5).toString("utf8") === "%PDF-";
 }
 
-// A lightweight text hint improves text-PDF imports; scanned PDFs are sent to
-// the model as a file and do not depend on this extraction succeeding.
-function leadIntelligencePdfText(buffer) {
-  return Buffer.from(buffer || []).toString("latin1")
-    .match(/\((?:\\.|[^\\)])*\)\s*Tj/g)?.map(value => value.replace(/^\(/, "").replace(/\)\s*Tj$/, ""))
-    .join("\n").slice(0, 18000) || "";
+// pdf-parse reads normal and compressed content streams, unlike the former
+// literal-string regex. Keep the tiny fallback only for malformed test PDFs;
+// the original PDF is still supplied to Responses for scanned PDFs.
+async function leadIntelligencePdfText(buffer) {
+  try {
+    const pdfBytes = Buffer.from(buffer || []);
+    const parsed = await pdfParse(pdfBytes);
+    const text = String(parsed?.text || "").replace(/\r\n?/g, "\n").trim();
+    const document = await pdfjs.getDocument({ data: new Uint8Array(pdfBytes) });
+    const annotations = await Promise.all(Array.from({ length: document.numPages }, async (_, index) => {
+      const page = await document.getPage(index + 1);
+      return page.getAnnotations();
+    }));
+    const links = [...new Set(annotations.flat().map(item => String(item.url || item.unsafeUrl || "").trim()).filter(url => /^https?:\/\//i.test(url)))];
+    // Some PDF writers store citation URLs only as link annotations, not in
+    // the content stream. Preserve those as a Sources addendum for both the
+    // model and public-source recovery while keeping labels in the text above.
+    return links.length ? `${text}\n\nSources\nLinked PDF annotations:\n${links.join("\n")}` : text;
+  } catch (error) {
+    const fallback = Buffer.from(buffer || []).toString("latin1")
+      .match(/\((?:\\.|[^\\)])*\)\s*Tj/g)?.map(value => value.replace(/^\(/, "").replace(/\)\s*Tj$/, ""))
+      .join("\n").trim() || "";
+    console.warn("Lead intelligence PDF text extraction failed; continuing with the attached PDF.", {
+      error: String(error?.message || error).slice(0, 180), fallback_characters: fallback.length
+    });
+    return fallback;
+  }
+}
+
+function logLeadIntelligencePdfExtractionDebug(rawText, filename) {
+  if (String(process.env.LEAD_INTELLIGENCE_PDF_DEBUG || "").toLowerCase() !== "true") return;
+  const text = String(rawText || "");
+  const heading = /(?:^|\n)\s*sources?\s*(?:\n|$|:|-)/i.exec(text);
+  const sourceText = heading ? text.slice(heading.index + heading[0].length) : "";
+  console.info("Lead intelligence PDF extraction debug", {
+    filename: String(filename || "").slice(0, 180),
+    extracted_characters: text.length,
+    sources_heading_found: Boolean(heading),
+    text_after_sources_heading: sourceText.slice(0, 6000)
+  });
 }
 
 function activeLeadIntelligenceStatuses() {
@@ -3461,7 +3489,7 @@ async function loadLeadIntelligenceReports(db, token, leadId, supabaseEnabled) {
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
 }
 
-async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems = []) {
+async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled) {
   const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
   const active = reports.find(report => activeLeadIntelligenceStatuses().has(report.status)) || null;
   const current = currentCompletedLeadIntelligenceReport(reports);
@@ -3474,8 +3502,7 @@ async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, market
     report: current ? serializeLeadIntelligenceRecord(current, { includeReport: true }) : null,
     active_report: active ? serializeLeadIntelligenceRecord(active) : null,
     failed_report: failed ? serializeLeadIntelligenceRecord(failed) : null,
-    history: reports.map(report => serializeLeadIntelligenceRecord(report)).slice(0, 12),
-    market_items: marketItems
+    history: reports.map(report => serializeLeadIntelligenceRecord(report)).slice(0, 12)
   };
 }
 
@@ -6610,18 +6637,7 @@ async function handleApi(req, res, url) {
       ? await getSupabaseLead(user.token, leadIntelMatch[1], user)
       : db.leads.find(item => item.id === leadIntelMatch[1] && leadBelongsToUser(item, user));
     if (!lead) return leadNotFound(res);
-    let items = [];
-    if (supabaseEnabled) {
-      try {
-        items = await rest("market_intelligence?select=*&order=published_at.desc&limit=100", supabaseDataOptions(user.token));
-      } catch {
-        items = [];
-      }
-    } else {
-      items = db.market_intelligence || [];
-    }
-    const marketItems = leadIntelItems(lead, matchIntelligenceToLeads(items, [lead]));
-    return sendJson(res, 200, await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems));
+    return sendJson(res, 200, await loadLeadIntelligenceState(db, user, lead, supabaseEnabled));
   }
 
   const leadIntelligenceUploadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/intelligence\/upload$/);
@@ -6633,8 +6649,10 @@ async function handleApi(req, res, url) {
     const filename = decodeURIComponent(String(req.headers["x-file-name"] || "lead-intelligence.pdf")).slice(0, 180);
     let parsed;
     try {
+      const rawPdfText = await leadIntelligencePdfText(pdf);
+      logLeadIntelligencePdfExtractionDebug(rawPdfText, filename);
       parsed = await parseLeadIntelligencePdfWithOpenAI({
-        rawPdfText: leadIntelligencePdfText(pdf), pdfBuffer: pdf, filename, lead,
+        rawPdfText, pdfBuffer: pdf, filename, lead,
         openAiKey: OPENAI_API_KEY, model: OPENAI_LEAD_INTELLIGENCE_MODEL
       });
     } catch (error) {
@@ -6666,7 +6684,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, {
       report: serializeLeadIntelligenceRecord(completed, { includeReport: true }),
       replaced_report_id: replacedReportId,
-      state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, [])
+      state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled)
     });
   }
 
@@ -6687,7 +6705,7 @@ async function handleApi(req, res, url) {
       code: processResult.status === "completed" ? "completed" : queued.created ? "queued" : "already_active",
       report: processResult.report || serializeLeadIntelligenceRecord(queued.record),
       result: processResult,
-      state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled, [])
+      state: await loadLeadIntelligenceState(db, user, lead, supabaseEnabled)
     });
   }
 

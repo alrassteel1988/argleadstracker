@@ -473,6 +473,38 @@ function withUploadedPdfValidationEvidence(input, filename) {
   return report;
 }
 
+function publicSourcesFromPdfText(rawText) {
+  const text = String(rawText || "").replace(/\r\n?/g, "\n");
+  // Permit page breaks/spacing/case changes around the heading. Stop when a
+  // following report heading begins, but never require each list item to stay
+  // on one physical line: PDF extractors commonly split a hyperlink from its
+  // numbered description.
+  const heading = /(?:^|\n)\s*sources?\s*(?:\n|$|:|-)/i.exec(text);
+  if (!heading) return [];
+  const following = text.slice(heading.index + heading[0].length);
+  const section = following.split(/\n\s*(?:[A-Z][A-Za-z ]{3,}|#{1,6}\s+[^\n]+)\s*\n/)[0] || following;
+  const urls = [...section.matchAll(/https?:\/\/[^\s<>\])}"']+/gi)].map(match => match[0].replace(/[.,;:]+$/, ""));
+  return [...new Set(urls.map(url => url.trim()).filter(url => {
+    try { return /^https?:$/i.test(new URL(url).protocol); } catch { return false; }
+  }))].map((url, index) => {
+    const urlIndex = section.indexOf(url);
+    const before = section.slice(Math.max(0, urlIndex - 240), urlIndex).replace(/\s+/g, " ").trim();
+    const numbered = before.match(/(?:^|\s)(\d+)\s*[.)-]\s*([^\n]{0,180})$/);
+    const markdown = before.match(/\[([^\]]{3,160})\]\s*\([^)]*$/);
+    const title = safeText(markdown?.[1] || numbered?.[2] || before.split(/[|\n]/).at(-1), url);
+    return { id: `src-pdf-${index + 1}`, title, url, publisher: new URL(url).hostname, source_type: "Uploaded PDF citation", access_date: new Date().toISOString().slice(0, 10) };
+  });
+}
+
+function withExtractedPdfSources(input, rawPdfText) {
+  const report = input && typeof input === "object" ? { ...input } : {};
+  const supplied = asArray(report.sources).filter(source => safeText(source?.url) && /^https?:\/\//i.test(safeText(source.url)));
+  if (supplied.length) return report;
+  const extracted = publicSourcesFromPdfText(rawPdfText);
+  if (extracted.length) report.sources = extracted;
+  return report;
+}
+
 async function generateLeadIntelligenceWithOpenAI({ lead, openAiKey, model = "gpt-4.1-mini", fetchImpl = fetch, timeoutMs = 90_000 }) {
   if (!openAiKey) {
     const error = new Error("Lead intelligence research is not configured. Add OPENAI_API_KEY on the server.");
@@ -582,7 +614,11 @@ async function parseLeadIntelligencePdfWithOpenAI({ rawPdfText, pdfBuffer, filen
       throw error;
     }
     const parsed = parseJsonText(extractResponseText(payload));
-    return { report: assertValidLeadIntelligenceReport(withUploadedPdfValidationEvidence(parsed, filename), leadInput) };
+    // Prefer actual public citations recovered from the PDF over model output.
+    // Do not synthesize an Uploaded PDF source: a genuinely source-less import
+    // must still fail the public-source validation.
+    const withPdfSources = withExtractedPdfSources(parsed, source);
+    return { report: assertValidLeadIntelligenceReport(withPdfSources, leadInput) };
   } catch (error) {
     if (error.name === "AbortError") {
       error = new Error("Lead intelligence provider request timed out.");
@@ -762,6 +798,8 @@ module.exports = {
   generateLeadIntelligenceWithOpenAI,
   parseJsonText,
   parseLeadIntelligencePdfWithOpenAI,
+  publicSourcesFromPdfText,
+  withExtractedPdfSources,
   withUploadedPdfValidationEvidence,
   normalizeLeadIntelligenceReport,
   priorityForWeightedScore,

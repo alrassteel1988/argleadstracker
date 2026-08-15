@@ -10,6 +10,14 @@ const leadIntelligencePdfRoute = serverSource.slice(
   serverSource.indexOf("const leadIntelligencePdfMatch"),
   serverSource.indexOf('if (req.method === "POST" && url.pathname === "/api/admin/lead-intelligence/process")')
 );
+const leadIntelStateRoute = serverSource.slice(
+  serverSource.indexOf("const leadIntelMatch"),
+  serverSource.indexOf("const leadIntelligenceUploadMatch")
+);
+const leadSummaryBundleSource = serverSource.slice(
+  serverSource.indexOf("async function buildLeadSummaryBundle"),
+  serverSource.indexOf("function leadSummaryFingerprint")
+);
 const dbPath = path.join(__dirname, "..", "data", "db.json");
 const dataIntelPath = path.join(__dirname, "..", "data", "lead-intelligence");
 const originalDb = fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : null;
@@ -45,6 +53,8 @@ assert.ok(!/res\.writeHead\(302,\s*\{\s*Location:\s*signedUrl/.test(leadIntellig
 assert.ok(leadIntelligencePdfRoute.includes("|| currentReport;"), "stale PDF route references must fall back to the authorized lead's current completed report");
 assert.ok(serverSource.includes("function leadIntelligencePdfStorageKeys(report)"), "PDF delivery must try legacy and canonical storage keys");
 assert.ok(serverSource.includes("function currentCompletedLeadIntelligenceReport(reports)"), "the current completed report lookup must ignore legacy string false values");
+assert.ok(!/market_intelligence|fetchMarketIntelligence|zawya/i.test(leadIntelStateRoute), "the Intel tab state endpoint must not fetch Zawya-backed market intelligence");
+assert.ok(!/fetchMarketIntelligence|zawya/i.test(leadSummaryBundleSource), "Refresh AI Summary must not make a live Zawya request; it uses stored PDF intelligence instead");
 
 fs.existsSync = originalExistsSync;
 fs.readFileSync = originalReadFileSync;
@@ -122,6 +132,7 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const initialIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(initialIntel.response.status, 200);
     assert.equal(initialIntel.data.active_report.status, "queued");
+    assert.ok(!Object.hasOwn(initialIntel.data, "market_items"), "the Intel tab API must not fetch or expose the Zawya-backed market feed");
 
     const generated = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/generate`, { method: "POST", token: adminToken });
     assert.equal(generated.response.status, 200, JSON.stringify(generated.data));
@@ -150,10 +161,8 @@ async function requestPdf(baseUrl, pathName, token, text) {
 
     providerMode = "pdf_missing_validation_evidence";
     const evidenceFallbackUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF without web citations.");
-    assert.equal(evidenceFallbackUpload.response.status, 200, JSON.stringify(evidenceFallbackUpload.data));
-    assert.equal(evidenceFallbackUpload.data.report.status, "completed");
-    assert.equal(evidenceFallbackUpload.data.report.report.sources[0].source_type, "Uploaded PDF", "uploaded PDF provenance must satisfy PDF-only validation without exposing the report publicly");
-    const evidenceFallbackReportId = evidenceFallbackUpload.data.report.id;
+    assert.equal(evidenceFallbackUpload.response.status, 500, JSON.stringify(evidenceFallbackUpload.data));
+    assert.ok(evidenceFallbackUpload.data.details.includes("At least one public source is required."), "a source-less PDF must not bypass public-source validation");
     providerMode = "success";
 
     const queuedPdfLead = await request(baseUrl, "/api/leads", {
@@ -186,7 +195,7 @@ async function requestPdf(baseUrl, pathName, token, text) {
 
     const adminReplacement = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Replacement API Intelligence Lead LLC PDF with procurement and structural steel details.");
     assert.equal(adminReplacement.response.status, 200, JSON.stringify(adminReplacement.data));
-    assert.equal(adminReplacement.data.replaced_report_id, evidenceFallbackReportId, "admin upload must replace the current PDF");
+    assert.equal(adminReplacement.data.replaced_report_id, uploaded.data.report.id, "admin upload must replace the last successful PDF");
 
     providerMode = "repairable_json";
     const repairedUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Repairable JSON intelligence PDF.");
@@ -197,6 +206,8 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const repairedSummary = await request(baseUrl, "/api/ai/lead-summary", { method: "POST", token: adminToken, body: { leadId: lead.data.id } });
     assert.equal(repairedSummary.response.status, 200, JSON.stringify(repairedSummary.data));
     assert.match(repairedSummary.data.summary.market_intelligence, /Structural steel supply/, "Lead Overview summary must use repaired PDF intelligence context");
+    assert.match(repairedSummary.data.summary.current_lead_status, /Steel fabrication/, "Lead Overview current status must include the uploaded PDF company profile");
+    assert.match(repairedSummary.data.summary.recommended_next_action, /Verify procurement contact/, "Lead Overview next action must fall back to the uploaded PDF recommendation");
     const repairedReportId = repairedUpload.data.report.id;
 
     providerMode = "repairable_array_json";
