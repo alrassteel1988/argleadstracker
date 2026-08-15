@@ -1091,7 +1091,11 @@ function resetLeadAiSummaryState() {
 
 function primeLeadAiSummaryState(lead) {
   const base = emptyLeadAiSummaryState();
-  const cached = leadAiSummaryCache.get(String(lead?.id || ""));
+  const leadId = String(lead?.id || "");
+  const candidate = leadAiSummaryCache.get(leadId);
+  // Older cache entries did not carry a lead id. Do not reuse them: an
+  // explicit identity check keeps stale localStorage from crossing lead tabs.
+  const cached = candidate?.leadId === leadId ? candidate : null;
   state.leadAiSummary = {
     ...base,
     ...(cached ? {
@@ -1107,6 +1111,7 @@ function primeLeadAiSummaryState(lead) {
 
 function rememberLeadAiSummary(leadId, payload, lead) {
   leadAiSummaryCache.set(String(leadId), {
+    leadId: String(leadId),
     summary: payload.summary || null,
     generatedAt: payload.generated_at || "",
     fingerprint: payload.fingerprint || "",

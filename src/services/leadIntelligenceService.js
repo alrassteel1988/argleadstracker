@@ -346,6 +346,32 @@ function firstJsonObject(text) {
   return raw.slice(start);
 }
 
+const COMPANY_NAME_STOP_WORDS = new Set([
+  "al", "and", "co", "company", "const", "construction", "contracting", "corp", "corporation",
+  "est", "factory", "group", "inc", "ind", "industries", "industry", "limited", "llc", "ltd",
+  "intelligence", "lead", "metal", "metallic", "services", "steel", "test", "the", "trading", "uae"
+]);
+
+function companyIdentityTokens(value) {
+  return [...new Set(String(value || "").toLowerCase().match(/[a-z0-9]+/g) || [])]
+    .filter(token => token.length >= 3 && !COMPANY_NAME_STOP_WORDS.has(token));
+}
+
+function assertLeadIntelligenceReportMatchesLead(report, lead) {
+  const expected = safeText(lead?.company_name || lead?.legal_name);
+  const identified = safeText(report?.company_profile?.company || report?.executive_snapshot?.company);
+  const expectedTokens = companyIdentityTokens(expected);
+  const identifiedTokens = companyIdentityTokens(identified);
+  if (!expectedTokens.length || !identifiedTokens.length) return report;
+  const hasSharedIdentityToken = identifiedTokens.some(token => expectedTokens.includes(token));
+  if (hasSharedIdentityToken) return report;
+
+  const error = new Error(`Uploaded PDF appears to describe \"${identified}\", not \"${expected}\".`);
+  error.code = "uploaded_pdf_company_mismatch";
+  error.status = 422;
+  throw error;
+}
+
 function stringEnd(text, start) {
   let escaped = false;
   for (let index = start + 1; index < text.length; index += 1) {
@@ -634,7 +660,8 @@ async function parseLeadIntelligencePdfWithOpenAI({ rawPdfText, pdfBuffer, filen
     // Do not synthesize an Uploaded PDF source: a genuinely source-less import
     // must still fail the public-source validation.
     const withPdfSources = withExtractedPdfSources(parsed, source);
-    return { report: assertValidLeadIntelligenceReport(withPdfCitationValidationEvidence(withPdfSources), leadInput) };
+    const report = assertValidLeadIntelligenceReport(withPdfCitationValidationEvidence(withPdfSources), leadInput);
+    return { report: assertLeadIntelligenceReportMatchesLead(report, leadInput) };
   } catch (error) {
     if (error.name === "AbortError") {
       error = new Error("Lead intelligence provider request timed out.");
@@ -808,6 +835,7 @@ module.exports = {
   SCORE_FACTORS,
   allowedResearchInputFromLead,
   assertValidLeadIntelligenceReport,
+  assertLeadIntelligenceReportMatchesLead,
   buildLeadIntelligencePrompt,
   calculateLeadScore,
   displayedScore,

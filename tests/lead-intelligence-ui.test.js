@@ -71,6 +71,8 @@ assert.ok(clientSource.includes("Refresh Intelligence"));
 assert.ok(clientSource.includes("Download PDF"));
 assert.ok(clientSource.includes("function leadIntelligencePdfViewerMarkup(report, hasPdf)"));
 assert.ok(clientSource.includes("clearLeadIntelligencePdfMissing(uploadedLeadId);"), "a successful upload must clear stale missing-file state before reloading the report");
+assert.ok(clientSource.includes("const cached = candidate?.leadId === leadId ? candidate : null;"), "cached summaries must prove their lead identity before rendering");
+assert.ok(clientSource.includes("leadId: String(leadId),"), "persisted summary cache entries must carry their lead identity");
 assert.ok(!renderDrawerIntelSource.includes("market_items"), "the Intel tab must not consume the market feed");
 assert.ok(!renderDrawerIntelSource.includes("ZAWYA"), "the Intel tab must not reference Zawya");
 assert.ok(!renderDrawerIntelSource.includes("Matched market feed items"), "the former Zawya-backed Intel block must be removed");

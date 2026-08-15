@@ -87,8 +87,21 @@ function providerFixture() {
 let providerMode = "success";
 global.fetch = async function mockedFetch(url, options) {
   if (String(url).startsWith("https://api.openai.com/")) {
-    const validJson = JSON.stringify(providerFixture());
-    const outputText = providerMode === "success" ? validJson
+    const serializedRequest = String(options?.body || "");
+    const leadCompany = (serializedRequest.match(/\\"company_name\\":\\"([^\\"]+)/)?.[1]
+      || serializedRequest.match(/"company_name":"([^"]+)/)?.[1]
+      || "API Intelligence Lead LLC");
+    const providerReport = providerMode === "second_lead" ? {
+      ...providerFixture(),
+      executive_snapshot: { ...providerFixture().executive_snapshot, company: "Second Intelligence Lead LLC", top_opportunity: "Second lead structural steel package" },
+      company_profile: { ...providerFixture().company_profile, company: "Second Intelligence Lead LLC", website: "https://second.example.com" }
+    } : {
+      ...providerFixture(),
+      executive_snapshot: { ...providerFixture().executive_snapshot, company: leadCompany },
+      company_profile: { ...providerFixture().company_profile, company: leadCompany }
+    };
+    const validJson = JSON.stringify(providerReport);
+    const outputText = (providerMode === "success" || providerMode === "second_lead") ? validJson
       : providerMode === "repairable_json" ? `Here is the reconstructed report:\n\n\`\`\`json\n${validJson.replace(',"executive_snapshot"', ' "executive_snapshot"').replace(/}$/, ',}')}\n\`\`\``
       : providerMode === "repairable_array_json" ? validJson.replace('["Steel fabrication"]', '["Steel fabrication" "Structural steel supply"]')
       : providerMode === "pdf_missing_validation_evidence" ? JSON.stringify({ ...providerFixture(), sources: [], research_quality: { ...providerFixture().research_quality, verified_information: [] } })
@@ -161,6 +174,30 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.notEqual(uploadedIntel.data.report.id, currentReportId, "upload must replace the current intelligence report");
     const anonymousPdf = await request(baseUrl, uploaded.data.report.download_url);
     assert.equal(anonymousPdf.response.status, 401, "PDF delivery must remain protected without a bearer token");
+
+    const secondLead = await request(baseUrl, "/api/leads", {
+      method: "POST", token: adminToken,
+      body: { company_name: "Second Intelligence Lead LLC", stage: "PROSPECT", territory: "Dubai", website: "https://second.example.com", sector: "Steel fabrication" }
+    });
+    assert.equal(secondLead.response.status, 201, JSON.stringify(secondLead.data));
+    providerMode = "second_lead";
+    const secondUpload = await requestPdf(baseUrl, `/api/leads/${secondLead.data.id}/intelligence/upload`, adminToken, "Second Intelligence Lead LLC has a distinct structural steel package.");
+    assert.equal(secondUpload.response.status, 200, JSON.stringify(secondUpload.data));
+    providerMode = "success";
+    const [firstLeadIntel, secondLeadIntel] = await Promise.all([
+      request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken }),
+      request(baseUrl, `/api/leads/${secondLead.data.id}/intel`, { token: adminToken })
+    ]);
+    assert.equal(firstLeadIntel.data.report.lead_id, lead.data.id, "first lead Intel must remain scoped to its lead id");
+    assert.equal(secondLeadIntel.data.report.lead_id, secondLead.data.id, "second lead Intel must remain scoped to its lead id");
+    assert.equal(firstLeadIntel.data.report.report.company_profile.company, "API Intelligence Lead LLC", "first lead must not show the second PDF report");
+    assert.equal(secondLeadIntel.data.report.report.company_profile.company, "Second Intelligence Lead LLC", "second lead must show only its own PDF report");
+    assert.notEqual(firstLeadIntel.data.report.id, secondLeadIntel.data.report.id, "two lead uploads must never share a report row");
+    providerMode = "second_lead";
+    const mismatchedUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "Second Intelligence Lead LLC PDF submitted to the wrong lead.");
+    assert.equal(mismatchedUpload.response.status, 422, "a PDF identifying another company must not be stored against this lead");
+    assert.match(mismatchedUpload.data.error || "", /appears to describe/i);
+    providerMode = "success";
 
     providerMode = "pdf_missing_validation_evidence";
     const evidenceFallbackUpload = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "PDF without web citations.");
