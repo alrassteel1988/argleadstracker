@@ -206,6 +206,14 @@ function normalizeLeadIntelligenceReport(input = {}, context = {}) {
       buying_triggers: asArray(input.structural_steel_opportunity?.buying_triggers).map(item => safeText(item)).filter(Boolean)
     },
     lead_score: score,
+    intel_card: {
+      score_display: pdfDisplayScore(input.intel_card?.score_display) ?? score.displayed_score,
+      priority: pdfPriority(input.intel_card?.priority || input.lead_score?.priority || priority),
+      steel_demand: pdfDemand(input.intel_card?.steel_demand || input.executive_snapshot?.steel_demand || input.structural_steel_opportunity?.steel_demand),
+      buyer_classification: pdfBuyer(input.intel_card?.buyer_classification || input.buyer_classification?.classification || input.executive_snapshot?.buyer_classification),
+      steel_opportunity_confidence: pdfConfidence(input.intel_card?.steel_opportunity_confidence || input.research_quality?.confidence_summary?.steel_opportunity_assessment),
+      provenance: safeText(input.intel_card?.provenance, "normalized_report")
+    },
     sales_recommendation: {
       best_person_department_to_approach: safeText(input.sales_recommendation?.best_person_department_to_approach, UNKNOWN),
       recommended_sales_angle: safeText(input.sales_recommendation?.recommended_sales_angle, UNKNOWN),
@@ -344,6 +352,91 @@ function firstJsonObject(text) {
     }
   }
   return raw.slice(start);
+}
+
+function normalizePdfSectionText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u2012-\u2015]/g, "-")
+    .replace(/[\t ]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function pdfPageText(rawText, pageNumber = 1) {
+  const text = normalizePdfSectionText(rawText);
+  const marker = new RegExp(`\\[PDF PAGE ${pageNumber}\\]`, "i");
+  const start = text.search(marker);
+  if (start < 0) return pageNumber === 1 ? text : "";
+  const after = text.slice(start).replace(marker, "");
+  return after.split(/\[PDF PAGE \d+\]/i)[0].trim();
+}
+
+function pdfHeadingSection(rawText, headingPattern) {
+  const text = normalizePdfSectionText(rawText);
+  const heading = new RegExp(`(?:^|\\n)\\s*(?:${headingPattern})\\s*(?:\\n|$)`, "im");
+  const match = heading.exec(text);
+  if (!match) return "";
+  const after = text.slice(match.index + match[0].length);
+  // Stop only at known report headings. Table rows can begin with capitals and
+  // must remain available to label-aware extraction.
+  return after.split(/\n\s*(?:Executive\s+Lead\s+Snapshot|Company\s+Profile|Project\s+Intelligence|Recently\s+Awarded\s+Projects|Ongoing\s+Projects|Previous\s+Relevant\s+Projects|Announced\s+Upcoming\s+Projects|Procurement\s+Contacts|Structural\s+Steel\s+Opportunity|Auditable\s+Lead\s+Score|Lead\s+Score|Sales\s+Recommendation|Verified\s+Information|Reasonable\s+Inferences|Not\s+Publicly\s+Found(?:\s+\/\s*|\s+)Unverified|Confidence\s+Summary|Sources)\s*\n/i)[0].trim();
+}
+
+function firstPdfValue(text, expression) {
+  const match = expression.exec(String(text || ""));
+  return match?.[1] ? String(match[1]).trim() : "";
+}
+
+function pdfDisplayScore(value) {
+  const numeric = Number(String(value || "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(numeric) && numeric >= 0 && numeric <= 10 ? Math.round(numeric * 10) / 10 : null;
+}
+
+function pdfPriority(value) {
+  return String(value || "").match(/\b([A-D])\b/i)?.[1]?.toUpperCase() || "";
+}
+
+function pdfDemand(value) {
+  return String(value || "").match(/\b(VERY\s+HIGH|HIGH|MEDIUM|LOW|VERY\s+LOW)\b/i)?.[1]?.replace(/\s+/g, " ").toUpperCase() || "";
+}
+
+function pdfBuyer(value) {
+  const match = String(value || "").match(/\b(DIRECT\s+BUYER|INFLUENCER|SPECIFIER|CONTRACTOR|TRADER|UNKNOWN)\b/i);
+  return match?.[1]?.replace(/\s+/g, " ").toUpperCase() || "";
+}
+
+function pdfConfidence(value) {
+  const match = String(value || "").match(/\b(HIGH|MEDIUM|LOW)\b/i);
+  return match?.[1] ? `${match[1][0].toUpperCase()}${match[1].slice(1).toLowerCase()}` : "";
+}
+
+// Card fields deliberately come from named PDF sections rather than from the
+// first matching label in the whole document. The calculated lead_score stays
+// intact for auditability; this object records the document display values.
+function extractIntelCardFieldsFromPdfText(rawPdfText, fallback = {}) {
+  const pageOne = pdfPageText(rawPdfText, 1);
+  const scoreSection = pdfHeadingSection(rawPdfText, "(?:Auditable\\s+)?Lead\\s+Score(?:\\s+(?:Breakdown|Details?))?");
+  const confidenceSection = pdfHeadingSection(rawPdfText, "Confidence\\s+Summary");
+  const score = pdfDisplayScore(firstPdfValue(pageOne, /\bLead\s*Score\s*[:|=-]?\s*([0-9]+(?:\.\d+)?)\s*(?:\/\s*10)?/i))
+    ?? fallback.score_display ?? null;
+  const priority = pdfPriority(firstPdfValue(scoreSection, /\bLead\s+Priority\s*[:|=-]?\s*([^\n|]{1,100})/i)
+    || firstPdfValue(scoreSection, /\bPriority\s*[:|=-]?\s*([^\n|]{1,100})/i)
+    || fallback.priority);
+  const steelDemand = pdfDemand(firstPdfValue(pageOne, /\bSteel\s+Demand\s*[:|=-]?\s*([^\n|]{1,80})/i) || fallback.steel_demand);
+  const buyerClassification = pdfBuyer(firstPdfValue(pageOne, /\bClassification\s*[:|=-]?\s*([^\n|]{1,100})/i) || fallback.buyer_classification);
+  const steelOpportunityConfidence = pdfConfidence(
+    firstPdfValue(confidenceSection, /\bSteel\s+Opportunity(?:\s+Assessment)?\s*[:|=-]?\s*([^\n|]{1,80})/i)
+    || fallback.steel_opportunity_confidence
+  );
+  return {
+    score_display: score,
+    priority,
+    steel_demand: steelDemand,
+    buyer_classification: buyerClassification,
+    steel_opportunity_confidence: steelOpportunityConfidence,
+    provenance: "pdf_section_targeted"
+  };
 }
 
 const COMPANY_NAME_STOP_WORDS = new Set([
@@ -661,6 +754,14 @@ async function parseLeadIntelligencePdfWithOpenAI({ rawPdfText, pdfBuffer, filen
     // must still fail the public-source validation.
     const withPdfSources = withExtractedPdfSources(parsed, source);
     const report = assertValidLeadIntelligenceReport(withPdfCitationValidationEvidence(withPdfSources), leadInput);
+    const sectionTargeted = extractIntelCardFieldsFromPdfText(source, {
+      score_display: report.lead_score.displayed_score,
+      priority: report.lead_score.priority,
+      steel_demand: report.executive_snapshot.steel_demand,
+      buyer_classification: report.executive_snapshot.buyer_classification,
+      steel_opportunity_confidence: report.research_quality.confidence_summary.steel_opportunity_assessment
+    });
+    report.intel_card = sectionTargeted;
     return { report: assertLeadIntelligenceReportMatchesLead(report, leadInput) };
   } catch (error) {
     if (error.name === "AbortError") {
@@ -822,6 +923,7 @@ function reportSummary(report) {
     lead_score: report.lead_score?.displayed_score,
     weighted_score: report.lead_score?.weighted_score,
     priority: report.lead_score?.priority,
+    intel_card: report.intel_card || {},
     steel_demand: report.executive_snapshot?.steel_demand,
     buyer_classification: report.executive_snapshot?.buyer_classification,
     confidence_summary: report.research_quality?.confidence_summary || {},
@@ -838,6 +940,7 @@ module.exports = {
   assertLeadIntelligenceReportMatchesLead,
   buildLeadIntelligencePrompt,
   calculateLeadScore,
+  extractIntelCardFieldsFromPdfText,
   displayedScore,
   generateLeadIntelligenceWithOpenAI,
   parseJsonText,

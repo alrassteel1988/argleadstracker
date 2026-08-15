@@ -5,6 +5,7 @@ const {
   allowedResearchInputFromLead,
   assertValidLeadIntelligenceReport,
   calculateLeadScore,
+  extractIntelCardFieldsFromPdfText,
   priorityForWeightedScore,
   publicSourcesFromPdfText,
   renderLeadIntelligencePdf,
@@ -135,6 +136,32 @@ assert.strictEqual(numberedSources.length, 8, "case- and whitespace-tolerant Sou
 assert.strictEqual(numberedSources[0].url, "https://source-1.example.com/profile");
 assert.strictEqual(numberedSources[7].url, "https://source-8.example.com/certification");
 assert.strictEqual(publicSourcesFromPdfText("Sources\n1. No link here.").length, 0, "a source heading without public URLs must not bypass validation");
+
+// Mirrors the Inventure Metal Products report layout: the page-one snapshot
+// intentionally conflicts with the later score breakdown and confidence table.
+const inventurePdfText = `
+[PDF PAGE 1]
+INVESTURE METAL PRODUCTS LLC
+Lead Score: 7/10 | Priority: C | Steel Demand: MEDIUM | Classification: DIRECT BUYER
+
+[PDF PAGE 2]
+Auditable Lead Score
+Weighted Lead Score: 6.4/10
+Lead Priority: Priority B - worthwhile active prospect
+
+Confidence Summary
+Company identity: High
+Company profile: High
+Project intelligence: Low
+Procurement contacts: Low
+Steel opportunity: Medium
+`;
+const inventureCard = extractIntelCardFieldsFromPdfText(inventurePdfText);
+assert.strictEqual(inventureCard.score_display, 7, "Score must come from the page-one Lead Score value, not the weighted score");
+assert.strictEqual(inventureCard.priority, "B", "Priority must come from the Auditable Lead Score Lead Priority line, not page-one Priority");
+assert.strictEqual(inventureCard.steel_demand, "MEDIUM", "Demand must come from the page-one Steel Demand value");
+assert.strictEqual(inventureCard.buyer_classification, "DIRECT BUYER", "Buyer must come from the page-one Classification value");
+assert.strictEqual(inventureCard.steel_opportunity_confidence, "Medium", "Confidence must come from the Steel opportunity row, not the first Confidence Summary row");
 const citationEvidence = withPdfCitationValidationEvidence({ sources: [{ id: "src-pdf-1", url: "https://example.com/public" }], research_quality: {} });
 assert.strictEqual(citationEvidence.research_quality.verified_information[0].source_refs[0], "src-pdf-1", "a verified-information fallback requires an actual public PDF source");
 assert.deepStrictEqual(withPdfCitationValidationEvidence({ sources: [], research_quality: {} }).research_quality, {}, "a source-less PDF must not receive validation evidence");

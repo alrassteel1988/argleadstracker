@@ -48,7 +48,7 @@ fs.readFileSync = function patchedReadFileSync(target) {
 
 const server = require("../server");
 
-assert.ok(leadIntelligencePdfRoute.includes("const storageResponse = await fetch(signedUrl);"), "Supabase PDFs must be fetched server-side through the authorized app route");
+assert.match(leadIntelligencePdfRoute, /const storageResponse = await fetch\(signedUrl[,)]/, "Supabase PDFs must be fetched server-side through the authorized app route");
 assert.ok(!/res\.writeHead\(302,\s*\{\s*Location:\s*signedUrl/.test(leadIntelligencePdfRoute), "The app must not redirect browsers to signed Supabase PDF URLs");
 assert.ok(leadIntelligencePdfRoute.includes("|| currentReport;"), "stale PDF route references must fall back to the authorized lead's current completed report");
 assert.ok(serverSource.includes("function leadIntelligencePdfStorageKeys(report)"), "PDF delivery must try legacy and canonical storage keys");
@@ -128,7 +128,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", body, he
 async function requestPdf(baseUrl, pathName, token, text) {
   const pdf = Buffer.from(`%PDF-1.4\n1 0 obj\n<<>>\nendobj\n2 0 obj\n<< /Length ${text.length + 30} >>\nstream\nBT /F1 12 Tf 72 720 Td (${text}) Tj ET\nendstream\nendobj\ntrailer <<>>\n%%EOF`);
   const response = await nativeFetch(`${baseUrl}${pathName}`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/pdf", "X-File-Name": "uploaded-intel.pdf" }, body: pdf });
-  return { response, data: await response.json() };
+  return { response, data: await response.json(), pdf };
 }
 
 (async () => {
@@ -158,15 +158,37 @@ async function requestPdf(baseUrl, pathName, token, text) {
     assert.equal(completedIntel.data.report.priority, "B");
     const currentReportId = completedIntel.data.report.id;
 
-    const uploaded = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, "API Intelligence Lead LLC structural steel opportunity and procurement recommendation.");
+    const uploaded = await requestPdf(baseUrl, `/api/leads/${lead.data.id}/intelligence/upload`, adminToken, `
+      [PDF PAGE 1]
+      API Intelligence Lead LLC
+      Lead Score: 7/10 | Priority: C | Steel Demand: MEDIUM | Classification: DIRECT BUYER
+      Auditable Lead Score
+      Weighted Lead Score: 6.4/10
+      Lead Priority: Priority B - worthwhile active prospect
+      Confidence Summary
+      Company identity: High
+      Steel opportunity: Medium
+    `);
     assert.equal(uploaded.response.status, 200, JSON.stringify(uploaded.data));
     assert.equal(uploaded.data.report.status, "completed");
     assert.equal(uploaded.data.report.is_current, true, "uploaded report must be marked current");
     assert.ok(uploaded.data.report.pdf_available, "uploaded report must persist a PDF storage reference");
     assert.ok(uploaded.data.report.report.executive_snapshot, "uploaded extraction must be saved in report_json");
+    const reextracted = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
+    assert.equal(reextracted.response.status, 200, JSON.stringify(reextracted.data));
+    assert.equal(reextracted.data.result.mode, "pdf_section_reextraction", "Refresh Intelligence must re-extract uploaded PDF card fields instead of generating a new report");
+    assert.deepEqual(reextracted.data.report.report.intel_card, {
+      score_display: 7,
+      priority: "B",
+      steel_demand: "MEDIUM",
+      buyer_classification: "DIRECT BUYER",
+      steel_opportunity_confidence: "Medium",
+      provenance: "pdf_section_targeted"
+    }, "Refresh Intelligence must use the requested PDF sections for every Intel card field");
     const immediateUploadedPdf = await request(baseUrl, uploaded.data.report.pdf_url, { token: adminToken });
     assert.equal(immediateUploadedPdf.response.status, 200, "a freshly uploaded PDF must be viewable immediately through the protected stream");
     assert.equal(immediateUploadedPdf.data.subarray(0, 5).toString("utf8"), "%PDF-", "the immediate protected stream must return the uploaded PDF bytes");
+    assert.deepEqual(immediateUploadedPdf.data, uploaded.pdf, "the protected viewer must return the exact PDF uploaded for this lead");
     const uploadedIntel = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
     assert.equal(uploadedIntel.data.report.id, uploaded.data.report.id);
     assert.equal(uploadedIntel.data.report.status, "completed", "Intel reload must return the saved completed upload");
@@ -184,6 +206,28 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const secondUpload = await requestPdf(baseUrl, `/api/leads/${secondLead.data.id}/intelligence/upload`, adminToken, "Second Intelligence Lead LLC has a distinct structural steel package.");
     assert.equal(secondUpload.response.status, 200, JSON.stringify(secondUpload.data));
     providerMode = "success";
+    const [firstLeadPdf, secondLeadPdf, firstLeadDownload, secondLeadDownload] = await Promise.all([
+      request(baseUrl, uploaded.data.report.pdf_url, { token: adminToken }),
+      request(baseUrl, secondUpload.data.report.pdf_url, { token: adminToken }),
+      request(baseUrl, uploaded.data.report.download_url, { token: adminToken }),
+      request(baseUrl, secondUpload.data.report.download_url, { token: adminToken })
+    ]);
+    for (const response of [firstLeadPdf, secondLeadPdf, firstLeadDownload, secondLeadDownload]) {
+      assert.equal(response.response.status, 200, "each lead's viewer and download route must resolve its own uploaded PDF");
+    }
+    assert.deepEqual(firstLeadPdf.data, uploaded.pdf, "first lead viewer must not serve the second lead's PDF");
+    assert.deepEqual(firstLeadDownload.data, uploaded.pdf, "first lead download must not serve the second lead's PDF");
+    assert.deepEqual(secondLeadPdf.data, secondUpload.pdf, "second lead viewer must not serve the first lead's PDF");
+    assert.deepEqual(secondLeadDownload.data, secondUpload.pdf, "second lead download must not serve the first lead's PDF");
+    assert.notDeepEqual(firstLeadPdf.data, secondLeadPdf.data, "two distinct uploads must never share stored PDF bytes");
+    const [firstLeadSummary, secondLeadSummary] = await Promise.all([
+      request(baseUrl, "/api/ai/lead-summary", { method: "POST", token: adminToken, body: { leadId: lead.data.id } }),
+      request(baseUrl, "/api/ai/lead-summary", { method: "POST", token: adminToken, body: { leadId: secondLead.data.id } })
+    ]);
+    assert.equal(firstLeadSummary.response.status, 200, JSON.stringify(firstLeadSummary.data));
+    assert.equal(secondLeadSummary.response.status, 200, JSON.stringify(secondLeadSummary.data));
+    assert.match(firstLeadSummary.data.summary.current_lead_status, /API Intelligence Lead LLC/, "first lead summary must use only its own uploaded PDF intelligence");
+    assert.match(secondLeadSummary.data.summary.current_lead_status, /Second Intelligence Lead LLC/, "second lead summary must use only its own uploaded PDF intelligence");
     const [firstLeadIntel, secondLeadIntel] = await Promise.all([
       request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken }),
       request(baseUrl, `/api/leads/${secondLead.data.id}/intel`, { token: adminToken })
@@ -288,21 +332,14 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const refresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
     assert.equal(refresh.response.status, 200);
     assert.equal(refresh.data.result.status, "completed");
-    assert.notEqual(refresh.data.state.report.id, currentReportId, "Successful refresh should immediately replace the current report.");
+    assert.equal(refresh.data.result.mode, "pdf_section_reextraction", "Refresh must re-extract the current uploaded PDF rather than replace it with a generic report.");
     const refreshedReportId = refresh.data.state.report.id;
 
     providerMode = "invalid";
-    const failedRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
-    assert.equal(failedRefresh.response.status, 500);
-    assert.equal(failedRefresh.data.result.status, "failed");
-    const failedState = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
-    assert.equal(failedState.data.report.id, refreshedReportId, "Failed refresh must not remove the last successful report.");
-    assert.equal(failedState.data.failed_report.status, "failed");
-
+    const repeatRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
+    assert.equal(repeatRefresh.response.status, 200);
+    assert.equal(repeatRefresh.data.state.report.id, refreshedReportId, "PDF re-extraction must keep the same report instead of creating a cross-source replacement.");
     providerMode = "success";
-    const retryProcess = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/retry`, { method: "POST", token: adminToken, body: { report_id: failedState.data.failed_report.id } });
-    assert.equal(retryProcess.response.status, 200, JSON.stringify(retryProcess.data));
-    assert.equal(retryProcess.data.result.status, "completed");
 
     const cronUnauthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { method: "POST" });
     assert.equal(cronUnauthorized.response.status, 401);

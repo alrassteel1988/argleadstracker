@@ -68,6 +68,8 @@ assert.ok(clientSource.includes("Generate Intelligence"));
 assert.ok(clientSource.includes("Intelligence report is ${escapeHtml(statusLabel)}."));
 assert.ok(clientSource.includes("Latest intelligence job failed."));
 assert.ok(clientSource.includes("Refresh Intelligence"));
+assert.ok(clientSource.includes("card.steel_opportunity_confidence"), "Intel card confidence must use the Steel opportunity confidence row");
+assert.ok(!clientSource.includes("<small>Identity ${escapeHtml(confidence.company_identity"), "Intel card must not label Company identity confidence as its generic confidence value");
 assert.ok(clientSource.includes("Download PDF"));
 assert.ok(clientSource.includes("function leadIntelligencePdfViewerMarkup(report, hasPdf)"));
 assert.ok(clientSource.includes("clearLeadIntelligencePdfMissing(uploadedLeadId);"), "a successful upload must clear stale missing-file state before reloading the report");
