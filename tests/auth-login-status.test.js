@@ -23,6 +23,8 @@ require.cache[require.resolve(supabasePath)] = {
     isSupabaseConfigured: () => true,
     isSupabaseAdminConfigured: () => true,
     serviceRest: async () => ({ allowed: true, remaining: 99, reset_after_seconds: 60 }),
+    refreshSession: async refreshToken => ({ access_token: `refreshed-${refreshToken}`, refresh_token: "rotated-refresh-token" }),
+    currentSupabaseUser: async request => ({ id: "auth-status-user", name: "Auth Status", role: "admin", token: request.headers.authorization.slice(7) }),
     signIn: async () => {
       const error = new Error("Invalid login credentials");
       error.status = 400;
@@ -70,6 +72,11 @@ function postJson(port, pathname, body) {
     assert.strictEqual(result.response.statusCode, 401);
     assert.strictEqual(result.data.error, "Invalid email or password.");
     assert.strictEqual(result.data.token, undefined);
+
+    const refreshed = await postJson(server.address().port, "/api/auth/refresh", { refresh_token: "valid-refresh-token" });
+    assert.strictEqual(refreshed.response.statusCode, 200);
+    assert.strictEqual(refreshed.data.token, "refreshed-valid-refresh-token");
+    assert.strictEqual(refreshed.data.refresh_token, "rotated-refresh-token");
   } finally {
     await new Promise(resolve => server.close(resolve));
   }

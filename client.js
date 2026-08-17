@@ -616,6 +616,7 @@ const els = {
 };
 
 const SESSION_KEY = "arg_crm_session";
+const REFRESH_SESSION_KEY = "arg_crm_refresh_session";
 let currentView = "dashboard";
 const leadFormTouched = new Set();
 const leadEnrichmentCache = new Map();
@@ -1010,21 +1011,44 @@ function googleCalendarUrl(reminder) {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+async function refreshApiSession() {
+  const refreshToken = sessionStorage.getItem(REFRESH_SESSION_KEY) || "";
+  if (!refreshToken) return false;
+  const response = await fetch("/api/auth/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.token) return false;
+  sessionStorage.setItem(SESSION_KEY, result.token);
+  if (result.refresh_token) sessionStorage.setItem(REFRESH_SESSION_KEY, result.refresh_token);
+  return true;
+}
+
 async function api(path, options = {}) {
-  const headers = { ...(options.headers || {}) };
+  const { retryAfterRefresh = false, ...requestOptions } = options;
+  const headers = { ...(requestOptions.headers || {}) };
   const token = sessionStorage.getItem(SESSION_KEY);
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (options.body && typeof options.body === "string" && !headers["Content-Type"]) {
+  if (requestOptions.body && typeof requestOptions.body === "string" && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
 
   const response = await fetch(path, {
-    ...options,
+    ...requestOptions,
     headers
   });
   const result = await response.json().catch(() => ({}));
+  if (response.status === 401 && !retryAfterRefresh && path !== "/api/auth/login" && path !== "/api/auth/refresh" && await refreshApiSession()) {
+    return api(path, { ...requestOptions, retryAfterRefresh: true });
+  }
   if (!response.ok) {
-    const error = new Error(result.error || `Request failed: ${response.status}`);
+    if (response.status === 401) {
+      sessionStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(REFRESH_SESSION_KEY);
+    }
+    const error = new Error(response.status === 401 ? "Your session has expired. Please sign in again." : (result.error || `Request failed: ${response.status}`));
     error.status = response.status;
     error.details = result;
     throw error;
@@ -13508,6 +13532,8 @@ async function loadLeads() {
     }
   } catch (error) {
     state.leadsError = error?.message || "The CRM records could not be loaded.";
+    state.leadsLoaded = false;
+    state.leads = [];
     if (currentView === "pipeline") renderLeadList();
     throw error;
   } finally {
@@ -13589,6 +13615,7 @@ function showLogin(message = "") {
   document.body.classList.remove("summary-details-modal-open");
   document.body.classList.remove("activity-modal-open");
   state.currentUser = null;
+  sessionStorage.removeItem(REFRESH_SESSION_KEY);
   state.userAccounts = [];
   state.marketNews = { items: [], disabled: false, loading: false, error: "", reason: "", fetched_at: "" };
   state.leadsLoaded = false;
@@ -14339,6 +14366,7 @@ els.loginForm.addEventListener("submit", async event => {
     });
     sessionStorage.removeItem(OVERDUE_BANNER_KEY);
     sessionStorage.setItem(SESSION_KEY, result.token);
+    if (result.refresh_token) sessionStorage.setItem(REFRESH_SESSION_KEY, result.refresh_token);
     els.loginForm.reset();
     showApp(result.user);
     await loadWorkspace();
