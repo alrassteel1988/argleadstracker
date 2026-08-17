@@ -18,9 +18,35 @@ function loadEnv() {
 
 loadEnv();
 
-const BASE_URL = process.env.PRODUCTION_BASE_URL || "https://argleadstracker.vercel.app";
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const ADMIN_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+const BASE_URL = String(process.env.STAGING_BASE_URL || process.env.TEST_BASE_URL || "").replace(/\/$/, "");
+const TEST_SUPABASE_URL = String(process.env.TEST_SUPABASE_URL || "").replace(/\/$/, "");
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD;
+const PRODUCTION_HOSTS = new Set(["argleadstracker.vercel.app"]);
+const PRODUCTION_SUPABASE_URLS = new Set(["https://emxumtmuatbetkztbsqn.supabase.co"]);
+
+if (BASE_URL) {
+  let host = "";
+  try {
+    host = new URL(BASE_URL).hostname.toLowerCase();
+  } catch {
+    throw new Error("STAGING_BASE_URL must be an absolute URL.");
+  }
+  if (PRODUCTION_HOSTS.has(host)) {
+    throw new Error("Refusing to run mutable UAT against production. Set STAGING_BASE_URL to the isolated staging/test deployment.");
+  }
+  if (!TEST_SUPABASE_URL) {
+    throw new Error("Refusing to run mutable UAT without TEST_SUPABASE_URL for the isolated staging/test project.");
+  }
+  const configuredSupabaseUrls = [
+    TEST_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_URL
+  ].filter(Boolean).map(value => String(value).replace(/\/$/, ""));
+  if (configuredSupabaseUrls.some(value => PRODUCTION_SUPABASE_URLS.has(value))) {
+    throw new Error("Refusing to run mutable UAT while any configured Supabase URL is the production project.");
+  }
+}
 
 async function api(request, method, pathname, token = "", body = undefined) {
   const response = await request.fetch(`${BASE_URL}${pathname}`, {
@@ -35,9 +61,9 @@ async function api(request, method, pathname, token = "", body = undefined) {
   return { response, data };
 }
 
-test("production salesman can add a lead through the UI", async ({ page, request }, testInfo) => {
+test("isolated staging salesman can add a lead through the UI", async ({ page, request }, testInfo) => {
   test.setTimeout(90000);
-  test.skip(!ADMIN_EMAIL || !ADMIN_PASSWORD, "ADMIN_EMAIL and ADMIN_BOOTSTRAP_PASSWORD are required.");
+  test.skip(!BASE_URL || !TEST_SUPABASE_URL || !ADMIN_EMAIL || !ADMIN_PASSWORD, "STAGING_BASE_URL, TEST_SUPABASE_URL, TEST_ADMIN_EMAIL, and TEST_ADMIN_PASSWORD are required.");
 
   const stamp = Date.now();
   const email = `go-live-browser-${stamp}@alrassteel.test`;
