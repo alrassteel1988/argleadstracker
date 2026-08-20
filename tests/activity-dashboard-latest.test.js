@@ -28,7 +28,11 @@ assert.match(client, /data-activity-page=/, "Activity pagination controls must b
 assert.match(css, /grid-template-columns:\s*minmax\(0, 1\.85fr\) minmax\(330px, 1fr\)/, "Desktop layout needs the approved roughly 65/35 split");
 assert.match(css, /grid-template-columns:\s*minmax\(0, 2fr\) minmax\(330px, 1fr\)/, "Go-live Activity workspace should use the requested 66/34 split");
 assert.match(css, /\.overdue-banner\.hidden\s*\{[^}]*display:\s*none\s*!important/s, "Hidden overdue alerts must not reserve vertical space");
-assert.match(css, /\.activity-weekly-card\s*\{[^}]*max-height:\s*86px\s*!important/s, "Weekly calendar must remain a compact strip");
+assert.match(css, /Activity panel layout contract/, "Activity panels need a documented normal-flow layout contract");
+assert.match(css, /grid-template-areas:\s*"kpis"\s*"calendar"\s*"workspace"\s*!important/s, "Calendar and workspace need explicit parent grid areas");
+assert.match(css, /grid-template-areas:\s*"log reminders"\s*!important/s, "Activity Log and Reminders need distinct desktop grid areas");
+assert.match(css, /grid-template-areas:\s*"log"\s*"reminders"\s*!important/s, "Narrow layouts must stack Activity Log before Reminders");
+assert.match(css, /\.activity-weekly-card\s*\{[^}]*max-height:\s*none\s*!important/s, "Weekly calendar must size to its content instead of a fixed compact strip");
 assert.match(css, /\.activity-kpi-copy > strong,[\s\S]*background:\s*transparent\s*!important/, "KPI values must not use large tinted value backgrounds");
 assert.match(css, /Admin Activity framed section titles/, "Admin Activity section title frames must be scoped and documented");
 assert.match(css, /\.activity-weekly-card,[\s\S]*\.activity-log-panel,[\s\S]*\.activity-reminders-panel[\s\S]*> \.activity-section-header\s*\{[^}]*box-sizing:\s*border-box\s*!important;[^}]*border:\s*2px solid #F6AA1C\s*!important;[^}]*background:\s*#FFFFFF\s*!important;[^}]*color:\s*#2C363F\s*!important;/, "Weekly calendar, Activity log, and Reminders headers need the orange framed title treatment on the rendered class");
@@ -41,7 +45,7 @@ assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.activity-table td::befo
 assert.doesNotMatch(css, /\.sidebar\b/, "The Activity redesign must not change sidebar sizing");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter:\s*blur|filter:\s*blur/i, "The latest Activity layer must remain flat and opaque");
 assert.match(serviceWorker, /"\/activity-dashboard-latest\.css"/, "The PWA shell must cache the latest Activity layer");
-assert.match(serviceWorker, /arg-pwa-v66-activity-bauhaus-overdue/, "The PWA cache must be bumped when Activity CSS changes");
+assert.match(serviceWorker, /arg-pwa-v67-activity-bauhaus-overdue-layout/, "The PWA cache must be bumped when Activity CSS changes");
 assert.match(serviceWorker, /\.then\(\(\) => self\.skipWaiting\(\)\)/, "The updated service worker must activate immediately for stale CRM sessions");
 assert.match(serviceWorker, /event\.respondWith\(networkFirst\(request\)\)/, "Same-origin UI assets must prefer the network before cached fallbacks");
 assert.match(vercel, /"src": "activity-dashboard-latest\.css"/, "Vercel must publish the latest Activity layer");

@@ -1917,6 +1917,125 @@ body.activity-admin-mode .overdue-owner-more > div {
 }
 body.activity-admin-mode .overdue-scope { display: block; margin-top: 2px; font-size: 11px; font-weight: 700; }
 
+/*
+ * Activity panel layout contract.
+ *
+ * Keep the calendar in normal flow. The earlier desktop density pass reserved
+ * 86px for it, but the framed header and seven day chips require more space;
+ * that disagreement clipped the calendar and allowed it to collide with the
+ * workspace beneath it. These three explicit grid areas are the only layout
+ * relationship between the calendar, log, and reminders.
+ */
+body.activity-admin-mode,
+body.activity-admin-mode .app-shell,
+body.activity-admin-mode .main,
+body.activity-admin-mode #activityView,
+body.activity-admin-mode .activity-dashboard,
+body.activity-admin-mode .activity-main-column {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.activity-admin-mode .activity-main-column {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    "kpis"
+    "calendar"
+    "workspace" !important;
+  grid-template-rows: auto auto minmax(570px, auto) !important;
+  gap: 14px !important;
+}
+
+body.activity-admin-mode .activity-kpi-grid { grid-area: kpis; }
+
+body.activity-admin-mode .activity-weekly-card {
+  grid-area: calendar;
+  flex: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.activity-admin-mode .activity-weekly-log {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    "legend"
+    "days"
+    "detail" !important;
+  align-items: start !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+body.activity-admin-mode .activity-day-strip { grid-area: days !important; }
+body.activity-admin-mode .calendar-legend { grid-area: legend !important; }
+body.activity-admin-mode .activity-day-detail { grid-area: detail; }
+
+body.activity-admin-mode .activity-secondary-grid {
+  grid-area: workspace;
+  display: grid !important;
+  grid-template-columns: minmax(0, 2fr) minmax(330px, 1fr) !important;
+  grid-template-areas: "log reminders" !important;
+  grid-auto-rows: minmax(570px, auto) !important;
+  align-items: stretch !important;
+  min-width: 0 !important;
+  min-height: 570px !important;
+  overflow: visible !important;
+}
+
+body.activity-admin-mode .activity-log-panel {
+  grid-area: log;
+  height: auto !important;
+  min-height: 570px !important;
+  overflow: hidden !important;
+}
+
+body.activity-admin-mode .activity-reminders-panel {
+  grid-area: reminders;
+  height: auto !important;
+  min-height: 570px !important;
+  overflow: hidden !important;
+}
+
+@media (max-width: 1024px) {
+  body.activity-admin-mode .activity-main-column {
+    grid-template-areas:
+      "kpis"
+      "calendar"
+      "workspace" !important;
+    grid-template-rows: auto auto auto !important;
+  }
+
+  body.activity-admin-mode .activity-secondary-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "log"
+      "reminders" !important;
+    grid-auto-rows: auto !important;
+    min-height: 0 !important;
+  }
+
+  body.activity-admin-mode .activity-log-panel,
+  body.activity-admin-mode .activity-reminders-panel {
+    min-height: 570px !important;
+  }
+}
+
+@media (max-width: 680px) {
+  body.activity-admin-mode .activity-weekly-log {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+  }
+
+  body.activity-admin-mode .activity-day-strip {
+    min-width: 462px !important;
+  }
+}
+
 @media (max-width: 680px) {
   body.activity-admin-mode .activity-day-strip { grid-template-columns: repeat(7, minmax(66px, 1fr)) !important; overflow-x: auto !important; }
   body.activity-admin-mode .activity-secondary-grid { gap: 12px !important; }

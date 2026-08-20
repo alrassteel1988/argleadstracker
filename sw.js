@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v66-activity-bauhaus-overdue";
+const CACHE_VERSION = "arg-pwa-v67-activity-bauhaus-overdue-layout";
 const APP_SHELL = [
   "/",
   "/index.html",
