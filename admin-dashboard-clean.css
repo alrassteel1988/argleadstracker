@@ -387,7 +387,7 @@ body.admin-dashboard-mode .admin-dashboard-overview-slot .metrics article:focus-
 /* Attention required row */
 body.admin-dashboard-mode .admin-dashboard-triage-row {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   align-items: stretch;
   gap: var(--admin-space-3);
 }
@@ -862,12 +862,14 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
   #dashboardFocus,
   #dashboardActivityFeed
 ) {
-  padding: var(--admin-space-1) var(--admin-space-3) var(--admin-space-3);
+  box-sizing: border-box;
+  padding: 10px 14px 14px;
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item {
   min-height: 54px;
-  padding: var(--admin-space-2) 0;
+  box-sizing: border-box;
+  padding: 9px 12px;
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item strong {
@@ -883,6 +885,7 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item p
   color: var(--admin-muted);
   font-size: 11px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-focus-item .stage-badge.compact {

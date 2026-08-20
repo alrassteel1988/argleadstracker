@@ -56,13 +56,17 @@ assert.ok(clientSource.includes("function openAuthenticatedPdf(url, popup = null
 assert.ok(clientSource.includes("data-lead-intelligence-pdf-download"));
 assert.ok(clientSource.includes("data-lead-intelligence-pdf-open"));
 assert.ok(clientSource.includes("data-lead-intelligence-pdf-preview"));
-assert.ok(clientSource.includes("leadIntelligenceMissingPdfUrls: new Set()"), "missing PDFs must not be retried on every Intel tab render");
-assert.ok(clientSource.includes("PDF file not found, please re-upload."), "the Intel tab must show a clear missing-PDF recovery message");
+assert.ok(!clientSource.includes("leadIntelligenceMissingPdfUrls"), "a PDF 404 must remain visible instead of removing the PDF controls");
+assert.ok(clientSource.includes("PDF preview could not be retrieved"), "the Intel tab must show a visible PDF-preview error");
 assert.ok(!clientSource.includes('href="${escapeHtml(report.download_url)}"'), "protected PDFs must not use direct navigation links");
 assert.ok(securityHeadersSource.includes("frame-src 'self' blob:"), "the authenticated blob-backed PDF preview must be allowed without permitting Supabase domains");
 assert.ok(clientSource.includes("Intelligence PDF saved to the Intel card and AI summary context."));
 assert.ok(clientSource.includes("state.leadDrawerIntel = await api(`/api/leads/${encodeURIComponent(uploadedLeadId)}/intel`);"), "failed PDF uploads must refresh the Intel state instead of leaving a stale queued status");
 assert.ok(clientSource.includes("report.report.executive_snapshot"));
+assert.ok(renderDrawerIntelSource.includes('class="lead-intel-detail-grid"'), "Intel findings must render in a dedicated grid");
+assert.ok(renderDrawerIntelSource.includes('class="lead-intel-detail-block"'), "Opportunity, Company profile, and Next action must render as separate labeled blocks");
+assert.ok(cssSource.includes(".lead-intel-detail-grid"), "Intel findings grid must have an explicit layout");
+assert.ok(cssSource.includes(".lead-intel-detail-block"), "Intel finding blocks must have readable spacing and wrapping");
 assert.ok(clientSource.includes("No intelligence report yet."));
 assert.ok(clientSource.includes("Generate Intelligence"));
 assert.ok(clientSource.includes("Intelligence report is ${escapeHtml(statusLabel)}."));
@@ -72,7 +76,7 @@ assert.ok(clientSource.includes("card.steel_opportunity_confidence"), "Intel car
 assert.ok(!clientSource.includes("<small>Identity ${escapeHtml(confidence.company_identity"), "Intel card must not label Company identity confidence as its generic confidence value");
 assert.ok(clientSource.includes("Download PDF"));
 assert.ok(clientSource.includes("function leadIntelligencePdfViewerMarkup(report, hasPdf)"));
-assert.ok(clientSource.includes("clearLeadIntelligencePdfMissing(uploadedLeadId);"), "a successful upload must clear stale missing-file state before reloading the report");
+assert.ok(!clientSource.includes("markLeadIntelligencePdfMissing"), "the client must not hide a missing PDF by replacing the report controls");
 assert.ok(clientSource.includes("const cached = candidate?.leadId === leadId ? candidate : null;"), "cached summaries must prove their lead identity before rendering");
 assert.ok(clientSource.includes("leadId: String(leadId),"), "persisted summary cache entries must carry their lead identity");
 assert.ok(!renderDrawerIntelSource.includes("market_items"), "the Intel tab must not consume the market feed");

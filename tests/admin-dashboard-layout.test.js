@@ -26,16 +26,22 @@ assert.match(client, /section\.querySelector\("\.panel-collapse-toggle"\)\?\.cla
 assert.match(client, /class="overdue-banner-kpis"/, "overdue attention panel must expose total and affected-salesman counts");
 assert.match(client, /class="overdue-banner-pills overdue-owner-chips"/, "salesman overdue counts must remain visible and wrap safely");
 assert.match(client, /renderMetrics\(\)/, "dashboard metric rendering must remain intact");
+assert.doesNotMatch(client, /\{ id: "marketIntelPanel", storageKey: "admin-dashboard-intel-overview-collapsed"/, "Admin Dashboard must not register the Zawya Intel Overview as a KPI panel");
+assert.match(client, /const visible = !admin && Boolean\(state\.dashboardToolsOpen && state\.dashboardMarketNewsOpen\)/, "Zawya Intel Overview must remain hidden for Admin Dashboard roles");
+assert.match(client, /if \(\["admin", "manager"\]\.includes\(String\(state\.currentUser\?\.role \|\| ""\)\.toLowerCase\(\)\)\) \{\s*state\.marketIntel = \{ items: \[\], heat_map: \[\], disabled: true \};/s, "Admin Dashboard must not fetch the Zawya feed");
 assert.match(client, /renderMarketSnapshotPanel\(\)/, "market snapshot rendering must remain intact");
 assert.match(client, /renderDashboardPipelineFunnel\(\)/, "pipeline funnel rendering must remain intact");
 assert.match(client, /els\.actionPlanPanel\?\.parentElement === els\.dashboardView/, "Dashboard reparenting must only use Lead Action Plans as an anchor while it is a Dashboard child");
 assert.match(client, /els\.lossReasonsPanel\?\.parentElement === els\.dashboardView/, "Dashboard reparenting must only use a valid Dashboard child as an insertBefore anchor");
 
 assert.match(css, /body\.admin-dashboard-mode \.dashboard-view\s*\{[^}]*grid-template-columns:\s*repeat\(12,\s*minmax\(0,\s*1fr\)\)/s, "desktop dashboard must use a 12-column composition");
-assert.match(css, /\.admin-dashboard-triage-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*5fr\)\s+minmax\(0,\s*4fr\)\s+minmax\(0,\s*3fr\)/s, "attention panels must use the requested 5/4/3 balance");
+assert.match(css, /\.admin-dashboard-triage-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*5fr\)\s+minmax\(0,\s*7fr\)/s, "remaining attention panels must rebalance after removing Intel Overview");
 assert.match(css, /\.admin-dashboard-analytics-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s, "analytics panels must be balanced side by side");
 assert.match(css, /\.admin-dashboard-overview-slot \.metrics\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s, "overview metrics must use four equal columns");
 assert.match(css, /\.admin-dashboard-bottom-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s, "Lead Action Plan insights must use three equal columns");
+assert.match(css, /#dashboardFocus,\s*#dashboardActivityFeed\s*\)\s*\{[^}]*box-sizing:\s*border-box;[^}]*padding:\s*10px\s+14px\s+14px/s, "Cold relationships and Latest interactions bodies need contained horizontal padding");
+assert.match(css, /\.dashboard-activity-item\s*\{[^}]*box-sizing:\s*border-box;[^}]*padding:\s*9px\s+12px/s, "Dashboard list items need consistent internal spacing");
+assert.match(css, /\.dashboard-activity-item p\s*\{[^}]*overflow-wrap:\s*anywhere/s, "Long activity descriptions must wrap inside their panel frame");
 assert.match(css, /\.panel-header \.panel-collapse-toggle\.hidden\s*\{[^}]*display:\s*flex !important/s, "redesigned dashboard panels must keep their collapse controls visible");
 assert.match(css, /#actionPlanPanel \.action-plan-grid\s*\{[^}]*max-height:\s*460px;[^}]*overflow-y:\s*auto/s, "expanded action plans need scoped internal scrolling");
 assert.match(css, /\.admin-dashboard-analytics-row > #actionPlanPanel\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*min-height:\s*820px;[^}]*border:\s*2px solid #7F77DD/s, "Lead Action Plans must occupy the vacated analytics row with its purple border");
