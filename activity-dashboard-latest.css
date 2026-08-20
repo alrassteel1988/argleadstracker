@@ -1450,10 +1450,11 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
   }
 
   body.activity-admin-mode .activity-weekly-card {
-    flex: 0 0 86px !important;
-    min-height: 86px !important;
-    max-height: 86px !important;
-    overflow: hidden !important;
+    flex: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   body.activity-admin-mode .activity-weekly-card > .activity-panel-cap {
@@ -1477,9 +1478,12 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
   }
 
   body.activity-admin-mode .activity-weekly-log {
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    grid-template-areas: "days legend" !important;
-    align-items: center !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "legend"
+      "days"
+      "detail" !important;
+    align-items: start !important;
     gap: 8px !important;
     padding: 5px 10px !important;
   }
@@ -1502,12 +1506,12 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
   }
 
   body.activity-admin-mode .activity-secondary-grid {
-    flex: 1 1 auto !important;
+    flex: none !important;
     grid-template-columns: minmax(0, 2fr) minmax(330px, 1fr) !important;
     align-items: stretch !important;
     gap: 14px !important;
     min-height: 0 !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
 
   body.activity-admin-mode .activity-log-panel,
