@@ -1816,3 +1816,228 @@ body.activity-admin-mode .activity-section-header .activity-count-pill {
 body.activity-admin-mode .activity-section-header :is(.activity-header-action, .calendar-nav-button, .calendar-range-pill) {
   border-color: #CBD4DC !important;
 }
+
+/* Activity Bauhaus consolidation: semantic colour only; teal remains the CRM action accent. */
+body.activity-admin-mode {
+  --activity-bauhaus-navy: #06283d;
+  --activity-bauhaus-teal: #1d9e75;
+  --activity-bauhaus-yellow: #f6aa1c;
+  --activity-bauhaus-red: #b83a32;
+}
+
+body.activity-admin-mode .activity-kpi-grid,
+body.activity-admin-mode .activity-secondary-grid { gap: 14px !important; }
+
+body.activity-admin-mode .activity-kpi-card {
+  min-height: 92px !important;
+  height: auto !important;
+  border: 3px solid var(--activity-bauhaus-navy) !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+}
+
+body.activity-admin-mode .activity-kpi-icon { border-radius: 2px !important; }
+body.activity-admin-mode .activity-kpi-card--blue .activity-kpi-icon,
+body.activity-admin-mode .activity-kpi-card--green .activity-kpi-icon { background: var(--activity-bauhaus-teal) !important; }
+body.activity-admin-mode .activity-kpi-card--red .activity-kpi-icon { background: var(--activity-bauhaus-red) !important; }
+body.activity-admin-mode .activity-kpi-card--amber .activity-kpi-icon { background: var(--activity-bauhaus-yellow) !important; }
+body.activity-admin-mode .activity-kpi-copy > span { color: var(--activity-bauhaus-navy) !important; font-weight: 800 !important; letter-spacing: .08em !important; }
+body.activity-admin-mode .activity-kpi-copy > strong,
+body.activity-admin-mode .activity-kpi-copy > strong.is-overdue,
+body.activity-admin-mode .activity-kpi-copy > strong.is-upcoming {
+  color: var(--activity-bauhaus-navy) !important;
+  font-family: "Plus Jakarta Sans", "Inter", sans-serif !important;
+  font-size: 34px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.07em !important;
+}
+
+body.activity-admin-mode :is(.activity-weekly-card, .activity-log-panel, .activity-reminders-panel) {
+  border: 3px solid var(--activity-bauhaus-navy) !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+}
+body.activity-admin-mode .activity-weekly-card > .activity-section-header,
+body.activity-admin-mode .activity-log-panel > .activity-section-header,
+body.activity-admin-mode .activity-reminders-panel > .activity-section-header { margin: 0 !important; border: 0 !important; border-radius: 0 !important; color: #fff !important; }
+body.activity-admin-mode .activity-weekly-card > .activity-section-header { background: var(--activity-bauhaus-teal) !important; }
+body.activity-admin-mode .activity-log-panel > .activity-section-header { background: var(--activity-bauhaus-navy) !important; }
+body.activity-admin-mode .activity-reminders-panel > .activity-section-header { background: var(--activity-bauhaus-yellow) !important; color: var(--activity-bauhaus-navy) !important; }
+body.activity-admin-mode :is(.activity-weekly-card, .activity-log-panel) > .activity-section-header :is(h2, .activity-weekly-subheading, div > span:not(.activity-count-pill)),
+body.activity-admin-mode .activity-reminders-panel > .activity-section-header :is(h2, .activity-weekly-subheading, div > span:not(.activity-count-pill)) { color: inherit !important; }
+
+body.activity-admin-mode .activity-day-strip { display: grid !important; grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
+body.activity-admin-mode .activity-weekly-card .activity-day-chip {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 2px !important;
+  min-height: 62px !important;
+  border: 2px solid var(--activity-bauhaus-navy) !important;
+  border-radius: 2px !important;
+}
+body.activity-admin-mode .activity-weekly-card .activity-day-chip small { color: var(--activity-latest-muted) !important; font-size: 10px !important; font-weight: 700 !important; }
+
+body.activity-admin-mode .activity-table-status,
+body.activity-admin-mode .count-chip { border: 0 !important; border-radius: 2px !important; color: #fff !important; font-weight: 800 !important; letter-spacing: .04em !important; text-transform: uppercase !important; }
+body.activity-admin-mode .activity-table-status.overdue,
+body.activity-admin-mode .activity-table-status.pending,
+body.activity-admin-mode .count-chip.overdue { background: var(--activity-bauhaus-red) !important; }
+body.activity-admin-mode .activity-table-status.upcoming,
+body.activity-admin-mode .activity-table-status.scheduled,
+body.activity-admin-mode .count-chip.upcoming { background: var(--activity-bauhaus-yellow) !important; color: var(--activity-bauhaus-navy) !important; }
+body.activity-admin-mode .activity-table-status.completed { background: var(--activity-bauhaus-teal) !important; }
+body.activity-admin-mode .activity-table-status.neutral { background: var(--activity-bauhaus-navy) !important; }
+
+body.activity-admin-mode .activity-secondary-grid { align-items: stretch !important; }
+body.activity-admin-mode .activity-log-panel,
+body.activity-admin-mode .activity-reminders-panel { min-height: 570px !important; }
+body.activity-admin-mode .reminder-card { border-radius: 2px !important; }
+body.activity-admin-mode .reminder-card.overdue { border-left-width: 7px !important; }
+body.activity-admin-mode .reminder-card.overdue-low { border-left-color: #d56a42 !important; }
+body.activity-admin-mode .reminder-card.overdue-medium { border-left-color: var(--activity-bauhaus-red) !important; background: #fff4ef !important; }
+body.activity-admin-mode .reminder-card.overdue-high { border-left-color: #8f211d !important; background: #ffe9e1 !important; }
+body.activity-admin-mode .reminder-card.overdue-critical { border-left-color: #5f1513 !important; background: #ffd9d0 !important; }
+body.activity-admin-mode .activity-reminders-links { margin-bottom: 86px !important; border-top: 3px solid var(--activity-bauhaus-navy) !important; }
+
+body.activity-admin-mode .overdue-owner-more { position: relative; }
+body.activity-admin-mode .overdue-owner-more summary { cursor: pointer; list-style: none; }
+body.activity-admin-mode .overdue-owner-more summary::-webkit-details-marker { display: none; }
+body.activity-admin-mode .overdue-owner-more > div {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  gap: 3px;
+  min-width: 150px;
+  padding: 7px;
+  border: 2px solid var(--activity-bauhaus-navy);
+  background: #fff;
+  color: var(--activity-bauhaus-navy);
+}
+body.activity-admin-mode .overdue-scope { display: block; margin-top: 2px; font-size: 11px; font-weight: 700; }
+
+/*
+ * Activity panel layout contract.
+ *
+ * Keep the calendar in normal flow. The earlier desktop density pass reserved
+ * 86px for it, but the framed header and seven day chips require more space;
+ * that disagreement clipped the calendar and allowed it to collide with the
+ * workspace beneath it. These three explicit grid areas are the only layout
+ * relationship between the calendar, log, and reminders.
+ */
+body.activity-admin-mode,
+body.activity-admin-mode .app-shell,
+body.activity-admin-mode .main,
+body.activity-admin-mode #activityView,
+body.activity-admin-mode .activity-dashboard,
+body.activity-admin-mode .activity-main-column {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.activity-admin-mode .activity-main-column {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    "kpis"
+    "calendar"
+    "workspace" !important;
+  grid-template-rows: auto auto minmax(570px, auto) !important;
+  gap: 14px !important;
+}
+
+body.activity-admin-mode .activity-kpi-grid { grid-area: kpis; }
+
+body.activity-admin-mode .activity-weekly-card {
+  grid-area: calendar;
+  flex: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.activity-admin-mode .activity-weekly-log {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    "legend"
+    "days"
+    "detail" !important;
+  align-items: start !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+body.activity-admin-mode .activity-day-strip { grid-area: days !important; }
+body.activity-admin-mode .calendar-legend { grid-area: legend !important; }
+body.activity-admin-mode .activity-day-detail { grid-area: detail; }
+
+body.activity-admin-mode .activity-secondary-grid {
+  grid-area: workspace;
+  display: grid !important;
+  grid-template-columns: minmax(0, 2fr) minmax(330px, 1fr) !important;
+  grid-template-areas: "log reminders" !important;
+  grid-auto-rows: minmax(570px, auto) !important;
+  align-items: stretch !important;
+  min-width: 0 !important;
+  min-height: 570px !important;
+  overflow: visible !important;
+}
+
+body.activity-admin-mode .activity-log-panel {
+  grid-area: log;
+  height: auto !important;
+  min-height: 570px !important;
+  overflow: hidden !important;
+}
+
+body.activity-admin-mode .activity-reminders-panel {
+  grid-area: reminders;
+  height: auto !important;
+  min-height: 570px !important;
+  overflow: hidden !important;
+}
+
+@media (max-width: 1024px) {
+  body.activity-admin-mode .activity-main-column {
+    grid-template-areas:
+      "kpis"
+      "calendar"
+      "workspace" !important;
+    grid-template-rows: auto auto auto !important;
+  }
+
+  body.activity-admin-mode .activity-secondary-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "log"
+      "reminders" !important;
+    grid-auto-rows: auto !important;
+    min-height: 0 !important;
+  }
+
+  body.activity-admin-mode .activity-log-panel,
+  body.activity-admin-mode .activity-reminders-panel {
+    min-height: 570px !important;
+  }
+}
+
+@media (max-width: 680px) {
+  body.activity-admin-mode .activity-weekly-log {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+  }
+
+  body.activity-admin-mode .activity-day-strip {
+    min-width: 462px !important;
+  }
+}
+
+@media (max-width: 680px) {
+  body.activity-admin-mode .activity-day-strip { grid-template-columns: repeat(7, minmax(66px, 1fr)) !important; overflow-x: auto !important; }
+  body.activity-admin-mode .activity-secondary-grid { gap: 12px !important; }
+  body.activity-admin-mode .activity-reminders-links { margin-bottom: 74px !important; }
+}

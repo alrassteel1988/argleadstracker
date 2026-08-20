@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v65-network-first-header-frame";
+const CACHE_VERSION = "arg-pwa-v67-activity-bauhaus-overdue-layout";
 const APP_SHELL = [
   "/",
   "/index.html",

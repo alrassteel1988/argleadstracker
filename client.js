@@ -5818,6 +5818,27 @@ function renderPipelineFunnelSummary() {
   );
 }
 
+// The authoritative Activity overdue dataset. An item must be outstanding,
+// assigned to the visible salesman (if any), and due inside the visible date
+// range. Activity records and follow-up items are deliberately not conflated.
+function useOverdueFollowUps() {
+  const filters = state.activityFilters || defaultActivityFilters();
+  const from = String(filters.dateFrom || "").slice(0, 10);
+  const to = String(filters.dateTo || "").slice(0, 10);
+  const salesman = String(filters.salesmanId || "all").trim().toLowerCase();
+  const items = overdueItems().filter(item => {
+    const dueDate = String(item.due_date || "").slice(0, 10);
+    const owner = String(item.assigned_salesman || "").trim().toLowerCase();
+    return (!from || dueDate >= from)
+      && (!to || dueDate <= to)
+      && (salesman === "all" || owner === salesman);
+  });
+  const scopeLabel = from || to
+    ? `${from ? formatDisplayDate(from) : "Any date"} to ${to ? formatDisplayDate(to) : "Today"}`
+    : "All dates";
+  return { items, from, to, scopeLabel };
+}
+
 function renderDashboardPipelineFunnel() {
   if (!els.dashboardPipelineFunnelPanel || !els.dashboardPipelineFunnelBody || !els.dashboardPipelineFunnelBadge) return;
   const role = String(state.currentUser?.role || "").toLowerCase();
@@ -5894,7 +5915,7 @@ function renderDashboardPipelineFunnel() {
 
 function renderOverdueBanner() {
   if (!els.overdueBanner || !state.currentUser) return;
-  const items = overdueItems();
+  const { items, scopeLabel } = useOverdueFollowUps();
   if (!items.length || sessionStorage.getItem(OVERDUE_BANNER_KEY) === "true") {
     els.overdueBanner.classList.add("hidden");
     els.overdueBanner.innerHTML = "";
@@ -5914,10 +5935,11 @@ function renderOverdueBanner() {
     : admin
       ? `${total} overdue follow-ups across ${breakdownEntries.length} ${breakdownEntries.length === 1 ? "salesman" : "salesmen"}`
       : `You have ${total} overdue follow-ups`;
+  const remainingOwners = breakdownEntries.slice(shown.length);
   const subtitle = total === 1
     ? escapeHtml(oldest.text)
     : admin
-      ? `${shown.map(([name, count]) => `<span class="overdue-pill overdue-owner-chip">${escapeHtml(name)}: ${count}</span>`).join("")}${moreCount ? `<span class="overdue-pill overdue-owner-chip">+${moreCount} more</span>` : ""}`
+      ? `${shown.map(([name, count]) => `<span class="overdue-pill overdue-owner-chip">${escapeHtml(name)}: ${count}</span>`).join("")}${moreCount ? `<details class="overdue-owner-more"><summary class="overdue-pill overdue-owner-chip" title="Show the remaining ${moreCount} salesmen">+${moreCount} more</summary><div>${remainingOwners.map(([name, count]) => `<span>${escapeHtml(name)}: ${escapeHtml(String(count))}</span>`).join("")}</div></details>` : ""}`
       : `Oldest: ${escapeHtml(oldest.company_name)} - ${escapeHtml(daysOverdueLabel(oldest.due_date))}`;
   const summary = admin && total > 1
     ? `
@@ -5927,6 +5949,7 @@ function renderOverdueBanner() {
         <span><b>${escapeHtml(String(total))}</b> overdue follow-ups</span>
         <span><b>${escapeHtml(String(breakdownEntries.length))}</b> salesmen affected</span>
       </div>
+      <span class="overdue-scope">Activity scope: ${escapeHtml(scopeLabel)}</span>
       <div class="overdue-banner-pills overdue-owner-chips">${subtitle}</div>
     `
     : `
@@ -11178,8 +11201,10 @@ function reminderCard(reminder, { compact = false } = {}) {
   const due = [reminder.due_date, reminder.due_time].filter(Boolean).join(" ");
   const calendarUrl = googleCalendarUrl(reminder);
   const overdue = reminder.due_date && reminder.due_date < today();
+  const overdueDays = overdue ? daysOverdue(reminder.due_date) : 0;
+  const staleness = overdueDays >= 30 ? "critical" : overdueDays >= 14 ? "high" : overdueDays >= 7 ? "medium" : "low";
   return `
-    <article class="reminder-card ${overdue ? "overdue" : "upcoming"}" data-reminder-lead="${escapeHtml(reminder.lead_id)}" tabindex="0">
+    <article class="reminder-card ${overdue ? `overdue overdue-${staleness}` : "upcoming"}" data-reminder-lead="${escapeHtml(reminder.lead_id)}" tabindex="0">
       <div>
         <strong>${escapeHtml(compact ? reminder.company_name : reminder.company_name)}</strong>
         <p>${escapeHtml(compact ? (reminder.activity_required || reminder.text || "Follow up with customer") : (reminder.activity_required || reminder.text || "Follow up with customer"))}</p>
@@ -11272,7 +11297,8 @@ function activitySummaryText(activities) {
   const uniqueSalesmen = new Set(activities.map(activity => activity.salesman_name || activity.assigned_salesman).filter(Boolean));
   const from = state.activityFilters.dateFrom ? formatDisplayDate(state.activityFilters.dateFrom) : "Any date";
   const to = state.activityFilters.dateTo ? formatDisplayDate(state.activityFilters.dateTo) : "Any date";
-  return `Showing ${activities.length} activit${activities.length === 1 ? "y" : "ies"} · ${uniqueSalesmen.size} ${uniqueSalesmen.size === 1 ? "salesman" : "salespeople"} · ${from} to ${to}`;
+  const overdueCount = useOverdueFollowUps().items.length;
+  return `Showing ${activities.length} activity record${activities.length === 1 ? "" : "s"} · ${overdueCount} overdue follow-up${overdueCount === 1 ? "" : "s"} in this scope · ${uniqueSalesmen.size} ${uniqueSalesmen.size === 1 ? "salesman" : "salespeople"} · ${from} to ${to}`;
 }
 
 function activityCardMarkup(activity) {
@@ -11423,6 +11449,7 @@ function renderWeeklyActivityLog(activities) {
         >
           <strong>${escapeHtml(day.day)}</strong>
           <span>${escapeHtml(day.number)}</span>
+          <small>${itemsForDay(day.date).length ? `${itemsForDay(day.date).length} item${itemsForDay(day.date).length === 1 ? "" : "s"}` : "No items"}</small>
         </button>
       `).join("")}
     </div>
@@ -13017,7 +13044,7 @@ function renderActivityView() {
   els.activitySummary.textContent = `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`;
   renderActivityFilters();
   const upcoming = allReminders().filter(reminder => !reminder.due_date || reminder.due_date >= today()).slice(0, 8);
-  const overdue = allReminders().filter(reminder => reminder.due_date && reminder.due_date < today()).slice(0, 6);
+  const overdue = useOverdueFollowUps().items;
   renderActivityReminders(upcoming, overdue);
   renderActivityQuickLinks();
   els.activityLoading.classList.toggle("hidden", !state.activityLoading);
