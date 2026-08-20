@@ -32,7 +32,9 @@ for (const label of [
   "Overdue follow-ups",
   "Open leads assigned",
   "Salesmen Directory",
-  "Salesman Performance Snapshot"
+  "Salesman Performance Snapshot",
+  "Pipeline Market Snapshot",
+  "Pipeline Funnel"
 ]) {
   assert.ok(html.includes(label), `${label} must be visible`);
 }
@@ -59,6 +61,7 @@ assert.match(client, /payload\.assigned_salesman = state\.currentUser\.name \|\|
 assert.match(client, /payload\.territory = state\.currentUser\.territory \|\| payload\.territory/, "Salesman lead saves must post the logged-in salesman territory");
 assert.match(client, /new Chart\(els\.performanceChart/, "Assigned-lead chart must use the existing Chart.js dependency");
 assert.match(client, /new Chart\(els\.salesmenSummaryChart/, "Summary chart must use the existing Chart.js dependency");
+assert.match(client, /els\.salesmenPipelineAnalytics\?\.appendChild\(panel\)/, "Pipeline analytics must remain in the Salesmen workspace");
 
 assert.match(css, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/, "Summary metrics need a four-column desktop grid");
 assert.match(css, /\.salesmen-metric-card\s*\{[^}]*background-image:\s*none\s*!important;[^}]*opacity:\s*1\s*!important;[^}]*isolation:\s*isolate;/s, "Summary metrics must be fully opaque flat surfaces");
@@ -69,6 +72,10 @@ assert.match(css, /\.salesmen-metric-card\.is-orange\s*\{[^}]*background-color:\
 assert.match(css, /\.salesmen-metric-card\.is-red\s*\{[^}]*background-color:\s*var\(--salesmen-red\)\s*!important;/s, "Open Leads Assigned must use an explicit solid red fill");
 assert.match(css, /\.salesmen-metric-card span\s*\{[^}]*-webkit-text-fill-color:\s*#ffffff;[^}]*opacity:\s*1\s*!important;/s, "Metric labels must remain fully opaque white");
 assert.match(css, /\.salesmen-directory-table\s*\{[^}]*min-width:\s*1080px/s, "The directory table needs a scoped horizontal-scroll fallback");
+assert.match(css, /\.salesmen-pipeline-analytics\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s, "Moved Pipeline analytics need a two-column Salesmen layout");
+assert.match(html, /salesmen-filter-grid[\s\S]*salesmen-filter-actions[\s\S]*clearSalesmenFilters[\s\S]*applySalesmenFilters/, "Filter actions must remain in the compact filter grid");
+assert.match(css, /\.salesmen-filter-actions\s*\{\s*display:\s*contents;/, "Desktop filter actions must share the controls row");
+assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.salesmen-filter-actions\s*\{\s*display:\s*grid;/, "Mobile filter actions must wrap safely");
 assert.match(css, /\.salesmen-directory-table th\s*\{[^}]*position:\s*sticky/s, "Directory headers should stay visible while scrolling");
 assert.match(css, /\.salesmen-card-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s, "Card View needs three large-screen columns");
 assert.match(css, /\.salesmen-directory-card\s*\{[^}]*background:\s*var\(--salesmen-surface\);[^}]*border:\s*2px solid var\(--salesmen-navy\);[^}]*border-top:\s*7px solid var\(--salesman-card-accent\)/s, "Cards need an opaque Bauhaus surface and structural accent");

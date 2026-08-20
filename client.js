@@ -274,6 +274,7 @@ const els = {
   adminDashboardTriageRow: document.querySelector("#adminDashboardTriageRow"),
   adminDashboardAnalyticsRow: document.querySelector("#adminDashboardAnalyticsRow"),
   adminDashboardBottomRow: document.querySelector("#adminDashboardBottomRow"),
+  salesmenPipelineAnalytics: document.querySelector("#salesmenPipelineAnalytics"),
   metricsPanel: document.querySelector("#metricsPanel"),
   summaryCardDetailsDialog: document.querySelector("#summaryCardDetailsDialog"),
   summaryCardDetailsShell: document.querySelector("#summaryCardDetailsShell"),
@@ -1939,11 +1940,12 @@ async function loadActivityAudioSources() {
 }
 
 function activityTranscriptMarkup(activity) {
-  if (!activity.voice_note_transcript) return "";
+  const transcript = activity.voice_note_transcript || activity.transcript || activity.voice_transcript || "";
+  if (!transcript) return "";
   return `
     <details class="activity-transcript">
       <summary>View AI transcript</summary>
-      <p>${escapeHtml(activity.voice_note_transcript)}</p>
+      <p>${escapeHtml(transcript)}</p>
     </details>
   `;
 }
@@ -2053,16 +2055,25 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
   els.activityDetailsTitle.textContent = `${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`;
   const attachments = (activity.attachments || []).filter(item => !item.removed_at);
   const history = activity.audit_history || [];
+  const activityDate = activity.at || activity.activity_date || activity.created_at || "";
+  const activityTime = activityDisplayTime(activity);
+  const transcript = activity.voice_note_transcript || activity.transcript || activity.voice_transcript || "";
+  const activityStatus = activityTableStatus(activity);
   els.activityDetailsBody.innerHTML = `
     <div class="activity-detail-grid">
       <div class="activity-detail-field"><span>Company</span><strong>${escapeHtml(lead.company_name)}</strong></div>
       <div class="activity-detail-field"><span>Recorded by</span><strong>${escapeHtml(activity.created_by_name || activity.salesman_name || lead.assigned_salesman || "User")}</strong></div>
+      <div class="activity-detail-field"><span>Activity date</span><strong>${escapeHtml(formatDisplayDate(activityDate))}${activityTime ? ` · ${escapeHtml(activityTime)}` : ""}</strong></div>
+      <div class="activity-detail-field"><span>Status</span><strong>${escapeHtml(activityStatus.label)}</strong></div>
       <div class="activity-detail-field"><span>Next action</span><strong>${escapeHtml(activity.next_action_plan || lead.next_action || "Not added")}</strong></div>
       <div class="activity-detail-field"><span>Next action date</span><strong>${escapeHtml(formatDisplayDate(activity.next_action_date || activity.at || ""))}</strong></div>
       <div class="activity-detail-field"><span>Purpose</span><strong>${escapeHtml(activity.activity_purpose || activity.type || "Activity")}</strong></div>
+      ${activity.quotation_ref ? `<div class="activity-detail-field"><span>Quotation</span><strong>${escapeHtml(activity.quotation_ref)}${activity.quotation_status ? ` · ${escapeHtml(activity.quotation_status)}` : ""}</strong></div>` : ""}
       <div class="activity-detail-field"><span>Version</span><strong>${escapeHtml(activity.version || 1)}</strong></div>
     </div>
     <section class="activity-detail-section"><h3>Notes</h3><p>${escapeHtml(activity.notes || activity.text || "No notes added.")}</p></section>
+    ${activityAudioMarkup(activity)}
+    ${transcript ? `<section class="activity-detail-section"><h3>Voice-note transcript</h3><p>${escapeHtml(transcript)}</p></section>` : ""}
     <section class="activity-detail-section">
       <h3>Attachments (${attachments.length})</h3>
       <div class="activity-attachment-list">
@@ -5854,6 +5865,27 @@ function renderPipelineFunnelSummary() {
   );
 }
 
+// The authoritative Activity overdue dataset. An item must be outstanding,
+// assigned to the visible salesman (if any), and due inside the visible date
+// range. Activity records and follow-up items are deliberately not conflated.
+function useOverdueFollowUps() {
+  const filters = state.activityFilters || defaultActivityFilters();
+  const from = String(filters.dateFrom || "").slice(0, 10);
+  const to = String(filters.dateTo || "").slice(0, 10);
+  const salesman = String(filters.salesmanId || "all").trim().toLowerCase();
+  const items = overdueItems().filter(item => {
+    const dueDate = String(item.due_date || "").slice(0, 10);
+    const owner = String(item.assigned_salesman || "").trim().toLowerCase();
+    return (!from || dueDate >= from)
+      && (!to || dueDate <= to)
+      && (salesman === "all" || owner === salesman);
+  });
+  const scopeLabel = from || to
+    ? `${from ? formatDisplayDate(from) : "Any date"} to ${to ? formatDisplayDate(to) : "Today"}`
+    : "All dates";
+  return { items, from, to, scopeLabel };
+}
+
 function renderDashboardPipelineFunnel() {
   if (!els.dashboardPipelineFunnelPanel || !els.dashboardPipelineFunnelBody || !els.dashboardPipelineFunnelBadge) return;
   const role = String(state.currentUser?.role || "").toLowerCase();
@@ -5930,7 +5962,7 @@ function renderDashboardPipelineFunnel() {
 
 function renderOverdueBanner() {
   if (!els.overdueBanner || !state.currentUser) return;
-  const items = overdueItems();
+  const { items, scopeLabel } = useOverdueFollowUps();
   if (!items.length || sessionStorage.getItem(OVERDUE_BANNER_KEY) === "true") {
     els.overdueBanner.classList.add("hidden");
     els.overdueBanner.innerHTML = "";
@@ -5950,10 +5982,11 @@ function renderOverdueBanner() {
     : admin
       ? `${total} overdue follow-ups across ${breakdownEntries.length} ${breakdownEntries.length === 1 ? "salesman" : "salesmen"}`
       : `You have ${total} overdue follow-ups`;
+  const remainingOwners = breakdownEntries.slice(shown.length);
   const subtitle = total === 1
     ? escapeHtml(oldest.text)
     : admin
-      ? `${shown.map(([name, count]) => `<span class="overdue-pill overdue-owner-chip">${escapeHtml(name)}: ${count}</span>`).join("")}${moreCount ? `<span class="overdue-pill overdue-owner-chip">+${moreCount} more</span>` : ""}`
+      ? `${shown.map(([name, count]) => `<span class="overdue-pill overdue-owner-chip">${escapeHtml(name)}: ${count}</span>`).join("")}${moreCount ? `<details class="overdue-owner-more"><summary class="overdue-pill overdue-owner-chip" title="Show the remaining ${moreCount} salesmen">+${moreCount} more</summary><div>${remainingOwners.map(([name, count]) => `<span>${escapeHtml(name)}: ${escapeHtml(String(count))}</span>`).join("")}</div></details>` : ""}`
       : `Oldest: ${escapeHtml(oldest.company_name)} - ${escapeHtml(daysOverdueLabel(oldest.due_date))}`;
   const summary = admin && total > 1
     ? `
@@ -5963,6 +5996,7 @@ function renderOverdueBanner() {
         <span><b>${escapeHtml(String(total))}</b> overdue follow-ups</span>
         <span><b>${escapeHtml(String(breakdownEntries.length))}</b> salesmen affected</span>
       </div>
+      <span class="overdue-scope">Activity scope: ${escapeHtml(scopeLabel)}</span>
       <div class="overdue-banner-pills overdue-owner-chips">${subtitle}</div>
     `
     : `
@@ -6925,9 +6959,7 @@ function arrangeAdminDashboardLayout() {
     [els.overdueBanner, els.marketIntelPanel, els.needsAttentionPanel].forEach(panel => {
       if (panel) els.adminDashboardTriageRow?.appendChild(panel);
     });
-    [els.marketSnapshotPanel, els.dashboardPipelineFunnelPanel].forEach(panel => {
-      if (panel) els.adminDashboardAnalyticsRow?.appendChild(panel);
-    });
+    els.actionPlanPanel && els.adminDashboardAnalyticsRow?.appendChild(els.actionPlanPanel);
     const actionPlanBody = els.actionPlanPanel?.querySelector(
       ":scope > .dashboard-collapsible-body > .dashboard-collapsible-body-inner"
     );
@@ -6955,18 +6987,29 @@ function arrangeAdminDashboardLayout() {
     els.sharedDashboardTopSlot?.insertBefore(els.overdueBanner, els.sharedDashboardTopSlot.firstChild);
   }
 
-  const dashboardAnchor = els.actionPlanPanel || els.dashboardView.firstElementChild;
+  const dashboardAnchor = els.actionPlanPanel?.parentElement === els.dashboardView
+    ? els.actionPlanPanel
+    : els.dashboardView.firstElementChild;
   [
     els.marketIntelPanel,
     els.needsAttentionPanel,
-    els.adminTaskPanel,
-    els.marketSnapshotPanel,
-    els.dashboardPipelineFunnelPanel
+    els.adminTaskPanel
   ].forEach(panel => {
     if (panel && panel.parentElement !== els.dashboardView) {
       els.dashboardView.insertBefore(panel, dashboardAnchor);
     }
   });
+  [els.marketSnapshotPanel, els.dashboardPipelineFunnelPanel].forEach(panel => {
+    if (panel && panel.parentElement !== els.salesmenPipelineAnalytics) {
+      els.salesmenPipelineAnalytics?.appendChild(panel);
+    }
+  });
+  if (els.actionPlanPanel?.parentElement !== els.dashboardView) {
+    const actionPlanAnchor = els.lossReasonsPanel?.parentElement === els.dashboardView
+      ? els.lossReasonsPanel
+      : null;
+    els.dashboardView?.insertBefore(els.actionPlanPanel, actionPlanAnchor);
+  }
   if (
     els.dashboardView &&
     els.adminDashboardBottomRow instanceof HTMLElement &&
@@ -11223,8 +11266,10 @@ function reminderCard(reminder, { compact = false } = {}) {
   const due = [reminder.due_date, reminder.due_time].filter(Boolean).join(" ");
   const calendarUrl = googleCalendarUrl(reminder);
   const overdue = reminder.due_date && reminder.due_date < today();
+  const overdueDays = overdue ? daysOverdue(reminder.due_date) : 0;
+  const staleness = overdueDays >= 30 ? "critical" : overdueDays >= 14 ? "high" : overdueDays >= 7 ? "medium" : "low";
   return `
-    <article class="reminder-card ${overdue ? "overdue" : "upcoming"}" data-reminder-lead="${escapeHtml(reminder.lead_id)}" tabindex="0">
+    <article class="reminder-card ${overdue ? `overdue overdue-${staleness}` : "upcoming"}" data-reminder-lead="${escapeHtml(reminder.lead_id)}" tabindex="0">
       <div>
         <strong>${escapeHtml(compact ? reminder.company_name : reminder.company_name)}</strong>
         <p>${escapeHtml(compact ? (reminder.activity_required || reminder.text || "Follow up with customer") : (reminder.activity_required || reminder.text || "Follow up with customer"))}</p>
@@ -11317,7 +11362,8 @@ function activitySummaryText(activities) {
   const uniqueSalesmen = new Set(activities.map(activity => activity.salesman_name || activity.assigned_salesman).filter(Boolean));
   const from = state.activityFilters.dateFrom ? formatDisplayDate(state.activityFilters.dateFrom) : "Any date";
   const to = state.activityFilters.dateTo ? formatDisplayDate(state.activityFilters.dateTo) : "Any date";
-  return `Showing ${activities.length} activit${activities.length === 1 ? "y" : "ies"} · ${uniqueSalesmen.size} ${uniqueSalesmen.size === 1 ? "salesman" : "salespeople"} · ${from} to ${to}`;
+  const overdueCount = useOverdueFollowUps().items.length;
+  return `Showing ${activities.length} activity record${activities.length === 1 ? "" : "s"} · ${overdueCount} overdue follow-up${overdueCount === 1 ? "" : "s"} in this scope · ${uniqueSalesmen.size} ${uniqueSalesmen.size === 1 ? "salesman" : "salespeople"} · ${from} to ${to}`;
 }
 
 function activityCardMarkup(activity) {
@@ -11468,6 +11514,7 @@ function renderWeeklyActivityLog(activities) {
         >
           <strong>${escapeHtml(day.day)}</strong>
           <span>${escapeHtml(day.number)}</span>
+          <small>${itemsForDay(day.date).length ? `${itemsForDay(day.date).length} item${itemsForDay(day.date).length === 1 ? "" : "s"}` : "No items"}</small>
         </button>
       `).join("")}
     </div>
@@ -13062,7 +13109,7 @@ function renderActivityView() {
   els.activitySummary.textContent = `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`;
   renderActivityFilters();
   const upcoming = allReminders().filter(reminder => !reminder.due_date || reminder.due_date >= today()).slice(0, 8);
-  const overdue = allReminders().filter(reminder => reminder.due_date && reminder.due_date < today()).slice(0, 6);
+  const overdue = useOverdueFollowUps().items;
   renderActivityReminders(upcoming, overdue);
   renderActivityQuickLinks();
   els.activityLoading.classList.toggle("hidden", !state.activityLoading);

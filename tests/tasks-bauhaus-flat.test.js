@@ -10,11 +10,11 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercelConfig = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-const sharedStyleIndex = html.indexOf('href="styles.css');
-const leadStyleIndex = html.indexOf('href="lead-detail-readability.css');
-const tasksStyleIndex = html.indexOf('href="tasks-bauhaus-flat.css');
-const globalStyleIndex = html.indexOf('href="bauhaus-global.css');
-const tasksContrastStyleIndex = html.indexOf('href="tasks-contrast.css');
+const sharedStyleIndex = html.indexOf('href="/styles.css');
+const leadStyleIndex = html.indexOf('href="/lead-detail-readability.css');
+const tasksStyleIndex = html.indexOf('href="/tasks-bauhaus-flat.css');
+const globalStyleIndex = html.indexOf('href="/bauhaus-global.css');
+const tasksContrastStyleIndex = html.indexOf('href="/tasks-contrast.css');
 assert.ok(sharedStyleIndex >= 0, "Shared stylesheet must be linked");
 assert.ok(leadStyleIndex > sharedStyleIndex, "Lead Detail overrides must load after shared styles");
 assert.ok(tasksStyleIndex > leadStyleIndex, "Tasks Bauhaus overrides must load after Lead Detail styles");

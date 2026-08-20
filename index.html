@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="/activity-workflow.css?v=1">
   <link rel="stylesheet" href="/admin-dashboard-clean.css?v=2">
   <link rel="stylesheet" href="/ai-sales-assistant.css?v=1">
-  <link rel="stylesheet" href="/activity-dashboard-latest.css?v=header-frame-3">
+  <link rel="stylesheet" href="/activity-dashboard-latest.css?v=bauhaus-overdue-4">
   <link rel="stylesheet" href="/lead-detail-contrast.css?v=2-action-buttons">
   </head>
   <body>
@@ -441,42 +441,6 @@
               </table>
             </div>
           </div>
-          <div class="panel market-snapshot-panel hidden" id="marketSnapshotPanel">
-            <div class="panel-header market-snapshot-header">
-              <div>
-                <h2>Pipeline Market Snapshot</h2>
-                <span>Potential customers by location and sector type</span>
-              </div>
-              <label class="market-snapshot-filter">
-                <span>Salesman</span>
-                <select id="marketSnapshotSalesmanFilter">
-                  <option value="all">All salesmen</option>
-                </select>
-              </label>
-            </div>
-            <div class="market-snapshot-tabs" role="tablist" aria-label="Market snapshot dimension">
-              <button class="market-snapshot-tab active" type="button" role="tab" aria-selected="true" data-market-snapshot-tab="location">Location</button>
-              <button class="market-snapshot-tab" type="button" role="tab" aria-selected="false" data-market-snapshot-tab="sector">Sector</button>
-            </div>
-            <div class="market-snapshot-grid">
-              <article class="snapshot-card" data-market-snapshot-view="location">
-                <div class="market-snapshot-bars" id="marketLocationBars" role="img" aria-label="Lead distribution by location"></div>
-              </article>
-              <article class="snapshot-card hidden" data-market-snapshot-view="sector">
-                <div class="market-snapshot-bars" id="marketSectorBars" role="img" aria-label="Lead distribution by sector type"></div>
-              </article>
-            </div>
-          </div>
-          <div class="panel pipeline-funnel-panel hidden" id="dashboardPipelineFunnelPanel">
-            <div class="panel-header">
-              <div>
-                <h2>Pipeline Funnel</h2>
-                <span>Track lead conversion progress by salesman</span>
-              </div>
-              <span id="dashboardPipelineFunnelBadge">0 visible leads</span>
-            </div>
-            <div class="pipeline-funnel-body" id="dashboardPipelineFunnelBody"></div>
-          </div>
           <div class="panel action-plan-panel hidden" id="actionPlanPanel">
             <div class="panel-header">
               <div>
@@ -701,10 +665,10 @@
                   <button class="active" type="button" data-salesmen-view="list" aria-pressed="true">List</button>
                   <button type="button" data-salesmen-view="cards" aria-pressed="false">Cards</button>
                 </fieldset>
-              </div>
-              <div class="salesmen-filter-actions">
-                <button class="ghost-button" id="clearSalesmenFilters" type="button">Clear Filters</button>
-                <button class="primary-button" id="applySalesmenFilters" type="button">Apply Filters</button>
+                <div class="salesmen-filter-actions">
+                  <button class="ghost-button" id="clearSalesmenFilters" type="button">Clear Filters</button>
+                  <button class="primary-button" id="applySalesmenFilters" type="button">Apply Filters</button>
+                </div>
               </div>
             </section>
 
@@ -745,6 +709,44 @@
                     <div class="salesmen-summary-legend" id="salesmenSummaryLegend"></div>
                   </div>
                 </article>
+              </div>
+            </section>
+            <section class="salesmen-pipeline-analytics" id="salesmenPipelineAnalytics" aria-label="Pipeline market and funnel analytics">
+              <div class="panel market-snapshot-panel hidden" id="marketSnapshotPanel">
+                <div class="panel-header market-snapshot-header">
+                  <div>
+                    <h2>Pipeline Market Snapshot</h2>
+                    <span>Potential customers by location and sector type</span>
+                  </div>
+                  <label class="market-snapshot-filter">
+                    <span>Salesman</span>
+                    <select id="marketSnapshotSalesmanFilter">
+                      <option value="all">All salesmen</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="market-snapshot-tabs" role="tablist" aria-label="Market snapshot dimension">
+                  <button class="market-snapshot-tab active" type="button" role="tab" aria-selected="true" data-market-snapshot-tab="location">Location</button>
+                  <button class="market-snapshot-tab" type="button" role="tab" aria-selected="false" data-market-snapshot-tab="sector">Sector</button>
+                </div>
+                <div class="market-snapshot-grid">
+                  <article class="snapshot-card" data-market-snapshot-view="location">
+                    <div class="market-snapshot-bars" id="marketLocationBars" role="img" aria-label="Lead distribution by location"></div>
+                  </article>
+                  <article class="snapshot-card hidden" data-market-snapshot-view="sector">
+                    <div class="market-snapshot-bars" id="marketSectorBars" role="img" aria-label="Lead distribution by sector type"></div>
+                  </article>
+                </div>
+              </div>
+              <div class="panel pipeline-funnel-panel hidden" id="dashboardPipelineFunnelPanel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Pipeline Funnel</h2>
+                    <span>Track lead conversion progress by salesman</span>
+                  </div>
+                  <span id="dashboardPipelineFunnelBadge">0 visible leads</span>
+                </div>
+                <div class="pipeline-funnel-body" id="dashboardPipelineFunnelBody"></div>
               </div>
             </section>
           </div>

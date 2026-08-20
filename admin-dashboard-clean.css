@@ -547,6 +547,12 @@ body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel {
   border-width: 1px;
 }
 
+body.admin-dashboard-mode .admin-dashboard-analytics-row > #actionPlanPanel {
+  grid-column: 1 / -1;
+  min-height: 820px;
+  border: 2px solid #7F77DD !important;
+}
+
 body.admin-dashboard-mode .admin-dashboard-analytics-row > .panel > .panel-header {
   flex: 0 0 auto;
   min-height: 68px;
@@ -763,7 +769,7 @@ body.admin-dashboard-mode #actionPlanPanel > .dashboard-collapsible-body > .dash
 body.admin-dashboard-mode #actionPlanPanel .action-plan-grid {
   display: grid;
   gap: var(--admin-space-2);
-  max-height: 270px;
+  max-height: 460px;
   padding: var(--admin-space-3) var(--admin-space-4) 0;
   overflow-y: auto;
   overscroll-behavior: contain;

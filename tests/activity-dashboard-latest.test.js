@@ -10,7 +10,7 @@ const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /activity-dashboard-latest\.css\?v=header-frame-3/, "Latest Activity CSS must use the header-frame cache-busting revision");
+assert.match(html, /activity-dashboard-latest\.css\?v=bauhaus-overdue-4/, "Latest Activity CSS must use the Bauhaus overdue cache-busting revision");
 assert.ok(
   html.indexOf("activity-dashboard-latest.css") > html.indexOf("bauhaus-global.css"),
   "The latest Activity layer must win the theme cascade"
@@ -18,6 +18,12 @@ assert.ok(
 assert.equal((html.match(/activity-section-header/g) || []).length, 3, "Only the three requested Admin Activity headers should use the framed title class");
 assert.match(html, /activity-kpi-card--blue/, "Activity KPIs need semantic card variants");
 assert.match(client, /function activityTableMarkup\(activities\)/, "Activity Log needs the shared semantic table renderer");
+assert.match(client, /Voice-note transcript/, "Activity details must expose a saved voice-note transcript");
+assert.match(client, /voice_note_transcript/, "The Activity client model must retain voice-note transcript data");
+assert.match(client, /function useOverdueFollowUps\(\)/, "Activity overdue surfaces need one authoritative dataset");
+assert.match(client, /Activity scope:/, "The overdue banner must disclose the date scope it uses");
+assert.match(client, /No items/, "Each empty weekly calendar day needs an explicit empty state");
+assert.match(client, /overdue-\$\{staleness\}/, "Overdue reminders need a staleness escalation class");
 assert.match(client, /<table class="activity-table">/, "Activity Log must use semantic table markup");
 assert.match(client, /activityPageSize:\s*10/, "Activity pagination should show ten records per page");
 assert.match(client, /data-activity-page=/, "Activity pagination controls must be wired");
@@ -37,10 +43,11 @@ assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.activity-table td::befo
 assert.doesNotMatch(css, /\.sidebar\b/, "The Activity redesign must not change sidebar sizing");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter:\s*blur|filter:\s*blur/i, "The latest Activity layer must remain flat and opaque");
 assert.match(serviceWorker, /"\/activity-dashboard-latest\.css"/, "The PWA shell must cache the latest Activity layer");
-assert.match(serviceWorker, /arg-pwa-v65-network-first-header-frame/, "The PWA cache must be bumped when Activity CSS changes");
+assert.match(serviceWorker, /arg-pwa-v66-activity-bauhaus-overdue/, "The PWA cache must be bumped when Activity CSS changes");
 assert.match(serviceWorker, /\.then\(\(\) => self\.skipWaiting\(\)\)/, "The updated service worker must activate immediately for stale CRM sessions");
 assert.match(serviceWorker, /event\.respondWith\(networkFirst\(request\)\)/, "Same-origin UI assets must prefer the network before cached fallbacks");
 assert.match(vercel, /"src": "activity-dashboard-latest\.css"/, "Vercel must publish the latest Activity layer");
 assert.match(server, /\["\/activity-dashboard-latest\.css", "activity-dashboard-latest\.css"\]/, "The Node server must publish the latest Activity layer");
+assert.match(server, /normalizedActivityType\(activity\.activity_purpose \|\| activity\.type\)/, "Activity API rows must display the structured purpose when legacy type is absent");
 
 console.log("activity-dashboard-latest.test.js: PASS");

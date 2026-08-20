@@ -9,7 +9,7 @@ const css = fs.readFileSync(path.join(root, "admin-dashboard-clean.css"), "utf8"
 const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /href="admin-dashboard-clean\.css\?v=2"/, "the Admin Dashboard stylesheet must be loaded");
+assert.match(html, /href="\/admin-dashboard-clean\.css\?v=2"/, "the Admin Dashboard stylesheet must be loaded");
 assert.match(html, /id="adminDashboardOverviewSlot"[^>]*aria-label="Dashboard overview"/, "overview region needs an accessible label");
 assert.match(html, /id="adminDashboardTriageRow"[^>]*aria-label="Attention required"/, "attention region needs an accessible label");
 assert.match(html, /id="adminDashboardAnalyticsRow"[^>]*aria-label="Pipeline analytics"/, "analytics region needs an accessible label");
@@ -28,6 +28,8 @@ assert.match(client, /class="overdue-banner-pills overdue-owner-chips"/, "salesm
 assert.match(client, /renderMetrics\(\)/, "dashboard metric rendering must remain intact");
 assert.match(client, /renderMarketSnapshotPanel\(\)/, "market snapshot rendering must remain intact");
 assert.match(client, /renderDashboardPipelineFunnel\(\)/, "pipeline funnel rendering must remain intact");
+assert.match(client, /els\.actionPlanPanel\?\.parentElement === els\.dashboardView/, "Dashboard reparenting must only use Lead Action Plans as an anchor while it is a Dashboard child");
+assert.match(client, /els\.lossReasonsPanel\?\.parentElement === els\.dashboardView/, "Dashboard reparenting must only use a valid Dashboard child as an insertBefore anchor");
 
 assert.match(css, /body\.admin-dashboard-mode \.dashboard-view\s*\{[^}]*grid-template-columns:\s*repeat\(12,\s*minmax\(0,\s*1fr\)\)/s, "desktop dashboard must use a 12-column composition");
 assert.match(css, /\.admin-dashboard-triage-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*5fr\)\s+minmax\(0,\s*4fr\)\s+minmax\(0,\s*3fr\)/s, "attention panels must use the requested 5/4/3 balance");
@@ -35,13 +37,14 @@ assert.match(css, /\.admin-dashboard-analytics-row\s*\{[^}]*grid-template-column
 assert.match(css, /\.admin-dashboard-overview-slot \.metrics\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s, "overview metrics must use four equal columns");
 assert.match(css, /\.admin-dashboard-bottom-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s, "Lead Action Plan insights must use three equal columns");
 assert.match(css, /\.panel-header \.panel-collapse-toggle\.hidden\s*\{[^}]*display:\s*flex !important/s, "redesigned dashboard panels must keep their collapse controls visible");
-assert.match(css, /#actionPlanPanel \.action-plan-grid\s*\{[^}]*max-height:\s*270px;[^}]*overflow-y:\s*auto/s, "growable action plans need scoped internal scrolling");
+assert.match(css, /#actionPlanPanel \.action-plan-grid\s*\{[^}]*max-height:\s*460px;[^}]*overflow-y:\s*auto/s, "expanded action plans need scoped internal scrolling");
+assert.match(css, /\.admin-dashboard-analytics-row > #actionPlanPanel\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*min-height:\s*820px;[^}]*border:\s*2px solid #7F77DD/s, "Lead Action Plans must occupy the vacated analytics row with its purple border");
 assert.match(css, /@media \(max-width:\s*900px\)/, "tablet layout breakpoint must exist");
 assert.match(css, /@media \(max-width:\s*700px\)/, "mobile layout breakpoint must exist");
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v65-network-first-header-frame/, "PWA cache must rotate for the latest UI assets");
+assert.match(sw, /arg-pwa-v66-activity-bauhaus-overdue/, "PWA cache must rotate for the latest UI assets");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
 assert.match(vercel, /"src": "admin-dashboard-clean\.css"/, "Vercel must build the dashboard stylesheet");
 assert.match(vercel, /"src": "\/admin-dashboard-clean\.css", "dest": "\/admin-dashboard-clean\.css"/, "Vercel must expose the dashboard stylesheet");

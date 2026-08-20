@@ -1819,7 +1819,7 @@ function flattenedActivitiesForUser(leads, user, filters = {}) {
     .filter(item => !item.activity.archived)
     .map(({ activity, index }) => {
     const date = activityDateOnly(activity) || new Date().toISOString().slice(0, 10);
-    const type = normalizedActivityType(activity.type);
+    const type = normalizedActivityType(activity.activity_purpose || activity.type);
     const salesmanName = activity.salesman_name || activity.created_by_name || activity.requested_by_name || lead.assigned_salesman || user.name || "";
     return {
       id: activity.id || `${lead.id}-${index}`,
@@ -1862,7 +1862,10 @@ function flattenedActivitiesForUser(leads, user, filters = {}) {
       edited_at: activity.edited_at || "",
       audio_url: activity.audio_url || "",
       audio_signed_url: activity.audio_signed_url || "",
-      transcript: activity.transcript || activity.voice_transcript || ""
+      voice_note_id: activity.voice_note_id || "",
+      voice_note_url: activity.voice_note_url || "",
+      voice_note_transcript: activity.voice_note_transcript || activity.transcript || activity.voice_transcript || "",
+      transcript: activity.transcript || activity.voice_note_transcript || activity.voice_transcript || ""
     };
   })).filter(activity => {
     const date = activity.activity_date.slice(0, 10);
