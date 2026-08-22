@@ -9,10 +9,10 @@ const sharedCss = fs.readFileSync(path.join(root, "styles.css"), "utf8");
 const client = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
-const sharedStyleIndex = html.indexOf('href="styles.css');
-const dashboardStyleIndex = html.indexOf('href="salesman-dashboard-live-leads.css');
-const leadDetailStyleIndex = html.indexOf('href="lead-detail-readability.css');
-const leadDetailContrastStyleIndex = html.indexOf('href="lead-detail-contrast.css');
+const sharedStyleIndex = html.indexOf('href="/styles.css');
+const dashboardStyleIndex = html.indexOf('href="/salesman-dashboard-live-leads.css');
+const leadDetailStyleIndex = html.indexOf('href="/lead-detail-readability.css');
+const leadDetailContrastStyleIndex = html.indexOf('href="/lead-detail-contrast.css');
 assert.ok(sharedStyleIndex >= 0, "Shared stylesheet must be linked");
 assert.ok(dashboardStyleIndex > sharedStyleIndex, "Dashboard overrides must load after shared styles");
 assert.ok(leadDetailStyleIndex > dashboardStyleIndex, "Lead Detail overrides must load last");
