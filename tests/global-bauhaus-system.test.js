@@ -9,8 +9,8 @@ const client = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercelConfig = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-const tasksStyleIndex = html.indexOf('href="tasks-bauhaus-flat.css');
-const globalStyleIndex = html.indexOf('href="bauhaus-global.css');
+const tasksStyleIndex = html.indexOf('href="/tasks-bauhaus-flat.css');
+const globalStyleIndex = html.indexOf('href="/bauhaus-global.css');
 assert.ok(tasksStyleIndex >= 0, "Tasks stylesheet must remain linked");
 assert.ok(globalStyleIndex > tasksStyleIndex, "The shared Bauhaus system must load after every page override");
 assert.match(serviceWorker, /"\/bauhaus-global\.css"/, "The PWA shell must cache the shared Bauhaus stylesheet");
