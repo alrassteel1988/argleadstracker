@@ -9,9 +9,9 @@ const client = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercelConfig = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-const leadStyleIndex = html.indexOf('href="lead-detail-readability.css');
-const activityStyleIndex = html.indexOf('href="activity-readability.css');
-const globalStyleIndex = html.indexOf('href="bauhaus-global.css');
+const leadStyleIndex = html.indexOf('href="/lead-detail-readability.css');
+const activityStyleIndex = html.indexOf('href="/activity-readability.css');
+const globalStyleIndex = html.indexOf('href="/bauhaus-global.css');
 assert.ok(activityStyleIndex > leadStyleIndex, "Activity readability must load after the Lead Detail page layer");
 assert.ok(globalStyleIndex > activityStyleIndex, "The shared Bauhaus system must remain the final theme layer");
 assert.match(serviceWorker, /"\/activity-readability\.css"/, "The PWA shell must cache Activity readability CSS");
