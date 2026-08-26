@@ -37,6 +37,22 @@ for (const label of [
   assert.ok(html.includes(label), `${label} must be visible`);
 }
 
+const salesmenToolbar = html.match(/<div class="salesmen-filter-grid">([\s\S]*?)<\/div>\s*<\/section>/);
+assert.ok(salesmenToolbar, "Salesmen filters must use one toolbar grid");
+for (const id of [
+  "salesmenSearch",
+  "salesmenTerritoryFilter",
+  "salesmenStatusFilter",
+  "performanceStageFilter",
+  "salesmenSort",
+  "clearSalesmenFilters",
+  "applySalesmenFilters"
+]) {
+  assert.match(salesmenToolbar[1], new RegExp(`id="${id}"`), `${id} must remain in the toolbar`);
+}
+assert.match(salesmenToolbar[1], /data-salesmen-view="list"/, "List view must remain in the toolbar");
+assert.match(salesmenToolbar[1], /data-salesmen-view="cards"/, "Cards view must remain in the toolbar");
+
 assert.match(client, /function salesmenDirectoryRows\(\)/, "Directory metrics must come from the existing application state");
 assert.match(client, /state\.userAccounts/, "The directory must reuse the existing account API result");
 assert.match(client, /state\.leads\.filter\(lead => leadMatchesSalesman/, "Lead ownership must reuse the existing matcher");
@@ -61,6 +77,12 @@ assert.match(client, /new Chart\(els\.performanceChart/, "Assigned-lead chart mu
 assert.match(client, /new Chart\(els\.salesmenSummaryChart/, "Summary chart must use the existing Chart.js dependency");
 
 assert.match(css, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/, "Summary metrics need a four-column desktop grid");
+assert.match(css, /\.salesmen-filter-grid\s*\{[^}]*grid-template-columns:\s*minmax\(112px, 1\.15fr\) minmax\(86px, \.75fr\) minmax\(92px, \.8fr\) minmax\(78px, \.7fr\) minmax\(145px, 1\.4fr\) minmax\(104px, 1fr\) minmax\(100px, max-content\) minmax\(100px, max-content\)/s, "Desktop toolbar must reserve eight compact columns in the required control order");
+assert.match(css, /\.salesmen-filter-actions\s*\{\s*display:\s*contents;/s, "Toolbar actions must participate in the desktop toolbar grid");
+assert.doesNotMatch(css, /\.salesmen-filter-actions(?:\s|,)\S*[^{]*\{[^}]*grid-(?:column|area)/s, "Desktop action controls must not span into a second toolbar row");
+assert.match(css, /\.salesmen-filter-actions button\s*\{[^}]*min-width:\s*100px;[^}]*min-height:\s*42px;[^}]*padding:\s*7px 8px;/s, "Desktop action controls must remain compact, readable toolbar columns");
+assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.salesmen-filter-grid\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/, "Only narrower tablet layouts may wrap toolbar controls into usable rows");
+assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.salesmen-filter-actions button\s*\{\s*width:\s*100%;/s, "Mobile toolbar actions must remain fully visible");
 assert.match(css, /\.salesmen-metric-card\s*\{[^}]*background-image:\s*none\s*!important;[^}]*opacity:\s*1\s*!important;[^}]*isolation:\s*isolate;/s, "Summary metrics must be fully opaque flat surfaces");
 assert.match(css, /\.salesmen-metric-card::before,[\s\S]*\.salesmen-metric-card::after\s*\{[^}]*content:\s*none\s*!important;/, "Summary metrics must not render decorative overlay layers");
 assert.match(css, /\.salesmen-metric-card\.is-blue\s*\{[^}]*background-color:\s*var\(--salesmen-blue\)\s*!important;/s, "Total Salesmen must use an explicit solid blue fill");
@@ -75,7 +97,7 @@ assert.match(css, /\.salesmen-directory-card\s*\{[^}]*background:\s*var\(--sales
 assert.match(css, /\.salesmen-directory-card\[data-card-accent="violet"\]/, "All deterministic accent variants must be styled");
 assert.match(css, /\.salesmen-directory-card-actions \.salesmen-row-actions\s*\{[^}]*grid-template-columns:\s*1fr 1fr auto/s, "Card actions must align consistently at the bottom");
 assert.match(css, /\.salesmen-directory-card a:focus-visible,[\s\S]*outline:\s*3px solid var\(--bauhaus-yellow/s, "Card actions and email links need visible keyboard focus");
-assert.match(css, /@media \(max-width: 1180px\)/, "Laptop and tablet layouts need a responsive breakpoint");
+assert.match(css, /@media \(max-width: 900px\)/, "Tablet layouts need a responsive breakpoint");
 assert.match(css, /@media \(max-width: 760px\)/, "Mobile layouts need a responsive breakpoint");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter|rgba\(/i, "The Salesmen redesign must stay flat and opaque");
 assert.match(serviceWorker, /"\/salesmen-directory\.css"/, "The PWA shell must cache the Salesmen stylesheet");

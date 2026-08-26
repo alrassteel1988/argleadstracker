@@ -166,9 +166,9 @@ body.salesmen-mode .salesmen-metric-card.is-red {
 
 .salesmen-filter-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(120px, 1fr)) minmax(142px, .85fr);
+  grid-template-columns: minmax(112px, 1.15fr) minmax(86px, .75fr) minmax(92px, .8fr) minmax(78px, .7fr) minmax(145px, 1.4fr) minmax(104px, 1fr) minmax(100px, max-content) minmax(100px, max-content);
   align-items: end;
-  gap: 12px;
+  gap: 8px;
 }
 
 .salesmen-filter-grid label,
@@ -236,10 +236,7 @@ body.salesmen-mode .salesmen-metric-card.is-red {
 }
 
 .salesmen-filter-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 12px;
+  display: contents;
 }
 
 .salesmen-filter-actions button,
@@ -251,6 +248,13 @@ body.salesmen-mode .salesmen-metric-card.is-red {
   border-radius: 4px !important;
   font-size: 13px;
   font-weight: 700;
+}
+
+.salesmen-filter-actions button {
+  min-width: 100px;
+  min-height: 42px;
+  padding: 7px 8px;
+  white-space: nowrap;
 }
 
 .salesmen-directory-panel {
@@ -908,16 +912,9 @@ body.salesmen-mode .salesmen-metric-card.is-red {
 .salesmen-summary-legend-row strong { font-size: 14px; }
 .salesmen-summary-legend-row small { color: #475569; font-size: 12px; }
 
-@media (max-width: 1500px) {
-  .salesmen-filter-grid {
-    grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(120px, 1fr));
-  }
-  .salesmen-view-toggle { grid-column: span 1; }
-}
-
-@media (max-width: 1180px) {
-  .salesmen-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .salesmen-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 900px) {
+    .salesmen-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .salesmen-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .salesmen-search-field { grid-column: 1 / -1; }
   .salesmen-snapshot-grid { grid-template-columns: 1fr; }
   .salesmen-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -929,7 +926,6 @@ body.salesmen-mode .salesmen-metric-card.is-red {
   .salesmen-filter-grid { grid-template-columns: 1fr; }
   .salesmen-search-field { grid-column: auto; }
   .salesmen-metric-card { min-height: 104px; }
-  .salesmen-filter-actions { flex-direction: column; }
   .salesmen-filter-actions button { width: 100%; }
   .salesmen-directory-panel > header,
   .salesmen-snapshot-panel > header,
