@@ -9,7 +9,7 @@ const css = fs.readFileSync(path.join(root, "admin-dashboard-clean.css"), "utf8"
 const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /href="\/admin-dashboard-clean\.css\?v=2"/, "the Admin Dashboard stylesheet must be loaded");
+assert.match(html, /href="\/admin-dashboard-clean\.css\?v=3-action-plans-bars"/, "the Admin Dashboard stylesheet must be loaded with the dashboard redesign revision");
 assert.match(html, /id="adminDashboardOverviewSlot"[^>]*aria-label="Dashboard overview"/, "overview region needs an accessible label");
 assert.match(html, /id="adminDashboardTriageRow"[^>]*aria-label="Attention required"/, "attention region needs an accessible label");
 assert.match(html, /id="adminDashboardAnalyticsRow"[^>]*aria-label="Pipeline analytics"/, "analytics region needs an accessible label");
@@ -20,7 +20,10 @@ assert.match(client, /Boolean\(state\.currentUser\) && !isSalesmanRole\(\) && cu
 assert.match(client, /document\.addEventListener\("click", handleDashboardCollapseClick\)/, "collapse controls must use a rerender-safe delegated handler");
 assert.match(client, /event\.target\.closest\("\.panel-collapse-toggle"\)/, "the delegated handler must target collapse controls only");
 assert.match(client, /document\.body\.classList\.contains\("admin-dashboard-mode"\)/, "Admin Dashboard collapse controls must remain interactive after dashboard rerenders");
-assert.match(client, /actionPlanBody\.appendChild\(els\.adminDashboardBottomRow\)/, "lower insight panels must live inside Lead Action Plans");
+assert.match(client, /els\.adminDashboardTriageRow\?\.after\(els\.actionPlanPanel\)/, "Lead Action Plans must follow the top summary and alert row");
+assert.match(client, /els\.actionPlanPanel\?\.after\(els\.adminTaskPanel, els\.lossReasonsPanel, els\.adminDashboardBottomRow\)/, "operational panels must follow Lead Action Plans");
+assert.match(client, /els\.dashboardView\?\.appendChild\(els\.adminDashboardAnalyticsRow\)/, "pipeline panels must move together to the bottom dashboard section");
+assert.doesNotMatch(client, /actionPlanBody\.appendChild\(els\.adminDashboardBottomRow\)/, "Lead Action Plans must not nest lower dashboard panels");
 assert.match(client, /section\.classList\.add\("collapsible-enabled"\)/, "Admin Dashboard layout must enable its visible collapse controls");
 assert.match(client, /section\.querySelector\("\.panel-collapse-toggle"\)\?\.classList\.remove\("hidden"\)/, "Admin Dashboard layout must reveal its collapse controls");
 assert.match(client, /class="overdue-banner-kpis"/, "overdue attention panel must expose total and affected-salesman counts");
@@ -33,15 +36,16 @@ assert.match(css, /body\.admin-dashboard-mode \.dashboard-view\s*\{[^}]*grid-tem
 assert.match(css, /\.admin-dashboard-triage-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*5fr\)\s+minmax\(0,\s*4fr\)\s+minmax\(0,\s*3fr\)/s, "attention panels must use the requested 5/4/3 balance");
 assert.match(css, /\.admin-dashboard-analytics-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s, "analytics panels must be balanced side by side");
 assert.match(css, /\.admin-dashboard-overview-slot \.metrics\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s, "overview metrics must use four equal columns");
-assert.match(css, /\.admin-dashboard-bottom-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s, "Lead Action Plan insights must use three equal columns");
+assert.match(css, /\.admin-dashboard-bottom-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s, "remaining operational insights must use three equal columns");
 assert.match(css, /\.panel-header \.panel-collapse-toggle\.hidden\s*\{[^}]*display:\s*flex !important/s, "redesigned dashboard panels must keep their collapse controls visible");
-assert.match(css, /#actionPlanPanel \.action-plan-grid\s*\{[^}]*max-height:\s*270px;[^}]*overflow-y:\s*auto/s, "growable action plans need scoped internal scrolling");
+assert.match(css, /#actionPlanPanel \.action-plan-grid\s*\{[^}]*max-height:\s*none;[^}]*overflow-y:\s*visible/s, "Lead Action Plans must grow naturally without nested vertical scrolling");
+assert.match(css, /\.admin-dashboard-analytics-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)/s, "bottom pipeline panels must sit side by side on desktop");
 assert.match(css, /@media \(max-width:\s*900px\)/, "tablet layout breakpoint must exist");
 assert.match(css, /@media \(max-width:\s*700px\)/, "mobile layout breakpoint must exist");
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v71-activity-section-header-contrast/, "PWA cache must rotate for the latest UI assets");
+assert.match(sw, /arg-pwa-v72-admin-dashboard-action-plan-bars/, "PWA cache must rotate for the latest UI assets");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
 assert.match(vercel, /"src": "admin-dashboard-clean\.css"/, "Vercel must build the dashboard stylesheet");
 assert.match(vercel, /"src": "\/admin-dashboard-clean\.css", "dest": "\/admin-dashboard-clean\.css"/, "Vercel must expose the dashboard stylesheet");
@@ -53,5 +57,14 @@ for (const char of css.replace(/\/\*[\s\S]*?\*\//g, "")) {
   assert.ok(depth >= 0, "Admin Dashboard CSS has an unmatched closing brace");
 }
 assert.equal(depth, 0, "Admin Dashboard CSS braces must balance");
+
+const dashboardFunnelMarkup = client.match(/function dashboardPipelineFunnelCompactMarkup\([\s\S]*?\n}\r?\n\r?\nfunction bindPipelineFunnelDialog/);
+assert.ok(dashboardFunnelMarkup, "Admin Dashboard funnel renderer must remain available");
+assert.match(dashboardFunnelMarkup[0], /dashboard-funnel-bar-list/, "Admin Dashboard funnel must render labelled horizontal bars");
+assert.match(dashboardFunnelMarkup[0], /overlapping measures/, "Admin Dashboard funnel must explain overlapping funnel measures");
+assert.doesNotMatch(dashboardFunnelMarkup[0], /donut|conic-gradient|pie|circle/i, "Admin Dashboard funnel must not render circular charts");
+assert.doesNotMatch(client, /\.filter\(group => group\.leads\.length\)/, "Lead Action Plans must retain zero-lead salesmen");
+assert.match(client, /No registered leads for this salesman yet\./, "Zero-lead salesmen need an explicit expanded empty state");
+assert.match(client, /state\.actionPlanCollapsed\[group\.key\] = true/, "Salesman action-plan details must remain collapsed initially");
 
 console.log("admin-dashboard-layout.test.js: PASS");

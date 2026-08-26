@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v71-activity-section-header-contrast";
+const CACHE_VERSION = "arg-pwa-v72-admin-dashboard-action-plan-bars";
 const APP_SHELL = [
   "/",
   "/index.html",
