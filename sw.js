@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v70-weekly-calendar-flow";
+const CACHE_VERSION = "arg-pwa-v71-activity-section-header-contrast";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -1821,7 +1821,7 @@ body.activity-admin-mode .activity-weekly-empty {
   }
 }
 
-/* Admin Activity framed section titles: Weekly calendar, Activity log, Reminders only. */
+/* Admin Activity French blue section titles: Weekly calendar, Activity log, Reminders only. */
 body.activity-admin-mode :is(
   .activity-weekly-card,
   .activity-log-panel,
@@ -1834,9 +1834,9 @@ body.activity-admin-mode :is(
   padding: 8px 14px !important;
   border: 2px solid #F6AA1C !important;
   border-radius: 4px !important;
-  background: #FFFFFF !important;
+  background: #003F91 !important;
   box-shadow: none !important;
-  color: #2C363F !important;
+  color: #FFFFFF !important;
 }
 
 body.activity-admin-mode :is(
@@ -1844,7 +1844,7 @@ body.activity-admin-mode :is(
   .activity-log-panel,
   .activity-reminders-panel
 ) > .activity-section-header h2 {
-  color: #2C363F !important;
+  color: #FFFFFF !important;
   font-size: 18px !important;
   font-weight: 700 !important;
   line-height: 1.2 !important;
@@ -1855,7 +1855,7 @@ body.activity-admin-mode :is(
   .activity-log-panel,
   .activity-reminders-panel
 ) > .activity-section-header :is(.activity-weekly-subheading, div > span:not(.activity-count-pill)) {
-  color: #2C363F !important;
+  color: #FFFFFF !important;
   font-size: 13px !important;
   font-weight: 400 !important;
   line-height: 1.25 !important;
@@ -1880,10 +1880,13 @@ body.activity-admin-mode .activity-section-header .activity-panel-actions {
   align-items: center !important;
 }
 
-body.activity-admin-mode .activity-section-header .activity-count-pill {
+body.activity-admin-mode .activity-section-header :is(
+  .activity-count-pill,
+  .activity-header-action,
+  .calendar-nav-button,
+  .calendar-range-pill
+) {
+  background: #FFFFFF !important;
   color: #2C363F !important;
-}
-
-body.activity-admin-mode .activity-section-header :is(.activity-header-action, .calendar-nav-button, .calendar-range-pill) {
-  border-color: #CBD4DC !important;
+  border-color: #F6AA1C !important;
 }
