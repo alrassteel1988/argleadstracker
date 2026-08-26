@@ -25,8 +25,8 @@ assert.match(
 );
 assert.match(
   client,
-  /els\.adminDashboardBottomRow instanceof HTMLElement[\s\S]*actionPlanBody\.appendChild\(els\.adminDashboardBottomRow\)/,
-  "the Admin Dashboard bottom row must be validated as a DOM node before appendChild"
+  /els\.actionPlanPanel\?\.after\(els\.adminTaskPanel, els\.lossReasonsPanel, els\.adminDashboardBottomRow\)/,
+  "the Admin Dashboard bottom row must remain a direct operational section after Lead Action Plans"
 );
 
 for (const type of [

@@ -116,6 +116,9 @@ body.admin-dashboard-mode :is(
   .admin-dashboard-triage-row,
   .admin-dashboard-analytics-row,
   #actionPlanPanel,
+  #adminTaskPanel,
+  #lossReasonsPanel,
+  .admin-dashboard-bottom-row,
   #agentPanel,
   #configAgentPanel
 ) {
@@ -667,35 +670,64 @@ body.admin-dashboard-mode #dashboardPipelineFunnelBody.dashboardFunnelCompactVie
 
 body.admin-dashboard-mode .dashboard-funnel-compact {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--admin-space-4);
 }
 
-body.admin-dashboard-mode .dashboard-funnel-donut {
-  width: 92px;
-  height: 92px;
+body.admin-dashboard-mode .dashboard-funnel-bar-list {
+  display: grid;
+  gap: var(--admin-space-3);
 }
 
-body.admin-dashboard-mode .dashboard-funnel-donut::after {
-  inset: 19px;
+body.admin-dashboard-mode .dashboard-funnel-note {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
-body.admin-dashboard-mode .dashboard-funnel-donut strong {
-  font-size: 22px;
-  font-weight: 700;
+body.admin-dashboard-mode .dashboard-funnel-bar-row {
+  display: grid;
+  gap: var(--admin-space-1);
 }
 
-body.admin-dashboard-mode .dashboard-funnel-donut small,
-body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-stage-head strong,
-body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-stage-stats span {
+body.admin-dashboard-mode .dashboard-funnel-bar-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--admin-space-3);
   color: var(--admin-text);
   font-size: 12px;
 }
 
-body.admin-dashboard-mode .dashboard-funnel-stages .pipeline-funnel-track {
+body.admin-dashboard-mode .dashboard-funnel-bar-meta strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-bar-meta span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+body.admin-dashboard-mode .dashboard-funnel-bar-track {
   height: 8px;
   border-radius: 0;
+  background: var(--bauhaus-muted, #eef1f4);
+}
+
+body.admin-dashboard-mode .dashboard-funnel-bar-track i {
+  display: block;
+  height: 100%;
+  background: var(--bauhaus-blue, #1f6aa5);
+}
+
+body.admin-dashboard-mode .dashboard-funnel-bar-row.contacted .dashboard-funnel-bar-track i {
+  background: var(--bauhaus-blue, #1f6aa5);
+}
+
+body.admin-dashboard-mode .dashboard-funnel-bar-row.open .dashboard-funnel-bar-track i {
+  background: var(--bauhaus-yellow, #e6a933);
 }
 
 body.admin-dashboard-mode .dashboard-funnel-comparison-summary {
@@ -763,11 +795,9 @@ body.admin-dashboard-mode #actionPlanPanel > .dashboard-collapsible-body > .dash
 body.admin-dashboard-mode #actionPlanPanel .action-plan-grid {
   display: grid;
   gap: var(--admin-space-2);
-  max-height: 270px;
-  padding: var(--admin-space-3) var(--admin-space-4) 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
+  max-height: none;
+  padding: var(--admin-space-3) var(--admin-space-4) var(--admin-space-4);
+  overflow-y: visible;
 }
 
 body.admin-dashboard-mode #actionPlanPanel .salesman-plan-card {

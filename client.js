@@ -5555,32 +5555,26 @@ function pipelineFunnelComparisonTableRowsMarkup(rows) {
 
 function dashboardPipelineFunnelCompactMarkup(leads, { dialogTitleId = "dashboardFunnelDialogTitle" } = {}) {
   const metrics = pipelineFunnelMetricsForLeads(leads);
-  const stages = pipelineFunnelStageRows(metrics).filter(stage => ["contacted", "open"].includes(stage.key));
+  const stages = pipelineFunnelStageRows(metrics).filter(stage => ["assigned", "contacted", "open"].includes(stage.key));
   const rows = pipelineFunnelComparisonRows(leads);
   const leader = rows.find(row => row.totalAssignedLeads > 0) || rows[0];
-  const activeOpen = Math.min(metrics.totalAssignedLeads, Math.max(0, metrics.openPipelineLeads));
-  const contactedBase = Math.max(0, metrics.totalAssignedLeads - activeOpen);
-  const activePercent = percentOf(activeOpen, metrics.totalAssignedLeads);
-  const donutBackground = metrics.totalAssignedLeads
-    ? `conic-gradient(var(--bauhaus-amber) 0 ${activePercent}%, var(--bauhaus-blue) ${activePercent}% 100%)`
-    : "#e2e8f0";
   const leaderSummary = leader
     ? `${leader.salesmanName} leads at ${leader.totalAssignedLeads} assigned`
     : "No assigned leads in the current filters";
 
   return `
     <div class="dashboard-funnel-compact">
-      <div class="dashboard-funnel-visual" role="img" aria-label="${escapeHtml(`${metrics.totalAssignedLeads} assigned leads, ${metrics.contactedLeads} contacted, ${metrics.openPipelineLeads} active or open`)}">
-        <div class="dashboard-funnel-donut" style="background:${donutBackground}">
-          <span><strong>${escapeHtml(String(metrics.totalAssignedLeads))}</strong><small>Assigned</small></span>
-        </div>
-        <div class="dashboard-funnel-legend">
-          <span><i class="contacted"></i>Contacted <strong>${escapeHtml(String(contactedBase))}</strong></span>
-          <span><i class="open"></i>Active/Open <strong>${escapeHtml(String(activeOpen))}</strong></span>
-        </div>
-      </div>
-      <div class="dashboard-funnel-stages">
-        ${stages.map(pipelineFunnelStageMarkup).join("")}
+      <div class="dashboard-funnel-bar-list" aria-label="${escapeHtml(`${metrics.totalAssignedLeads} assigned leads, ${metrics.contactedLeads} contacted, ${metrics.openPipelineLeads} active or open`)}">
+        <p class="dashboard-funnel-note">Counts are overlapping measures; each bar is shown as a share of assigned leads.</p>
+        ${stages.map(stage => `
+          <article class="dashboard-funnel-bar-row ${escapeHtml(stage.tone)}">
+            <div class="dashboard-funnel-bar-meta">
+              <strong>${escapeHtml(stage.label)}</strong>
+              <span>${escapeHtml(String(stage.count))} &middot; ${escapeHtml(String(stage.percentage))}% of assigned</span>
+            </div>
+            <div class="dashboard-funnel-bar-track" aria-hidden="true"><i class="${escapeHtml(stage.tone)}" style="width:${Math.max(0, Math.min(100, stage.percentage || 0))}%"></i></div>
+          </article>
+        `).join("")}
       </div>
     </div>
     <div class="dashboard-funnel-comparison-summary">
@@ -6889,19 +6883,12 @@ function arrangeAdminDashboardLayout() {
     [els.overdueBanner, els.marketIntelPanel, els.needsAttentionPanel].forEach(panel => {
       if (panel) els.adminDashboardTriageRow?.appendChild(panel);
     });
+    els.adminDashboardTriageRow?.after(els.actionPlanPanel);
+    els.actionPlanPanel?.after(els.adminTaskPanel, els.lossReasonsPanel, els.adminDashboardBottomRow);
     [els.marketSnapshotPanel, els.dashboardPipelineFunnelPanel].forEach(panel => {
       if (panel) els.adminDashboardAnalyticsRow?.appendChild(panel);
     });
-    const actionPlanBody = els.actionPlanPanel?.querySelector(
-      ":scope > .dashboard-collapsible-body > .dashboard-collapsible-body-inner"
-    );
-    if (
-      actionPlanBody &&
-      els.adminDashboardBottomRow instanceof HTMLElement &&
-      els.adminDashboardBottomRow.parentElement !== actionPlanBody
-    ) {
-      actionPlanBody.appendChild(els.adminDashboardBottomRow);
-    }
+    els.dashboardView?.appendChild(els.adminDashboardAnalyticsRow);
     ADMIN_DASHBOARD_COLLAPSIBLES.forEach(definition => {
       const section = document.getElementById(definition.id);
       if (!section) return;
@@ -6909,6 +6896,10 @@ function arrangeAdminDashboardLayout() {
       section.querySelector(".panel-collapse-toggle")?.classList.remove("hidden");
       updateDashboardCollapsibleButton(section);
     });
+    if (!els.actionPlanPanel?.dataset.actionPlanDefaultOpen) {
+      setDashboardSectionCollapsed(els.actionPlanPanel, false, { persist: false, refresh: false, force: true });
+      els.actionPlanPanel.dataset.actionPlanDefaultOpen = "true";
+    }
     return;
   }
 
@@ -10707,8 +10698,7 @@ function renderActionPlanPanel() {
         leads,
         overdue: leads.filter(lead => leadActionPlanState(lead).chipClass === "hot").length
       };
-    })
-    .filter(group => group.leads.length);
+    });
   groups.forEach(group => {
     if (typeof state.actionPlanCollapsed[group.key] !== "boolean") {
       state.actionPlanCollapsed[group.key] = true;
@@ -10757,7 +10747,7 @@ function renderActionPlanPanel() {
               </tr>
             </thead>
             <tbody>
-              ${group.leads.map(lead => {
+              ${group.leads.length ? group.leads.map(lead => {
                 const plan = leadActionPlanState(lead);
                 return `
                   <tr class="salesman-plan-row" data-action-plan-lead="${escapeHtml(lead.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
@@ -10772,7 +10762,7 @@ function renderActionPlanPanel() {
                     <td data-label="Status"><span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span></td>
                   </tr>
                 `;
-              }).join("")}
+              }).join("") : `<tr><td colspan="6"><div class="table-empty-state">No registered leads for this salesman yet.</div></td></tr>`}
             </tbody>
           </table>
         </div>
