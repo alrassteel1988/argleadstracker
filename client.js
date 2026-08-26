@@ -11394,10 +11394,6 @@ function renderWeeklyActivityLog(activities) {
   if (!els.activityWeeklyLog) return;
   const days = weekDays(state.activityWeekAnchor);
   const items = activityWeeklyItems(activities, state.activityWeekAnchor);
-  const selectedDate = days.some(day => day.date === state.activitySelectedDay)
-    ? state.activitySelectedDay
-    : "";
-  const selectedItems = selectedDate ? items.filter(item => item.date === selectedDate) : [];
   const itemsForDay = date => items.filter(item => item.date === date);
   const dayTone = day => {
     const dayItems = itemsForDay(day.date);
@@ -11412,37 +11408,28 @@ function renderWeeklyActivityLog(activities) {
       <span><i class="legend-swatch upcoming"></i>Upcoming</span>
       <span><i class="legend-swatch neutral"></i>Neutral</span>
     </div>
-    <div class="activity-day-strip" role="list" aria-label="Activity days for ${escapeHtml(weekRangeLabel(state.activityWeekAnchor))}">
-      ${days.map(day => `
-        <button
-          type="button"
-          class="activity-day-chip ${dayTone(day)} ${day.date === today() ? "today" : ""} ${day.date === selectedDate ? "selected" : ""}"
-          data-activity-calendar-day="${escapeHtml(day.date)}"
-          aria-pressed="${String(day.date === selectedDate)}"
-          title="${escapeHtml(`${itemsForDay(day.date).length} calendar item${itemsForDay(day.date).length === 1 ? "" : "s"}`)}"
-        >
-          <strong>${escapeHtml(day.day)}</strong>
-          <span>${escapeHtml(day.number)}</span>
-        </button>
-      `).join("")}
+    <div class="activity-weekly-grid" role="list" aria-label="Activity days for ${escapeHtml(weekRangeLabel(state.activityWeekAnchor))}">
+      ${days.map(day => {
+        const dayItems = itemsForDay(day.date);
+        return `
+          <section class="activity-weekly-day ${dayTone(day)} ${day.date === today() ? "today" : ""}" role="listitem">
+            <header class="activity-weekly-day-head">
+              <strong>${escapeHtml(day.day)}</strong>
+              <span>${escapeHtml(day.number)}</span>
+            </header>
+            <div class="activity-weekly-day-items">
+              ${dayItems.map(item => `
+                <button type="button" class="activity-day-event" data-calendar-lead="${escapeHtml(item.leadId)}">
+                  <span>${escapeHtml(item.time)}</span>
+                  <strong>${escapeHtml(item.company)}</strong>
+                  <em>${escapeHtml(item.title)}</em>
+                </button>
+              `).join("") || `<p class="activity-weekly-empty">No activity scheduled.</p>`}
+            </div>
+          </section>
+        `;
+      }).join("")}
     </div>
-    ${selectedDate ? `
-      <div class="activity-day-detail" aria-live="polite">
-        <div class="activity-day-detail-head">
-          <strong>${escapeHtml(formatDisplayDate(selectedDate))}</strong>
-          <button type="button" data-activity-calendar-close aria-label="Close selected day details">Close</button>
-        </div>
-        <div class="activity-day-detail-list">
-          ${selectedItems.map(item => `
-            <button type="button" class="activity-day-event" data-calendar-lead="${escapeHtml(item.leadId)}">
-              <span>${escapeHtml(item.time)}</span>
-              <strong>${escapeHtml(item.company)}</strong>
-              <em>${escapeHtml(item.title)}</em>
-            </button>
-          `).join("") || `<p>No activity scheduled for this day.</p>`}
-        </div>
-      </div>
-    ` : ""}
   `;
   if (els.activityWeekRange) els.activityWeekRange.textContent = weekRangeLabel(state.activityWeekAnchor);
   if (els.activityKpiWeek) els.activityKpiWeek.textContent = String(items.length);
@@ -11452,18 +11439,6 @@ function renderWeeklyActivityLog(activities) {
       state.selectedId = button.dataset.calendarLead;
       openLeadDrawer(state.selectedId, "activities");
     });
-  });
-  els.activityWeeklyLog.querySelectorAll("[data-activity-calendar-day]").forEach(button => {
-    button.addEventListener("click", () => {
-      state.activitySelectedDay = state.activitySelectedDay === button.dataset.activityCalendarDay
-        ? ""
-        : button.dataset.activityCalendarDay;
-      renderWeeklyActivityLog(activities);
-    });
-  });
-  els.activityWeeklyLog.querySelector("[data-activity-calendar-close]")?.addEventListener("click", () => {
-    state.activitySelectedDay = "";
-    renderWeeklyActivityLog(activities);
   });
 }
 
