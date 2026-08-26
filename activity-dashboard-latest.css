@@ -1450,10 +1450,10 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
   }
 
   body.activity-admin-mode .activity-weekly-card {
-    flex: 0 0 86px !important;
-    min-height: 86px !important;
-    max-height: 86px !important;
-    overflow: hidden !important;
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   body.activity-admin-mode .activity-weekly-card > .activity-panel-cap {
@@ -1477,28 +1477,23 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
   }
 
   body.activity-admin-mode .activity-weekly-log {
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    grid-template-areas: "days legend" !important;
-    align-items: center !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
     gap: 8px !important;
     padding: 5px 10px !important;
-  }
-
-  body.activity-admin-mode .activity-day-strip {
-    grid-area: days !important;
-    gap: 5px !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
   }
 
   body.activity-admin-mode .calendar-legend {
-    grid-area: legend !important;
     gap: 8px !important;
-    white-space: nowrap !important;
+    white-space: normal !important;
   }
 
-  body.activity-admin-mode .activity-weekly-card .activity-day-chip {
-    min-height: 33px !important;
-    padding: 3px 5px !important;
-    border-radius: 4px !important;
+  body.activity-admin-mode .activity-weekly-grid {
+    grid-template-columns: repeat(7, minmax(132px, 1fr)) !important;
+    gap: 6px !important;
+    min-width: 924px !important;
   }
 
   body.activity-admin-mode .activity-secondary-grid {
@@ -1747,6 +1742,82 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
   body.activity-admin-mode .activity-reminders-links {
     margin: 0 9px 7px !important;
     padding-top: 5px !important;
+  }
+}
+
+/* Weekly Activity Calendar: each day owns its visible events or empty state. */
+body.activity-admin-mode .activity-weekly-log {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+body.activity-admin-mode .activity-weekly-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(132px, 1fr));
+  gap: 8px;
+  min-width: 924px;
+}
+
+body.activity-admin-mode .activity-weekly-day {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  border: 1px solid var(--activity-latest-line);
+  border-radius: 5px;
+  background: #fff;
+}
+
+body.activity-admin-mode .activity-weekly-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--activity-latest-line);
+  color: var(--activity-latest-ink);
+}
+
+body.activity-admin-mode .activity-weekly-day-head strong {
+  font-size: 12px;
+}
+
+body.activity-admin-mode .activity-weekly-day-head span {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+body.activity-admin-mode .activity-weekly-day-items {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 92px;
+  padding: 6px;
+}
+
+body.activity-admin-mode .activity-weekly-day .activity-day-event {
+  grid-template-columns: 1fr;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--activity-latest-line);
+  border-radius: 4px;
+}
+
+body.activity-admin-mode .activity-weekly-day .activity-day-event :is(span, strong, em) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.activity-admin-mode .activity-weekly-empty {
+  margin: 0;
+  color: var(--activity-latest-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+@media (max-width: 680px) {
+  body.activity-admin-mode .activity-weekly-grid {
+    min-width: 896px;
   }
 }
 

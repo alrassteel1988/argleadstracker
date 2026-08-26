@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v65-network-first-header-frame";
+const CACHE_VERSION = "arg-pwa-v70-weekly-calendar-flow";
 const APP_SHELL = [
   "/",
   "/index.html",
