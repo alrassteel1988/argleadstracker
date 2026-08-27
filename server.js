@@ -29,6 +29,7 @@ const {
   isSupabaseConfigured,
   listAuthUsers,
   rest,
+  refreshSession,
   serviceRest,
   signIn,
   signOut,
@@ -5122,6 +5123,24 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { token: issueToken(user), user: publicUser(user) });
   }
 
+  if (req.method === "POST" && url.pathname === "/api/auth/refresh") {
+    if (!supabaseEnabled) return sendJson(res, 401, { error: "Please sign in again." });
+    const payload = await readBody(req);
+    const refreshToken = String(payload.refresh_token || "").trim();
+    if (!refreshToken) return sendJson(res, 401, { error: "Please sign in again." });
+    try {
+      const session = await refreshSession(refreshToken);
+      const user = await currentSupabaseUser({ headers: { authorization: `Bearer ${session.access_token}` } });
+      if (!user) return sendJson(res, 403, { error: "Your profile is not active. Contact the administrator." });
+      return sendJson(res, 200, { token: session.access_token, refresh_token: session.refresh_token, user: publicUser(user) });
+    } catch (error) {
+      if ([400, 401, 403].includes(Number(error?.status))) {
+        return sendJson(res, 401, { error: "Please sign in again." });
+      }
+      throw error;
+    }
+  }
+
   const voiceNoteMatch = url.pathname.match(/^\/api\/pmr-voice-notes\/([^/]+)$/);
   if (req.method === "GET" && voiceNoteMatch) {
     return handleVoiceNoteDownload(req, res, url, { supabaseEnabled, db });
@@ -6534,6 +6553,13 @@ async function handleApi(req, res, url) {
         && (!to || String(request.requested_at || "").slice(0, 10) <= to))
       .sort((a, b) => String(b.requested_at || "").localeCompare(String(a.requested_at || "")));
     return sendJson(res, 200, requests);
+  }
+
+  const leadDetailMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
+  if (req.method === "GET" && leadDetailMatch) {
+    const lead = await accessibleLeadById(db, user, leadDetailMatch[1], supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    return sendJson(res, 200, supabaseEnabled ? lead : leadWithDerivedFields(lead));
   }
 
   if (req.method === "POST" && url.pathname === "/api/leads") {

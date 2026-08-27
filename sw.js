@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v71-activity-section-header-contrast";
+const CACHE_VERSION = "arg-pwa-v72-authenticated-lead-summary";
 const APP_SHELL = [
   "/",
   "/index.html",

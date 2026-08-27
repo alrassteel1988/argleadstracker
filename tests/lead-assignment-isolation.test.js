@@ -129,6 +129,9 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(alexLeads.response.status, 200);
     assert(!alexLeads.data.some(lead => lead.id === createdByAlex.data.id), "Alex must not see a lead reassigned to Bhatia");
 
+    const alexLeadDetail = await request(baseUrl, `/api/leads/${encodeURIComponent(createdByAlex.data.id)}`, alex);
+    assert.equal(alexLeadDetail.response.status, 404, "a salesman must not resolve another salesman's lead detail");
+
     const alexProtectedRoute = await request(baseUrl, `/api/leads/${encodeURIComponent(createdByAlex.data.id)}/pmrs`, alex);
     assert([403, 404].includes(alexProtectedRoute.response.status), JSON.stringify(alexProtectedRoute.data));
 
@@ -142,6 +145,9 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     const bhatiaLeads = await request(baseUrl, "/api/leads", bhatia);
     assert.equal(bhatiaLeads.response.status, 200);
     assert(bhatiaLeads.data.some(lead => lead.id === createdByAlex.data.id), "Bhatia must see the currently assigned lead");
+
+    const bhatiaLeadDetail = await request(baseUrl, `/api/leads/${encodeURIComponent(createdByAlex.data.id)}`, bhatia);
+    assert.equal(bhatiaLeadDetail.response.status, 200, "the assigned salesman must resolve their lead detail");
 
     const bhatiaProtectedRoute = await request(baseUrl, `/api/leads/${encodeURIComponent(createdByAlex.data.id)}/pmrs`, bhatia);
     assert.equal(bhatiaProtectedRoute.response.status, 200, JSON.stringify(bhatiaProtectedRoute.data));

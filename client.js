@@ -616,6 +616,7 @@ const els = {
 };
 
 const SESSION_KEY = "arg_crm_session";
+const REFRESH_SESSION_KEY = "arg_crm_refresh_session";
 let currentView = "dashboard";
 const leadFormTouched = new Set();
 const leadEnrichmentCache = new Map();
@@ -629,6 +630,8 @@ let duplicateCheckTimer = null;
 let overdueRefreshTimer = null;
 let performanceChartInstance = null;
 let salesmenSummaryChartInstance = null;
+let authRefreshPromise = null;
+let authInitialization = Promise.resolve();
 
 function isLeadRoutePath(pathname = window.location.pathname) {
   return /^\/leads\/[^/]+\/?$/.test(pathname);
@@ -1010,18 +1013,83 @@ function googleCalendarUrl(reminder) {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+function sessionToken() {
+  return sessionStorage.getItem(SESSION_KEY) || "";
+}
+
+function persistSession(session = {}) {
+  if (session.token) sessionStorage.setItem(SESSION_KEY, session.token);
+  if (session.refresh_token) sessionStorage.setItem(REFRESH_SESSION_KEY, session.refresh_token);
+}
+
+function clearSession() {
+  sessionStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(REFRESH_SESSION_KEY);
+}
+
+function isRefreshableRequest(path, options = {}) {
+  return !options.skipAuthRefresh && !["/api/auth/login", "/api/auth/refresh"].includes(path);
+}
+
+async function refreshAuthenticatedSession() {
+  if (authRefreshPromise) return authRefreshPromise;
+  const refreshToken = sessionStorage.getItem(REFRESH_SESSION_KEY);
+  if (!refreshToken) throw Object.assign(new Error("Your session has expired. Please sign in again."), { status: 401 });
+  authRefreshPromise = fetch("/api/auth/refresh", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  })
+    .then(async response => {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.token) {
+        throw Object.assign(new Error(result.error || "Your session has expired. Please sign in again."), { status: response.status || 401 });
+      }
+      persistSession(result);
+      if (result.user) state.currentUser = result.user;
+      return result;
+    })
+    .finally(() => { authRefreshPromise = null; });
+  return authRefreshPromise;
+}
+
+function handleAuthenticationFailure() {
+  clearSession();
+  state.leads = [];
+  state.leadsLoaded = false;
+  state.selectedId = null;
+  showLogin("Your session has expired. Please sign in again.");
+}
+
+async function authenticatedFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const token = sessionToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const request = {
+    ...options,
+    credentials: "same-origin",
+    headers
+  };
+  let response = await fetch(path, request);
+  if (response.status === 401 && isRefreshableRequest(path, options)) {
+    try {
+      await refreshAuthenticatedSession();
+      const refreshedToken = sessionToken();
+      if (refreshedToken) request.headers.Authorization = `Bearer ${refreshedToken}`;
+      response = await fetch(path, request);
+    } catch (error) {
+      handleAuthenticationFailure();
+      throw error;
+    }
+  }
+  return response;
+}
+
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
-  const token = sessionStorage.getItem(SESSION_KEY);
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (options.body && typeof options.body === "string" && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const response = await fetch(path, {
-    ...options,
-    headers
-  });
+  if (options.body && typeof options.body === "string" && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  const response = await authenticatedFetch(path, { ...options, headers });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(result.error || `Request failed: ${response.status}`);
@@ -1411,7 +1479,8 @@ function renderSyncStatus() {
 }
 
 async function syncOutbox() {
-  if (state.sync.syncing || !navigator.onLine || !state.currentUser) {
+  await authInitialization;
+  if (state.sync.syncing || !navigator.onLine || !state.currentUser || !sessionToken()) {
     await refreshSyncState();
     return;
   }
@@ -1439,6 +1508,14 @@ async function syncOutbox() {
         }
         await deleteOutboxItem(next.id);
       } catch (error) {
+        if ([401, 403].includes(Number(error?.status))) {
+          await updateOutboxItem({
+            ...next,
+            status: "failed",
+            last_error: error.message || "Authentication is required before this change can sync."
+          });
+          break;
+        }
         const attempts = Number(next.attempts || 0) + 1;
         const latest = await getOutboxItem(next.id).catch(() => null);
         await updateOutboxItem({
@@ -1502,14 +1579,9 @@ function clientId(prefix = "local") {
 }
 
 async function downloadExport(path, fallbackName, options = {}) {
-  const token = sessionStorage.getItem(SESSION_KEY);
-  const headers = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {})
-  };
-  const response = await fetch(path, {
+  const response = await authenticatedFetch(path, {
     method: options.method || "GET",
-    headers,
+    headers: options.headers || {},
     body: options.body
   });
   if (!response.ok) {
@@ -1530,12 +1602,10 @@ async function downloadExport(path, fallbackName, options = {}) {
 }
 
 async function transcribeRecording(blob) {
-  const token = sessionStorage.getItem(SESSION_KEY);
-  const response = await fetch("/api/transcriptions", {
+  const response = await authenticatedFetch("/api/transcriptions", {
     method: "POST",
     headers: {
-      "Content-Type": blob.type || "audio/webm",
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      "Content-Type": blob.type || "audio/webm"
     },
     body: blob
   });
@@ -1779,14 +1849,12 @@ async function uploadPmrVoiceNote() {
 }
 
 async function uploadPmrVoiceBlob(blob, fallbackType = "audio/webm") {
-  const token = sessionStorage.getItem(SESSION_KEY);
   const mimeType = blob.type || fallbackType || "audio/webm";
   const body = blob.type ? blob : blob.slice(0, blob.size, mimeType);
-  const response = await fetch("/api/pmr-voice-notes", {
+  const response = await authenticatedFetch("/api/pmr-voice-notes", {
     method: "POST",
     headers: {
-      "Content-Type": mimeType,
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      "Content-Type": mimeType
     },
     body
   });
@@ -1804,15 +1872,19 @@ function activityAudioMarkup(activity) {
   return `<audio class="activity-audio" controls preload="metadata" data-voice-note-id="${escapeHtml(voiceNoteId)}" ${source}></audio>`;
 }
 
+function handleOutboxSyncError(error) {
+  refreshSyncState().catch(() => {});
+  if (!error || Number(error.status) === 401) return;
+  setToast(error.message || "Pending changes could not be synchronized.", "error");
+}
+
 async function uploadLeadIntelligencePdf(leadId, file) {
   if (!(file instanceof File) || !/\.pdf$/i.test(file.name || "") && file.type !== "application/pdf") {
     throw new Error("Choose a PDF intelligence report.");
   }
-  const token = sessionStorage.getItem(SESSION_KEY) || "";
-  const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/intelligence/upload`, {
+  const response = await authenticatedFetch(`/api/leads/${encodeURIComponent(leadId)}/intelligence/upload`, {
     method: "POST",
     headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       "Content-Type": "application/pdf",
       "X-File-Name": encodeURIComponent(file.name)
     },
@@ -1824,8 +1896,7 @@ async function uploadLeadIntelligencePdf(leadId, file) {
 }
 
 async function fetchAuthenticatedBlob(url) {
-  const token = sessionStorage.getItem(SESSION_KEY) || "";
-  const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const response = await authenticatedFetch(url);
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
     const error = new Error(result.error || `Intelligence PDF request failed: ${response.status}`);
@@ -2483,21 +2554,21 @@ function initPwaShell() {
       });
     }).catch(() => null);
     navigator.serviceWorker.addEventListener("message", event => {
-      if (event.data?.type === "SYNC_OUTBOX") syncOutbox();
+      if (event.data?.type === "SYNC_OUTBOX") syncOutbox().catch(handleOutboxSyncError);
     });
   }
 
   window.addEventListener("online", () => {
     state.sync.online = true;
     refreshSyncState();
-    syncOutbox();
+    syncOutbox().catch(handleOutboxSyncError);
   });
   window.addEventListener("offline", () => {
     state.sync.online = false;
     refreshSyncState();
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) syncOutbox();
+    if (!document.hidden) syncOutbox().catch(handleOutboxSyncError);
   });
 }
 
@@ -9822,10 +9893,7 @@ async function downloadActivityAttachment(attachmentId) {
   const activityId = els.activityForm?.elements.activity_id?.value || activityDetailsSelection?.activity?.id;
   if (!leadId || !activityId) return;
   try {
-    const token = sessionStorage.getItem(SESSION_KEY);
-    const response = await fetch(activityAttachmentUrl(leadId, activityId, attachmentId), {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
+    const response = await authenticatedFetch(activityAttachmentUrl(leadId, activityId, attachmentId));
     if (!response.ok) throw new Error("Attachment could not be downloaded.");
     const blob = await response.blob();
     const disposition = response.headers.get("content-disposition") || "";
@@ -13435,7 +13503,11 @@ function setView(view) {
   }
 }
 
-async function loadLeads() {
+async function loadLeads(options = {}) {
+  if (!options.authInitialized) await authInitialization;
+  if (!state.currentUser || !sessionToken()) {
+    throw Object.assign(new Error("Please sign in to load your CRM records."), { status: 401 });
+  }
   state.leadsLoading = true;
   state.leadsError = "";
   if (currentView === "pipeline") renderLeadList();
@@ -13461,6 +13533,7 @@ async function loadLeads() {
       loadLeadDetailData(state.selectedId);
     }
   } catch (error) {
+    if ([401, 403].includes(Number(error?.status))) state.leads = [];
     state.leadsError = error?.message || "The CRM records could not be loaded.";
     if (currentView === "pipeline") renderLeadList();
     throw error;
@@ -13692,7 +13765,7 @@ async function loadWorkspace() {
   fillSelect(document.querySelector("#pmrAccountStatus"), state.settings.pmr?.accountStatus || []);
   els.leadForm.elements.next_action_date.value = today();
   await loadConfigurationAgentState();
-  await loadLeads();
+  await loadLeads({ authInitialized: true });
   await loadWeeklyReportWorkspace();
   await marketNewsPromise;
   maybeAutoRunDailyPipeline();
@@ -13709,7 +13782,7 @@ async function init() {
     showApp(result.user);
     await loadWorkspace();
   } catch {
-    sessionStorage.removeItem(SESSION_KEY);
+    clearSession();
     showLogin("Please sign in to continue.");
   }
 }
@@ -14292,7 +14365,7 @@ els.loginForm.addEventListener("submit", async event => {
       body: JSON.stringify(Object.fromEntries(new FormData(els.loginForm).entries()))
     });
     sessionStorage.removeItem(OVERDUE_BANNER_KEY);
-    sessionStorage.setItem(SESSION_KEY, result.token);
+    persistSession(result);
     els.loginForm.reset();
     showApp(result.user);
     await loadWorkspace();
@@ -14343,7 +14416,7 @@ els.logoutButton.addEventListener("click", async () => {
   try {
     await api("/api/auth/logout", { method: "POST" });
   } finally {
-    sessionStorage.removeItem(SESSION_KEY);
+    clearSession();
     showLogin();
   }
 });
@@ -14569,7 +14642,7 @@ els.dailyAiPanel?.addEventListener("click", event => {
 
 els.syncStatusPill?.addEventListener("click", openPendingChanges);
 els.closePendingChanges?.addEventListener("click", () => els.pendingChangesDialog?.close());
-els.syncNowButton?.addEventListener("click", () => syncOutbox());
+els.syncNowButton?.addEventListener("click", () => syncOutbox().catch(handleOutboxSyncError));
 els.closeQuickLog?.addEventListener("click", () => els.quickLogDialog?.close());
 els.closeMobileMap?.addEventListener("click", () => els.mobileMapDialog?.close());
 els.closeActivityDialog?.addEventListener("click", () => closeActivityModal());
@@ -15455,9 +15528,10 @@ initAiSalesAssistant();
 initPwaShell();
 initDashboardCollapsibles();
 setInterval(() => {
-  if (state.sync.pending) syncOutbox();
+  if (state.sync.pending) syncOutbox().catch(handleOutboxSyncError);
 }, 60_000);
 
-init().catch(error => {
+authInitialization = init();
+authInitialization.catch(error => {
   document.body.innerHTML = `<main class="empty-state"><strong>Could not load ARG CRM</strong><span>${escapeHtml(error.message)}</span></main>`;
 });
