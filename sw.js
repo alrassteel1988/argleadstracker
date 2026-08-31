@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v72-admin-dashboard-action-plan-bars";
+const CACHE_VERSION = "arg-pwa-v73-authenticated-lead-summary-admin-dashboard";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -183,6 +183,13 @@ async function signIn(email, password) {
   return request("/auth/v1/token?grant_type=password", { method: "POST", body: { email, password } });
 }
 
+async function refreshSession(refreshToken) {
+  return request("/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    body: { refresh_token: String(refreshToken || "") }
+  });
+}
+
 async function signOut(token) {
   return request("/auth/v1/logout", { method: "POST", token });
 }
@@ -274,6 +281,7 @@ module.exports = {
   isSupabaseConfigured,
   listAuthUsers,
   rest,
+  refreshSession,
   serviceRest,
   signIn,
   signOut,
