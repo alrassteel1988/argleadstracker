@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v73-authenticated-lead-summary-admin-dashboard";
+const CACHE_VERSION = "arg-pwa-v74-admin-dashboard-card-readability";
 const APP_SHELL = [
   "/",
   "/index.html",

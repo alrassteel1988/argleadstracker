@@ -9,7 +9,7 @@ const css = fs.readFileSync(path.join(root, "admin-dashboard-clean.css"), "utf8"
 const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /href="\/admin-dashboard-clean\.css\?v=3-action-plans-bars"/, "the Admin Dashboard stylesheet must be loaded with the dashboard redesign revision");
+assert.match(html, /href="\/admin-dashboard-clean\.css\?v=4-card-readability"/, "the Admin Dashboard stylesheet must use the card-readability revision");
 assert.match(html, /id="adminDashboardOverviewSlot"[^>]*aria-label="Dashboard overview"/, "overview region needs an accessible label");
 assert.match(html, /id="adminDashboardTriageRow"[^>]*aria-label="Attention required"/, "attention region needs an accessible label");
 assert.match(html, /id="adminDashboardAnalyticsRow"[^>]*aria-label="Pipeline analytics"/, "analytics region needs an accessible label");
@@ -37,15 +37,24 @@ assert.match(css, /\.admin-dashboard-triage-row\s*\{[^}]*grid-template-columns:\
 assert.match(css, /\.admin-dashboard-analytics-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s, "analytics panels must be balanced side by side");
 assert.match(css, /\.admin-dashboard-overview-slot \.metrics\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s, "overview metrics must use four equal columns");
 assert.match(css, /\.admin-dashboard-bottom-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s, "remaining operational insights must use three equal columns");
+assert.doesNotMatch(css, /\.admin-dashboard-bottom-row\s*\{[^}]*height:\s*\d+px/s, "the three Admin Dashboard cards must grow to fit their content");
+assert.match(css, /\.admin-dashboard-bottom-row > \.panel\s*\{[^}]*min-height:\s*180px;[^}]*overflow:\s*visible/s, "Admin Dashboard cards must have a readable minimum while preserving natural content height");
+assert.doesNotMatch(css, /#dashboardFocus,[\s\S]*?#dashboardActivityFeed,[\s\S]*?#dashboardStatus[\s\S]*?overflow-y:\s*auto/s, "card content must not be cramped into an internal vertical scroll region");
+assert.match(css, /\.dashboard-focus-item\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/s, "Cold relationships must reserve a separate badge column");
+assert.match(css, /\.dashboard-activity-item strong\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*text-overflow:\s*clip;[^}]*white-space:\s*normal/s, "Cold relationships and Latest interactions must wrap long account names safely");
+assert.match(css, /\.stage-badge\.compact\s*\{[^}]*align-self:\s*start;[^}]*white-space:\s*normal/s, "Cold relationship badges must not overlap wrapped text");
+assert.match(css, /#dashboardStatus\s*\{[^}]*grid-auto-rows:\s*auto/s, "Pipeline Health cards must grow with their status labels");
+assert.match(css, /\.status-card\s*\{[^}]*min-height:\s*72px/s, "Pipeline Health status cards need a readable minimum height");
 assert.match(css, /\.panel-header \.panel-collapse-toggle\.hidden\s*\{[^}]*display:\s*flex !important/s, "redesigned dashboard panels must keep their collapse controls visible");
 assert.match(css, /#actionPlanPanel \.action-plan-grid\s*\{[^}]*max-height:\s*none;[^}]*overflow-y:\s*visible/s, "Lead Action Plans must grow naturally without nested vertical scrolling");
 assert.match(css, /\.admin-dashboard-analytics-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)/s, "bottom pipeline panels must sit side by side on desktop");
 assert.match(css, /@media \(max-width:\s*900px\)/, "tablet layout breakpoint must exist");
 assert.match(css, /@media \(max-width:\s*700px\)/, "mobile layout breakpoint must exist");
+assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*?#dashboardStatus\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/, "narrow Pipeline Health layouts must use a single readable column");
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v73-authenticated-lead-summary-admin-dashboard/, "PWA cache must rotate for the latest UI assets");
+assert.match(sw, /arg-pwa-v74-admin-dashboard-card-readability/, "PWA cache must rotate for the card-readability update");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
 assert.match(vercel, /"src": "admin-dashboard-clean\.css"/, "Vercel must build the dashboard stylesheet");
 assert.match(vercel, /"src": "\/admin-dashboard-clean\.css", "dest": "\/admin-dashboard-clean\.css"/, "Vercel must expose the dashboard stylesheet");
