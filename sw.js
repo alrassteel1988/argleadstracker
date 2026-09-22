@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v75-admin-dashboard-inner-card-spacing";
+const CACHE_VERSION = "arg-pwa-v76-admin-dashboard-intel-alert-spacing";
 const APP_SHELL = [
   "/",
   "/index.html",

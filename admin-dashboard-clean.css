@@ -514,21 +514,45 @@ body.admin-dashboard-mode .admin-dashboard-triage-row .dashboard-collapsible-bod
   min-height: 0;
 }
 
-body.admin-dashboard-mode .admin-dashboard-triage-row .dashboard-collapsible-body-inner {
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(
+  #marketIntelPanel,
+  #needsAttentionPanel
+) > .dashboard-collapsible-body > .dashboard-collapsible-body-inner {
   max-height: none;
-  padding: var(--admin-space-3);
+  min-width: 0;
+  padding: 0;
   overflow: visible;
 }
 
-body.admin-dashboard-mode .admin-dashboard-triage-row :is(.market-intel-feed, .needs-attention-list) {
-  max-height: none;
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(
+  #marketIntelPanel,
+  #needsAttentionPanel
+) {
   overflow: visible;
 }
 
-body.admin-dashboard-mode .admin-dashboard-triage-row :is(.empty-copy, .intel-item, .attention-flag-card) {
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(
+  #marketIntelFeed,
+  #needsAttentionList
+) {
+  display: grid;
+  gap: var(--admin-space-2);
+  max-height: none;
+  min-width: 0;
+  padding: var(--admin-space-2) var(--admin-space-3);
+  overflow: visible;
+}
+
+body.admin-dashboard-mode .admin-dashboard-triage-row :is(
+  #marketIntelFeed,
+  #needsAttentionList
+) > :is(.empty-copy, .intel-item, .attention-flag-card) {
+  max-width: 100%;
+  min-width: 0;
   color: var(--admin-text);
   font-size: 12px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 /* Balanced analytics row */
