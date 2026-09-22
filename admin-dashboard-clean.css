@@ -884,9 +884,12 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
   padding: var(--admin-space-1) var(--admin-space-3) var(--admin-space-3);
 }
 
-body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item {
+body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
+  #dashboardFocus,
+  #dashboardActivityFeed
+) > .dashboard-activity-item {
   min-height: 54px;
-  padding: var(--admin-space-2) 0;
+  padding: var(--admin-space-2) var(--admin-space-3);
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-focus-item {
