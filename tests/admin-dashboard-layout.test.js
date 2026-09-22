@@ -9,7 +9,7 @@ const css = fs.readFileSync(path.join(root, "admin-dashboard-clean.css"), "utf8"
 const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /href="\/admin-dashboard-clean\.css\?v=5-inner-card-spacing"/, "the Admin Dashboard stylesheet must use the inner-card-spacing revision");
+assert.match(html, /href="\/admin-dashboard-clean\.css\?v=6-intel-alert-spacing"/, "the Admin Dashboard stylesheet must use the Intel and alert spacing revision");
 assert.match(html, /id="adminDashboardOverviewSlot"[^>]*aria-label="Dashboard overview"/, "overview region needs an accessible label");
 assert.match(html, /id="adminDashboardTriageRow"[^>]*aria-label="Attention required"/, "attention region needs an accessible label");
 assert.match(html, /id="adminDashboardAnalyticsRow"[^>]*aria-label="Pipeline analytics"/, "analytics region needs an accessible label");
@@ -34,6 +34,16 @@ assert.match(client, /renderDashboardPipelineFunnel\(\)/, "pipeline funnel rende
 
 assert.match(css, /body\.admin-dashboard-mode \.dashboard-view\s*\{[^}]*grid-template-columns:\s*repeat\(12,\s*minmax\(0,\s*1fr\)\)/s, "desktop dashboard must use a 12-column composition");
 assert.match(css, /\.admin-dashboard-triage-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*5fr\)\s+minmax\(0,\s*4fr\)\s+minmax\(0,\s*3fr\)/s, "attention panels must use the requested 5/4/3 balance");
+assert.match(css, /:is\(\s*#marketIntelPanel,\s*#needsAttentionPanel\s*\)\s*>\s*\.dashboard-collapsible-body\s*>\s*\.dashboard-collapsible-body-inner\s*\{[^}]*padding:\s*0;/s, "Intel Overview and Director Alerts must reserve their body spacing for the direct content areas");
+assert.match(css, /:is\(\s*#marketIntelFeed,\s*#needsAttentionList\s*\)\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--admin-space-2\);[^}]*padding:\s*var\(--admin-space-2\)\s+var\(--admin-space-3\);[^}]*overflow:\s*visible;/s, "Intel Overview and Director Alerts need 8px vertical and 12px horizontal body padding that can grow naturally");
+assert.match(css, /:is\(\s*#marketIntelFeed,\s*#needsAttentionList\s*\)\s*>\s*:is\(\.empty-copy,\s*\.intel-item,\s*\.attention-flag-card\)\s*\{[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere;/s, "Intel and alert messages and populated cards must wrap safely inside their panels");
+assert.match(html, /id="refreshMarketIntel"/, "Intel Overview must retain Refresh Intel");
+assert.match(html, /id="needsAttentionCount">0 open</, "Director Alerts must retain its open-alert count");
+assert.match(client, /Market intelligence feed is disabled until ZAWYA_API_KEY and feed URL are configured\./, "Intel Overview must retain its configuration warning state");
+assert.match(client, /No open director alerts\./, "Director Alerts must retain its empty state");
+assert.match(client, /function intelItemMarkup\(item\)/, "Intel Overview must retain populated-item rendering");
+assert.match(client, /function attentionFlagCard\(flag\)/, "Director Alerts must retain populated-alert rendering");
+assert.match(client, /data-flag-action/, "Director Alert acknowledgement and resolution controls must remain wired");
 assert.match(css, /\.admin-dashboard-analytics-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s, "analytics panels must be balanced side by side");
 assert.match(css, /\.admin-dashboard-overview-slot \.metrics\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s, "overview metrics must use four equal columns");
 assert.match(css, /\.admin-dashboard-bottom-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s, "remaining operational insights must use three equal columns");
@@ -57,7 +67,7 @@ assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*?#dashboardStatus\s*\{[^}
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v75-admin-dashboard-inner-card-spacing/, "PWA cache must rotate for the inner-card-spacing update");
+assert.match(sw, /arg-pwa-v76-admin-dashboard-intel-alert-spacing/, "PWA cache must rotate for the Intel and alert spacing update");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
 assert.match(sw, /if \(url\.pathname\.startsWith\("\/api\/"\)\) return;/, "PWA must keep API responses out of the cache");
 assert.match(vercel, /"src": "admin-dashboard-clean\.css"/, "Vercel must build the dashboard stylesheet");
