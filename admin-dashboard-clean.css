@@ -825,7 +825,6 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row {
   align-items: stretch;
   gap: var(--admin-space-3);
   width: auto;
-  height: 300px;
   min-width: 0;
   margin: 0 var(--admin-space-4) var(--admin-space-4);
 }
@@ -835,10 +834,9 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel {
   flex-direction: column;
   width: 100%;
   min-width: 0;
-  min-height: 0;
-  height: 100%;
+  min-height: 180px;
   margin: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--admin-border);
 }
 
@@ -866,7 +864,6 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel > .dashboard-coll
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row > .panel > .dashboard-collapsible-body > .dashboard-collapsible-body-inner {
-  height: 100%;
   min-height: 0;
   padding: 0;
 }
@@ -876,10 +873,8 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
   #dashboardActivityFeed,
   #dashboardStatus
 ) {
-  height: 100%;
   min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
@@ -889,9 +884,18 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
   padding: var(--admin-space-1) var(--admin-space-3) var(--admin-space-3);
 }
 
-body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item {
+body.admin-dashboard-mode .admin-dashboard-bottom-row :is(
+  #dashboardFocus,
+  #dashboardActivityFeed
+) > .dashboard-activity-item {
   min-height: 54px;
-  padding: var(--admin-space-2) 0;
+  padding: var(--admin-space-2) var(--admin-space-3);
+}
+
+body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-focus-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--admin-space-2);
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item strong {
@@ -900,32 +904,47 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item s
   font-size: 12px;
   font-weight: 700;
   line-height: 1.3;
+  overflow: visible;
   overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-activity-item p {
+  margin: 2px 0 0;
   color: var(--admin-muted);
   font-size: 11px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-focus-item .stage-badge.compact {
+  align-self: start;
+  max-width: 100%;
   min-height: 22px;
   padding: 3px 6px;
   border: 1px solid #9fc4dc;
   border-radius: var(--admin-radius);
   font-size: 10px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  grid-auto-rows: auto;
   gap: var(--admin-space-2);
   padding: var(--admin-space-3);
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus .status-card {
+  display: grid;
+  align-content: start;
+  gap: var(--admin-space-1);
+  min-width: 0;
+  min-height: 72px;
   padding: var(--admin-space-3);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius);
@@ -936,6 +955,8 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus .status-c
   color: var(--admin-muted);
   font-size: 10px;
   font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus .status-card strong {
@@ -1073,6 +1094,21 @@ body.admin-dashboard-mode .collapsible-enabled.is-collapsed > .dashboard-collaps
 
   body.admin-dashboard-mode .admin-dashboard-bottom-row {
     margin-inline: var(--admin-space-3);
+  }
+}
+
+@media (max-width: 520px) {
+  body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-focus-item {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--admin-space-1);
+  }
+
+  body.admin-dashboard-mode .admin-dashboard-bottom-row .dashboard-focus-item .stage-badge.compact {
+    justify-self: start;
   }
 }
 
