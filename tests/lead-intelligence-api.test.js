@@ -77,6 +77,9 @@ function providerFixture() {
 let providerMode = "success";
 global.fetch = async function mockedFetch(url, options) {
   if (String(url).startsWith("https://api.openai.com/")) {
+    if (providerMode === "provider_error") {
+      return { ok: false, status: 502, async json() { return { error: { message: "mock provider failure" } }; } };
+    }
     const validJson = JSON.stringify(providerFixture());
     const outputText = providerMode === "success" ? validJson
       : providerMode === "repairable_json" ? `Here is the reconstructed report:\n\n\`\`\`json\n${validJson.replace(',"executive_snapshot"', ' "executive_snapshot"').replace(/}$/, ',}')}\n\`\`\``
@@ -241,17 +244,62 @@ async function requestPdf(baseUrl, pathName, token, text) {
     const refreshedReportId = refresh.data.state.report.id;
 
     providerMode = "invalid";
+    const lowConfidenceRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
+    assert.equal(lowConfidenceRefresh.response.status, 200, JSON.stringify(lowConfidenceRefresh.data));
+    assert.equal(lowConfidenceRefresh.data.result.status, "completed");
+    assert.equal(lowConfidenceRefresh.data.state.report.priority, "D");
+    assert.equal(lowConfidenceRefresh.data.state.report.summary.sources_count, 1);
+    assert.notEqual(lowConfidenceRefresh.data.state.report.id, refreshedReportId, "Low-confidence report should still become the current report.");
+
+    providerMode = "provider_error";
     const failedRefresh = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/refresh`, { method: "POST", token: adminToken });
     assert.equal(failedRefresh.response.status, 500);
     assert.equal(failedRefresh.data.result.status, "failed");
     const failedState = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
-    assert.equal(failedState.data.report.id, refreshedReportId, "Failed refresh must not remove the last successful report.");
+    assert.equal(failedState.data.report.id, lowConfidenceRefresh.data.state.report.id, "Failed refresh must not remove the last successful report.");
     assert.equal(failedState.data.failed_report.status, "failed");
 
     providerMode = "success";
     const retryProcess = await request(baseUrl, `/api/leads/${lead.data.id}/intelligence/retry`, { method: "POST", token: adminToken, body: { report_id: failedState.data.failed_report.id } });
     assert.equal(retryProcess.response.status, 200, JSON.stringify(retryProcess.data));
     assert.equal(retryProcess.data.result.status, "completed");
+
+    const staleStartedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const staleCreatedAt = new Date(Date.now() + 1000).toISOString();
+    const dbAfterRetry = JSON.parse(fs.readFileSync(dbPath, "utf8"));
+    dbAfterRetry.lead_intelligence_reports.unshift({
+      id: "lir-stale-researching",
+      lead_id: lead.data.id,
+      status: "researching",
+      report_json: null,
+      weighted_score: null,
+      displayed_score: null,
+      priority: "",
+      demand_classification: "",
+      steel_demand: "",
+      buyer_classification: "",
+      workflow_version: "uae-structural-steel-lead-intelligence@2026-08-10",
+      provider_metadata: {},
+      research_timestamp: null,
+      pdf_storage_key: "",
+      pdf_url: "",
+      error_code: "",
+      error_message: "",
+      created_at: staleCreatedAt,
+      started_at: staleStartedAt,
+      completed_at: null,
+      updated_at: staleStartedAt,
+      initiating_user_id: adminLogin.data.user.id,
+      initiated_by: adminLogin.data.user.id,
+      is_current: false,
+      superseded_at: null
+    });
+    fs.writeFileSync(dbPath, JSON.stringify(dbAfterRetry, null, 2));
+    const staleState = await request(baseUrl, `/api/leads/${lead.data.id}/intel`, { token: adminToken });
+    assert.equal(staleState.response.status, 200);
+    assert.equal(staleState.data.active_report, null);
+    assert.equal(staleState.data.failed_report.id, "lir-stale-researching");
+    assert.equal(staleState.data.failed_report.error_code, "stale_worker_interrupted");
 
     const cronUnauthorized = await request(baseUrl, "/api/cron/process-lead-intelligence", { method: "POST" });
     assert.equal(cronUnauthorized.response.status, 401);

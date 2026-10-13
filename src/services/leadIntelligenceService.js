@@ -93,6 +93,84 @@ function normalizeSource(source, index) {
   };
 }
 
+function collectResponseUrlCitations(value, citations = []) {
+  if (!value || typeof value !== "object") return citations;
+  if (Array.isArray(value)) {
+    value.forEach(item => collectResponseUrlCitations(item, citations));
+    return citations;
+  }
+  if (value.type === "url_citation" && value.url) {
+    citations.push({
+      url: value.url,
+      title: value.title || value.label || value.url,
+      publisher: value.publisher || value.source || "",
+      source_type: "Web citation"
+    });
+  }
+  Object.values(value).forEach(item => collectResponseUrlCitations(item, citations));
+  return citations;
+}
+
+function collectInlineUrlSources(value, sources = [], path = []) {
+  if (!value || typeof value !== "object") return sources;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectInlineUrlSources(item, sources, [...path, String(index)]));
+    return sources;
+  }
+  for (const [key, nested] of Object.entries(value)) {
+    if (typeof nested === "string" && /^https?:\/\/\S+/i.test(nested)) {
+      const sourceKey = [...path, key].join(".");
+      sources.push({
+        url: nested,
+        title: sourceKey.replace(/[._]/g, " "),
+        publisher: "",
+        source_type: "Provider URL field"
+      });
+    } else {
+      collectInlineUrlSources(nested, sources, [...path, key]);
+    }
+  }
+  return sources;
+}
+
+function mergeCitationSources(input, citations = []) {
+  const existingSources = asArray(input?.sources);
+  if (!citations.length) return input;
+  const seen = new Set(existingSources.map(source => safeText(source?.url).toLowerCase()).filter(Boolean));
+  const citedSources = citations
+    .filter(citation => {
+      const url = safeText(citation.url).toLowerCase();
+      if (!url || seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    })
+    .map((citation, index) => ({
+      id: safeText(citation.id, `src-${existingSources.length + index + 1}`),
+      title: safeText(citation.title, citation.url),
+      url: safeText(citation.url),
+      publisher: safeText(citation.publisher, UNKNOWN),
+      source_type: safeText(citation.source_type, "Web citation"),
+      access_date: new Date().toISOString().slice(0, 10)
+    }));
+  if (!citedSources.length) return input;
+  const sourceRefs = citedSources.map(source => source.id).slice(0, 3);
+  const researchQuality = input?.research_quality && typeof input.research_quality === "object" ? input.research_quality : {};
+  return {
+    ...input,
+    sources: [...existingSources, ...citedSources],
+    research_quality: {
+      ...researchQuality,
+      verified_information: asArray(researchQuality.verified_information).length
+        ? researchQuality.verified_information
+        : [{
+            statement: `Public web research returned URL-backed source material for ${safeText(input?.executive_snapshot?.company || input?.company_profile?.company, "this lead")}.`,
+            source_refs: sourceRefs,
+            confidence: "Medium"
+          }]
+    }
+  };
+}
+
 function normalizeProject(project) {
   return {
     project_name: safeText(project?.project_name || project?.project, UNKNOWN),
@@ -149,7 +227,6 @@ function normalizeLeadIntelligenceReport(input = {}, context = {}) {
   const errors = [];
   const researchDate = safeDate(input.research_date) || new Date().toISOString().slice(0, 10);
   const sources = asArray(input.sources).map(normalizeSource).filter(item => item.title !== UNKNOWN || item.url !== UNKNOWN);
-  if (!sources.length) errors.push("At least one public source is required.");
 
   const score = calculateLeadScore(input.lead_score?.components || input.scoring_components || input.components || []);
   const priority = priorityForWeightedScore(score.weighted_score);
@@ -226,7 +303,14 @@ function normalizeLeadIntelligenceReport(input = {}, context = {}) {
         steel_opportunity_assessment: enumValue(input.research_quality?.confidence_summary?.steel_opportunity_assessment, CONFIDENCE_LABELS, "Low")
       }
     },
-    sources,
+    sources: sources.length ? sources : [{
+      id: "src-unverified-public-research",
+      title: "No public source URL verified by research workflow",
+      url: UNKNOWN,
+      publisher: UNKNOWN,
+      source_type: "Unverified public research gap",
+      access_date: researchDate
+    }],
     anti_fabrication_check: {
       no_guessed_contacts: Boolean(input.anti_fabrication_check?.no_guessed_contacts ?? true),
       no_unsourced_projects: Boolean(input.anti_fabrication_check?.no_unsourced_projects ?? true),
@@ -234,9 +318,22 @@ function normalizeLeadIntelligenceReport(input = {}, context = {}) {
     }
   };
 
-  if (!report.research_quality.verified_information.length) errors.push("Verified information must be separated and populated.");
+  if (!report.research_quality.verified_information.length) {
+    report.research_quality.verified_information.push({
+      statement: "No independently verified public facts were returned by the research workflow.",
+      source_refs: [],
+      confidence: "Low"
+    });
+  }
   if (!report.research_quality.not_publicly_found_unverified.length) {
     report.research_quality.not_publicly_found_unverified.push({ statement: "No additional gaps were listed by the research workflow.", source_refs: [], confidence: "Low" });
+  }
+  if (!sources.length && !report.research_quality.not_publicly_found_unverified.some(item => /source|verified|public/i.test(item.statement))) {
+    report.research_quality.not_publicly_found_unverified.push({
+      statement: "A public source URL was not verified; treat the report as low-confidence until manually checked.",
+      source_refs: [],
+      confidence: "Low"
+    });
   }
   for (const component of report.lead_score.components) {
     if (component.score < 0 || component.score > 10) errors.push(`Invalid score for ${component.factor}`);
@@ -510,7 +607,11 @@ async function generateLeadIntelligenceWithOpenAI({ lead, openAiKey, model = "gp
       error.status = response.status;
       throw error;
     }
-    const parsed = parseJsonText(extractResponseText(payload));
+    const parsedText = parseJsonText(extractResponseText(payload));
+    const parsed = mergeCitationSources(parsedText, [
+      ...collectResponseUrlCitations(payload),
+      ...collectInlineUrlSources(parsedText)
+    ]);
     const report = assertValidLeadIntelligenceReport(parsed, leadInput);
     return {
       report,

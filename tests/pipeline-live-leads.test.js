@@ -28,6 +28,8 @@ for (const sortKey of ["company", "nextAction", "daysOverdue", "dueDate", "sales
 }
 
 assert.match(client, /function pipelineFilteredAndSortedLeads\(\)/, "Pipeline filtering and sorting must be shared");
+assert.match(client, /function salesmanLeadDisplayRank\(lead\)/, "Salesman worklists must rank Dormant and Lost leads after active stages");
+assert.match(client, /isSalesmanRole\(\)[\s\S]*salesmanLeadDisplayRank\(left\.lead\)/, "Pipeline must apply the inactive-stage rank only to Salesman results");
 assert.match(client, /nextAction === "all" \|\| action === nextAction/, "Next Action must combine with existing filters");
 assert.match(client, /matchesPipelineOverdueRange/, "Days overdue must use the shared overdue calculation");
 assert.match(client, /reportDueDate >= dateFrom[\s\S]*reportDueDate <= dateTo/, "Report date range must filter due dates inclusively");

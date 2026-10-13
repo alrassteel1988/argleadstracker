@@ -5,6 +5,7 @@ const {
   allowedResearchInputFromLead,
   assertValidLeadIntelligenceReport,
   calculateLeadScore,
+  generateLeadIntelligenceWithOpenAI,
   priorityForWeightedScore,
   renderLeadIntelligencePdf
 } = require("../src/services/leadIntelligenceService");
@@ -124,8 +125,13 @@ assert.strictEqual(report.procurement_contacts[0].name, UNKNOWN);
 assert.strictEqual(report.sources[0].url, "https://example.com/contact");
 assert.ok(report.research_quality.verified_information[0].source_refs.includes("src-1"));
 
-assert.throws(() => assertValidLeadIntelligenceReport(fixtureReport({ sources: [] })), /failed validation/);
-assert.throws(() => assertValidLeadIntelligenceReport(fixtureReport({ research_quality: { verified_information: [], reasonable_inferences: [], not_publicly_found_unverified: [], confidence_summary: {} } })), /failed validation/);
+const noSourceReport = assertValidLeadIntelligenceReport(fixtureReport({ sources: [] }));
+assert.strictEqual(noSourceReport.sources[0].id, "src-unverified-public-research");
+assert.strictEqual(noSourceReport.research_quality.verified_information[0].confidence, "High");
+
+const noVerifiedFactsReport = assertValidLeadIntelligenceReport(fixtureReport({ research_quality: { verified_information: [], reasonable_inferences: [], not_publicly_found_unverified: [], confidence_summary: {} } }));
+assert.strictEqual(noVerifiedFactsReport.research_quality.verified_information[0].confidence, "Low");
+assert.match(noVerifiedFactsReport.research_quality.verified_information[0].statement, /No independently verified public facts/);
 
 const allowed = allowedResearchInputFromLead({
   company_name: "Allowed Co",
@@ -142,4 +148,48 @@ assert.strictEqual(pdf.slice(0, 4).toString(), "%PDF");
 assert.ok(pdf.toString("utf8").includes("/Subtype /Link"), "Source URLs should be clickable PDF annotations.");
 assert.ok(pdf.toString("utf8").includes("Not publicly found"));
 
-console.log("PASS lead intelligence service");
+(async () => {
+  const providerReportWithInlineUrlOnly = fixtureReport({
+    sources: [],
+    research_quality: {
+      verified_information: [],
+      reasonable_inferences: [{ statement: "Structural sections may be relevant.", source_refs: ["src-1"], confidence: "Medium" }],
+      not_publicly_found_unverified: [{ statement: "Named procurement manager not publicly found.", source_refs: [], confidence: "Low" }],
+      confidence_summary: {
+        company_identity: "Medium",
+        company_profile: "Medium",
+        project_intelligence: "Low",
+        procurement_contacts: "Low",
+        steel_opportunity_assessment: "Medium"
+      }
+    }
+  });
+  const result = await generateLeadIntelligenceWithOpenAI({
+    lead: { company_name: "Test Steel Contracting LLC", website: "https://example.com" },
+    openAiKey: "test-key",
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          id: "resp-cited",
+          status: "completed",
+          output: [{
+            content: [{
+              type: "output_text",
+              text: JSON.stringify(providerReportWithInlineUrlOnly)
+            }]
+          }]
+        };
+      }
+    })
+  });
+  assert.strictEqual(result.report.sources[0].url, "https://example.com");
+  assert.strictEqual(result.report.sources[0].source_type, "Provider URL field");
+  assert.ok(result.report.research_quality.verified_information[0].source_refs.includes("src-1"));
+
+  console.log("PASS lead intelligence service");
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -7065,6 +7065,12 @@ body.pipeline-compact-mode .detail-panel .empty-state {
   --kanban-header-copy: #7f1d1d;
 }
 
+.kanban-column-header.stage-dormant {
+  --kanban-header-bg: #eef1f4;
+  --kanban-header-border: #9aa7b5;
+  --kanban-header-copy: #334155;
+}
+
 .kanban-card-list {
   display: grid;
   align-content: start;
@@ -24053,6 +24059,11 @@ body.admin-dashboard-mode .admin-dashboard-bottom-row #dashboardStatus .status-c
 .lead-table-stage-lost {
   background: var(--bauhaus-red-tint);
   color: var(--bauhaus-red-text);
+}
+
+.lead-table-stage-dormant {
+  background: #eef1f4;
+  color: #334155;
 }
 
 .lead-table-overdue-amber,

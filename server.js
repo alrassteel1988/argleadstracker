@@ -173,7 +173,7 @@ const RATE_LIMIT_SECRET_CONFIGURED = Boolean(process.env.RATE_LIMIT_HASH_SECRET 
 const RATE_LIMIT_HASH_SECRET = process.env.RATE_LIMIT_HASH_SECRET || SESSION_SECRET;
 const RATE_LIMIT_TENANT_ID = String(process.env.RATE_LIMIT_TENANT_ID || "arg-leads-tracker").trim();
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
-const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "LOST"];
+const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "DORMANT", "LOST"];
 const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
 const COMPANY_TIERS = ["1", "2", "3"];
 const GCC_TERRITORIES = ["UAE-North", "UAE-South", "Saudi", "Kuwait", "Bahrain", "Oman", "Mixed"];
@@ -1078,7 +1078,7 @@ function normalizeStageValue(value, fallback = "NEW") {
     NEGOTIATION: "NEGOTIATION",
     ACTIVE: "WON",
     WON: "WON",
-    DORMANT: "LOST",
+    DORMANT: "DORMANT",
     "AT RISK": "LOST",
     LOST: "LOST"
   };
@@ -1691,7 +1691,7 @@ function expectedFrequencyDays(lead) {
 function relationshipHealth(lead) {
   const elapsed = daysSince(lead.last_activity || lead.next_action_date);
   const expected = expectedFrequencyDays(lead);
-  if (normalizeStageValue(lead.stage, "NEW") === "LOST" || elapsed > expected * 1.6) return { label: "RED", score: 1, reason: `${elapsed} days since last activity` };
+  if (["LOST", "DORMANT"].includes(normalizeStageValue(lead.stage, "NEW")) || elapsed > expected * 1.6) return { label: "RED", score: 1, reason: `${elapsed} days since last activity` };
   if (elapsed > expected) return { label: "AMBER", score: 2, reason: `${elapsed} days since last activity` };
   return { label: "GREEN", score: 3, reason: `Activity within ${expected}-day expected contact window` };
 }
@@ -3405,9 +3405,19 @@ function currentCompletedLeadIntelligenceReport(reports) {
     || null;
 }
 
+const LEAD_INTELLIGENCE_ACTIVE_STALE_MS = 2 * 60 * 1000;
+
+function isStaleLeadIntelligenceJob(report, now = Date.now()) {
+  const status = String(report?.status || "");
+  if (!["researching", "generating_pdf"].includes(status)) return false;
+  const timestamp = Date.parse(report.updated_at || report.started_at || report.created_at || "");
+  return Number.isFinite(timestamp) && now - timestamp > LEAD_INTELLIGENCE_ACTIVE_STALE_MS;
+}
+
 function sanitizeLeadIntelligenceError(error) {
   const code = String(error?.code || (error?.status === 429 ? "provider_rate_limited" : error?.status === 504 ? "provider_timeout" : "processing_failed")).replace(/[^a-z0-9_:-]/gi, "_").slice(0, 80);
-  const message = String(error?.message || "Lead intelligence generation failed.")
+  const details = Array.isArray(error?.details) && error.details.length ? ` ${error.details.join(" ")}` : "";
+  const message = `${String(error?.message || "Lead intelligence generation failed.")}${details}`
     .replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [redacted]")
     .replace(/sk-[A-Za-z0-9._-]+/g, "[redacted]")
     .slice(0, 500);
@@ -3463,7 +3473,17 @@ async function loadLeadIntelligenceReports(db, token, leadId, supabaseEnabled) {
 }
 
 async function loadLeadIntelligenceState(db, user, lead, supabaseEnabled, marketItems = []) {
-  const reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  let reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  const staleActive = reports.find(report => isStaleLeadIntelligenceJob(report));
+  if (staleActive) {
+    await updateLeadIntelligenceReport(db, staleActive.id, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_code: "stale_worker_interrupted",
+      error_message: "Lead intelligence research was interrupted before completion. Please retry the report."
+    }, supabaseEnabled);
+    reports = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
+  }
   const active = reports.find(report => activeLeadIntelligenceStatuses().has(report.status)) || null;
   const current = currentCompletedLeadIntelligenceReport(reports);
   const latestTerminal = reports.find(report => report.status === "completed" || report.status === "failed") || null;
@@ -3532,7 +3552,16 @@ async function queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, opti
   }
   const existing = await loadLeadIntelligenceReports(db, user.token, lead.id, supabaseEnabled);
   const active = existing.find(report => activeLeadIntelligenceStatuses().has(report.status));
-  if (active) return { record: active, created: false };
+  if (active && isStaleLeadIntelligenceJob(active)) {
+    await updateLeadIntelligenceReport(db, active.id, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_code: "stale_worker_interrupted",
+      error_message: "Lead intelligence research was interrupted before completion. Please retry the report."
+    }, supabaseEnabled);
+  } else if (active) {
+    return { record: active, created: false };
+  }
   if (options.skipIfAnyReport && existing.length) return { record: existing[0], created: false, skipped: true };
   if (options.retryReportId) {
     const failed = existing.find(report => String(report.id) === String(options.retryReportId) && report.status === "failed");
@@ -4252,6 +4281,7 @@ function weeklyProblemCandidateFlags(lead) {
   if (nextActionDate && nextActionDate < new Date().toISOString().slice(0, 10)) flags.push(`Follow-up overdue since ${nextActionDate}`);
   if (String(lead?.priority || "").toLowerCase() === "at risk") flags.push("Marked at risk in CRM");
   if (normalizeStageValue(lead?.stage, "NEW") === "LOST") flags.push("Lead is in lost stage");
+  if (normalizeStageValue(lead?.stage, "NEW") === "DORMANT") flags.push("Lead is marked dormant; no future steel requirement is expected");
   const lastActivity = isoDateOnly(lead?.last_activity);
   if (lastActivity) {
     const age = Math.floor((Date.now() - new Date(`${lastActivity}T00:00:00`).getTime()) / 86400000);
@@ -4288,7 +4318,7 @@ function securedOrdersForWeeklyReport(leads, weekEnding) {
 
 function expectedOrdersForWeeklyReport(leads) {
   return (leads || [])
-    .filter(lead => !["WON", "LOST"].includes(normalizeStageValue(lead?.stage, "NEW")))
+    .filter(lead => !["WON", "DORMANT", "LOST"].includes(normalizeStageValue(lead?.stage, "NEW")))
     .sort((a, b) => Number(b.estimated_value || 0) - Number(a.estimated_value || 0))
     .slice(0, 12)
     .map(lead => ({
@@ -7902,4 +7932,5 @@ server.weeklyReportWorkflow = weeklyReportWorkflow;
 server.normalizeEnglishText = normalizeEnglishText;
 server.transcribeAudio = transcribeAudio;
 server.processOneLeadIntelligenceJob = processOneLeadIntelligenceJob;
+server.config = { maxDuration: 120 };
 module.exports = server;
