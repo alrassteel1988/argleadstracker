@@ -150,7 +150,7 @@ body.salesman-dashboard-mode .salesman-dashboard-pipeline > .panel-header h2 {
 }
 
 body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-pipeline-strip {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
 }
@@ -185,6 +185,10 @@ body.salesman-dashboard-mode .salesman-simplified-stage.tone-negotiation {
 
 body.salesman-dashboard-mode .salesman-simplified-stage.tone-won {
   --salesman-stage-accent: var(--bauhaus-navy);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage.tone-lost {
+  --salesman-stage-accent: var(--bauhaus-red);
 }
 
 body.salesman-dashboard-mode .salesman-simplified-stage:hover {
@@ -672,6 +676,10 @@ body.salesman-dashboard-mode .salesman-simplified-stage.tone-negotiation {
 
 body.salesman-dashboard-mode .salesman-simplified-stage.tone-won {
   --salesman-stage-accent: var(--salesman-text-success);
+}
+
+body.salesman-dashboard-mode .salesman-simplified-stage.tone-lost {
+  --salesman-stage-accent: var(--salesman-text-critical);
 }
 
 body.salesman-dashboard-mode .salesman-dashboard-pipeline .salesman-simplified-stage strong {

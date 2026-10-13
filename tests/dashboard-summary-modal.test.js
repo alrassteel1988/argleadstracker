@@ -37,6 +37,7 @@ for (const type of [
   "salesmanStageContacted",
   "salesmanStageNegotiation",
   "salesmanStageWon",
+  "salesmanStageLost",
   "salesmanActionOverdue",
   "salesmanActionCoverageGap",
   "salesmanActionNextUp"
@@ -48,6 +49,7 @@ for (const type of [
 assert.match(client, /data-summary-card="[^"]*"[^>]*aria-controls="summaryCardDetailsDialog"/, "Salesman summary buttons must expose the dialog they control");
 assert.match(client, /els\.salesmanSimplifiedDashboard\?\.addEventListener\("click"[\s\S]*event\.target\.closest\("\[data-summary-card\]"\)[\s\S]*openSummaryCardDetails\(card\.dataset\.summaryCard,\s*card\)/, "Dynamically rendered Salesman cards must open the shared details modal");
 assert.match(client, /function renderSalesmanSimplifiedDashboard\(\)\s*\{[\s\S]*const datasets = salesmanDashboardSummaryDatasets\(\)/, "Salesman card values must use the same datasets as their modal records");
+assert.match(client, /const dashboardLeads = \[\.\.\.leads\]\.sort\([\s\S]*salesmanLeadDisplayRank\(a\) - salesmanLeadDisplayRank\(b\)/, "Salesman Dashboard must keep Dormant and Lost leads below active stages");
 assert.match(client, /function salesmanDashboardActionSummaryDatasets\(\)/, "Salesman action popups must use a shared action-queue selector");
 for (const type of ["salesmanActionOverdue", "salesmanActionCoverageGap", "salesmanActionNextUp"]) {
   assert.match(client, new RegExp(`summaryType:\\s*"${type}"`), `${type} action card must open its summary popup`);
@@ -95,7 +97,7 @@ assert.match(salesmanCss, /--salesman-text-link:\s*#125E8A;/, "Salesman Dashboar
 assert.match(salesmanCss, /\.salesman-triage-card\.tone-danger\s*{[^}]*--salesman-action-kicker:\s*var\(--salesman-text-critical\);[^}]*--salesman-action-title:\s*var\(--salesman-text-secondary\);[^}]*--salesman-action-body:\s*var\(--salesman-text-primary\);[^}]*--salesman-action-cta:\s*var\(--salesman-text-link\);/s, "Pale overdue action cards must use readable semantic colors");
 assert.match(salesmanCss, /\.salesman-triage-card \.salesman-triage-company\s*{[^}]*color:\s*var\(--salesman-action-company\)\s*!important;[^}]*font-weight:\s*600;/s, "Action card company names must be dark and semibold");
 assert.match(salesmanCss, /\.salesman-triage-card:is\(\.is-dark, \.tone-dark, \.tone-inverse, \[data-contrast="dark"\]\)\s*{[^}]*--salesman-action-title:\s*var\(--salesman-text-inverse\);/s, "Dark action card variants must opt into light semantic tokens");
-assert.match(salesmanCss, /grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/, "pipeline stage cards must be equal-width on desktop");
+assert.match(salesmanCss, /grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/, "pipeline stage cards must be equal-width on desktop");
 assert.match(salesmanCss, /@media \(min-width:\s*821px\)[\s\S]*\.salesman-simplified-metric\s*{[^}]*min-height:\s*88px;[^}]*padding:\s*10px 14px;/, "desktop summary cards must use the compact readable height");
 assert.match(salesmanCss, /@media \(min-width:\s*821px\)[\s\S]*\.salesman-simplified-stage\s*{[^}]*min-height:\s*72px;[^}]*padding:\s*8px 12px;/, "desktop pipeline stages must use the compact readable height");
 assert.match(salesmanLiveLeadsCss, /--salesman-dashboard-section-gap:\s*12px;/, "major Salesman Dashboard sections must use a compact consistent gap");

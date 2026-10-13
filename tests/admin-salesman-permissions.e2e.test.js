@@ -179,6 +179,19 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert(salesmanLeads.data.some(lead => lead.id === ownLead.data.id));
     assert(!salesmanLeads.data.some(lead => lead.id === otherLead.data.id));
 
+    const salesmanSettings = await request(baseUrl, "/api/settings", { token: salesmanToken });
+    assert.equal(salesmanSettings.response.status, 200);
+    assert(salesmanSettings.data.stages.includes("DORMANT"), "Salesmen must be able to select the Dormant stage.");
+
+    const dormantOwnLead = await request(baseUrl, `/api/leads/${ownLead.data.id}`, {
+      method: "PATCH",
+      token: salesmanToken,
+      csrfToken: salesmanCsrfToken,
+      body: { stage: "DORMANT", notes: "No future steel requirement is expected at this time." }
+    });
+    assert.equal(dormantOwnLead.response.status, 200, JSON.stringify(dormantOwnLead.data));
+    assert.equal(dormantOwnLead.data.stage, "DORMANT", "Dormant must remain distinct from Lost so it can be reactivated later.");
+
     const salesmanCreatedLead = await request(baseUrl, "/api/leads", {
       method: "POST",
       token: salesmanToken,

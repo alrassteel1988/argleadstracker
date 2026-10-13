@@ -762,8 +762,12 @@ const KANBAN_STAGES = [
   { key: "CONTACTED", label: "Contacted", color: "stage-qualified", aliases: ["CONTACTED", "OUTREACH", "QUALIFIED"] },
   { key: "NEGOTIATION", label: "Negotiation", color: "stage-negotiation", aliases: ["NEGOTIATION", "ENGAGED", "SAMPLING", "PROPOSAL", "PROPOSAL SENT"] },
   { key: "WON", label: "Won", color: "stage-won", aliases: ["WON", "ACTIVE"] },
-  { key: "LOST", label: "Lost", color: "stage-lost", aliases: ["LOST", "DORMANT", "AT RISK"] }
+  { key: "DORMANT", label: "Dormant", color: "stage-dormant", aliases: ["DORMANT"] },
+  { key: "LOST", label: "Lost", color: "stage-lost", aliases: ["LOST", "AT RISK"] }
 ];
+const CANONICAL_STAGE_KEYS = KANBAN_STAGES.map(stage => stage.key);
+const CANONICAL_STAGE_SET = new Set(CANONICAL_STAGE_KEYS);
+const CLOSED_STAGE_KEYS = new Set(["WON", "DORMANT", "LOST"]);
 
 const STAGE_ALIAS_MAP = new Map(
   KANBAN_STAGES.flatMap(stage => stage.aliases.map(alias => [String(alias).trim().toUpperCase(), stage.key]))
@@ -4416,9 +4420,9 @@ function smartSearchLeadResult(lead, query, tokens) {
   const overdueCount = overdueReminderItemsForLead(lead).length + (leadHasOverdueNextAction(lead) ? 1 : 0);
   const noFollowup = !lead.next_action_date;
   const staleDays = daysSince(lead.last_activity || lead.updated_at || lead.created_at);
-  const dormant = normalizedStage === "LOST" || staleDays >= 60;
-  const inactive = normalizedStage === "LOST" || staleDays >= 75 || (!lead.last_activity && !lead.next_action_date);
-  const openPipeline = !["WON", "LOST"].includes(normalizedStage);
+  const dormant = normalizedStage === "DORMANT" || staleDays >= 60;
+  const inactive = ["DORMANT", "LOST"].includes(normalizedStage) || staleDays >= 75 || (!lead.last_activity && !lead.next_action_date);
+  const openPipeline = !CLOSED_STAGE_KEYS.has(normalizedStage);
   const lostLead = isLostStageValue(lead.stage) || Boolean(lead.lost_reason);
   const activeCustomer = normalizedStage === "WON";
   const quotationRelated = Boolean(lead.quotation_ref)
@@ -4637,7 +4641,7 @@ function healthClass(health) {
 }
 
 function isOverdue(lead) {
-  return lead.next_action_date <= today() && !["WON", "LOST"].includes(normalizeStageKey(lead.stage));
+  return lead.next_action_date <= today() && !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage));
 }
 
 function isAdminOrManager() {
@@ -4645,7 +4649,7 @@ function isAdminOrManager() {
 }
 
 function activeLeadForOverdue(lead) {
-  return !["WON", "LOST"].includes(String(lead?.stage || "").trim().toUpperCase());
+  return !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead?.stage));
 }
 
 function leadHasOverdueNextAction(lead) {
@@ -4746,7 +4750,7 @@ function dashboardLeadIsAtRisk(lead) {
 }
 
 function dashboardSummaryDatasets() {
-  const openPipeline = state.leads.filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage)));
+  const openPipeline = state.leads.filter(lead => !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage)));
   const activeCustomers = state.leads.filter(lead => normalizeStageKey(lead.stage) === "WON");
   const atRisk = state.leads.filter(dashboardLeadIsAtRisk);
   const tasksDue = state.leads
@@ -4864,6 +4868,7 @@ function summaryDetailsCoverageGapRecord(company, type) {
 function summaryDetailsStageTone(stageKey) {
   if (stageKey === "WON") return "green";
   if (stageKey === "LOST") return "red";
+  if (stageKey === "DORMANT") return "neutral";
   if (stageKey === "NEGOTIATION") return "amber";
   return "blue";
 }
@@ -5061,6 +5066,16 @@ function summaryCardDetailsConfig(type) {
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "WON" }
+    },
+    salesmanStageLost: {
+      title: "Lost Leads",
+      description: "Your leads currently in the Lost stage.",
+      tone: "red",
+      searchPlaceholder: "Search Lost-stage leads",
+      leads: salesmanDatasets.stageLost,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline", stageKey: "LOST" }
     },
     salesmanActionOverdue: {
       title: "Overdue Follow-ups",
@@ -6880,7 +6895,7 @@ function renderPortfolioAnalytics() {
   const overdue = allDue.filter(reminder => daysUntil(reminder.due_date) < 0);
   els.portfolioTotal.textContent = leads.length;
   els.portfolioActive.textContent = leads.filter(lead => normalizeStageKey(lead.stage) === "WON").length;
-  els.portfolioDormant.textContent = leads.filter(lead => normalizeStageKey(lead.stage) === "LOST").length;
+  els.portfolioDormant.textContent = leads.filter(lead => normalizeStageKey(lead.stage) === "DORMANT").length;
   els.portfolioHot.textContent = leads.filter(lead => String(lead.priority || "").toLowerCase() === "hot").length;
   els.portfolioDue.textContent = allDue.filter(reminder => daysUntil(reminder.due_date) <= 7).length;
   els.portfolioOverdue.textContent = overdue.length;
@@ -6903,7 +6918,7 @@ function renderPortfolioAnalytics() {
 
   const stageCounts = Object.entries(countBy(leads, lead => stageDisplayLabel(lead.stage || "NEW"))).sort((a, b) => b[1] - a[1]);
   const countryCounts = Object.entries(countBy(leads, inferCountry)).sort((a, b) => b[1] - a[1]);
-  const dormantPct = leads.length ? Math.round((leads.filter(lead => normalizeStageKey(lead.stage) === "LOST").length / leads.length) * 100) : 0;
+  const dormantPct = leads.length ? Math.round((leads.filter(lead => normalizeStageKey(lead.stage) === "DORMANT").length / leads.length) * 100) : 0;
   const concentration = entries[0] ? `${entries[0][0]} (${entries[0][1]})` : "No data";
   els.portfolioInsights.innerHTML = `
     <article><span>Highest Lead Concentration</span><strong>${escapeHtml(concentration)}</strong></article>
@@ -7009,7 +7024,7 @@ function salesmanDashboardLeads() {
 
 function firstTouchDueLeads() {
   return salesmanDashboardLeads()
-    .filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage)))
+    .filter(lead => !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage)))
     .filter(lead => !hasLeadContactedActivity(lead))
     .sort((a, b) => {
       const originRank = lead => leadOriginForCurrentUser(lead, state.currentUser).includes("Admin") ? 0 : 1;
@@ -7030,7 +7045,7 @@ function lossReasonPromptDueLeads() {
 
 function actionableSalesmanLeads() {
   return salesmanDashboardLeads()
-    .filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage)))
+    .filter(lead => !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage)))
     .filter(lead => String(lead.next_action_date || "").slice(0, 10))
     .sort((a, b) =>
       String(a.next_action_date || "").localeCompare(String(b.next_action_date || ""))
@@ -7053,7 +7068,8 @@ function salesmanDashboardSummaryDatasets() {
     stageNew: byStage("NEW"),
     stageContacted: byStage("CONTACTED"),
     stageNegotiation: byStage("NEGOTIATION"),
-    stageWon: byStage("WON")
+    stageWon: byStage("WON"),
+    stageLost: byStage("LOST")
   };
 }
 
@@ -7083,7 +7099,8 @@ function salesmanDashboardSummaryIcon(type) {
     stageNew: '<path d="M15 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8" cy="7" r="4"></circle><path d="M19 8v6M16 11h6"></path>',
     stageContacted: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 10h.01M12 10h.01M16 10h.01"></path>',
     stageNegotiation: '<path d="m8 11 4-4 4 4M12 7v10"></path><path d="M5 5 2 8l4 4M19 5l3 3-4 4"></path><path d="M7 19h10"></path>',
-    stageWon: '<path d="M8 21h8M12 17v4"></path><path d="M7 4h10v5a5 5 0 0 1-10 0z"></path><path d="M7 6H4a2 2 0 0 0 2 4h1M17 6h3a2 2 0 0 1-2 4h-1"></path>'
+    stageWon: '<path d="M8 21h8M12 17v4"></path><path d="M7 4h10v5a5 5 0 0 1-10 0z"></path><path d="M7 6H4a2 2 0 0 0 2 4h1M17 6h3a2 2 0 0 1-2 4h-1"></path>',
+    stageLost: '<circle cx="12" cy="12" r="9"></circle><path d="m9 9 6 6m0-6-6 6"></path>'
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[type] || icons.myLeads}</svg>`;
 }
@@ -7099,7 +7116,8 @@ function renderSalesmanSimplifiedDashboard() {
     NEW: datasets.stageNew.length,
     CONTACTED: datasets.stageContacted.length,
     NEGOTIATION: datasets.stageNegotiation.length,
-    WON: datasets.stageWon.length
+    WON: datasets.stageWon.length,
+    LOST: datasets.stageLost.length
   };
 
   if (els.salesmanSimplifiedGreeting) {
@@ -7232,7 +7250,8 @@ function renderSalesmanSimplifiedDashboard() {
       { label: "New", value: pipelineCounts.NEW, type: "salesmanStageNew", icon: "stageNew", tone: "new" },
       { label: "Contacted", value: pipelineCounts.CONTACTED, type: "salesmanStageContacted", icon: "stageContacted", tone: "contacted" },
       { label: "Negotiation", value: pipelineCounts.NEGOTIATION, type: "salesmanStageNegotiation", icon: "stageNegotiation", tone: "negotiation" },
-      { label: "Won", value: pipelineCounts.WON, type: "salesmanStageWon", icon: "stageWon", tone: "won" }
+      { label: "Won", value: pipelineCounts.WON, type: "salesmanStageWon", icon: "stageWon", tone: "won" },
+      { label: "Lost", value: pipelineCounts.LOST, type: "salesmanStageLost", icon: "stageLost", tone: "lost" }
     ].map(card => `
       <button class="salesman-simplified-stage tone-${escapeHtml(card.tone)} ${summaryLoading ? "is-loading" : ""}" type="button" data-summary-card="${escapeHtml(card.type)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" aria-label="${escapeHtml(`${card.label} leads, ${card.value}. View summary`)}" title="${escapeHtml(`View ${card.label} leads breakdown`)}" aria-busy="${summaryLoading}" ${summaryLoading ? "disabled" : ""}>
         <span class="salesman-stage-copy">
@@ -7250,6 +7269,8 @@ function renderSalesmanSimplifiedDashboard() {
   }
   if (els.salesmanDashboardLeadList) {
     const dashboardLeads = [...leads].sort((a, b) => {
+      const statusComparison = salesmanLeadDisplayRank(a) - salesmanLeadDisplayRank(b);
+      if (statusComparison) return statusComparison;
       const aDue = String(a.next_action_date || "9999-12-31").slice(0, 10);
       const bDue = String(b.next_action_date || "9999-12-31").slice(0, 10);
       return aDue.localeCompare(bDue) || compareNewestLeadFirst(a, b);
@@ -8214,6 +8235,10 @@ function pipelineSortValue(lead, key) {
   return values[key] ?? "";
 }
 
+function salesmanLeadDisplayRank(lead) {
+  return ["DORMANT", "LOST"].includes(normalizeStageKey(lead?.stage)) ? 1 : 0;
+}
+
 function pipelineFilteredAndSortedLeads() {
   const nextAction = state.pipelineTable.nextAction;
   const dueDate = state.pipelineTable.dueDate;
@@ -8233,6 +8258,10 @@ function pipelineFilteredAndSortedLeads() {
     })
     .map((lead, index) => ({ lead, index }))
     .sort((left, right) => {
+      const statusComparison = isSalesmanRole()
+        ? salesmanLeadDisplayRank(left.lead) - salesmanLeadDisplayRank(right.lead)
+        : 0;
+      if (statusComparison) return statusComparison;
       const a = pipelineSortValue(left.lead, key);
       const b = pipelineSortValue(right.lead, key);
       const comparison = typeof a === "number" && typeof b === "number"
@@ -11272,7 +11301,7 @@ function renderActivityReminders(upcoming, overdue) {
 function renderActivityQuickLinks() {
   if (!els.activityQuickLinks) return;
   const tasks = allReminders().length;
-  const activePipeline = state.leads.filter(lead => !["WON", "LOST"].includes(normalizeStageKey(lead.stage))).length;
+  const activePipeline = state.leads.filter(lead => !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage))).length;
   const quotes = state.leads.filter(lead =>
     Boolean(lead.quotation_ref)
     || String(lead.activity_purpose || "").toLowerCase().includes("quotation")

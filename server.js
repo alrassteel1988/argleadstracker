@@ -173,7 +173,16 @@ const RATE_LIMIT_SECRET_CONFIGURED = Boolean(process.env.RATE_LIMIT_HASH_SECRET 
 const RATE_LIMIT_HASH_SECRET = process.env.RATE_LIMIT_HASH_SECRET || SESSION_SECRET;
 const RATE_LIMIT_TENANT_ID = String(process.env.RATE_LIMIT_TENANT_ID || "arg-leads-tracker").trim();
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
-const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "LOST"];
+const LOCAL_SESSION_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+const SESSION_ISSUER = "arg-lead-tracker-local";
+const LOCAL_SESSION_CSRF_BYTES = 16;
+const LOGIN_BODY_MAX_BYTES = 32 * 1024;
+const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "").split(",").map(origin => origin.trim()).filter(Boolean);
+const CORS_ALLOW_CREDENTIALS = String(process.env.CORS_ALLOW_CREDENTIALS || "true").toLowerCase() === "true";
+const CORS_MAX_AGE_SECONDS = Number(process.env.CORS_MAX_AGE_SECONDS || 600);
+const CORS_ALLOWED_METHODS = "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS";
+const CORS_ALLOWED_HEADERS = "Authorization, Content-Type, X-CSRF-Token";
+const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "DORMANT", "LOST"];
 const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
 const COMPANY_TIERS = ["1", "2", "3"];
 const GCC_TERRITORIES = ["UAE-North", "UAE-South", "Saudi", "Kuwait", "Bahrain", "Oman", "Mixed"];
@@ -1078,7 +1087,7 @@ function normalizeStageValue(value, fallback = "NEW") {
     NEGOTIATION: "NEGOTIATION",
     ACTIVE: "WON",
     WON: "WON",
-    DORMANT: "LOST",
+    DORMANT: "DORMANT",
     "AT RISK": "LOST",
     LOST: "LOST"
   };
@@ -1691,7 +1700,7 @@ function expectedFrequencyDays(lead) {
 function relationshipHealth(lead) {
   const elapsed = daysSince(lead.last_activity || lead.next_action_date);
   const expected = expectedFrequencyDays(lead);
-  if (normalizeStageValue(lead.stage, "NEW") === "LOST" || elapsed > expected * 1.6) return { label: "RED", score: 1, reason: `${elapsed} days since last activity` };
+  if (["LOST", "DORMANT"].includes(normalizeStageValue(lead.stage, "NEW")) || elapsed > expected * 1.6) return { label: "RED", score: 1, reason: `${elapsed} days since last activity` };
   if (elapsed > expected) return { label: "AMBER", score: 2, reason: `${elapsed} days since last activity` };
   return { label: "GREEN", score: 3, reason: `Activity within ${expected}-day expected contact window` };
 }
@@ -4281,6 +4290,7 @@ function weeklyProblemCandidateFlags(lead) {
   if (nextActionDate && nextActionDate < new Date().toISOString().slice(0, 10)) flags.push(`Follow-up overdue since ${nextActionDate}`);
   if (String(lead?.priority || "").toLowerCase() === "at risk") flags.push("Marked at risk in CRM");
   if (normalizeStageValue(lead?.stage, "NEW") === "LOST") flags.push("Lead is in lost stage");
+  if (normalizeStageValue(lead?.stage, "NEW") === "DORMANT") flags.push("Lead is marked dormant; no future steel requirement is expected");
   const lastActivity = isoDateOnly(lead?.last_activity);
   if (lastActivity) {
     const age = Math.floor((Date.now() - new Date(`${lastActivity}T00:00:00`).getTime()) / 86400000);
@@ -4317,7 +4327,7 @@ function securedOrdersForWeeklyReport(leads, weekEnding) {
 
 function expectedOrdersForWeeklyReport(leads) {
   return (leads || [])
-    .filter(lead => !["WON", "LOST"].includes(normalizeStageValue(lead?.stage, "NEW")))
+    .filter(lead => !["WON", "DORMANT", "LOST"].includes(normalizeStageValue(lead?.stage, "NEW")))
     .sort((a, b) => Number(b.estimated_value || 0) - Number(a.estimated_value || 0))
     .slice(0, 12)
     .map(lead => ({
