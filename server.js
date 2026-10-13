@@ -173,15 +173,6 @@ const RATE_LIMIT_SECRET_CONFIGURED = Boolean(process.env.RATE_LIMIT_HASH_SECRET 
 const RATE_LIMIT_HASH_SECRET = process.env.RATE_LIMIT_HASH_SECRET || SESSION_SECRET;
 const RATE_LIMIT_TENANT_ID = String(process.env.RATE_LIMIT_TENANT_ID || "arg-leads-tracker").trim();
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
-const LOCAL_SESSION_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
-const SESSION_ISSUER = "arg-lead-tracker-local";
-const LOCAL_SESSION_CSRF_BYTES = 16;
-const LOGIN_BODY_MAX_BYTES = 32 * 1024;
-const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "").split(",").map(origin => origin.trim()).filter(Boolean);
-const CORS_ALLOW_CREDENTIALS = String(process.env.CORS_ALLOW_CREDENTIALS || "true").toLowerCase() === "true";
-const CORS_MAX_AGE_SECONDS = Number(process.env.CORS_MAX_AGE_SECONDS || 600);
-const CORS_ALLOWED_METHODS = "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS";
-const CORS_ALLOWED_HEADERS = "Authorization, Content-Type, X-CSRF-Token";
 const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "DORMANT", "LOST"];
 const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
 const COMPANY_TIERS = ["1", "2", "3"];

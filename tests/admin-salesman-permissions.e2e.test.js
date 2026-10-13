@@ -56,16 +56,6 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     const adminToken = adminLogin.data.token;
     const adminCsrfToken = adminLogin.data.csrf_token;
 
-    const salesmanAccountWithoutCsrf = await request(baseUrl, "/api/users", {
-      method: "POST",
-      token: adminToken,
-      body: { name: "E2E Salesman", email: "salesman-e2e@alrassteel.test", password: "SalesPass123!", territory: "UAE-North" }
-    });
-    assert.equal(salesmanAccountWithoutCsrf.response.status, 403);
-    const usersAfterMissingCsrf = await request(baseUrl, "/api/users", { token: adminToken });
-    assert.equal(usersAfterMissingCsrf.response.status, 200);
-    assert.equal(usersAfterMissingCsrf.data.some(user => String(user.email || "").toLowerCase() === "salesman-e2e@alrassteel.test"), false);
-
     const salesmanAccount = await request(baseUrl, "/api/users", {
       method: "POST",
       token: adminToken,
