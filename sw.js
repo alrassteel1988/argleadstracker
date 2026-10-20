@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v78-consistent-admin-sidebar";
+const CACHE_VERSION = "arg-pwa-v79-admin-activity-shared-theme";
 const APP_SHELL = [
   "/",
   "/index.html",
