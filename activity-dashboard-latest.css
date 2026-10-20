@@ -1813,6 +1813,16 @@ body.activity-admin-mode .activity-weekly-empty {
 }
 
 /* Admin Activity shared CRM section titles: Weekly calendar, Activity log, Reminders only. */
+/* The legacy .panel highlight paints over child headers, even on solid fills. */
+body.activity-admin-mode :is(
+  .activity-weekly-card,
+  .activity-log-panel,
+  .activity-reminders-panel
+)::before {
+  content: none !important;
+  background: none !important;
+}
+
 body.activity-admin-mode :is(
   .activity-weekly-card,
   .activity-log-panel,

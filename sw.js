@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v79-admin-activity-shared-theme";
+const CACHE_VERSION = "arg-pwa-v80-activity-solid-navy-caps";
 const APP_SHELL = [
   "/",
   "/index.html",
