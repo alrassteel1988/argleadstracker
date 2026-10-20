@@ -209,6 +209,7 @@ const els = {
   smartSearchShell: document.querySelector("#smartSearchShell"),
   smartSearchInput: document.querySelector("#smartSearchInput"),
   smartSearchPanel: document.querySelector("#smartSearchPanel"),
+  mobileTabs: document.querySelector("#mobileTabs"),
   mobileAlertsBadge: document.querySelector("#mobileAlertsBadge"),
   installBanner: document.querySelector("#installBanner"),
   installBannerTitle: document.querySelector("#installBannerTitle"),
@@ -13659,6 +13660,7 @@ function showLogin(message = "") {
   els.loginMessage.textContent = message;
   els.authScreen.classList.remove("hidden");
   els.appShell.classList.add("hidden");
+  els.mobileTabs?.classList.add("hidden");
   els.overdueBanner?.classList.add("hidden");
   els.overduePipelineFilter?.classList.add("hidden");
   els.installBanner?.classList.add("hidden");
@@ -13673,6 +13675,7 @@ function showLogin(message = "") {
 function configureRoleUi(user) {
   const role = normalizeRoleValue(user?.role);
   const admin = role === "admin";
+  document.body.classList.toggle("admin-shell", admin);
   const salesman = role === "salesman";
   const privileged = !salesman;
   if (salesman) {
@@ -13734,6 +13737,7 @@ function showApp(user) {
   configureRoleUi(user);
   els.authScreen.classList.add("hidden");
   els.appShell.classList.remove("hidden");
+  els.mobileTabs?.classList.remove("hidden");
   document.querySelector("#aiAssistantLauncher")?.classList.remove("hidden");
   maybeShowInstallBanner();
   refreshSyncState();

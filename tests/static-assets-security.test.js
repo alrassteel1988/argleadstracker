@@ -11,6 +11,7 @@ const publicRequests = [
   ["/leads/lead-1001?tab=activities", "text/html"],
   ["/client.js?v=test", "text/javascript"],
   ["/styles.css?v=test", "text/css"],
+  ["/mobile-ui.css?v=test", "text/css"],
   ["/manifest.json", "application/json"],
   ["/favicon.svg", "image/svg+xml"],
   ["/icons/icon-192.png", "image/png"],

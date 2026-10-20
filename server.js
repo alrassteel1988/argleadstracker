@@ -258,6 +258,7 @@ const PUBLIC_STATIC_FILES = new Map([
   ["/bauhaus-global.css", "bauhaus-global.css"],
   ["/lead-detail-contrast.css", "lead-detail-contrast.css"],
   ["/lead-detail-readability.css", "lead-detail-readability.css"],
+  ["/mobile-ui.css", "mobile-ui.css"],
   ["/pipeline-live-leads.css", "pipeline-live-leads.css"],
   ["/salesman-dashboard-live-leads.css", "salesman-dashboard-live-leads.css"],
   ["/salesman-dashboard-summaries.css", "salesman-dashboard-summaries.css"],

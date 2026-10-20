@@ -34,6 +34,7 @@
   --text-body-readable: 14px;
   --text-table-readable: 13px;
   --text-control-readable: 13px;
+  --app-sidebar-width: 188px;
 
   /* Rebind legacy presentation tokens to opaque shared values. */
   --blue-sidebar: var(--bauhaus-navy);
@@ -1322,4 +1323,19 @@ button:disabled,
   background: var(--bauhaus-light-yellow) !important;
   border: 1px solid var(--bauhaus-orange) !important;
   color: #6e4a16 !important;
+}
+
+/* Keep the Admin navigation rail stable when page-specific layouts change. */
+@media (min-width: 1025px) {
+  body.admin-shell .app-shell {
+    grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr) !important;
+  }
+
+  body.admin-shell .sidebar {
+    box-sizing: border-box;
+    width: var(--app-sidebar-width) !important;
+    max-width: var(--app-sidebar-width) !important;
+    padding: 18px 0 0 !important;
+    overflow-y: auto;
+  }
 }

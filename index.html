@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="/lead-detail-readability.css?v=7-badge-contrast">
   <link rel="stylesheet" href="/activity-readability.css?v=8-admin-density">
   <link rel="stylesheet" href="/tasks-bauhaus-flat.css?v=1">
-  <link rel="stylesheet" href="/bauhaus-global.css?v=5-readable-modals">
+  <link rel="stylesheet" href="/bauhaus-global.css?v=6-consistent-admin-sidebar">
   <link rel="stylesheet" href="/salesmen-directory.css?v=9-bauhaus-cards-toggle">
   <link rel="stylesheet" href="/salesman-dashboard-summaries.css?v=3-compact">
   <link rel="stylesheet" href="/pipeline-live-leads.css?v=5-date-contrast">
@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="/ai-sales-assistant.css?v=1">
   <link rel="stylesheet" href="/activity-dashboard-latest.css?v=section-header-french-blue-1">
   <link rel="stylesheet" href="/lead-detail-contrast.css?v=2-action-buttons">
+  <link rel="stylesheet" href="/mobile-ui.css?v=1">
   </head>
   <body>
     <main class="auth-screen" id="authScreen">
@@ -967,7 +968,7 @@
       <button class="primary-button" type="button" id="refreshAppButton">Refresh</button>
     </aside>
 
-    <div class="mobile-tabs" aria-label="Mobile navigation">
+    <div class="mobile-tabs hidden" id="mobileTabs" aria-label="Mobile navigation">
       <button class="nav-item active" data-view="dashboard"><span>Home</span>Home</button>
       <button class="nav-item" data-view="pipeline"><span>Leads</span>Leads</button>
       <button class="nav-item mobile-log-tab" data-mobile-action="quick-log"><span>+</span>Log</button>
