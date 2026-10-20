@@ -10,7 +10,7 @@ const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /activity-dashboard-latest\.css\?v=shared-crm-theme-2/, "Activity CSS must use the shared-theme cache revision");
+assert.match(html, /activity-dashboard-latest\.css\?v=solid-navy-caps-3/, "Activity CSS must use the solid-header cache revision");
 assert.ok(
   html.indexOf("activity-dashboard-latest.css") > html.indexOf("bauhaus-global.css"),
   "The latest Activity layer must win the theme cascade"
@@ -32,6 +32,7 @@ assert.match(client, /class="activity-weekly-empty">No activity scheduled\.<\/p>
 assert.match(client, /const dayItems = itemsForDay\(day\.date\)/, "Each day must render its own zero, one, or multiple scheduled items");
 assert.match(css, /\.activity-kpi-copy > strong,[\s\S]*background:\s*transparent\s*!important/, "KPI values must not use large tinted value backgrounds");
 assert.match(css, /Admin Activity shared CRM section titles/, "Activity section titles must use the shared CRM theme");
+assert.match(css, /body\.activity-admin-mode :is\(\s*\.activity-weekly-card,\s*\.activity-log-panel,\s*\.activity-reminders-panel\s*\)::before\s*\{[^}]*content:\s*none\s*!important;[^}]*background:\s*none\s*!important;/, "Legacy panel highlight overlays must not wash out the three navy Activity headers");
 assert.match(css, /\.activity-weekly-card,[\s\S]*\.activity-log-panel,[\s\S]*\.activity-reminders-panel[\s\S]*> \.activity-section-header\s*\{[^}]*box-sizing:\s*border-box\s*!important;[^}]*border:\s*2px solid var\(--bauhaus-navy\)\s*!important;[^}]*background:\s*var\(--bauhaus-navy\)\s*!important;[^}]*color:\s*#FFFFFF\s*!important;/, "Activity section headers must match the navy CRM panel headers");
 assert.match(css, /> \.activity-section-header h2\s*\{[^}]*color:\s*#FFFFFF\s*!important;[^}]*font-size:\s*18px\s*!important;[^}]*font-weight:\s*700\s*!important;/, "Framed Activity section titles must use white bold text");
 assert.match(css, /> \.activity-section-header :is\(\.activity-weekly-subheading, div > span:not\(\.activity-count-pill\)\)\s*\{[^}]*color:\s*#FFFFFF\s*!important;[^}]*font-size:\s*13px\s*!important;[^}]*font-weight:\s*400\s*!important;[^}]*opacity:\s*1\s*!important;/, "Framed Activity section subtitles must use white non-faded text");
@@ -50,7 +51,7 @@ assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.activity-table td::befo
 assert.doesNotMatch(css, /\.sidebar\b/, "The Activity redesign must not change sidebar sizing");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter:\s*blur|filter:\s*blur/i, "The latest Activity layer must remain flat and opaque");
 assert.match(serviceWorker, /"\/activity-dashboard-latest\.css"/, "The PWA shell must cache the latest Activity layer");
-assert.match(serviceWorker, /arg-pwa-v79-admin-activity-shared-theme/, "The PWA cache must include the latest UI asset revision");
+assert.match(serviceWorker, /arg-pwa-v80-activity-solid-navy-caps/, "The PWA cache must include the latest UI asset revision");
 assert.match(serviceWorker, /\.then\(\(\) => self\.skipWaiting\(\)\)/, "The updated service worker must activate immediately for stale CRM sessions");
 assert.match(serviceWorker, /event\.respondWith\(networkFirst\(request\)\)/, "Same-origin UI assets must prefer the network before cached fallbacks");
 assert.match(vercel, /"src": "activity-dashboard-latest\.css"/, "Vercel must publish the latest Activity layer");
