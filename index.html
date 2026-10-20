@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="/activity-readability.css?v=8-admin-density">
   <link rel="stylesheet" href="/tasks-bauhaus-flat.css?v=1">
   <link rel="stylesheet" href="/bauhaus-global.css?v=6-consistent-admin-sidebar">
-  <link rel="stylesheet" href="/salesmen-directory.css?v=9-bauhaus-cards-toggle">
+  <link rel="stylesheet" href="/salesmen-directory.css?v=10-full-height-sidebar">
   <link rel="stylesheet" href="/salesman-dashboard-summaries.css?v=3-compact">
   <link rel="stylesheet" href="/pipeline-live-leads.css?v=5-date-contrast">
   <link rel="stylesheet" href="/tasks-contrast.css?v=1">
@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="/activity-workflow.css?v=1">
   <link rel="stylesheet" href="/admin-dashboard-clean.css?v=6-intel-alert-spacing">
   <link rel="stylesheet" href="/ai-sales-assistant.css?v=1">
-  <link rel="stylesheet" href="/activity-dashboard-latest.css?v=solid-navy-caps-3">
+  <link rel="stylesheet" href="/activity-dashboard-latest.css?v=calendar-minimize-4">
   <link rel="stylesheet" href="/lead-detail-contrast.css?v=2-action-buttons">
   <link rel="stylesheet" href="/mobile-ui.css?v=1">
   </head>
@@ -861,6 +861,7 @@
                     <button class="calendar-nav-button" id="activityPrevWeek" type="button" aria-label="Previous week">‹</button>
                     <span class="calendar-range-pill" id="activityWeekRange">Week view</span>
                     <button class="calendar-nav-button" id="activityNextWeek" type="button" aria-label="Next week">›</button>
+                    <button class="ghost-button activity-header-action hidden" id="activityCalendarToggle" type="button" aria-expanded="true" aria-controls="activityWeeklyLog" aria-label="Minimize weekly calendar">Minimize</button>
                   </div>
                 </div>
                 <div class="activity-weekly-log" id="activityWeeklyLog"></div>
@@ -1741,7 +1742,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=salesman-active-first-1"></script>
+  <script src="/client.js?v=activity-calendar-minimize-2"></script>
   </body>
 </html>
 

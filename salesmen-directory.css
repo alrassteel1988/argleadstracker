@@ -31,6 +31,21 @@ body.salesmen-mode .main {
   min-width: 0;
 }
 
+/* Match the content-height page instead of the legacy viewport-height rail. */
+@media (min-width: 1025px) {
+  body.salesmen-mode .sidebar {
+    height: auto !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    align-self: stretch;
+  }
+
+  body.salesmen-mode .sidebar-footer {
+    margin-top: auto;
+    flex-shrink: 0;
+  }
+}
+
 body.salesmen-mode #salesmenView {
   display: block;
   width: 100%;

@@ -94,6 +94,7 @@ const state = {
   activityFiltersOpen: false,
   activityFilters: loadActivityFilters(),
   activityWeekAnchor: today(),
+  activityCalendarMinimized: false,
   weeklyReports: {
     loading: false,
     actionPending: false,
@@ -456,6 +457,7 @@ const els = {
   activityView: document.querySelector("#activityView"),
   activityFeed: document.querySelector("#activityFeed"),
   activityWeeklyLog: document.querySelector("#activityWeeklyLog"),
+  activityCalendarToggle: document.querySelector("#activityCalendarToggle"),
   activitySummary: document.querySelector("#activitySummary"),
   activityFilterToggle: document.querySelector("#activityFilterToggle"),
   activityFilterBar: document.querySelector("#activityFilterBar"),
@@ -13073,7 +13075,23 @@ function bindWeeklyReviewEvents() {
   });
 }
 
+function renderActivityCalendarVisibility() {
+  const admin = state.currentUser?.role === "admin" || state.currentUser?.role === "manager";
+  const minimized = admin && state.activityCalendarMinimized;
+  if (els.activityCalendarToggle) {
+    els.activityCalendarToggle.classList.toggle("hidden", !admin);
+    els.activityCalendarToggle.textContent = minimized ? "Expand" : "Minimize";
+    els.activityCalendarToggle.setAttribute("aria-expanded", String(!minimized));
+    els.activityCalendarToggle.setAttribute("aria-label", `${minimized ? "Expand" : "Minimize"} weekly calendar`);
+  }
+  if (els.activityWeeklyLog) {
+    els.activityWeeklyLog.hidden = minimized;
+    els.activityWeeklyLog.closest(".activity-weekly-card")?.classList.toggle("is-minimized", minimized);
+  }
+}
+
 function renderActivityView() {
+  renderActivityCalendarVisibility();
   const activities = state.activities || [];
   const canReviewDeletions = ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase());
   els.openActivityDeletionQueue?.classList.toggle("hidden", !canReviewDeletions);
@@ -14184,6 +14202,11 @@ els.activityPrevWeek?.addEventListener("click", () => {
   state.activityWeekAnchor = isoDateFromDate(addDays(dateOnly(state.activityWeekAnchor), -7));
   renderActivityView();
   renderTopbar();
+});
+els.activityCalendarToggle?.addEventListener("click", () => {
+  if (state.currentUser?.role !== "admin" && state.currentUser?.role !== "manager") return;
+  state.activityCalendarMinimized = !state.activityCalendarMinimized;
+  renderActivityCalendarVisibility();
 });
 els.activityNextWeek?.addEventListener("click", () => {
   state.activityWeekAnchor = isoDateFromDate(addDays(dateOnly(state.activityWeekAnchor), 7));
