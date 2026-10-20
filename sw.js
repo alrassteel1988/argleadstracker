@@ -1,10 +1,11 @@
-const CACHE_VERSION = "arg-pwa-v76-admin-dashboard-intel-alert-spacing";
+const CACHE_VERSION = "arg-pwa-v78-consistent-admin-sidebar";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
   "/salesman-dashboard-live-leads.css",
   "/lead-detail-readability.css",
+  "/mobile-ui.css",
   "/activity-readability.css",
   "/activity-dashboard-latest.css",
   "/tasks-bauhaus-flat.css",

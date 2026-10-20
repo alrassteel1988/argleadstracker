@@ -67,7 +67,7 @@ assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*?#dashboardStatus\s*\{[^}
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v76-admin-dashboard-intel-alert-spacing/, "PWA cache must rotate for the Intel and alert spacing update");
+assert.match(sw, /arg-pwa-v78-consistent-admin-sidebar/, "PWA cache must rotate for the Admin sidebar update");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
 assert.match(sw, /if \(url\.pathname\.startsWith\("\/api\/"\)\) return;/, "PWA must keep API responses out of the cache");
 assert.match(vercel, /"src": "admin-dashboard-clean\.css"/, "Vercel must build the dashboard stylesheet");

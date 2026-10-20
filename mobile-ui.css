@@ -1,0 +1,204 @@
+/* Shared mobile usability layer.  Loaded last so every role gets the same safe phone layout. */
+@media (max-width: 720px) {
+  :root {
+    --mobile-page-gutter: 12px;
+    --mobile-navigation-height: 82px;
+  }
+
+  html {
+    scroll-padding-bottom: calc(var(--mobile-navigation-height) + env(safe-area-inset-bottom));
+  }
+
+  body,
+  .app-shell,
+  .main,
+  .topbar,
+  .topbar-title,
+  .topbar-copy,
+  .topbar-actions,
+  .panel,
+  .view-panel,
+  .content-grid {
+    min-width: 0;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .main {
+    padding: 12px var(--mobile-page-gutter) calc(var(--mobile-navigation-height) + 18px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .auth-hero h1 {
+    font-size: clamp(28px, 8.2vw, 34px);
+    line-height: 1.12;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 19;
+    gap: 12px;
+    margin-bottom: 12px !important;
+  }
+
+  .topbar-title {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .topbar-copy h1 {
+    overflow-wrap: anywhere;
+    font-size: clamp(20px, 6vw, 24px) !important;
+    line-height: 1.15 !important;
+  }
+
+  .topbar-copy p {
+    overflow-wrap: anywhere;
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+  }
+
+  .mobile-menu-button,
+  .topbar-actions :is(button, .sync-status-pill) {
+    min-height: 44px;
+  }
+
+  .topbar-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .topbar-actions .smart-search-shell,
+  .topbar-actions .sync-status-pill {
+    grid-column: 1 / -1;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  .topbar-actions :is(button, .sync-status-pill) {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    white-space: normal;
+  }
+
+  .topbar-actions .smart-search-field {
+    min-height: 44px !important;
+    background-color: var(--bauhaus-surface) !important;
+  }
+
+  body :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    min-height: 44px;
+    font-size: 16px !important;
+  }
+
+  body textarea {
+    min-height: 96px;
+  }
+
+  .mobile-tabs {
+    min-height: var(--mobile-navigation-height);
+    padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+    border-top: 2px solid var(--bauhaus-border) !important;
+    background-color: var(--bauhaus-surface) !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-tabs .nav-item {
+    min-width: 0;
+    min-height: 52px;
+    padding: 7px 3px;
+    border-radius: var(--bauhaus-radius) !important;
+    font-size: 12px !important;
+    line-height: 1.15;
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+
+  .mobile-tabs .nav-item > span:not(.mobile-alert-badge) {
+    display: none;
+  }
+
+  .mobile-tabs .mobile-log-tab::before {
+    content: "+";
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 0.9;
+  }
+
+  .mobile-tabs .mobile-log-tab {
+    margin-top: -14px;
+    border: 2px solid var(--bauhaus-border) !important;
+    border-radius: var(--bauhaus-radius) !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-tabs .mobile-log-tab span {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--bauhaus-radius) !important;
+  }
+
+  :is(
+    .lead-table-scroll,
+    .summary-card-details-table-wrap,
+    .salesman-leads-list-wrap,
+    .pipeline-funnel-table-wrap,
+    .activity-weekly-log
+  ) {
+    max-width: 100%;
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  :is(.summary-card-details-dialog, .salesman-leads-dialog) {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+    margin: auto !important;
+  }
+
+  :is(.summary-card-details-header, .salesman-leads-dialog .dialog-header) {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .summary-card-details-header-actions {
+    align-items: flex-end;
+  }
+}
+
+@media (max-width: 420px) {
+  .main {
+    padding-inline: 10px !important;
+  }
+
+  .topbar-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .topbar-actions > * {
+    grid-column: 1 / -1;
+  }
+
+  .metrics,
+  .salesman-simplified-metrics {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .mobile-tabs,
+  .topbar {
+    transition: none !important;
+  }
+}

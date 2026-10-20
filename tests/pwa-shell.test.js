@@ -18,11 +18,13 @@ assert.ok(index.includes('id="installBanner"'));
 assert.ok(index.includes('id="quickLogDialog"'));
 assert.ok(index.includes('data-mobile-action="quick-log"'));
 assert.ok(index.includes('id="pendingChangesDialog"'));
+assert.ok(index.includes('href="/mobile-ui.css?v=1"'));
 
 const sw = read("sw.js");
 assert.ok(sw.includes('url.pathname.startsWith("/api/")'));
 assert.ok(sw.includes("staleWhileRevalidate"));
 assert.ok(sw.includes("arg-outbox-sync"));
+assert.ok(sw.includes('"/mobile-ui.css"'));
 
 const client = read("client.js");
 assert.ok(client.includes("indexedDB.open(OUTBOX_DB_NAME"));
