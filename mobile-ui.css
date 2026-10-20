@@ -30,11 +30,6 @@
     padding: 12px var(--mobile-page-gutter) calc(var(--mobile-navigation-height) + 18px + env(safe-area-inset-bottom)) !important;
   }
 
-  .auth-hero h1 {
-    font-size: clamp(28px, 8.2vw, 34px);
-    line-height: 1.12;
-  }
-
   .topbar {
     position: sticky;
     top: 0;

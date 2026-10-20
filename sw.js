@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v82-activity-calendar-minimize";
+const CACHE_VERSION = "arg-pwa-v83-responsive-login-redesign";
 const APP_SHELL = [
   "/",
   "/index.html",

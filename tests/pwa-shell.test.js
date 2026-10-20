@@ -18,7 +18,7 @@ assert.ok(index.includes('id="installBanner"'));
 assert.ok(index.includes('id="quickLogDialog"'));
 assert.ok(index.includes('data-mobile-action="quick-log"'));
 assert.ok(index.includes('id="pendingChangesDialog"'));
-assert.ok(index.includes('href="/mobile-ui.css?v=1"'));
+assert.ok(index.includes('href="/mobile-ui.css?v=2-login-typography"'));
 
 const sw = read("sw.js");
 assert.ok(sw.includes('url.pathname.startsWith("/api/")'));
