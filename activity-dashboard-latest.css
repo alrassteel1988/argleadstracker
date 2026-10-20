@@ -1,14 +1,15 @@
 /* Latest Admin Activity workspace. This final layer intentionally wins over
    earlier Activity experiments while remaining isolated from the sidebar. */
 body.activity-admin-mode {
-  --activity-latest-ink: #102a43;
-  --activity-latest-muted: #475569;
-  --activity-latest-line: #cbd5e1;
-  --activity-latest-soft: #f8fafc;
-  --activity-latest-blue: #1677c8;
-  --activity-latest-red: #d64545;
-  --activity-latest-amber: #e58b13;
-  --activity-latest-green: #438b32;
+  --activity-latest-ink: var(--bauhaus-text);
+  --activity-latest-muted: var(--bauhaus-text-muted);
+  --activity-latest-line: var(--bauhaus-border-light);
+  --activity-latest-soft: var(--bauhaus-muted);
+  --activity-latest-blue: var(--bauhaus-blue);
+  --activity-latest-red: var(--bauhaus-metric-red);
+  --activity-latest-amber: var(--bauhaus-metric-orange);
+  --activity-latest-green: var(--bauhaus-metric-green);
+  --activity-latest-page: var(--bauhaus-background);
 }
 
 body.activity-admin-mode .main {
@@ -86,7 +87,7 @@ body.activity-admin-mode .activity-kpi-icon {
   width: 42px;
   height: 42px;
   border-radius: 6px;
-  background-color: #eaf3fb;
+  background-color: var(--bauhaus-light-blue);
   font-size: 13px;
 }
 
@@ -121,35 +122,35 @@ body.activity-admin-mode .activity-kpi-copy > strong {
 }
 
 body.activity-admin-mode .activity-kpi-card--blue {
-  border-color: #b8d5ee;
+  border-color: var(--bauhaus-blue);
   color: var(--activity-latest-blue);
 }
 
 body.activity-admin-mode .activity-kpi-card--red {
-  border-color: #efc0c0;
+  border-color: var(--bauhaus-red);
   color: var(--activity-latest-red);
 }
 
 body.activity-admin-mode .activity-kpi-card--red .activity-kpi-icon {
-  background-color: #fbe8e8;
+  background-color: var(--bauhaus-light-red);
 }
 
 body.activity-admin-mode .activity-kpi-card--amber {
-  border-color: #f0d1a3;
+  border-color: var(--bauhaus-orange);
   color: var(--activity-latest-amber);
 }
 
 body.activity-admin-mode .activity-kpi-card--amber .activity-kpi-icon {
-  background-color: #fff1da;
+  background-color: var(--bauhaus-light-yellow);
 }
 
 body.activity-admin-mode .activity-kpi-card--green {
-  border-color: #c8dfbc;
+  border-color: var(--bauhaus-green);
   color: var(--activity-latest-green);
 }
 
 body.activity-admin-mode .activity-kpi-card--green .activity-kpi-icon {
-  background-color: #eaf5e4;
+  background-color: var(--bauhaus-light-green);
 }
 
 body.activity-admin-mode .activity-weekly-card,
@@ -249,7 +250,7 @@ body.activity-admin-mode .activity-weekly-card .activity-day-chip {
   gap: 5px;
   min-height: 31px;
   padding: 4px 8px;
-  border: 1px solid #dbe3eb;
+  border: 1px solid var(--bauhaus-border-light);
   border-radius: 5px;
   background-color: #ffffff;
 }
@@ -455,7 +456,7 @@ body.activity-admin-mode .activity-table-type i {
   width: 24px;
   height: 24px;
   border-radius: 5px;
-  background-color: #eef4f9;
+  background-color: var(--bauhaus-light-blue);
   color: var(--activity-latest-blue);
   font-style: normal;
 }
@@ -465,9 +466,9 @@ body.activity-admin-mode .activity-table-status {
   min-height: 24px;
   align-items: center;
   padding: 3px 7px;
-  border: 1px solid #d2dbe5;
+  border: 1px solid var(--bauhaus-border-light);
   border-radius: 5px;
-  background-color: #eef2f6;
+  background-color: var(--bauhaus-muted);
   color: #334155;
   font-size: 10px;
   font-weight: 700;
@@ -475,21 +476,21 @@ body.activity-admin-mode .activity-table-status {
 
 body.activity-admin-mode .activity-table-status.overdue,
 body.activity-admin-mode .activity-table-status.pending {
-  border-color: #efb4b4;
-  background-color: #fbe6e6;
+  border-color: var(--bauhaus-red);
+  background-color: var(--bauhaus-light-red);
   color: #8a2020;
 }
 
 body.activity-admin-mode .activity-table-status.upcoming,
 body.activity-admin-mode .activity-table-status.scheduled {
-  border-color: #f0d09d;
-  background-color: #fff1d8;
+  border-color: var(--bauhaus-orange);
+  background-color: var(--bauhaus-light-yellow);
   color: #7a4700;
 }
 
 body.activity-admin-mode .activity-table-status.completed {
-  border-color: #bddcae;
-  background-color: #e8f4e2;
+  border-color: var(--bauhaus-green);
+  background-color: var(--bauhaus-light-green);
   color: #285d19;
 }
 
@@ -504,7 +505,7 @@ body.activity-admin-mode .activity-table-actions .small-action,
 body.activity-admin-mode .activity-row-menu summary {
   min-height: 28px;
   padding: 4px 7px;
-  border: 1px solid #b9c7d5;
+  border: 1px solid var(--bauhaus-border-light);
   border-radius: 4px;
   background-color: #ffffff;
   color: var(--activity-latest-ink);
@@ -568,7 +569,7 @@ body.activity-admin-mode .activity-pagination > div {
 body.activity-admin-mode .activity-pagination button {
   width: 28px;
   height: 28px;
-  border: 1px solid #b9c7d5;
+  border: 1px solid var(--bauhaus-border-light);
   border-radius: 4px;
   background-color: #ffffff;
   color: var(--activity-latest-ink);
@@ -1195,16 +1196,6 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
    working Activity Log and Reminders columns most of the viewport. */
 @media (min-width: 1180px) and (min-height: 700px) {
   body.activity-admin-mode {
-    --activity-latest-ink: #102A43;
-    --activity-latest-muted: #607286;
-    --activity-latest-line: #CBD4DC;
-    --activity-latest-soft: #EEECE6;
-    --activity-latest-blue: #176B9C;
-    --activity-latest-red: #D9473F;
-    --activity-latest-amber: #F2B632;
-    --activity-latest-green: #3F8F3A;
-    --activity-latest-page: #F4F2EC;
-    --activity-latest-sidebar: #062638;
     height: 100dvh !important;
     min-height: 100dvh !important;
     overflow: hidden !important;
@@ -1233,21 +1224,21 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
     min-height: 50px !important;
     margin-bottom: 6px !important;
     padding: 6px 10px !important;
-    border: 1px solid var(--activity-latest-line) !important;
+    border: 1px solid var(--bauhaus-navy) !important;
     border-radius: 6px !important;
-    background: #ffffff !important;
+    background: var(--bauhaus-navy) !important;
     box-shadow: none !important;
   }
 
   body.activity-admin-mode .topbar h1 {
-    color: var(--activity-latest-ink) !important;
+    color: #ffffff !important;
     font-size: 26px !important;
     line-height: 1.05 !important;
   }
 
   body.activity-admin-mode .topbar-subtitle,
   body.activity-admin-mode #topbarContext {
-    color: var(--activity-latest-muted) !important;
+    color: #ffffff !important;
     font-size: 12px !important;
     line-height: 1.2 !important;
   }
@@ -1271,8 +1262,8 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
 
   body.activity-admin-mode .topbar-actions .primary-button,
   body.activity-admin-mode #openLeadForm {
-    background: var(--activity-latest-amber) !important;
-    color: #102A43 !important;
+    background: var(--bauhaus-yellow) !important;
+    color: var(--bauhaus-navy) !important;
   }
 
   body.activity-admin-mode .overdue-banner {
@@ -1634,7 +1625,7 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
     z-index: 2 !important;
     height: 29px !important;
     padding: 4px 7px !important;
-    background: #EEECE6 !important;
+    background: var(--bauhaus-muted) !important;
   }
 
   body.activity-admin-mode .activity-table-row,
@@ -1651,7 +1642,7 @@ body.activity-admin-mode #activityView :is(button, input, select, summary, [tabi
   body.activity-admin-mode .activity-table-type i {
     width: 20px !important;
     height: 20px !important;
-    background: #EEECE6 !important;
+    background: var(--bauhaus-muted) !important;
   }
 
   body.activity-admin-mode .activity-table-status {
@@ -1821,7 +1812,7 @@ body.activity-admin-mode .activity-weekly-empty {
   }
 }
 
-/* Admin Activity French blue section titles: Weekly calendar, Activity log, Reminders only. */
+/* Admin Activity shared CRM section titles: Weekly calendar, Activity log, Reminders only. */
 body.activity-admin-mode :is(
   .activity-weekly-card,
   .activity-log-panel,
@@ -1832,9 +1823,9 @@ body.activity-admin-mode :is(
   margin: 0 0 11px !important;
   box-sizing: border-box !important;
   padding: 8px 14px !important;
-  border: 2px solid #F6AA1C !important;
+  border: 2px solid var(--bauhaus-navy) !important;
   border-radius: 4px !important;
-  background: #003F91 !important;
+  background: var(--bauhaus-navy) !important;
   box-shadow: none !important;
   color: #FFFFFF !important;
 }
@@ -1886,7 +1877,39 @@ body.activity-admin-mode .activity-section-header :is(
   .calendar-nav-button,
   .calendar-range-pill
 ) {
-  background: #FFFFFF !important;
-  color: #2C363F !important;
-  border-color: #F6AA1C !important;
+  background: var(--bauhaus-surface) !important;
+  color: var(--bauhaus-navy) !important;
+  border-color: var(--bauhaus-border-light) !important;
+}
+
+/* Reuse the same solid metric palette as the Admin Dashboard at every width. */
+body.activity-admin-mode .activity-kpi-card--blue {
+  --activity-kpi-fill: var(--bauhaus-blue);
+}
+
+body.activity-admin-mode .activity-kpi-card--red {
+  --activity-kpi-fill: var(--bauhaus-metric-red);
+}
+
+body.activity-admin-mode .activity-kpi-card--amber {
+  --activity-kpi-fill: var(--bauhaus-metric-orange);
+}
+
+body.activity-admin-mode .activity-kpi-card--green {
+  --activity-kpi-fill: var(--bauhaus-metric-green);
+}
+
+body.activity-admin-mode .activity-kpi-card {
+  background: var(--activity-kpi-fill) !important;
+  color: #ffffff !important;
+}
+
+body.activity-admin-mode .activity-kpi-card .activity-kpi-copy > :is(span, strong, small) {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+body.activity-admin-mode .activity-kpi-card :is(.activity-kpi-icon, .activity-kpi-mark) {
+  background: var(--activity-kpi-fill) !important;
+  color: #ffffff !important;
 }
