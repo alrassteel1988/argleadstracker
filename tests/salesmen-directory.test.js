@@ -9,6 +9,13 @@ const css = fs.readFileSync(path.join(root, "salesmen-directory.css"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
+const desktopSidebar = css.match(/@media \(min-width: 1025px\)\s*\{\s*body\.salesmen-mode \.sidebar\s*\{([^}]+)\}/);
+assert.ok(desktopSidebar, "Salesmen needs a desktop-only sidebar height correction");
+assert.match(desktopSidebar[1], /height:\s*auto\s*!important;/, "Sidebar must grow with the full directory and performance snapshot, not stop at 100dvh");
+assert.match(desktopSidebar[1], /align-self:\s*stretch;/, "Sidebar must stretch to the main content grid row");
+assert.match(desktopSidebar[1], /min-height:\s*100dvh\s*!important;/, "Short Salesmen pages must still fill the viewport");
+assert.match(css, /body\.salesmen-mode \.sidebar-footer\s*\{[^}]*margin-top:\s*auto;[^}]*flex-shrink:\s*0;/, "User footer must stay at the bottom of the full-height sidebar without shrinking");
+
 for (const id of [
   "salesmenMetricTotal",
   "salesmenMetricTerritories",

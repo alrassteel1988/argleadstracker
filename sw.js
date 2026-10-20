@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v80-activity-solid-navy-caps";
+const CACHE_VERSION = "arg-pwa-v82-activity-calendar-minimize";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -1813,6 +1813,34 @@ body.activity-admin-mode .activity-weekly-empty {
 }
 
 /* Admin Activity shared CRM section titles: Weekly calendar, Activity log, Reminders only. */
+body.activity-admin-mode #activityWeeklyLog[hidden] {
+  display: none !important;
+}
+
+body.activity-admin-mode .activity-weekly-card.is-minimized {
+  min-height: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+body.activity-admin-mode .activity-weekly-card.is-minimized > .activity-section-header {
+  margin-bottom: 0 !important;
+}
+
+body.activity-admin-mode #activityCalendarToggle {
+  min-height: 36px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+body.activity-admin-mode #activityCalendarToggle:focus-visible {
+  outline: 2px solid var(--bauhaus-yellow);
+  outline-offset: 2px;
+}
+
+body.activity-admin-mode .activity-weekly-card .calendar-toolbar {
+  flex-wrap: wrap;
+}
+
 /* The legacy .panel highlight paints over child headers, even on solid fills. */
 body.activity-admin-mode :is(
   .activity-weekly-card,

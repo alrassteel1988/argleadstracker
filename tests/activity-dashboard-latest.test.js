@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
@@ -10,7 +11,49 @@ const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /activity-dashboard-latest\.css\?v=solid-navy-caps-3/, "Activity CSS must use the solid-header cache revision");
+assert.match(html, /id="activityCalendarToggle"[^>]*type="button"[^>]*aria-expanded="true"[^>]*aria-controls="activityWeeklyLog"/, "Calendar toggle needs native keyboard behavior and an explicit controlled region");
+assert.match(css, /#activityWeeklyLog\[hidden\]\s*\{\s*display:\s*none\s*!important;/, "Minimized calendar must release layout space despite legacy display rules");
+assert.match(css, /\.activity-weekly-card\.is-minimized > \.activity-section-header\s*\{\s*margin-bottom:\s*0\s*!important;/, "Minimized card must not reserve its former body gap");
+assert.match(client, /function renderActivityView\(\)\s*\{\s*renderActivityCalendarVisibility\(\);/, "Activity refreshes must preserve calendar visibility");
+const visibilityFunction = client.match(/function renderActivityCalendarVisibility\(\) \{[\s\S]*?\n\}/);
+assert.ok(visibilityFunction, "Calendar visibility needs one shared renderer");
+const visibilityClasses = new Map();
+const visibilityAttributes = new Map();
+const visibilityState = { currentUser: { role: "admin" }, activityCalendarMinimized: false };
+const visibilityEls = {
+  activityCalendarToggle: {
+    classList: { toggle: (name, value) => visibilityClasses.set(`button:${name}`, value) },
+    setAttribute: (name, value) => visibilityAttributes.set(name, value)
+  },
+  activityWeeklyLog: {
+    hidden: false,
+    closest: () => ({ classList: { toggle: (name, value) => visibilityClasses.set(name, value) } })
+  }
+};
+const visibilityContext = vm.createContext({ state: visibilityState, els: visibilityEls });
+vm.runInContext(visibilityFunction[0], visibilityContext);
+const toggleHandler = client.match(/els\.activityCalendarToggle\?\.addEventListener\("click", \(\) => \{([\s\S]*?)\n\}\);/);
+assert.ok(toggleHandler, "Calendar minimize button must be wired");
+vm.runInContext('renderActivityCalendarVisibility()', visibilityContext);
+assert.equal(visibilityEls.activityWeeklyLog.hidden, false);
+vm.runInContext(`(() => {${toggleHandler[1]}})()`, visibilityContext);
+assert.equal(visibilityEls.activityWeeklyLog.hidden, true);
+assert.equal(visibilityClasses.get("is-minimized"), true);
+assert.equal(visibilityAttributes.get("aria-expanded"), "false");
+assert.equal(visibilityEls.activityCalendarToggle.textContent, "Expand");
+vm.runInContext('renderActivityCalendarVisibility()', visibilityContext);
+assert.equal(visibilityEls.activityWeeklyLog.hidden, true, "Refreshing must not reopen the calendar");
+vm.runInContext(`(() => {${toggleHandler[1]}})()`, visibilityContext);
+assert.equal(visibilityEls.activityWeeklyLog.hidden, false);
+assert.equal(visibilityAttributes.get("aria-expanded"), "true");
+assert.equal(visibilityEls.activityCalendarToggle.textContent, "Minimize");
+visibilityState.currentUser.role = "salesman";
+visibilityState.activityCalendarMinimized = true;
+vm.runInContext('renderActivityCalendarVisibility()', visibilityContext);
+assert.equal(visibilityEls.activityWeeklyLog.hidden, false, "Admin-only preference must not hide the Salesman calendar");
+assert.equal(visibilityClasses.get("button:hidden"), true);
+
+assert.match(html, /activity-dashboard-latest\.css\?v=calendar-minimize-4/, "Activity CSS must use the calendar minimize cache revision");
 assert.ok(
   html.indexOf("activity-dashboard-latest.css") > html.indexOf("bauhaus-global.css"),
   "The latest Activity layer must win the theme cascade"
@@ -51,7 +94,7 @@ assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.activity-table td::befo
 assert.doesNotMatch(css, /\.sidebar\b/, "The Activity redesign must not change sidebar sizing");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter:\s*blur|filter:\s*blur/i, "The latest Activity layer must remain flat and opaque");
 assert.match(serviceWorker, /"\/activity-dashboard-latest\.css"/, "The PWA shell must cache the latest Activity layer");
-assert.match(serviceWorker, /arg-pwa-v80-activity-solid-navy-caps/, "The PWA cache must include the latest UI asset revision");
+assert.match(serviceWorker, /arg-pwa-v82-activity-calendar-minimize/, "The PWA cache must include the latest UI asset revision");
 assert.match(serviceWorker, /\.then\(\(\) => self\.skipWaiting\(\)\)/, "The updated service worker must activate immediately for stale CRM sessions");
 assert.match(serviceWorker, /event\.respondWith\(networkFirst\(request\)\)/, "Same-origin UI assets must prefer the network before cached fallbacks");
 assert.match(vercel, /"src": "activity-dashboard-latest\.css"/, "Vercel must publish the latest Activity layer");
