@@ -22,7 +22,7 @@ assert.match(sharedCss, /#authScreen \.auth-card input\s*\{[^}]*min-height:\s*48
 assert.match(sharedCss, /#authScreen \.auth-hero::after,[\s\S]*?content:\s*none\s*!important;/, "Login must not restore legacy glass highlights");
 assert.match(sharedCss, /#authScreen \.auth-hero em\s*\{[^}]*font-family:\s*"Playfair Display", Georgia, serif;/, "Headline accents must use Playfair Display");
 assert.match(sharedCss, /#authScreen \.auth-card h2 em\s*\{[^}]*font-family:\s*"Playfair Display", Georgia, serif;/, "Welcome accent must use the same Playfair Display face");
-assert.match(html, /family=Playfair\+Display:ital,wght@1,400;1,500/, "Requested italic font must be loaded through the existing font provider");
+assert.match(html, /family=Playfair\+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700/, "Requested regular and italic title fonts must load through the existing font provider");
 const loginMarkup = html.match(/<form class="auth-card" id="loginForm">([\s\S]*?)<\/form>/)[1];
 assert.match(loginMarkup, /name="email" type="email" autocomplete="username"[^>]*required/, "Email form binding and browser validation must be preserved");
 assert.match(loginMarkup, /name="password" type="password" autocomplete="current-password"[^>]*required/, "Password form binding and autocomplete must be preserved");

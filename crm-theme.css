@@ -1,0 +1,77 @@
+/* Revised proposal foundation. One token layer for both CRM roles. */
+:root {
+  --crm-navy: #083D77;
+  --crm-white: #FEFCFD;
+  --crm-teal: #5BC0BE;
+  --crm-amber: #FFB100;
+  --crm-gold-heading: #B87A00;
+  --crm-sidebar-start: #0F2B47;
+  --crm-sidebar-end: #07192B;
+  --crm-sidebar-background: linear-gradient(135deg, var(--crm-sidebar-start) 0%, var(--crm-sidebar-end) 100%);
+  --crm-surface: var(--crm-white);
+  --crm-surface-muted: #EFF5F6;
+  --crm-text: #172B4D;
+  --crm-text-secondary: #475569;
+  --crm-control-border: #66788A;
+  --crm-border: var(--crm-teal);
+  --crm-focus: var(--crm-navy);
+  --crm-health-red: #B9363F;
+  --crm-health-amber: #8A5200;
+  --crm-health-green: #3F7426;
+  --crm-health-red-soft: #FAE4E2;
+  --crm-health-amber-soft: #F8EDCE;
+  --crm-health-green-soft: #E6F0D8;
+  --crm-font-ui: "Inter", sans-serif;
+  --crm-font-title: "Playfair Display", Georgia, serif;
+  --crm-type-caption: 0.8125rem;
+  --crm-type-body: 0.875rem;
+  --crm-type-body-large: 1rem;
+  --crm-type-section: 1.125rem;
+  --crm-type-title: 1.75rem;
+  --crm-leading-body: 1.5;
+  --crm-leading-title: 1.2;
+  --crm-space-1: 4px;
+  --crm-space-2: 8px;
+  --crm-space-3: 12px;
+  --crm-space-4: 16px;
+  --crm-space-5: 20px;
+  --crm-space-6: 24px;
+  --crm-radius-control: 6px;
+  --crm-radius-panel: 10px;
+  --crm-radius-dialog: 12px;
+  --crm-shadow-panel: 0 2px 8px #DCE6EA;
+  --crm-background-desktop: url("/assets/brand/crm-silk-white-desktop.png");
+  --crm-background-mobile: url("/assets/brand/crm-silk-white-mobile.png");
+  --crm-background: var(--crm-background-desktop);
+  --crm-logo-white: url("/assets/brand/al-ras-steel-white-logo.png");
+
+  /* Existing presentation consumers migrate without changing their contracts. */
+  --font-body: var(--crm-font-ui);
+  --font-ui: var(--crm-font-ui);
+  --font-display: var(--crm-font-ui);
+}
+
+body .app-shell > .main {
+  background-color: var(--crm-surface) !important;
+  background-image: var(--crm-background) !important;
+  background-position: center bottom;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+body .app-shell .topbar-copy h1 {
+  font-family: var(--crm-font-title) !important;
+}
+
+/* The specified gold only passes AA for large text on the white surface. */
+.crm-title-accent {
+  color: var(--crm-gold-heading);
+  font-family: var(--crm-font-title);
+  font-style: italic;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --crm-background: var(--crm-background-mobile);
+  }
+}

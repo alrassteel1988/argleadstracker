@@ -45,6 +45,16 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
   await expect(page.locator("#loginForm")).toBeVisible();
   const role = await login(page, info);
   await expect(page.locator("#dashboardView")).toBeVisible();
+  if (phase === "after") {
+    const presentation = await page.locator(".main").evaluate(element => ({
+      image: getComputedStyle(element).backgroundImage,
+      font: getComputedStyle(element).fontFamily,
+      headingFont: getComputedStyle(element.querySelector("h1")).fontFamily
+    }));
+    expect(presentation.image).toContain(info.project.name.endsWith("mobile") ? "crm-silk-white-mobile.png" : "crm-silk-white-desktop.png");
+    expect(presentation.font).toContain("Inter");
+    expect(presentation.headingFont).toContain("Playfair Display");
+  }
   await capture(page, info, "02-dashboard");
 
   await page.goto("/?view=pipeline");

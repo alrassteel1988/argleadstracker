@@ -11,6 +11,10 @@ const publicRequests = [
   ["/leads/lead-1001?tab=activities", "text/html"],
   ["/client.js?v=test", "text/javascript"],
   ["/styles.css?v=test", "text/css"],
+  ["/crm-theme.css?v=test", "text/css"],
+  ["/assets/brand/crm-silk-white-desktop.png", "image/png"],
+  ["/assets/brand/crm-silk-white-mobile.png", "image/png"],
+  ["/assets/brand/al-ras-steel-white-logo.png", "image/png"],
   ["/mobile-ui.css?v=test", "text/css"],
   ["/manifest.json", "application/json"],
   ["/favicon.svg", "image/svg+xml"],
@@ -33,7 +37,9 @@ const blockedRequests = [
   "/supabase/migrations/20260724120000_ai_sales_assistant.sql",
   "/artifacts/ai-sales-assistant-mobile.png",
   "/admin",
-  "/unknown.css"
+  "/unknown.css",
+  "/assets/brand/README.md",
+  "/assets/brand/unapproved.png"
 ];
 
 async function run() {

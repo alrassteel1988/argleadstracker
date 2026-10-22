@@ -12,5 +12,8 @@ These are exact binary copies, not regenerated, cropped, compressed or recolored
 The bottom logo is part of each background. The owner also supplied the original
 standalone white logo for navy branding surfaces. Preserve its proportions and
 artwork; do not extract the embedded background logo or redraw it.
-These assets are not yet referenced by runtime CSS or exposed
-through the explicit public static allowlist in this preparation checkpoint.
+Foundation phase: both backgrounds are referenced by `crm-theme.css` and switch
+at the existing 720px phone breakpoint. All three files have exact public static
+entries and PWA shell entries; no directory-wide public access was added.
+The white logo is available for the following shared-branding phase, not yet
+substituted into the old navigation markup.

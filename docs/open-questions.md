@@ -66,3 +66,18 @@ Do not hide existing counterparts just because the proposed version is out of sc
 - No runtime code, theme tokens, form markup, source data, secrets, API, database or service-worker asset revision changed.
 - Inventory commit: documentation only. Preparation adds the isolated test harness and three unchanged owner-supplied brand PNGs. `npm run verify` passed again. No assets are applied to runtime yet.
 - Next safe step: clarify Lost presentation scope under Q-02, complete remaining Before captures, then start tokens as a small independently verified commit. Q-01 and Q-03 are resolved; Q-04 now has an isolated local test implementation.
+
+## Foundation phase outcome
+
+- Shared proposal tokens and the two approved backgrounds are now applied.
+  The original white logo is available for the next shared-branding step.
+- Existing mobile-final stylesheet ordering is preserved. Only obsolete literal
+  cache-version and expanded font-request assertions were updated; no behavior
+  or security assertion was removed.
+- `npm run verify` and the new token/contrast/artwork checks pass.
+- Final foundation browser run: PASS, all 8 Admin/Salesman desktop/mobile tests,
+  including computed background and font checks.
+- Main-flow After screenshots are phase evidence, not full design completion.
+- Q-02 remains open. No status values, filters, labels, counts or Lost access
+  were changed by this phase. It does not block unrelated presentation work.
+- No new APIs, database operations, permissions, provider calls or deployment.

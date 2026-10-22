@@ -5,7 +5,7 @@
 - Inventory date: 22 October 2026 (Asia/Dubai).
 - Baseline: `62ec92668261142e5c0fa8b3a1be91359fee9241` (`origin/main`, fetched before the audit).
 - Branch: `codex/crm-ui-proposal-inventory`.
-- The inventory commit changed documentation only. The following preparation checkpoint adds supplied brand assets and an isolated browser baseline. No re-skin, API, database, authentication, route, calculation, or production changes have been made.
+- The inventory commit changed documentation only; preparation added artwork and an isolated browser baseline. The foundation phase now introduces presentation tokens, fonts and approved backgrounds. No API, database, authentication, route, calculation, or production changes have been made.
 - Authoritative attachment, confirmed by the owner: `Revised CRM UI Design Proposal.pdf`, 57 landscape A4 pages. The prompt named another PDF that was not supplied. See Q-01 in [open-questions.md](open-questions.md).
 - All 57 pages were text-extracted; representative sign-in, Salesman home/statuses, Admin team/activity/mobile pages were rendered and visually inspected. Prototype data is not application data.
 - Repository-wide indexing covers 137 tracked runtime, stylesheet, configuration, test, migration, and agent-reference files. Main routing, form, renderer, role, API dispatch, job and integration contracts were inspected directly. This is a source-based functionality inventory, not a claim that every execution branch has been exercised or a new security audit.
@@ -55,6 +55,36 @@ synthetic names, and separate temporary servers per role/viewport. No applicatio
 validation, authentication, rate limit or behavior was weakened. The final run
 passed all 8 tests. See [tests/ui/README.md](../tests/ui/README.md) for exact coverage
 and exclusions; no production browser tests or provider operations were run.
+
+### Foundation phase evidence
+
+- Shared `crm-theme.css` defines the proposal palette, font, spacing, radius,
+  surface, focus, health and approved-artwork tokens for both roles.
+- Inter remains the general UI face; Playfair Display is scoped to page titles
+  and explicit accent helpers. The existing font provider now loads regular and
+  italic weights. No new external host or CSP permission was introduced.
+- Desktop/mobile silk-white artwork is applied to the content area. The white
+  logo is publicly available for the next branding step; navigation markup has
+  not yet been replaced. No artwork bytes changed.
+- `server.js` changes only the exact static-file allowlist. Vercel lists those
+  same public assets explicitly. The PWA version is v84 and includes the new
+  public assets; the API cache exclusion and all private-file guards remain.
+- `npm run verify`: PASS after resolving obsolete asset-version/font URL
+  assertions. First failure was admin-dashboard-layout.test.js:70, expecting
+  v83 rather than v84. A subsequent mobile-final stylesheet-order assertion was
+  preserved by moving the foundation before mobile-ui.css, not weakening the
+  test. The mobile font-loading assertion was expanded to require all old italic
+  weights plus the new regular/italic title weights.
+- `npm run test:ui:tokens`: PASS. Covers palette, AA token contrast (gold only
+  large-text AA), artwork hashes, static build/routes, font request and cache
+  contracts. It is included in `npm run verify`.
+- Browser After captures at this phase show only the foundation, not a finished
+  re-skin. The baseline suite now checks the computed desktop/mobile background,
+  Inter UI face and Playfair page-title face before its existing main flows.
+  Final `CRM_UI_SCREENSHOT_PHASE=after npm run test:ui:baseline`: PASS, 8 tests
+  across both roles at 1440x900 and 375x812 (2.8 minutes).
+- Still pending: full primitive/shell/page/dialog migration, complete visual
+  state matrix, real-provider/voice UAT and production checks. No push or deploy.
 
 ## 4. Existing page and route inventory
 

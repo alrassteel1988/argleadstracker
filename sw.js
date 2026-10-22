@@ -1,8 +1,12 @@
-const CACHE_VERSION = "arg-pwa-v83-responsive-login-redesign";
+const CACHE_VERSION = "arg-pwa-v84-revised-ui-foundation";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
+  "/crm-theme.css",
+  "/assets/brand/crm-silk-white-desktop.png",
+  "/assets/brand/crm-silk-white-mobile.png",
+  "/assets/brand/al-ras-steel-white-logo.png",
   "/salesman-dashboard-live-leads.css",
   "/lead-detail-readability.css",
   "/mobile-ui.css",
