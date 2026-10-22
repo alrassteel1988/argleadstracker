@@ -5,8 +5,8 @@
 - Inventory date: 22 October 2026 (Asia/Dubai).
 - Baseline: `62ec92668261142e5c0fa8b3a1be91359fee9241` (`origin/main`, fetched before the audit).
 - Branch: `codex/crm-ui-proposal-inventory`.
-- This step changes documentation only. No re-skin, API, database, authentication, route, calculation, or production changes have been made.
-- Actual attachment: `Revised CRM UI Design Proposal.pdf`, 57 landscape A4 pages. The prompt names `Al_Ras_Steel_CRM_Comprehensive_UI_Proposal_A4.pdf`, which was not supplied. See Q-01 in [open-questions.md](open-questions.md).
+- The inventory commit changed documentation only. The following preparation checkpoint adds supplied brand assets and an isolated browser baseline. No re-skin, API, database, authentication, route, calculation, or production changes have been made.
+- Authoritative attachment, confirmed by the owner: `Revised CRM UI Design Proposal.pdf`, 57 landscape A4 pages. The prompt named another PDF that was not supplied. See Q-01 in [open-questions.md](open-questions.md).
 - All 57 pages were text-extracted; representative sign-in, Salesman home/statuses, Admin team/activity/mobile pages were rendered and visually inspected. Prototype data is not application data.
 - Repository-wide indexing covers 137 tracked runtime, stylesheet, configuration, test, migration, and agent-reference files. Main routing, form, renderer, role, API dispatch, job and integration contracts were inspected directly. This is a source-based functionality inventory, not a claim that every execution branch has been exercised or a new security audit.
 - Private environment files, production databases, backups, customer exports, recordings, and report archives were not used as test data. Historical video/artwork artifacts and dependency internals are not executable CRM features and are outside the migration.
@@ -39,13 +39,22 @@ Every screen, field and action below is **PENDING after re-skin**. The UI migrat
 | `npm run build` | PASS; existing build reports no asset compilation required | PENDING |
 | Separate lint | NOT AVAILABLE in package.json; no substitute tool invented | BLOCKED pending owner-approved command |
 | Separate TypeScript check | NOT AVAILABLE; JavaScript application, no typecheck script | N/A unless owner configures tooling separately |
-| Browser Playwright, Admin and Salesman main flows | NOT RUN | BLOCKED pending isolated test setup |
+| `npm run test:ui:baseline` | PASS: 8 tests across Admin/Salesman at desktop/mobile, synthetic local storage only | PENDING after styling; main flows, not every inventory item |
 | Production browser UAT scripts | NOT RUN: default to production, create a user and lead, perform cleanup | Never run without separate explicit production authorization |
-| Before screenshots, 1440px and 375px, both roles | NOT RUN for full screen matrix | Capture before first styling change in synthetic environment |
+| Before screenshots, 1440px and 375px, both roles | Main-flow screenshots captured by isolated suite; full state/dialog matrix incomplete | After captures PENDING |
 | Production smoke test, external providers and live RLS | NOT RUN; no production access authorized by this visual task | Not a local-suite claim |
 
 First baseline test failure: **none**. No behavioral test was changed or removed during this inventory.
 The filename `admin-salesman-permissions.e2e.test.js` denotes local HTTP testing, not Playwright browser coverage.
+
+Preparation checkpoint: `npm run verify` passed again with no runtime edits.
+New harness development initially failed on a wrong sort-key locator, fuzzy
+duplicate rejection of overly similar test company names, and cross-profile
+rate-limit contention. The harness was corrected: real `company` hook, distinct
+synthetic names, and separate temporary servers per role/viewport. No application
+validation, authentication, rate limit or behavior was weakened. The final run
+passed all 8 tests. See [tests/ui/README.md](../tests/ui/README.md) for exact coverage
+and exclusions; no production browser tests or provider operations were run.
 
 ## 4. Existing page and route inventory
 
@@ -282,6 +291,7 @@ For each applicable Admin/Salesman screen in P-01 through P-20, and every dialog
 - Include expanded/minimized calendar, expanded/collapsed dashboard panels, report missing/complete/locked/revision states, duplicate warning, pending enrichment and AI confirmation.
 - Store artifacts outside the repository by default; publish only approved de-identified screenshots.
 - At inventory time: all Before/After entries NOT RUN/PENDING, not completed screenshots.
+- Preparation checkpoint: main-flow Before captures are under the OS temporary directory, `arg-crm-ui-screenshots/before/<project>/`. They include login, dashboard, Pipeline, six lead tabs, authorized main routes, Add Lead steps, Add Activity, AI Assistant, weekly draft or minimized calendar. Every other state/dialog and all After captures remain PENDING. Approved background/logo assets are recorded in [assets/brand/README.md](../assets/brand/README.md); they are not yet applied to the runtime.
 
 ## 12. Migration plan and commit gates
 
