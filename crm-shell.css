@@ -1,4 +1,10 @@
 /* Shared proposal shell. Existing menu and route state remain authoritative. */
+body #appShell .topbar #openPlacesSearch {
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  border-color: var(--crm-control-border) !important;
+}
+
 body #mobileSidebar {
   background-color: var(--crm-sidebar-end) !important;
   background-image: var(--crm-sidebar-background) !important;

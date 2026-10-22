@@ -120,3 +120,19 @@ Do not hide existing counterparts just because the proposed version is out of sc
   connection; rerunning with approved local-server access passed both gates.
 - Q-02 remains unresolved. Lost records, stage options, counts and stored
   values have not been removed. Full page/dialog migration remains in progress.
+
+## Salesman dashboard presentation checkpoint
+
+- Existing summary/stage cards, action cards, queues and live table now use
+  proposal white/teal/navy styling. All existing sections and drill-down actions
+  remain, including Lost until Q-02 is resolved. No stage-label mappings added.
+- The proposal omits some currently implemented action/first-touch/loss-reason
+  sections. These are retained under the task's preserve-functionality rule.
+- Three metric cards stack on phones; five existing stage cards wrap into two
+  columns. Full field and table data remain available, with table-only scrolling.
+- A visual check found and fixed a legacy white-on-white Search places label.
+  Loading-frame presentation and secondary coaching states still need their
+  final migration pass; do not treat this checkpoint as full-screen completion.
+- Final local gates: `npm run verify` PASS; `npm run test:ui` PASS (eight core
+  flows plus four shell checks). Initial browser failure was a new test locator
+  mismatch, corrected against the existing renderer without changing behavior.

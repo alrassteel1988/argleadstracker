@@ -1,0 +1,388 @@
+/* Proposal dashboard presentation. Existing datasets, actions and order remain. */
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: none !important;
+  grid-auto-rows: auto;
+  gap: var(--crm-space-4);
+  padding: 0;
+  overflow: visible !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard > * {
+  grid-row: auto !important;
+  min-width: 0;
+}
+
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard > :is(.salesman-simplified-metrics, .salesman-dashboard-pipeline, .salesman-dashboard-live-leads) {
+  grid-column: 1 / -1;
+}
+
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard > :is(.salesman-dashboard-top-actions, .salesman-dashboard-call-queue, .salesman-dashboard-first-touch, .salesman-dashboard-loss-reasons) {
+  grid-column: auto;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block {
+  align-self: stretch;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-surface) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+  color: var(--crm-text);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header {
+  min-height: 0;
+  padding: var(--crm-space-4);
+  gap: var(--crm-space-3);
+  border: 0 !important;
+  border-bottom: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) var(--crm-radius-panel) 0 0;
+  background: var(--crm-surface) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header h2 {
+  margin: 0;
+  color: var(--crm-navy) !important;
+  font-size: 18px !important;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header :is(span, small):not(button *) {
+  color: var(--crm-text-secondary) !important;
+  font-size: var(--crm-type-caption) !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-metrics {
+  gap: var(--crm-space-3);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-metric {
+  grid-template-columns: 24px minmax(0, 1fr) 16px;
+  gap: var(--crm-space-3);
+  min-height: 0;
+  padding: var(--crm-space-4);
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-surface) !important;
+  box-shadow: var(--crm-shadow-panel);
+  transform: none;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-metric:hover:not(:disabled) {
+  border-color: var(--crm-navy) !important;
+  background: var(--crm-surface-muted) !important;
+  transform: none;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-icon {
+  align-self: start;
+  width: 24px;
+  height: 24px;
+  border-radius: 0;
+  background: none !important;
+  color: var(--crm-navy) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+body.salesman-dashboard-mode #appShell .tone-danger .salesman-summary-card-icon {
+  color: var(--crm-health-red) !important;
+}
+
+body.salesman-dashboard-mode #appShell .tone-warm .salesman-summary-card-icon {
+  color: var(--crm-health-amber) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-copy {
+  gap: var(--crm-space-1);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-copy :is(.salesman-summary-card-label, .salesman-summary-card-action) {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-copy strong {
+  color: var(--crm-navy) !important;
+  font-size: 28px !important;
+  line-height: 1.15;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-copy small {
+  overflow: visible;
+  white-space: normal;
+  color: var(--crm-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-dashboard-pipeline > .panel-header {
+  padding-bottom: var(--crm-space-2);
+  border-bottom: 0 !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-pipeline-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--crm-space-2);
+  padding: 0 var(--crm-space-4) var(--crm-space-4);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-stage {
+  justify-content: center;
+  min-height: 0;
+  padding: var(--crm-space-2);
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  text-align: center;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-copy {
+  gap: var(--crm-space-1);
+  justify-items: center;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-copy :is(.salesman-stage-label, .salesman-stage-action) {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-copy strong {
+  color: var(--crm-navy) !important;
+  font-size: 26px !important;
+  line-height: 1.15;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-icon {
+  display: grid;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  color: var(--crm-navy) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-stage:hover:not(:disabled) {
+  background: var(--crm-surface-muted) !important;
+  border-color: var(--crm-navy) !important;
+}
+
+body.salesman-dashboard-mode #appShell :is(.salesman-simplified-actions, .salesman-simplified-queue, .salesman-first-touch-list, .salesman-loss-prompts-list) {
+  min-height: 0;
+  padding: var(--crm-space-4);
+  gap: var(--crm-space-3);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  height: auto;
+  overflow: visible;
+}
+
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedAddLead {
+  border: 1px solid var(--crm-control-border) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-hero {
+  border-color: var(--crm-border) !important;
+  background: var(--crm-surface) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-hero-header,
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedGreeting {
+  color: var(--crm-navy) !important;
+  background: var(--crm-surface) !important;
+  font-size: 13px !important;
+  font-weight: 600;
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-actions > .salesman-triage-card {
+  height: auto;
+  min-height: 0;
+  padding: var(--crm-space-3);
+  gap: var(--crm-space-1);
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-triage-card :is(strong, p, span, small) {
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-triage-card .salesman-triage-kicker {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 700;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-triage-card.tone-danger .salesman-triage-kicker { color: var(--crm-health-red) !important; }
+body.salesman-dashboard-mode #appShell .salesman-triage-card.tone-warm .salesman-triage-kicker { color: var(--crm-health-amber) !important; }
+body.salesman-dashboard-mode #appShell .salesman-triage-card small { color: var(--crm-navy) !important; }
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue {
+  flex: 0 1 auto;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item {
+  min-width: 0;
+  min-height: 68px;
+  padding: var(--crm-space-3) 0;
+  gap: var(--crm-space-3);
+  border: 0 !important;
+  border-bottom: 1px solid var(--crm-border) !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item :is(strong, p) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item p {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item .chip {
+  min-width: 0;
+  max-width: 130px;
+  padding: 4px 8px;
+  border-radius: var(--crm-radius-control);
+  white-space: normal;
+  font-size: 12px !important;
+  line-height: 1.4;
+  background: var(--crm-surface-muted) !important;
+  color: var(--crm-text) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item .chip.hot {
+  background: var(--crm-health-red-soft) !important;
+  color: var(--crm-health-red) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-dashboard-live-leads {
+  height: 56dvh;
+  min-height: 360px;
+  max-height: none;
+  margin: 0;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-dashboard-lead-table {
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  padding: 0 var(--crm-space-4) var(--crm-space-4);
+  overflow: auto;
+}
+
+body.salesman-dashboard-mode #appShell .dashboard-live-lead-table :is(th, td) {
+  padding: 10px 12px;
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.5;
+  background: var(--crm-surface);
+  border-bottom: 1px solid var(--crm-border);
+}
+
+body.salesman-dashboard-mode #appShell .dashboard-live-lead-table th {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  background: var(--crm-surface-muted) !important;
+  letter-spacing: 0;
+}
+
+body.salesman-dashboard-mode #appShell .dashboard-live-lead-table :is(.lead-table-company strong, .lead-table-contact, .lead-table-contact-link) {
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+}
+
+body.salesman-dashboard-mode #appShell .dashboard-live-lead-table .lead-table-company small {
+  color: var(--crm-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+body.salesman-dashboard-mode #appShell .dashboard-live-lead-table a {
+  color: var(--crm-navy) !important;
+}
+
+@media (max-width: 1024px) {
+  body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
+    grid-template-columns: 1fr;
+  }
+
+  body.salesman-dashboard-mode #appShell .salesman-simplified-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  body.salesman-dashboard-mode #appShell .salesman-simplified-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  body.salesman-dashboard-mode #appShell .salesman-simplified-pipeline-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header {
+    flex-wrap: wrap;
+  }
+
+  body.salesman-dashboard-mode #appShell .salesman-dashboard-live-leads {
+    height: 65dvh;
+    min-height: 400px;
+  }
+}

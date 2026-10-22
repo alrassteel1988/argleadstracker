@@ -33,6 +33,9 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 - Supplied logo loading, white header/title accents, stable desktop rail,
   existing Admin account dialog through Tools, footer sign-out and mobile menu.
 - Mobile Home/Leads/Log/Map/Alerts navigation and their existing windows.
+- Salesman dashboard white/teal/navy surfaces, unchanged five stage actions,
+  nonoverlapping action/list flow, 14px company names and page overflow checks.
+- Search places button foreground/background contrast for both roles.
 - Additional desktop effective-layout widths of 1280, 1152 and 960px. The latter
   two approximate available layout widths at 125%/150% on a 1440px screen; these
   are not a claim of native browser-zoom testing.

@@ -13,6 +13,12 @@ test("shared shell branding, navigation and existing management actions", async 
   expect(brand.loaded).toBe(true);
   expect(brand.source).toBe("/assets/brand/al-ras-steel-white-logo.png");
   await expect(page.locator('#topbarPageTitle em')).toHaveText("Dashboard");
+  const placesColors = await page.locator("#openPlacesSearch").evaluate(button => ({
+    background: getComputedStyle(button).backgroundColor,
+    foreground: getComputedStyle(button).color
+  }));
+  expect(placesColors.background).toBe("rgb(254, 252, 253)");
+  expect(placesColors.foreground).toBe("rgb(8, 61, 119)");
   await page.locator("#smartSearchInput").fill("Synthetic Steel Company 01");
   await expect(page.locator("#smartSearchPanel")).toBeVisible();
   await expect(page.locator("#smartSearchPanel")).toContainText("Synthetic Steel Company 01");

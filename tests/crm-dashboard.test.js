@@ -1,0 +1,24 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const read = file => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+const css = read("crm-dashboard.css");
+const html = read("index.html");
+const worker = read("sw.js");
+const vercel = JSON.parse(read("vercel.json"));
+
+assert.match(css, /#salesmanSimplifiedDashboard\s*\{[^}]*grid-template-rows:\s*none\s*!important/s);
+assert.match(css, /#salesmanSimplifiedDashboard\s*\{[^}]*overflow:\s*visible\s*!important/s);
+assert.match(css, /\.salesman-simplified-block\s*\{[^}]*var\(--crm-border\)[^}]*var\(--crm-surface\)/s);
+assert.match(css, /\.salesman-summary-card-copy small\s*\{[^}]*overflow:\s*visible[^}]*white-space:\s*normal/s);
+assert.match(css, /\.salesman-simplified-queue\s*\{[^}]*max-height:\s*340px[^}]*overflow-y:\s*auto/s);
+assert.match(css, /\.salesman-dashboard-lead-table\s*\{[^}]*overflow:\s*auto/s);
+assert.match(css, /@media \(max-width: 720px\)[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+assert.doesNotMatch(css, /rgba\(|gradient\(|filter:\s*blur|backdrop-filter|opacity:\s*0\./);
+assert.doesNotMatch(css, /data-summary-card[^}]*display:\s*none/, "Do not remove stage or metric actions");
+assert.ok(html.indexOf('/crm-dashboard.css?v=') > html.indexOf('/crm-shell.css?v='));
+assert.ok(html.indexOf('/mobile-ui.css?v=') > html.indexOf('/crm-dashboard.css?v='));
+assert.ok(vercel.builds.some(item => item.src === "crm-dashboard.css" && item.use === "@vercel/static"));
+assert.ok(vercel.routes.some(item => item.src === "/crm-dashboard.css" && item.dest === "/crm-dashboard.css"));
+assert.ok(worker.includes('"/crm-dashboard.css"'));
+console.log("PASS proposal dashboard surfaces, readable content, normal flow and static asset contracts");

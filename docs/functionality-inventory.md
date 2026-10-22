@@ -5,7 +5,7 @@
 - Inventory date: 22 October 2026 (Asia/Dubai).
 - Baseline: `62ec92668261142e5c0fa8b3a1be91359fee9241` (`origin/main`, fetched before the audit).
 - Branch: `codex/crm-ui-proposal-inventory`.
-- The inventory commit changed documentation only; preparation added artwork and an isolated browser baseline. The foundation phase now introduces presentation tokens, fonts and approved backgrounds. No API, database, authentication, route, calculation, or production changes have been made.
+- The inventory commit changed documentation only; preparation added artwork and an isolated browser baseline. Presentation work now covers tokens, fonts, artwork, controls, shell and the primary Salesman dashboard. No API, database, authentication, route, calculation, or production changes have been made.
 - Authoritative attachment, confirmed by the owner: `Revised CRM UI Design Proposal.pdf`, 57 landscape A4 pages. The prompt named another PDF that was not supplied. See Q-01 in [open-questions.md](open-questions.md).
 - All 57 pages were text-extracted; representative sign-in, Salesman home/statuses, Admin team/activity/mobile pages were rendered and visually inspected. Prototype data is not application data.
 - Repository-wide indexing covers 137 tracked runtime, stylesheet, configuration, test, migration, and agent-reference files. Main routing, form, renderer, role, API dispatch, job and integration contracts were inspected directly. This is a source-based functionality inventory, not a claim that every execution branch has been exercised or a new security audit.
@@ -148,6 +148,39 @@ and exclusions; no production browser tests or provider operations were run.
   verification and browser suite passed. No application protection changed.
 - Page-specific layout, all dialog/state captures, actual 125%/150% zoom and
   provider/voice UAT remain pending. No production operations or deployment.
+
+### Salesman dashboard presentation phase
+
+- `crm-dashboard.css` converts the existing Salesman summary cards, stage
+  counts, action cards, call queue and live table to white surfaces, teal
+  boundaries and navy typography. Red/amber remain small health indicators.
+- All three metric actions, five existing stage drill-downs, queue actions,
+  first-touch and loss-reason sections remain. No data, values, datasets,
+  permissions, routes or JavaScript behavior changed in this phase.
+- The main grid uses content-sized rows instead of inherited fixed grid tracks.
+  Two desktop action panels remain side by side and stack below 1025px. Queue
+  scrolling is scoped to its list; the lead table retains internal scrolling.
+- Table body/company text is 14px; metadata and labels are at least 12px.
+  Summary descriptions wrap instead of truncating. Phone stage tiles wrap into
+  two columns without shrinking labels. The duplicate Add Lead action remains
+  available but is secondary; the topbar action remains amber.
+- Visual review caught a legacy Salesman-only white Search places label. The
+  shared shell now explicitly uses navy text on its white background, tested
+  for both roles and viewport profiles. Mobile greeting contrast is also fixed.
+- The first browser attempt failed only on a newly added nonexistent
+  `.lead-company-name` locator. The renderer uses `.lead-table-company strong`;
+  both the presentation selector and test were corrected. Behavioral assertions
+  were not removed. Final `npm run test:ui`: PASS, eight main-flow tests in
+  4.0 minutes followed by four shared-shell tests in 49.0 seconds. These include
+  new dashboard surface/spacing/type checks and both-role Search places contrast
+  checks. Final stage action icons were manually confirmed visible at 20px in
+  the updated mobile preview; no handler or data code changed.
+- Final `npm run verify`: PASS, including the new dashboard contract suite.
+  No lint or TypeScript script exists; no separate lint/typecheck pass claimed.
+- Remaining full-migration work includes other pages/dialogs, all secondary
+  dashboard states, transient sign-in/loading presentation, proposal title
+  accent consistency, duplicate legacy stylesheet consolidation and full zoom
+  coverage. Q-02 status presentation remains unchanged pending clarification.
 
 ## 4. Existing page and route inventory
 

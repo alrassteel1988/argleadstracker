@@ -31,6 +31,25 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     expect(presentation.headingFont).toContain("Playfair Display");
   }
   await capture(page, info, "02-dashboard");
+  if (phase === "after" && role === "salesman") {
+    const surface = await page.locator(".salesman-dashboard-pipeline").evaluate(element => ({
+      color: getComputedStyle(element).backgroundColor,
+      border: getComputedStyle(element).borderTopColor,
+      headingColor: getComputedStyle(element.querySelector("h2")).color
+    }));
+    expect(surface.color).toBe("rgb(254, 252, 253)");
+    expect(surface.border).toBe("rgb(91, 192, 190)");
+    expect(surface.headingColor).toBe("rgb(8, 61, 119)");
+    await expect(page.locator("#salesmanSimplifiedPipeline [data-summary-card]")).toHaveCount(5);
+    const actions = await page.locator(".salesman-dashboard-top-actions").boundingBox();
+    const calls = await page.locator(".salesman-dashboard-call-queue").boundingBox();
+    const list = await page.locator(".salesman-dashboard-live-leads").boundingBox();
+    expect(list.y).toBeGreaterThanOrEqual(Math.max(actions.y + actions.height, calls.y + calls.height) + 15);
+    const companyText = await page.locator("#salesmanDashboardLeadList .lead-table-company strong").first().evaluate(element => parseFloat(getComputedStyle(element).fontSize));
+    expect(companyText).toBeGreaterThanOrEqual(14);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  }
 
   await page.goto("/?view=pipeline");
   await expect(page.locator("#leadList table")).toBeVisible();

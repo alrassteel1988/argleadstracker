@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v86-revised-ui-shell";
+const CACHE_VERSION = "arg-pwa-v87-revised-ui-dashboard";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -7,6 +7,7 @@ const APP_SHELL = [
   "/crm-icons.css",
   "/crm-controls.css",
   "/crm-shell.css",
+  "/crm-dashboard.css",
   "/assets/brand/crm-silk-white-desktop.png",
   "/assets/brand/crm-silk-white-mobile.png",
   "/assets/brand/al-ras-steel-white-logo.png",
