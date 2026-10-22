@@ -204,6 +204,24 @@ body button:is([aria-label^="Close"], [aria-label^="Dismiss"], .panel-collapse-t
   vertical-align: middle;
 }
 
+body #appShell .panel-collapse-toggle .panel-collapse-label,
+body #appShell .panel-collapse-toggle .panel-collapse-icon {
+  display: none;
+}
+
+body #appShell .panel-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 6px !important;
+  border: 1px solid var(--crm-control-border) !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+
 @media (max-width: 720px) {
   body :is(.auth-screen, .app-shell, dialog) :is(.primary-button, .ghost-button, .small-action, .text-button, .danger-button, .voice-button, .tasks-voice-button, .sheet-save) {
     min-height: 44px !important;

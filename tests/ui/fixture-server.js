@@ -84,6 +84,7 @@ function startFixture() {
   const port = Number(process.env.CRM_UI_TEST_PORT || 4179);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid local fixture port");
   const snapshot = createFixtureSnapshot();
+  console.log(`Synthetic UI fixture snapshot: ${snapshot}`);
   // The child runtime receives no inherited credentials, provider keys or Vercel flags.
   for (const name of Object.keys(process.env)) {
     if (!/^(?:PATH|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|TMPDIR|HOME|USERPROFILE)$/i.test(name)) delete process.env[name];

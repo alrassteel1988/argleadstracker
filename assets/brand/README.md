@@ -15,5 +15,6 @@ artwork; do not extract the embedded background logo or redraw it.
 Foundation phase: both backgrounds are referenced by `crm-theme.css` and switch
 at the existing 720px phone breakpoint. All three files have exact public static
 entries and PWA shell entries; no directory-wide public access was added.
-The white logo is available for the following shared-branding phase, not yet
-substituted into the old navigation markup.
+Shared shell phase: the unchanged white logo is now used in the sign-in hero and
+sidebar, with its original aspect ratio and accessible alternative text. The
+existing square PWA application icons remain unchanged.

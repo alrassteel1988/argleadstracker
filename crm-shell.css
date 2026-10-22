@@ -1,0 +1,444 @@
+/* Shared proposal shell. Existing menu and route state remain authoritative. */
+body #mobileSidebar {
+  background-color: var(--crm-sidebar-end) !important;
+  background-image: var(--crm-sidebar-background) !important;
+  border-right: 1px solid var(--crm-border) !important;
+  color: var(--crm-white);
+}
+
+body #mobileSidebar .sidebar-top {
+  gap: 20px;
+}
+
+body #mobileSidebar .brand {
+  min-width: 0;
+}
+
+.crm-brand-image {
+  display: block;
+  width: 148px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+body #mobileSidebar .nav-item {
+  min-height: 40px;
+  padding: 8px 12px 8px 16px;
+  border: 0 !important;
+  border-left: 3px solid var(--crm-sidebar-end) !important;
+  border-radius: 4px !important;
+  background-color: var(--crm-sidebar-end) !important;
+  color: var(--crm-white) !important;
+  font-family: var(--crm-font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+body #mobileSidebar .nav-item:is(:hover, :focus-visible) {
+  border-left-color: var(--crm-amber) !important;
+  background-color: var(--crm-sidebar-start) !important;
+  outline-color: var(--crm-amber) !important;
+}
+
+body #mobileSidebar .nav-item.active {
+  border-left-color: var(--crm-amber) !important;
+  background-color: var(--crm-sidebar-start) !important;
+  color: var(--crm-amber) !important;
+  font-family: var(--crm-font-title);
+  font-size: 18px;
+  font-style: italic;
+  font-weight: 700;
+}
+
+body #mobileSidebar .nav-item-icon {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: currentColor !important;
+  color: inherit !important;
+  font-size: 0;
+  -webkit-mask: var(--crm-nav-icon, var(--crm-icon-list)) center / contain no-repeat;
+  mask: var(--crm-nav-icon, var(--crm-icon-list)) center / contain no-repeat;
+  pointer-events: none;
+}
+
+body #mobileSidebar [data-view="dashboard"] { --crm-nav-icon: var(--crm-icon-layout-dashboard); }
+body #mobileSidebar [data-view="pipeline"] { --crm-nav-icon: var(--crm-icon-list); }
+body #mobileSidebar [data-view="salesmen"] { --crm-nav-icon: var(--crm-icon-users); }
+body #mobileSidebar [data-view="activity"] { --crm-nav-icon: var(--crm-icon-calendar-days); }
+body #mobileSidebar [data-view="tasks"] { --crm-nav-icon: var(--crm-icon-clipboard-list); }
+body #mobileSidebar [data-quick-view] { --crm-nav-icon: var(--crm-icon-file-text); }
+body #mobileSidebar #sidebarSearchPlaces { --crm-nav-icon: var(--crm-icon-map-pin); }
+
+body #mobileSidebar .nav-group-label,
+body #mobileSidebar .sidebar-user-copy span {
+  color: var(--crm-white) !important;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+body #mobileSidebar .sidebar-user-copy strong {
+  color: var(--crm-white) !important;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+body #mobileSidebar :is(.sidebar-tools-menu, .sidebar-tools-trigger, .sidebar-user-shell, .sidebar-user-dropdown) {
+  border-color: var(--crm-border) !important;
+  background-color: var(--crm-sidebar-end) !important;
+  color: var(--crm-white) !important;
+}
+
+body #mobileSidebar .user-menu-action {
+  min-height: 36px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0 !important;
+  background-color: var(--crm-sidebar-end) !important;
+  color: var(--crm-white) !important;
+  font: 600 13px/1.5 var(--crm-font-ui);
+  text-align: left;
+  white-space: normal;
+}
+
+body #mobileSidebar .sidebar-user-chevron {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background-color: var(--crm-white);
+  font-size: 0;
+  -webkit-mask: var(--crm-icon-chevron-down) center / contain no-repeat;
+  mask: var(--crm-icon-chevron-down) center / contain no-repeat;
+}
+
+body #mobileSidebar #sidebarToolsMenu[open] .sidebar-user-chevron {
+  -webkit-mask-image: var(--crm-icon-chevron-up);
+  mask-image: var(--crm-icon-chevron-up);
+}
+
+body #mobileSidebar .sidebar-footer {
+  margin-top: auto;
+  flex-shrink: 0;
+  padding-bottom: 12px;
+}
+
+body #mobileSidebar #logoutButton {
+  min-height: 36px;
+  margin: 6px 12px 0;
+  border-color: var(--crm-sidebar-end) !important;
+  background-color: var(--crm-sidebar-end) !important;
+  color: var(--crm-amber) !important;
+  font-family: var(--crm-font-title);
+  font-size: 16px;
+  font-style: italic;
+  font-weight: 600;
+  text-align: left;
+}
+
+body #mobileSidebar :is(button, summary):focus-visible {
+  outline-color: var(--crm-amber) !important;
+}
+
+body #appShell .topbar {
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px !important;
+  padding: 12px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+
+body #appShell .topbar:not(.hidden):not([hidden]) {
+  display: flex !important;
+}
+
+body #appShell .topbar-title {
+  flex: 1 1 240px;
+  min-width: 0;
+  color: var(--crm-navy) !important;
+}
+
+body #appShell .topbar-copy h1 {
+  color: var(--crm-navy) !important;
+  font-family: var(--crm-font-title) !important;
+  font-size: 28px !important;
+  font-weight: 700;
+  line-height: 1.25 !important;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+body #appShell #topbarPageTitle .crm-title-accent {
+  color: var(--crm-gold-heading) !important;
+}
+
+body #appShell .topbar-copy p {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  overflow-wrap: anywhere;
+}
+
+body #appShell .topbar-actions {
+  flex: 1 1 480px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  width: auto !important;
+  max-width: 680px;
+  min-width: 0;
+}
+
+body #appShell .topbar-actions:not(.hidden):not([hidden]) {
+  display: flex !important;
+}
+
+body #appShell .smart-search-shell {
+  flex: 1 1 250px;
+  min-width: 180px !important;
+  max-width: 360px !important;
+}
+
+body #appShell .smart-search-field {
+  gap: 6px;
+  min-height: 40px !important;
+  padding: 0 8px;
+  border: 1px solid var(--crm-control-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+
+body #appShell .smart-search-icon {
+  width: 16px;
+  height: 16px;
+  background-color: var(--crm-navy);
+  font-size: 0;
+  -webkit-mask: var(--crm-icon-search) center / contain no-repeat;
+  mask: var(--crm-icon-search) center / contain no-repeat;
+}
+
+body #appShell #smartSearchInput {
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 4px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+}
+
+body #appShell #mobileMenuToggle { --crm-button-icon: var(--crm-icon-menu); }
+
+body #aiAssistantLauncher {
+  border-color: var(--crm-navy) !important;
+  border-radius: 24px !important;
+  background-color: var(--crm-navy) !important;
+  color: var(--crm-amber) !important;
+  font-family: var(--crm-font-ui);
+  font-weight: 600;
+}
+
+body #aiAssistantLauncher .ai-assistant-launcher__wave {
+  display: none;
+}
+
+body #authScreen .auth-hero {
+  background-color: var(--crm-sidebar-end) !important;
+  background-image: var(--crm-sidebar-background) !important;
+}
+
+body #authScreen .auth-brand .crm-brand-image {
+  width: 176px;
+}
+
+body #authScreen .auth-hero em {
+  color: var(--crm-amber) !important;
+}
+
+body #authScreen .auth-card h2 em {
+  color: var(--crm-gold-heading) !important;
+}
+
+@media (min-width: 1025px) {
+  body #appShell {
+    grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr) !important;
+  }
+
+  body #mobileSidebar {
+    box-sizing: border-box;
+    width: var(--app-sidebar-width) !important;
+    max-width: var(--app-sidebar-width) !important;
+    padding: 18px 0 0 !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  body #appShell {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  body #mobileSidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: min(86vw, 320px) !important;
+    max-width: calc(100vw - 20px) !important;
+    height: 100dvh !important;
+    overflow-y: auto;
+    transform: translateX(-105%);
+  }
+
+  body.menu-open #mobileSidebar {
+    transform: translateX(0);
+  }
+
+  body #mobileSidebar #closeMobileSidebar {
+    display: inline-flex;
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  body #mobileSidebar .user-menu-action {
+    min-height: 44px;
+  }
+
+  body #appShell #mobileMenuToggle {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--crm-control-border) !important;
+    background-color: var(--crm-surface) !important;
+    color: var(--crm-navy) !important;
+  }
+
+  body #appShell .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 19;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  body #appShell .topbar-title,
+  body #appShell .topbar-actions {
+    flex-basis: auto;
+    width: 100% !important;
+    max-width: none;
+  }
+
+  body #appShell .topbar-copy h1 {
+    font-size: 24px !important;
+  }
+
+  body #aiAssistantLauncher {
+    bottom: calc(94px + env(safe-area-inset-bottom));
+  }
+
+  body #appShell > .main {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  body #authScreen .auth-brand .crm-brand-image {
+    width: 128px;
+  }
+
+  body #appShell .smart-search-shell {
+    flex-basis: 100%;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  body #appShell .topbar-actions > button:not(.hidden):not([hidden]) {
+    width: auto;
+    flex: 0 1 auto;
+    min-height: 44px;
+  }
+
+  body #appShell #smartSearchInput {
+    min-height: 44px;
+  }
+
+  body #mobileTabs {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    min-height: 82px;
+    padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--crm-border) !important;
+    background-color: var(--crm-surface) !important;
+  }
+
+  body #mobileTabs:not(.hidden):not([hidden]) {
+    display: grid;
+  }
+
+  body #mobileTabs .nav-item {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 4px;
+    min-height: 52px;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background-color: var(--crm-surface) !important;
+    color: var(--crm-navy) !important;
+    font-family: var(--crm-font-ui);
+    font-size: 12px !important;
+    line-height: 1.2;
+  }
+
+  body #mobileTabs .nav-item::before {
+    content: "";
+    display: block;
+    width: 20px;
+    height: 20px;
+    background-color: currentColor;
+    -webkit-mask: var(--crm-nav-icon, var(--crm-icon-list)) center / contain no-repeat;
+    mask: var(--crm-nav-icon, var(--crm-icon-list)) center / contain no-repeat;
+    pointer-events: none;
+  }
+
+  body #mobileTabs .nav-item > span[aria-hidden="true"] {
+    display: none;
+  }
+
+  body #mobileTabs [data-view="dashboard"] { --crm-nav-icon: var(--crm-icon-house); }
+  body #mobileTabs [data-view="pipeline"] { --crm-nav-icon: var(--crm-icon-list); }
+  body #mobileTabs [data-mobile-action="quick-log"] { --crm-nav-icon: var(--crm-icon-plus); }
+  body #mobileTabs [data-mobile-action="map"] { --crm-nav-icon: var(--crm-icon-map-pin); }
+  body #mobileTabs [data-mobile-action="alerts"] { --crm-nav-icon: var(--crm-icon-circle-alert); }
+
+  body #mobileTabs .nav-item.active {
+    border-bottom: 3px solid var(--crm-amber) !important;
+    font-weight: 700;
+  }
+
+  body #mobileTabs .mobile-log-tab {
+    width: 56px;
+    min-height: 56px;
+    justify-self: center;
+    margin-top: -12px;
+    border: 1px solid var(--crm-navy) !important;
+    border-radius: 50% !important;
+    background-color: var(--crm-amber) !important;
+    color: var(--crm-navy) !important;
+  }
+}

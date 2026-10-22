@@ -8636,6 +8636,13 @@ function weekRangeLabel(anchorDate = state.activityWeekAnchor) {
   return `${start} - ${end}`;
 }
 
+function pageTitleMarkup(value) {
+  const title = String(value ?? "");
+  const parts = /^(.*?)(\S+)(\s*)$/s.exec(title);
+  if (!parts) return escapeHtml(title);
+  return `${escapeHtml(parts[1])}<em class="crm-title-accent">${escapeHtml(parts[2])}</em>${escapeHtml(parts[3])}`;
+}
+
 function renderTopbar() {
   if (!els.topbarPageTitle || !els.topbarContext || !state.currentUser) return;
   const currentWeekItems = activityWeeklyItems(state.activities || [], state.activityWeekAnchor);
@@ -8676,7 +8683,7 @@ function renderTopbar() {
     title: "CRM",
     context: `${state.leads.length} active records`
   };
-  els.topbarPageTitle.textContent = config.title;
+  els.topbarPageTitle.innerHTML = pageTitleMarkup(config.title);
   els.topbarContext.textContent = config.context;
 }
 

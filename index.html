@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0d1b2a">
+    <meta name="theme-color" content="#083D77">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -34,6 +34,7 @@
   <link rel="stylesheet" href="/crm-theme.css?v=1-foundation">
   <link rel="stylesheet" href="/crm-icons.css?v=1">
   <link rel="stylesheet" href="/crm-controls.css?v=1">
+  <link rel="stylesheet" href="/crm-shell.css?v=1">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
   <body>
@@ -41,11 +42,8 @@
       <section class="auth-shell" aria-label="Al Ras Steel sign in">
         <div class="auth-hero">
           <div class="auth-brand">
-            <div class="brand-mark">AR</div>
-            <div>
-              <strong>AL RAS STEEL</strong>
-              <span>UAE &amp; GCC CRM</span>
-            </div>
+            <img class="crm-brand-image" src="/assets/brand/al-ras-steel-white-logo.png" width="2400" height="1511" alt="Al Ras Steel, since 1988">
+            <span class="sr-only">UAE &amp; GCC CRM</span>
           </div>
           <div>
             <h1>Where steel supply meets <em>relationship intelligence.</em></h1>
@@ -93,11 +91,8 @@
         <div class="sidebar-top">
           <div class="sidebar-brand-row">
             <div class="brand">
-              <div class="brand-mark">AR</div>
-              <div class="brand-copy">
-                <strong>AL RAS STEEL</strong>
-                <span>INTELLIGENCE</span>
-              </div>
+              <img class="crm-brand-image" src="/assets/brand/al-ras-steel-white-logo.png" width="2400" height="1511" alt="Al Ras Steel, since 1988">
+              <span class="sr-only">CRM Intelligence</span>
             </div>
             <button class="sidebar-close-button" id="closeMobileSidebar" type="button" aria-label="Close navigation menu">&times;</button>
           </div>
@@ -127,6 +122,7 @@
               <span class="sidebar-user-chevron" aria-hidden="true">▾</span>
             </summary>
             <div class="sidebar-user-dropdown">
+              <button class="user-menu-action hidden" id="openSalesmanForm" type="button">Create Salesman Account</button>
               <button class="user-menu-action hidden" id="exportLeadsExcel" type="button">Export Excel</button>
               <button class="user-menu-action hidden" id="exportLeadsPdf" type="button">Export PDF</button>
               <button class="user-menu-action hidden" id="openImportLeads" type="button">Import Leads</button>
@@ -140,6 +136,7 @@
               <span class="sr-only" id="signedInUser"></span>
             </span>
           </div>
+          <button class="ghost-button sidebar-sign-out" id="logoutButton" type="button">Sign Out</button>
         </div>
       </aside>
 
@@ -161,8 +158,6 @@
               </label>
               <div class="smart-search-panel hidden" id="smartSearchPanel" aria-live="polite"></div>
             </div>
-            <button class="ghost-button hidden" id="openSalesmanForm">Create Salesman Account</button>
-            <button class="ghost-button" id="logoutButton">Sign Out</button>
             <button class="ghost-button" id="openPlacesSearch">Search places</button>
             <button class="primary-button" id="openLeadForm">Add lead</button>
           </div>
@@ -973,11 +968,11 @@
     </aside>
 
     <div class="mobile-tabs hidden" id="mobileTabs" aria-label="Mobile navigation">
-      <button class="nav-item active" data-view="dashboard"><span>Home</span>Home</button>
-      <button class="nav-item" data-view="pipeline"><span>Leads</span>Leads</button>
-      <button class="nav-item mobile-log-tab" data-mobile-action="quick-log"><span>+</span>Log</button>
-      <button class="nav-item" data-mobile-action="map"><span>Map</span>Map</button>
-      <button class="nav-item" data-mobile-action="alerts"><span>!</span>Alerts<em id="mobileAlertsBadge" class="mobile-alert-badge hidden">0</em></button>
+      <button class="nav-item active" data-view="dashboard" aria-label="Home"><span aria-hidden="true">Home</span>Home</button>
+      <button class="nav-item" data-view="pipeline" aria-label="Leads"><span aria-hidden="true">Leads</span>Leads</button>
+      <button class="nav-item mobile-log-tab" data-mobile-action="quick-log" aria-label="Log activity"><span aria-hidden="true">+</span>Log</button>
+      <button class="nav-item" data-mobile-action="map" aria-label="Map"><span aria-hidden="true">Map</span>Map</button>
+      <button class="nav-item" data-mobile-action="alerts"><span aria-hidden="true">!</span>Alerts<em id="mobileAlertsBadge" class="mobile-alert-badge hidden">0</em></button>
     </div>
 
     <div class="lead-drawer-shell hidden" id="leadDrawerShell" aria-hidden="true">

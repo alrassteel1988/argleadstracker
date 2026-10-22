@@ -1,0 +1,67 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const root = path.resolve(__dirname, "..");
+const read = file => fs.readFileSync(path.join(root, file), "utf8");
+const css = read("crm-shell.css");
+const html = read("index.html");
+const client = read("client.js");
+const worker = read("sw.js");
+const vercel = JSON.parse(read("vercel.json"));
+const manifest = JSON.parse(read("manifest.json"));
+assert.match(html, /<meta name="theme-color" content="#083D77">/);
+assert.equal(manifest.theme_color, "#083D77");
+assert.equal(manifest.background_color, "#FEFCFD");
+
+assert.equal((html.match(/id="logoutButton"/g) || []).length, 1);
+assert.equal((html.match(/id="openSalesmanForm"/g) || []).length, 1);
+const footer = html.match(/<div class="sidebar-footer">([\s\S]*?)<\/aside>/)[1];
+assert.match(footer, /id="logoutButton"/);
+assert.match(footer, /sidebar-user-dropdown[\s\S]*id="openSalesmanForm"/);
+const topbar = html.match(/<header class="topbar">([\s\S]*?)<\/header>/)[1];
+assert.doesNotMatch(topbar, /id="(?:logoutButton|openSalesmanForm)"/);
+assert.match(topbar, /id="smartSearchInput"/);
+assert.match(topbar, /id="openPlacesSearch"/);
+assert.match(topbar, /id="openLeadForm"/);
+assert.equal((html.match(/class="crm-brand-image"[^>]*src="\/assets\/brand\/al-ras-steel-white-logo.png"/g) || []).length, 2);
+assert.match(html, /width="2400" height="1511" alt="Al Ras Steel, since 1988"/);
+assert.match(client, /els\.openSalesmanForm\.classList\.toggle\("hidden", !admin\)/, "Existing Admin-only control guard stays unchanged");
+assert.match(client, /els\.logoutButton\.addEventListener\("click"/, "Keep the existing sign-out handler");
+
+const functionSource = name => {
+  const match = client.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`));
+  assert.ok(match, name);
+  return match[0];
+};
+const formatTitle = vm.runInNewContext(`${functionSource("escapeHtml")}\n${functionSource("pageTitleMarkup")}\npageTitleMarkup`);
+assert.equal(formatTitle("Dashboard"), '<em class="crm-title-accent">Dashboard</em>');
+assert.equal(formatTitle("Lead Detail"), 'Lead <em class="crm-title-accent">Detail</em>');
+assert.equal(formatTitle(null), "");
+assert.equal(formatTitle("  Lead Detail  "), '  Lead <em class="crm-title-accent">Detail</em>  ');
+const hostile = formatTitle('A <img src=x onerror="alert(1)"> & Co.');
+assert.doesNotMatch(hostile, /<img|onerror="|<script/i);
+assert.match(hostile, /&lt;img/);
+assert.match(hostile, /&amp;/);
+assert.match(client, /els\.topbarPageTitle\.innerHTML = pageTitleMarkup\(config\.title\)/);
+assert.match(client, /els\.topbarContext\.textContent = config\.context/);
+
+assert.match(css, /body #mobileSidebar\s*\{[^}]*background-image:\s*var\(--crm-sidebar-background\)/s);
+assert.match(css, /body #appShell \.topbar\s*\{[^}]*background-color:\s*var\(--crm-surface\)/s);
+assert.match(css, /body #mobileSidebar \.nav-item\.active\s*\{[^}]*var\(--crm-amber\)[^}]*font-style:\s*italic/s);
+assert.match(css, /body #mobileSidebar #logoutButton\s*\{[^}]*var\(--crm-amber\)[^}]*font-style:\s*italic/s);
+assert.match(css, /@media \(min-width: 1025px\)[\s\S]*grid-template-columns:\s*var\(--app-sidebar-width\) minmax\(0, 1fr\)/s);
+assert.match(css, /body\.menu-open #mobileSidebar\s*\{[^}]*transform:\s*translateX\(0\)/s);
+assert.match(css, /#mobileTabs:not\(\.hidden\):not\(\[hidden\]\)/, "Never reveal mobile tabs before sign-in");
+assert.match(css, /\.topbar:not\(\.hidden\):not\(\[hidden\]\)/, "Header layout must not override functional hidden state");
+assert.match(css, /\.topbar-actions:not\(\.hidden\):not\(\[hidden\]\)/, "Toolbar layout must not override functional hidden state");
+assert.match(css, /\.mobile-log-tab\s*\{[^}]*border-radius:\s*50%\s*!important[^}]*var\(--crm-amber\)/s);
+assert.match(css, /padding-bottom:\s*calc\(100px \+ env\(safe-area-inset-bottom\)\)/);
+assert.doesNotMatch(css, /rgba\(|filter:\s*blur|backdrop-filter:\s*blur/);
+assert.ok(html.indexOf('/crm-shell.css?v=') > html.indexOf('/crm-controls.css?v='));
+assert.ok(html.indexOf('/mobile-ui.css?v=') > html.indexOf('/crm-shell.css?v='));
+assert.ok(vercel.builds.some(item => item.src === "crm-shell.css" && item.use === "@vercel/static"));
+assert.ok(vercel.routes.some(item => item.src === "/crm-shell.css" && item.dest === "/crm-shell.css"));
+assert.ok(worker.includes('"/crm-shell.css"'));
+console.log("PASS shared CRM shell, safe title markup, branding and preserved action contracts");

@@ -25,7 +25,7 @@
 | BLOCKED | Needs an owner decision, asset, or approved test environment. |
 | N/A | Not an implemented application feature. |
 
-Every screen, field and action below is **PENDING after re-skin**. The UI migration has not started. Do not turn a SOURCE result into PASS merely because a CSS assertion passed.
+Every screen, field and action below is **PENDING full after-re-skin verification** unless its specific evidence says otherwise. Shared foundation, controls and shell work is in progress. Do not turn a SOURCE result into PASS merely because a CSS assertion passed.
 
 ## 3. Baseline commands and results
 
@@ -114,6 +114,40 @@ and exclusions; no production browser tests or provider operations were run.
 - Final `CRM_UI_SCREENSHOT_PHASE=after npm run test:ui:baseline`: PASS, 8 tests
   in 2.8 minutes. Both role totals, Sign in icon/colors and phone field assertions
   passed alongside the existing create, draft, filter, tabs and dialog flows.
+
+### Shared shell phase evidence
+
+- `crm-shell.css` applies the approved sidebar gradient, supplied original logo,
+  active gold italic navigation, white topbar, proposal title treatment, local
+  icons and existing five-action mobile navigation. Both roles use one layer.
+- Existing Sign Out moved into the sidebar footer; existing Admin-only Create
+  Salesman Account moved into Tools. IDs, handlers, role guards and dialog
+  behavior remain unchanged. No routes, actions or permissions were added.
+- `pageTitleMarkup()` is a presentation-only renderer: all title fragments are
+  escaped before wrapping the final word. Tests cover hostile title text.
+- Hidden-state selectors remain authoritative. Desktop sidebar width stays
+  188px; existing Salesmen full-height behavior is retained. The mobile menu
+  remains controlled by existing menu state, backdrop and ARIA attributes.
+- Manifest/header browser colors changed only; application name, scope, start
+  URL, shortcuts and square icons are unchanged. Cache v86 adds the explicit
+  shell stylesheet; API and private-file cache exclusions remain unchanged.
+- Browser checks cover both roles at 1440x900 and 375x812, global search,
+  original logo loading, Admin management dialog open/cancel, mobile menu,
+  existing Home/Leads navigation and Quick Log/Map/Alerts dialogs. Additional
+  widths 1280, 1152 and 960 check overflow, not native browser zoom.
+- The original eight-flow suite and four shell checks use fresh isolated
+  fixtures in sequence. Initial combined-suite rate-limit contention was fixed
+  by test isolation, not by weakening runtime limits. An animated menu assertion
+  now waits for its final position instead of measuring an intermediate frame.
+- Default captures are After; baseline Before images are not overwritten.
+- Final shell checkpoint: `npm run verify` PASS; `npm run test:ui:shell`
+  PASS, all four role/viewport projects in 47.1 seconds, including global search.
+  First attempt in the restricted sandbox failed at auth-refresh.test.js with
+  `connect EACCES 127.0.0.1:62654`. The browser attempt was stopped after no
+  progress. Both commands then ran with approved local-server access; the full
+  verification and browser suite passed. No application protection changed.
+- Page-specific layout, all dialog/state captures, actual 125%/150% zoom and
+  provider/voice UAT remain pending. No production operations or deployment.
 
 ## 4. Existing page and route inventory
 

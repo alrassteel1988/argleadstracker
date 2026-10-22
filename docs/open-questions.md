@@ -100,3 +100,23 @@ Do not hide existing counterparts just because the proposed version is out of sc
   verification claimed.
 - Still pending: supplied logo placement, sidebar/header/mobile navigation,
   page-specific layout and icon cleanup, dialogs, full state/zoom matrix, Q-02.
+
+## Shared shell phase
+
+- The owner-supplied original logo is now placed on sign-in and sidebar navy
+  surfaces without changing its bytes or proportions. The sidebar, topbar and
+  mobile navigation now share proposal styling for both roles.
+- Sign Out and Admin Create Salesman Account were relocated, not replaced:
+  existing IDs, event handlers, permission guards and dialog mechanics remain.
+- The only client JavaScript change is escaped title markup for the final-word
+  accent. It does not alter title selection, records, routes or calculations.
+- Global search, keyboard names, hidden-state rules and mobile alert count
+  announcements remain intact. Navigation checks exercise existing actions.
+- Extra 1152/960px layout captures are not native 125%/150% zoom evidence.
+- Tests use separate fresh local fixtures for baseline and shell suites to
+  avoid test-driven rate-limit contention; production protections are unchanged.
+- Final `npm run verify`: PASS. Final `npm run test:ui:shell`: PASS, four
+  projects in 47.1 seconds. Windows sandbox initially denied a loopback test
+  connection; rerunning with approved local-server access passed both gates.
+- Q-02 remains unresolved. Lost records, stage options, counts and stored
+  values have not been removed. Full page/dialog migration remains in progress.
