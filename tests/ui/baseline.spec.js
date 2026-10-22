@@ -24,6 +24,9 @@ async function login(page, info) {
   await page.locator('#loginForm button[type="submit"]').click();
   await expect(page.locator("#appShell")).toBeVisible();
   await expect(page.locator("#loginForm")).toBeHidden();
+  // Wait for the known synthetic records, not the initial zero/loading frame.
+  if (role === "admin") await expect(page.locator("#metricValue")).toHaveText("9");
+  else await expect(page.locator('[data-summary-card="salesmanMyLeads"] strong')).toHaveText("12");
   return role;
 }
 
@@ -40,6 +43,16 @@ test.beforeEach(async ({ page }) => {
 
 test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({ page }, info) => {
   await page.goto("/");
+  if (phase === "after") {
+    const signInPresentation = await page.locator('#loginForm button[type="submit"]').evaluate(button => ({
+      icon: getComputedStyle(button, "::before").maskImage,
+      foreground: getComputedStyle(button).color,
+      background: getComputedStyle(button).backgroundColor
+    }));
+    expect(signInPresentation.icon).toContain("data:image/svg+xml");
+    expect(signInPresentation.foreground).toBe("rgb(8, 61, 119)");
+    expect(signInPresentation.background).toBe("rgb(255, 177, 0)");
+  }
   await capture(page, info, "01-login");
   await page.locator('#loginForm button[type="submit"]').click();
   await expect(page.locator("#loginForm")).toBeVisible();
@@ -59,6 +72,14 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
 
   await page.goto("/?view=pipeline");
   await expect(page.locator("#leadList table")).toBeVisible();
+  if (phase === "after" && info.project.name.endsWith("mobile")) {
+    const field = await page.locator('[data-pipeline-filter="search"]').evaluate(element => ({
+      fontSize: parseFloat(getComputedStyle(element).fontSize),
+      height: element.getBoundingClientRect().height
+    }));
+    expect(field.fontSize).toBeGreaterThanOrEqual(16);
+    expect(field.height).toBeGreaterThanOrEqual(44);
+  }
   await expect(page.locator("#leadList")).toContainText("Synthetic Steel Company 01");
   if (role === "salesman") {
     await expect(page.locator("#leadList")).not.toContainText("Synthetic Steel Company 13");

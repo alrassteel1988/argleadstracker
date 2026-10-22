@@ -1,9 +1,11 @@
-const CACHE_VERSION = "arg-pwa-v84-revised-ui-foundation";
+const CACHE_VERSION = "arg-pwa-v85-revised-ui-controls";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
   "/crm-theme.css",
+  "/crm-icons.css",
+  "/crm-controls.css",
   "/assets/brand/crm-silk-white-desktop.png",
   "/assets/brand/crm-silk-white-mobile.png",
   "/assets/brand/al-ras-steel-white-logo.png",

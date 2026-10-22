@@ -86,6 +86,35 @@ and exclusions; no production browser tests or provider operations were run.
 - Still pending: full primitive/shell/page/dialog migration, complete visual
   state matrix, real-provider/voice UAT and production checks. No push or deploy.
 
+### Shared controls phase evidence
+
+- Added `crm-controls.css` and a 40-icon, locally bundled Lucide CSS subset.
+  Source/integrity/license: assets/icons/README.md and LICENSE. Existing dynamic
+  labels and handlers are untouched; decorative masks cannot receive clicks or
+  change accessible names. Buttons already containing SVGs and record cards are
+  intentionally left for their page-specific pass.
+- Shared buttons, fields, semantic completion/error/disabled feedback, focus,
+  neutral panel caps, tab treatment and opaque surfaces now use proposal tokens.
+  Legacy brand variables are rebound to the shared token layer for both roles.
+- Pipeline exports keep the same IDs, routes, formats and handlers. Only their
+  legacy green/red presentation was converted to the shared secondary surface;
+  the two obsolete color assertions were updated, not behavior assertions.
+- Native forms, required indicators, field names, IDs, data attributes, ARIA,
+  permission/routing logic and service-worker API exclusions are unchanged.
+- `npm run test:ui:tokens`, `node tests/pipeline-live-leads.test.js`,
+  `node tests/static-assets-security.test.js` and `npm run verify`: PASS.
+  No test failure in this phase. Manual review led to replacing duplicate close/
+  collapse glyphs with the decorative icon while retaining their ARIA names.
+- Browser captures now wait for the fixture's known 9 Admin open records or
+  12 Salesman assigned records instead of the initial zero/loading frame.
+  New browser assertions cover the Sign in icon/colors and phone Pipeline
+  field font >=16px and height >=44px. Production values are never hardcoded.
+- Role navigation, logo placement, full per-page layout, remaining icon/table/
+  dialog states, 125%/150% zoom and provider/voice verification remain PENDING.
+- Final `CRM_UI_SCREENSHOT_PHASE=after npm run test:ui:baseline`: PASS, 8 tests
+  in 2.8 minutes. Both role totals, Sign in icon/colors and phone field assertions
+  passed alongside the existing create, draft, filter, tabs and dialog flows.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.

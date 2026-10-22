@@ -155,20 +155,17 @@ body.pipeline-compact-mode .pipeline-empty-state .ghost-button:hover {
 }
 
 body.pipeline-compact-mode .pipeline-list-actions .pipeline-export-button {
-  border-color: transparent !important;
-  color: #fff !important;
+  border-color: var(--crm-control-border) !important;
+  color: var(--crm-navy) !important;
 }
 
-body.pipeline-compact-mode .pipeline-list-actions .pipeline-export-button.is-excel {
-  background-color: var(--bauhaus-green) !important;
-}
-
+body.pipeline-compact-mode .pipeline-list-actions .pipeline-export-button.is-excel,
 body.pipeline-compact-mode .pipeline-list-actions .pipeline-export-button.is-pdf {
-  background-color: var(--bauhaus-red) !important;
+  background-color: var(--crm-surface) !important;
 }
 
 body.pipeline-compact-mode .pipeline-list-actions .pipeline-export-button:hover:not(:disabled) {
-  background-color: var(--bauhaus-navy) !important;
+  background-color: var(--crm-surface-muted) !important;
 }
 
 body.pipeline-compact-mode .pipeline-list-actions .ghost-button:disabled {

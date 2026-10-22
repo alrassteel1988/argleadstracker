@@ -1,0 +1,216 @@
+/* Shared presentational primitives; form and event contracts stay unchanged. */
+body :is(.auth-screen, .app-shell, dialog) :is(.primary-button, .ghost-button, .small-action, .text-button, .danger-button, .voice-button, .tasks-voice-button, .sheet-save, .salesman-open-button, .action-plan-toolbar-button) {
+  min-height: 36px;
+  border: 1px solid var(--crm-control-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  font-family: var(--crm-font-ui);
+  font-size: var(--crm-type-body);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(.primary-button, .voice-button, .tasks-voice-button, .sheet-save, .salesman-open-button, .action-plan-toolbar-button) {
+  border-color: var(--crm-navy) !important;
+  background-color: var(--crm-navy) !important;
+  color: var(--crm-white) !important;
+}
+
+body :is(.auth-screen, .app-shell, dialog) .danger-button {
+  border-color: var(--crm-health-red) !important;
+  background-color: var(--crm-health-red) !important;
+  color: var(--crm-white) !important;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(.primary-button, .voice-button, .tasks-voice-button, .sheet-save, .salesman-open-button, .action-plan-toolbar-button):hover:not(:disabled) {
+  background-color: var(--crm-sidebar-start) !important;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(.ghost-button, .small-action, .text-button):hover:not(:disabled) {
+  border-color: var(--crm-navy) !important;
+  background-color: var(--crm-surface-muted) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+body :is(.auth-screen, .app-shell, dialog) .danger-button:hover:not(:disabled) {
+  background-color: var(--crm-health-red-soft) !important;
+  color: var(--crm-health-red) !important;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(.primary-button, .ghost-button, .small-action, .text-button, .danger-button):active:not(:disabled) {
+  outline: 1px solid currentColor;
+  outline-offset: -4px;
+}
+
+body :is(#openLeadForm, #salesmanSimplifiedAddLead, #weeklySubmitReport, .auth-card button[type="submit"], .dialog-form button.primary-button[type="submit"], .sheet-save) {
+  border-color: var(--crm-amber) !important;
+  background-color: var(--crm-amber) !important;
+  color: var(--crm-navy) !important;
+}
+
+body :is(#openLeadForm, #salesmanSimplifiedAddLead, #weeklySubmitReport, .auth-card button[type="submit"], .dialog-form button.primary-button[type="submit"], .sheet-save):hover:not(:disabled) {
+  border-color: var(--crm-navy) !important;
+  background-color: var(--crm-amber) !important;
+  text-decoration: underline;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--crm-control-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+  -webkit-text-fill-color: var(--crm-text);
+  font-family: var(--crm-font-ui);
+  font-size: var(--crm-type-body);
+  line-height: var(--crm-leading-body);
+  letter-spacing: 0;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(input, textarea)::placeholder {
+  color: var(--crm-text-secondary) !important;
+  -webkit-text-fill-color: var(--crm-text-secondary);
+  opacity: 1 !important;
+  font-weight: 400;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(input, select, textarea).field--required-empty {
+  border: 1.5px solid var(--crm-health-amber) !important;
+  background-color: var(--crm-health-amber-soft) !important;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(input, select, textarea).field--filled {
+  border: 1.5px solid var(--crm-health-green) !important;
+  background-color: var(--crm-health-green-soft) !important;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(input, select, textarea)[aria-invalid="true"] {
+  border: 2px solid var(--crm-health-red) !important;
+  background-color: var(--crm-health-red-soft) !important;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(button, input, select, textarea):disabled {
+  border-color: var(--crm-control-border) !important;
+  background-color: var(--crm-surface-muted) !important;
+  color: var(--crm-text-secondary) !important;
+  -webkit-text-fill-color: var(--crm-text-secondary);
+  opacity: 1 !important;
+  cursor: not-allowed;
+}
+
+body :is(.auth-screen, .app-shell, dialog) :is(button, [role="button"], a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--crm-focus) !important;
+  outline-offset: 2px !important;
+  border-color: var(--crm-focus) !important;
+}
+
+body .app-shell :is(.panel, .view-panel, .lead-detail-page-panel, .pipeline-worklist-column, .salesman-dashboard-live-leads) {
+  border-color: var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+}
+
+body .app-shell :is(.panel-header, .compact-header, .kanban-panel-header, .market-snapshot-header, .pipeline-funnel-table-head) {
+  border-bottom: 1px solid var(--crm-border) !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+
+body .app-shell :is(.panel-header, .compact-header, .kanban-panel-header, .market-snapshot-header, .pipeline-funnel-table-head) :is(h1, h2, h3, h4, p, span, small, strong, label):not(button *, a *) {
+  color: var(--crm-navy) !important;
+}
+
+body dialog {
+  border-color: var(--crm-border) !important;
+  border-radius: var(--crm-radius-dialog) !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+}
+
+body :is(.drawer-tabs, .lead-detail-tabs, .market-snapshot-tabs) {
+  border-color: var(--crm-border) !important;
+  background-color: var(--crm-surface) !important;
+}
+
+body :is(.drawer-tabs, .lead-detail-tabs, .market-snapshot-tabs) button {
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  font-weight: 600;
+}
+
+body :is(.drawer-tabs, .lead-detail-tabs, .market-snapshot-tabs) button:is(.active, [aria-selected="true"]) {
+  border-bottom: 3px solid var(--crm-amber) !important;
+  background-color: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  font-weight: 700;
+}
+
+/* Decoration is independent of mutable labels, loading text and event targets. */
+body button:not(:has(svg)):not(.nav-item):not(.lead-drawer-backdrop):not(.menu-backdrop):not(.activity-card-button):not(.salesman-triage-card):not(.salesman-call-next-item):not(.salesman-first-touch-item):not(.salesman-loss-item):not([data-lead-id]):not([data-dashboard-lead]):not([data-salesman-queue-open]):not([data-summary-card]):not([data-pipeline-sort])::before {
+  content: "";
+  display: inline-block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-inline-end: 6px;
+  vertical-align: -0.12em;
+  background-color: currentColor;
+  -webkit-mask: var(--crm-button-icon, var(--crm-icon-arrow-right)) center / contain no-repeat;
+  mask: var(--crm-button-icon, var(--crm-icon-arrow-right)) center / contain no-repeat;
+  pointer-events: none;
+}
+
+body :is(button[type="submit"], #leadSubmitButton, #weeklySaveDraft, #saveActivity) { --crm-button-icon: var(--crm-icon-save); }
+body :is(#openLeadForm, #salesmanSimplifiedAddLead, #openSalesmanForm, [data-add-activity], [data-drawer-log-activity]) { --crm-button-icon: var(--crm-icon-plus); }
+body :is(#loginForm button[type="submit"]) { --crm-button-icon: var(--crm-icon-log-in); }
+body :is(#logoutButton) { --crm-button-icon: var(--crm-icon-log-out); }
+body :is(#openPlacesSearch, #sidebarSearchPlaces, #agentAsk, #smartSearchShell button, #placesSearchForm button[type="submit"]) { --crm-button-icon: var(--crm-icon-search); }
+body :is(#exportLeadsExcel, #exportLeadsPdf, #exportPipelineExcel, #exportPipelinePdf, [data-pipeline-export], #salesmenExportCsv) { --crm-button-icon: var(--crm-icon-download); }
+body :is(#openImportLeads, [data-intel-upload], [data-upload]) { --crm-button-icon: var(--crm-icon-upload); }
+body :is(#refreshAppButton, #refreshMarketIntel, #refreshPipelineLeads, [data-retry], [data-refresh]) { --crm-button-icon: var(--crm-icon-refresh-cw); }
+body :is(#clearPipelineFilters, #resetActivityFilters, #clearSalesmenFilters, #applySalesmenFilters) { --crm-button-icon: var(--crm-icon-sliders-horizontal); }
+body :is(.danger-button, #requestActivityDeletionFromDetails) { --crm-button-icon: var(--crm-icon-circle-alert); }
+body :is(.voice-button, .tasks-voice-button, [data-weekly-voice-button]) { --crm-button-icon: var(--crm-icon-mic); }
+body :is(#weeklySubmitReport, #aiAssistantSend, #configAgentPropose) { --crm-button-icon: var(--crm-icon-send); }
+body :is(#aiAssistantLauncher, [data-ai-action], [data-company-ai-action], [data-salesperson-ai-action]) { --crm-button-icon: var(--crm-icon-sparkles); }
+body :is([data-drawer-edit], #editActivityFromDetails, [data-edit-activity]) { --crm-button-icon: var(--crm-icon-pencil); }
+body :is(.panel-collapse-toggle, #activityCalendarToggle, [aria-expanded="true"]) { --crm-button-icon: var(--crm-icon-chevron-up); }
+body :is(.panel-collapse-toggle, #activityCalendarToggle, [aria-expanded="false"]):is([aria-expanded="false"]) { --crm-button-icon: var(--crm-icon-chevron-down); }
+body :is([data-drawer-tab="overview"]) { --crm-button-icon: var(--crm-icon-building); }
+body :is([data-drawer-tab="activities"]) { --crm-button-icon: var(--crm-icon-list); }
+body :is([data-drawer-tab="pmr"], [data-drawer-tab="notes"]) { --crm-button-icon: var(--crm-icon-file-text); }
+body :is([data-drawer-tab="reminders"], .calendar-nav-button) { --crm-button-icon: var(--crm-icon-calendar-days); }
+body :is([data-drawer-tab="intel"]) { --crm-button-icon: var(--crm-icon-sparkles); }
+body :is(.close-button, .dialog-close, .summary-card-details-close, [id^="close"], [id^="cancel"], .sidebar-close-button, [aria-label^="Dismiss"], [aria-label^="Close"]) { --crm-button-icon: var(--crm-icon-x); }
+
+body button:is([aria-label^="Close"], [aria-label^="Dismiss"], .panel-collapse-toggle[aria-label]):not(.menu-backdrop):not(.lead-drawer-backdrop) {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 8px;
+  font-size: 0 !important;
+}
+
+body button:is([aria-label^="Close"], [aria-label^="Dismiss"], .panel-collapse-toggle[aria-label]):not(.menu-backdrop):not(.lead-drawer-backdrop)::before {
+  margin-inline-end: 0;
+  vertical-align: middle;
+}
+
+@media (max-width: 720px) {
+  body :is(.auth-screen, .app-shell, dialog) :is(.primary-button, .ghost-button, .small-action, .text-button, .danger-button, .voice-button, .tasks-voice-button, .sheet-save) {
+    min-height: 44px !important;
+  }
+
+  body :is(.auth-screen, .app-shell, dialog) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+    min-height: 44px !important;
+    font-size: 16px !important;
+  }
+}

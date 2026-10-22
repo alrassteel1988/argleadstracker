@@ -250,6 +250,8 @@ const PUBLIC_STATIC_FILES = new Map([
   ["/client.js", "client.js"],
   ["/styles.css", "styles.css"],
   ["/crm-theme.css", "crm-theme.css"],
+  ["/crm-icons.css", "crm-icons.css"],
+  ["/crm-controls.css", "crm-controls.css"],
   ["/assets/brand/crm-silk-white-desktop.png", "assets/brand/crm-silk-white-desktop.png"],
   ["/assets/brand/crm-silk-white-mobile.png", "assets/brand/crm-silk-white-mobile.png"],
   ["/assets/brand/al-ras-steel-white-logo.png", "assets/brand/al-ras-steel-white-logo.png"],

@@ -49,6 +49,25 @@
   --font-body: var(--crm-font-ui);
   --font-ui: var(--crm-font-ui);
   --font-display: var(--crm-font-ui);
+  --bauhaus-navy: var(--crm-navy);
+  --bauhaus-deep-navy: var(--crm-sidebar-end);
+  --bauhaus-blue: var(--crm-navy);
+  --bauhaus-yellow: var(--crm-amber);
+  --bauhaus-orange: var(--crm-amber);
+  --bauhaus-text: var(--crm-text);
+  --bauhaus-text-muted: var(--crm-text-secondary);
+  --bauhaus-surface: var(--crm-surface);
+  --bauhaus-muted: var(--crm-surface-muted);
+  --bauhaus-border-light: var(--crm-border);
+  --bauhaus-border: var(--crm-navy);
+  --bauhaus-radius: var(--crm-radius-control);
+  --bauhaus-radius-large: var(--crm-radius-panel);
+  --panel-border-info: var(--crm-border);
+  --panel-border-new: var(--crm-border);
+  --panel-border-pending: var(--crm-border);
+  --panel-border-neutral: var(--crm-border);
+  --surface-1: var(--crm-surface);
+  --surface-2: var(--crm-surface-muted);
 }
 
 body .app-shell > .main {

@@ -12,6 +12,8 @@ const publicRequests = [
   ["/client.js?v=test", "text/javascript"],
   ["/styles.css?v=test", "text/css"],
   ["/crm-theme.css?v=test", "text/css"],
+  ["/crm-icons.css?v=test", "text/css"],
+  ["/crm-controls.css?v=test", "text/css"],
   ["/assets/brand/crm-silk-white-desktop.png", "image/png"],
   ["/assets/brand/crm-silk-white-mobile.png", "image/png"],
   ["/assets/brand/al-ras-steel-white-logo.png", "image/png"],
@@ -39,7 +41,8 @@ const blockedRequests = [
   "/admin",
   "/unknown.css",
   "/assets/brand/README.md",
-  "/assets/brand/unapproved.png"
+  "/assets/brand/unapproved.png",
+  "/assets/icons/LICENSE"
 ];
 
 async function run() {
