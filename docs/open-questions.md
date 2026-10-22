@@ -136,3 +136,24 @@ Do not hide existing counterparts just because the proposed version is out of sc
 - Final local gates: `npm run verify` PASS; `npm run test:ui` PASS (eight core
   flows plus four shell checks). Initial browser failure was a new test locator
   mismatch, corrected against the existing renderer without changing behavior.
+
+## Shared data and Pipeline checkpoint
+
+- Proposal pages 12/37 inform shared white KPI cards and white data tables.
+  Current nine-column Pipeline structure and all column-header filters are
+  retained instead of reducing coverage to the simpler proposal filter row.
+- Shared table declarations have been consolidated out of the Salesman-specific
+  layer. Stage/priority/overdue labels and thresholds remain unchanged.
+- Pagination reserves space for the existing fixed AI Assistant. A passive
+  toast no longer intercepts control clicks. Neither change alters workflows.
+- The existing bootstrap defers query-route restoration until initial loading
+  completes; the isolated loading test uses normal Pipeline navigation while
+  the lead response is held. No routing logic was modified to satisfy a test.
+- No production, provider, database, role or API changes. Initial legacy CSS
+  remains for unconverted pages until their separate presentation passes.
+- The current phone table uses horizontal scrolling to retain every existing
+  field/filter. The proposal's compact phone record-card presentation remains
+  part of the final responsive design pass, not a completed visual match here.
+- `npm run verify` passes. Local browser coverage now includes all eight core
+  flows, four shell flows and four data-surface flows. Real-provider, production
+  RLS, native zoom and the complete visual-state matrix remain unverified.

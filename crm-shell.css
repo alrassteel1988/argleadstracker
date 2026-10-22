@@ -1,4 +1,8 @@
 /* Shared proposal shell. Existing menu and route state remain authoritative. */
+body #appToast {
+  pointer-events: none;
+}
+
 body #appShell .topbar #openPlacesSearch {
   background-color: var(--crm-surface) !important;
   color: var(--crm-navy) !important;

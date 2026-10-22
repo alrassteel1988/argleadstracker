@@ -326,38 +326,6 @@ body.salesman-dashboard-mode #appShell .salesman-dashboard-lead-table {
   overflow: auto;
 }
 
-body.salesman-dashboard-mode #appShell .dashboard-live-lead-table :is(th, td) {
-  padding: 10px 12px;
-  color: var(--crm-text) !important;
-  font-size: 14px !important;
-  line-height: 1.5;
-  background: var(--crm-surface);
-  border-bottom: 1px solid var(--crm-border);
-}
-
-body.salesman-dashboard-mode #appShell .dashboard-live-lead-table th {
-  color: var(--crm-navy) !important;
-  font-size: 12px !important;
-  font-weight: 700;
-  background: var(--crm-surface-muted) !important;
-  letter-spacing: 0;
-}
-
-body.salesman-dashboard-mode #appShell .dashboard-live-lead-table :is(.lead-table-company strong, .lead-table-contact, .lead-table-contact-link) {
-  color: var(--crm-text) !important;
-  font-size: 14px !important;
-}
-
-body.salesman-dashboard-mode #appShell .dashboard-live-lead-table .lead-table-company small {
-  color: var(--crm-text-secondary) !important;
-  font-size: 12px !important;
-  line-height: 1.5;
-}
-
-body.salesman-dashboard-mode #appShell .dashboard-live-lead-table a {
-  color: var(--crm-navy) !important;
-}
-
 @media (max-width: 1024px) {
   body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
     grid-template-columns: 1fr;

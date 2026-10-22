@@ -1,0 +1,348 @@
+/* Shared data surfaces. Filtering, sorting, datasets and row handlers stay native. */
+body #appShell #metricsPanel {
+  height: auto !important;
+  max-height: none;
+  gap: var(--crm-space-3);
+}
+
+body.pipeline-compact-mode #appShell #metricsShell,
+body.pipeline-compact-mode #appShell #metricsShell .dashboard-collapsible-body-inner {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+body #appShell #metricsPanel > article {
+  height: auto !important;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--crm-space-4);
+  border: 1px solid var(--crm-border) !important;
+  border-top: 3px solid var(--crm-amber) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+}
+
+body #appShell #metricsPanel > article::before,
+body #appShell #metricsPanel > article::after {
+  content: none !important;
+}
+
+body #appShell #metricsPanel > article > span {
+  color: var(--crm-navy) !important;
+  font-size: 13px !important;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body #appShell #metricsPanel > article > span::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: 7px;
+  border-radius: 50%;
+  background: var(--crm-teal);
+}
+
+body #appShell #metricsPanel > .metric-active > span::before { background: var(--crm-health-green); }
+body #appShell #metricsPanel > .metric-risk > span::before { background: var(--crm-health-red); }
+body #appShell #metricsPanel > .metric-due > span::before { background: var(--crm-health-amber); }
+
+body #appShell #metricsPanel > article strong {
+  color: var(--crm-navy) !important;
+  font-size: 30px !important;
+  line-height: 1.2;
+}
+
+body #appShell #metricsPanel > article small {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+body #appShell #metricsPanel > article:is(:hover, :focus-visible) {
+  border-color: var(--crm-navy) !important;
+  background: var(--crm-surface-muted) !important;
+}
+
+body #appShell .live-lead-table {
+  border: 0 !important;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--crm-text);
+  font-family: var(--crm-font-ui);
+}
+
+body #appShell .live-lead-table :is(th, td) {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--crm-divider) !important;
+  background: var(--crm-surface);
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+body #appShell .live-lead-table th {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  letter-spacing: 0;
+  background: var(--crm-surface) !important;
+}
+
+body #appShell .live-lead-table :is(.lead-table-company strong, .lead-table-contact, .lead-table-contact-link) {
+  color: var(--crm-navy) !important;
+  font-size: 14px !important;
+}
+
+body #appShell .live-lead-table .lead-table-company small {
+  color: var(--crm-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+body #appShell .live-lead-table :is(.lead-table-next-action, a) {
+  color: var(--crm-navy) !important;
+}
+
+body #appShell .live-lead-table tbody tr:is(:hover, :focus-visible, .active) td {
+  background: var(--crm-surface-muted) !important;
+}
+
+body #appShell .live-lead-table .lead-table-badge {
+  display: inline-block;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface-muted) !important;
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body #appShell .live-lead-table :is(.lead-table-overdue-amber, .lead-table-priority-amber, .lead-table-stage-negotiation) {
+  border-color: var(--crm-health-amber) !important;
+  background: var(--crm-health-amber-soft) !important;
+  color: var(--crm-health-amber) !important;
+}
+
+body #appShell .live-lead-table :is(.lead-table-overdue-red, .lead-table-priority-red, .lead-table-stage-lost) {
+  border-color: var(--crm-health-red) !important;
+  background: var(--crm-health-red-soft) !important;
+  color: var(--crm-health-red) !important;
+}
+
+body #appShell .live-lead-table :is(.lead-table-priority-green, .lead-table-stage-won) {
+  border-color: var(--crm-health-green) !important;
+  background: var(--crm-health-green-soft) !important;
+  color: var(--crm-health-green) !important;
+}
+
+body.pipeline-compact-mode #appShell #pipelineWorkspace,
+body.pipeline-compact-mode #appShell #pipelineView,
+body.pipeline-compact-mode #appShell #pipelineListPanel {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+body.pipeline-compact-mode #appShell #pipelineWorkspace {
+  overflow: visible;
+}
+
+body.pipeline-compact-mode #appShell #pipelineListPanel {
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-list-header {
+  flex-wrap: wrap;
+  padding: var(--crm-space-4);
+  border-bottom: 1px solid var(--crm-divider) !important;
+  background: var(--crm-surface) !important;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-list-header h2 {
+  color: var(--crm-navy) !important;
+  font: 700 18px/1.35 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-list-header span,
+body.pipeline-compact-mode #appShell .pipeline-report-range :is(span, label) {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-report-tools {
+  flex-wrap: wrap;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-report-range {
+  border-color: var(--crm-divider);
+  border-radius: var(--crm-radius-control);
+  background: var(--crm-surface-muted);
+}
+
+body.pipeline-compact-mode #appShell #leadList {
+  min-height: 240px;
+  max-height: min(62dvh, 680px);
+  overflow: auto;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+  scrollbar-gutter: stable;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-lead-table {
+  min-width: 1120px;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-lead-table th {
+  padding: 0;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-column-row th {
+  height: 44px;
+  top: 0;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-filter-row th {
+  height: auto;
+  top: 44px;
+  padding: 6px;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(1) { width: 16%; }
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(4) { width: 14%; }
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(7) { width: 9%; }
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(8) { width: 10%; }
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(9) { width: 8%; }
+
+body.pipeline-compact-mode #appShell .pipeline-sort-button {
+  min-height: 44px;
+  padding: 8px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy);
+  font: 600 12px/1.4 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-sort-button:is(:hover, .active) {
+  background: var(--crm-surface-muted) !important;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-sort-indicator {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  color: var(--crm-navy) !important;
+  font-size: 0 !important;
+  -webkit-mask: var(--crm-sort-icon, var(--crm-icon-sliders-horizontal)) center / contain no-repeat;
+  mask: var(--crm-sort-icon, var(--crm-icon-sliders-horizontal)) center / contain no-repeat;
+}
+
+body.pipeline-compact-mode #appShell th[aria-sort="ascending"] { --crm-sort-icon: var(--crm-icon-chevron-up); }
+body.pipeline-compact-mode #appShell th[aria-sort="descending"] { --crm-sort-icon: var(--crm-icon-chevron-down); }
+
+body.pipeline-compact-mode #appShell .pipeline-filter-row :is(input, select).is-active {
+  border: 2px solid var(--crm-navy) !important;
+  background: var(--crm-surface-muted) !important;
+  font-weight: 700;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-owner-scope {
+  height: auto;
+  min-height: 38px;
+  color: var(--crm-text-secondary);
+  background: var(--crm-surface-muted);
+  border-color: var(--crm-divider);
+  white-space: normal;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-row-action {
+  min-height: 36px;
+  padding: 6px;
+  border: 1px solid var(--crm-control-border);
+  border-radius: var(--crm-radius-control);
+  background: var(--crm-surface);
+  color: var(--crm-navy);
+  font: 600 13px/1.4 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-row-action:hover {
+  background: var(--crm-surface-muted);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-pagination {
+  flex-wrap: wrap;
+  padding: var(--crm-space-3) var(--crm-space-4);
+  padding-inline-end: 168px;
+  border-top: 1px solid var(--crm-divider);
+  background: var(--crm-surface);
+  color: var(--crm-text-secondary);
+  font: 400 13px/1.5 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-pagination-controls {
+  flex-wrap: wrap;
+}
+
+body.pipeline-compact-mode #appShell :is(.pipeline-empty-state, .pipeline-error-state, .pipeline-loading-state) {
+  padding: var(--crm-space-6);
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font: 400 14px/1.5 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-loading-state span {
+  background: var(--crm-surface-muted);
+  border-color: var(--crm-divider);
+  border-radius: var(--crm-radius-control);
+}
+
+@media (max-width: 720px) {
+  body #appShell #metricsPanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  body #appShell #metricsPanel > article {
+    padding: var(--crm-space-3);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-row-action {
+    min-height: 44px;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-pagination {
+    padding-inline-end: 76px;
+  }
+}
+
+@media (max-width: 359px) {
+  body #appShell #metricsPanel {
+    grid-template-columns: 1fr !important;
+  }
+}

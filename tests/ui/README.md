@@ -1,15 +1,15 @@
 # Isolated CRM UI baseline
 
 Run `npm run test:ui` from the repository root. It runs `test:ui:baseline` (8
-core-flow tests) then `test:ui:shell` (4 shell/navigation tests), each with fresh
-servers. Chromium must already
+core-flow tests), `test:ui:shell` (4 shell/navigation tests), then `test:ui:data`
+(4 Pipeline data-surface tests), each with fresh servers. Chromium must already
 be available through the existing Playwright dependency. This suite does not
 use the production add-lead script or production credentials.
 
 ## Isolation
 
 - Each role/viewport gets a separate loopback server and temporary directory.
-- Core and shell suites run sequentially with fresh normal rate-limit buckets;
+- Core, shell and data suites run sequentially with fresh normal rate-limit buckets;
   this avoids shared test traffic exhausting the real report limit. No limit is
   disabled or changed. No reset API is exposed.
 - Only an explicit runtime-file allowlist is copied; no `.env`, source database,
@@ -36,6 +36,10 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 - Salesman dashboard white/teal/navy surfaces, unchanged five stage actions,
   nonoverlapping action/list flow, 14px company names and page overflow checks.
 - Search places button foreground/background contrast for both roles.
+- The data suite separately exercises all Pipeline column filters, combined
+  sorting/pagination, Admin-only report ranges and Excel/PDF downloads, loading,
+  empty results, a synthetic 503 and retry, and opening a lead. It also checks
+  KPI caption bounds, table text and AI-launcher pagination clearance.
 - Additional desktop effective-layout widths of 1280, 1152 and 960px. The latter
   two approximate available layout widths at 125%/150% on a 1440px screen; these
   are not a claim of native browser-zoom testing.

@@ -182,6 +182,40 @@ and exclusions; no production browser tests or provider operations were run.
   accent consistency, duplicate legacy stylesheet consolidation and full zoom
   coverage. Q-02 status presentation remains unchanged pending clarification.
 
+### Shared data surfaces and Pipeline phase
+
+- Proposal pages 12 and 37 were rendered and compared. `crm-data.css` now owns
+  shared KPI surfaces and live-lead table typography, row states and badges.
+  Duplicate dashboard table declarations were removed from crm-dashboard.css.
+- Existing Admin dashboard and both-role Pipeline KPI cards use white surfaces,
+  teal boundaries, amber top rules and small health markers. Values, summary
+  actions and calculations are untouched. Fixed Pipeline metric wrapper heights
+  were removed so the existing subtext is no longer clipped.
+- Pipeline keeps all nine existing columns, all eight existing header filters,
+  role-specific Salesman scope, inclusive Admin report dates, exports and
+  pagination. The proposal's separate simpler filter row is not substituted
+  for these existing controls. No JS, API or permission logic changed.
+- Shared table bodies are 14px with 12px metadata/badges, navy text and opaque
+  semantic fills. Sticky header offsets match the 44px column heading row.
+  Narrow-screen overflow remains table-scoped; all data is retained.
+- A new browser flow found the floating AI launcher intercepting Next page on
+  desktop. Pagination now reserves space for it. The noninteractive appToast
+  status element has pointer-events:none; its text/timer/ARIA behavior remains.
+- The first new suite was stopped after this verified overlap. A subsequent
+  loading-state assertion was corrected to navigate through the actual Pipeline
+  control while the synthetic response is held; initial route restoration is
+  deferred by existing bootstrap behavior and was not changed by this UI task.
+- New isolated tests exercise company/contact search, every column filter,
+  combined filters/sorting/pagination, Admin salesman filter and Excel/PDF
+  downloads, report dates, loading, empty results, simulated 503/retry and row
+  navigation. Interception is confined to disposable synthetic browsers.
+- Final `npm run verify`: PASS. The complete browser chain passes all eight
+  core-flow and four shell checks; all four final data projects also passed,
+  including KPI caption bounds and 14px navy company text. Browser-chain final
+  process completed with exit 0 (8 core in 3.9m, 4 shell in 1.0m, 4 data in 1.5m).
+- Remaining full-migration items include other pages/dialogs, all secondary states,
+  approved status presentation under Q-02, full native zoom and production UAT.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.
