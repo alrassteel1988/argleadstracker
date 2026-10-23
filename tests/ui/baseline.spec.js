@@ -81,8 +81,37 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     await page.goto(`/leads/ui-lead-1?tab=${tab}`);
     await expect(page.locator("#leadDetailView")).toBeVisible();
     await expect(page.locator(`[data-drawer-tab="${tab}"]`)).toBeVisible();
+    if (tab === "overview") {
+      await page.locator('[data-toggle-lead-ai-minimize="true"]').click();
+      await expect(page.locator("#leadAiSummaryPagePanel")).toHaveClass(/minimized/);
+      if (phase === "after") expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      await capture(page, info, "04-lead-summary-minimized");
+      await page.locator('[data-toggle-lead-ai-minimize="false"]').click();
+      await expect(page.locator("#leadAiSummaryPagePanel")).not.toHaveClass(/minimized/);
+    }
+    if (phase === "after") {
+      await expect(page.locator(`[data-drawer-tab="${tab}"]`)).toHaveAttribute("aria-current", "page");
+      await expect(page.locator(".lead-page-header")).toHaveCSS("background-color", "rgb(254, 252, 253)");
+      await expect(page.locator(".lead-page-header h2")).toHaveCSS("color", "rgb(8, 61, 119)");
+      const columns = await page.locator("#leadDetailView").evaluate(element => {
+        const info = element.querySelector("#leadDetailPagePanel").getBoundingClientRect();
+        const ai = element.querySelector("#leadAiSummaryPagePanel").getBoundingClientRect();
+        return { infoX: info.x, infoY: info.y, aiX: ai.x, aiY: ai.y };
+      });
+      if (info.project.name.endsWith("mobile")) expect(columns.infoY).toBeLessThan(columns.aiY);
+      else expect(columns.aiX).toBeLessThan(columns.infoX);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    }
     await capture(page, info, `04-lead-${tab}`);
   }
+
+  await page.locator("[data-drawer-edit-notes]").click();
+  await expect(page.locator("#drawerNotesForm")).toBeVisible();
+  await page.locator('#drawerNotesForm textarea[name="notes"]').fill("Synthetic UI verification: notes editing remains available.");
+  const noteSaved = page.waitForResponse(response => response.url().endsWith("/api/leads/ui-lead-1") && response.request().method() === "PATCH");
+  await page.locator('#drawerNotesForm button[type="submit"]').click();
+  expect((await noteSaved).ok()).toBe(true);
+  await expect(page.locator(".drawer-notes-view")).toContainText("Synthetic UI verification: notes editing remains available.");
 
   for (const view of ["salesmen", "activity", "tasks"]) {
     await page.goto(`/?view=${view}`);

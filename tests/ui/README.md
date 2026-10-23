@@ -28,6 +28,8 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 - Empty sign-in validation, sign-in, sign-out and role-specific route visibility.
 - Pipeline search, stage filter, sorting, clear filters and Salesman isolation.
 - All six lead tabs and the three existing Add Lead steps, including a real save.
+- Lead tab aria-current, white/navy header treatment, desktop column placement,
+  record-first mobile placement, AI minimize/restore and inline Notes edit/save.
 - Add Activity dialog open/cancel and AI Assistant dialog open/close.
 - Salesman weekly draft save; Admin calendar minimize/expand.
 - Supplied logo loading, white header/title accents, stable desktop rail,

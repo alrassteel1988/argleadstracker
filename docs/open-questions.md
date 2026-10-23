@@ -157,3 +157,26 @@ Do not hide existing counterparts just because the proposed version is out of sc
 - `npm run verify` passes. Local browser coverage now includes all eight core
   flows, four shell flows and four data-surface flows. Real-provider, production
   RLS, native zoom and the complete visual-state matrix remain unverified.
+
+## Lead Details checkpoint
+
+- The existing AI summary column is retained even though proposal page 15
+  focuses on contact/action cards. Both existing columns use the same proposal
+  surfaces. The record comes first on phones; desktop retains AI left/record
+  right. DOM reading order prioritizes the record without duplicating content.
+- All six current tabs and original status values remain. Navigation now exposes
+  aria-current without adding tablist keyboard semantics or changing routing.
+- Field values retain a 15px floor; body copy is 14px. Former green/violet panel
+  categories are replaced with shared teal boundaries; red/amber remain for
+  health/risk/warning signals. Existing labels still communicate meaning.
+- Call/Email links, note editing, AI minimize/restore, disclosures and existing
+  Intel/PMR/media actions remain. No unseen proposal-only actions were added.
+- Test startup waits are bounded at 15s and still require the exact synthetic
+  totals. Header color assertions retry across existing async DOM replacements.
+- The existing AI Minimize control is now visible on phones instead of being
+  hidden by legacy responsive CSS. It uses the unchanged desktop handler.
+- Full local browser regression chain: PASS, all 16 tests. An additional
+  focused record-screen rerun passed all four profiles in 1.8m and covers the
+  final minimized-summary width guard. `npm run verify` also passes against
+  the final record styling. These are isolated synthetic checks, not production
+  acceptance or proof of a complete application-wide visual migration.

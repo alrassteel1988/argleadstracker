@@ -9572,7 +9572,7 @@ function renderLeadDrawer() {
         <span class="chip">${escapeHtml(formatAED(lead.estimated_value))}</span>
       </div>
     </header>
-    <nav class="drawer-tabs lead-detail-tabs">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}">${tabLabels[tab]}</button>`).join("")}</nav>
+    <nav class="drawer-tabs lead-detail-tabs" aria-label="Lead details sections">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}" aria-current="${state.leadDrawerTab === tab ? "page" : "false"}">${tabLabels[tab]}</button>`).join("")}</nav>
     <div class="drawer-body lead-detail-page-body">${body}</div>
   `;
   renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });

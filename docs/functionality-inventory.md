@@ -216,6 +216,46 @@ and exclusions; no production browser tests or provider operations were run.
 - Remaining full-migration items include other pages/dialogs, all secondary states,
   approved status presentation under Q-02, full native zoom and production UAT.
 
+### Shared Lead Details presentation phase
+
+- Proposal page 15 was rendered and compared. Shared `crm-record.css` applies
+  white company/tabs/panels, navy headings and values, teal boundaries, neutral
+  fields, and restrained red/amber risk or warning markers for both roles.
+- Existing Overview, Activities, PMR, Reminders, Intel and Notes remain. The
+  company heading is 24px (20px phone), section headings 18px, values 15px,
+  body copy 14px and labels/metadata 12-13px. Empty fields remain italic and
+  readable. Call/Email keep their original URLs and now include local icons.
+- The desktop AI-left / information-right structure and original column widths
+  remain. Primary record markup now precedes AI markup in reading/focus order;
+  named grid areas preserve desktop placement and stack record-first at tablet
+  and phone sizes. No record, action or AI content was removed.
+- The only client change adds a navigation label and aria-current derived from
+  the already-selected tab. No handlers, route logic, state updates, data
+  fetching, validation, API payloads, permissions or calculations changed.
+- Browser checks now include AI minimize/restore, active-tab announcements,
+  white/navy header colors, column placement, no page overflow and existing
+  inline Notes edit/save through the real synthetic API.
+- First browser attempt: one fixture bootstrap exceeded the old 5s wait. Trace
+  showed login/settings/leads HTTP 200 and an unfinished activities request,
+  not an authentication rejection. The exact-count startup assertion remains,
+  with a bounded 15s allowance. A second new style assertion read a detached
+  header during async rendering; retrying locator CSS assertions now verify
+  the same colors against the current element. No application behavior changed.
+- The new mobile control check also found the existing Minimize action hidden
+  by legacy phone CSS. That responsive hide is overridden while honoring any
+  explicit hidden attribute/class. The same existing minimize/restore handler
+  is reused; no new AI request or state workflow was introduced.
+- `npm run test:ui`: PASS (8 core flows in 2.7m, 4 shell flows in 30.1s,
+  4 data flows in 1.5m). Final collapsed-summary styling rerun:
+  `npm run test:ui:baseline -- --grep "sign-in validation"`: PASS, all four
+  Admin/Salesman desktop/mobile profiles in 1.8m on 23 October 2026.
+- `npm run verify`: PASS on 23 October 2026 against the final record styling,
+  including syntax, API/security regression tests, presentation contracts and
+  the production build command. No separate lint or TypeScript script exists.
+- Populated PMR/media,
+  every Intel job state, provider UAT, native zoom and final legacy CSS cleanup
+  remain part of the full migration audit, not claimed complete here.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.

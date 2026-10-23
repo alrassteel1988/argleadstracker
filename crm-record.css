@@ -1,0 +1,347 @@
+/* Shared record presentation; all six tabs and existing forms stay intact. */
+body #appShell #leadDetailView {
+  grid-template-areas: "ai info";
+}
+
+body #appShell #leadDetailView .lead-detail-info-column { grid-area: info; }
+body #appShell #leadDetailView .lead-detail-ai-column { grid-area: ai; }
+
+body #appShell #leadDetailView :is(.lead-detail-page-panel, .lead-ai-summary-panel) {
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-surface) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+  color: var(--crm-text);
+}
+
+body #appShell #leadDetailView :is(.lead-detail-page-toolbar, .lead-page-header, .lead-detail-tabs) {
+  border-color: var(--crm-divider) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+
+body #appShell #leadDetailView .drawer-title-copy h2 {
+  color: var(--crm-navy) !important;
+  font: 700 24px/1.3 var(--crm-font-ui);
+  overflow-wrap: anywhere;
+}
+
+body #appShell #leadDetailView .drawer-title-copy p {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+body #appShell #leadDetailView .drawer-avatar {
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface-muted) !important;
+  color: var(--crm-navy) !important;
+}
+
+body #appShell #leadDetailView .lead-detail-back-button {
+  color: var(--crm-navy) !important;
+  background: var(--crm-surface) !important;
+}
+
+body #appShell #leadDetailView .lead-detail-tabs {
+  gap: 4px;
+  padding: 0 var(--crm-space-3);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+body #appShell #leadDetailView .lead-detail-tabs button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 10px;
+  border: 0 !important;
+  border-bottom: 3px solid var(--crm-surface) !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  font: 600 14px/1.4 var(--crm-font-ui);
+}
+
+body #appShell #leadDetailView .lead-detail-tabs button.active {
+  border-bottom-color: var(--crm-amber) !important;
+  font-weight: 700;
+}
+
+body #appShell #leadDetailView .lead-detail-tabs button:hover {
+  background: var(--crm-surface-muted) !important;
+}
+
+body #appShell #leadDetailView :is(.drawer-stage-pill, .drawer-stage-select, .drawer-badges .chip) {
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface-muted) !important;
+  color: var(--crm-navy) !important;
+  -webkit-text-fill-color: currentColor !important;
+  font: 600 13px/1.4 var(--crm-font-ui);
+}
+
+body #appShell #leadDetailView .drawer-badges .chip.hot {
+  border-color: var(--crm-health-red) !important;
+  background: var(--crm-health-red-soft) !important;
+  color: var(--crm-health-red) !important;
+}
+
+body #appShell #leadDetailView .drawer-badges .chip.warm {
+  border-color: var(--crm-health-amber) !important;
+  background: var(--crm-health-amber-soft) !important;
+  color: var(--crm-health-amber) !important;
+}
+
+body #appShell #leadDetailView :is(.drawer-section, .drawer-disclosure) {
+  min-width: 0;
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+}
+
+body #appShell #leadDetailView .drawer-section {
+  padding: var(--crm-space-4);
+  gap: var(--crm-space-3);
+}
+
+body #appShell #leadDetailView :is(.drawer-tab-heading h3, .drawer-section h3, .drawer-disclosure > summary > span) {
+  color: var(--crm-navy) !important;
+  font: 700 18px/1.35 var(--crm-font-ui);
+}
+
+body #appShell #leadDetailView :is(.drawer-section-copy, .drawer-disclosure > summary > small, .empty-copy, .timeline-empty span) {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body #appShell #leadDetailView .drawer-disclosure > summary {
+  padding: var(--crm-space-4);
+  background: var(--crm-surface) !important;
+}
+
+body #appShell #leadDetailView .drawer-disclosure-body {
+  padding: 0 var(--crm-space-4) var(--crm-space-4);
+}
+
+body #appShell #leadDetailView :is(.drawer-field, .drawer-summary-card) {
+  min-width: 0;
+  padding: var(--crm-space-3);
+  border: 1px solid var(--crm-divider) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+}
+
+body #appShell #leadDetailView :is(.drawer-field > span, .drawer-summary-card > span) {
+  color: var(--crm-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body #appShell #leadDetailView :is(.drawer-field strong, .drawer-field-value, .drawer-summary-card strong) {
+  color: var(--crm-text) !important;
+  -webkit-text-fill-color: currentColor !important;
+  font-size: 15px !important;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: normal !important;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+body #appShell #leadDetailView .drawer-field a.drawer-field-value {
+  color: var(--crm-navy) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+body #appShell #leadDetailView .drawer-field.is-empty .drawer-field-value {
+  color: var(--crm-text-secondary) !important;
+  font-style: italic;
+}
+
+body #appShell #leadDetailView .drawer-summary-card.next-action {
+  border-color: var(--crm-health-red) !important;
+  background: var(--crm-health-red-soft) !important;
+}
+
+body #appShell #leadDetailView .drawer-summary-card.next-action :is(span, strong) {
+  color: var(--crm-health-red) !important;
+}
+
+body #appShell #leadDetailView .drawer-primary-actions > a.ghost-button {
+  border: 1px solid var(--crm-control-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  -webkit-text-fill-color: currentColor !important;
+  font: 600 14px/1.4 var(--crm-font-ui);
+}
+
+body #appShell #leadDetailView .drawer-primary-actions > a::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-inline-end: 6px;
+  background: currentColor;
+  vertical-align: -2px;
+  -webkit-mask: var(--crm-contact-icon) center / contain no-repeat;
+  mask: var(--crm-contact-icon) center / contain no-repeat;
+  pointer-events: none;
+}
+
+body #appShell #leadDetailView .drawer-primary-actions > a:nth-of-type(1) { --crm-contact-icon: var(--crm-icon-phone); }
+body #appShell #leadDetailView .drawer-primary-actions > a:nth-of-type(2) { --crm-contact-icon: var(--crm-icon-mail); }
+body [data-drawer-edit-lead] { --crm-button-icon: var(--crm-icon-pencil); }
+body [data-refresh-lead-ai-summary] { --crm-button-icon: var(--crm-icon-refresh-cw); }
+body [data-toggle-lead-ai-minimize="true"] { --crm-button-icon: var(--crm-icon-chevron-up); }
+body [data-toggle-lead-ai-minimize="false"] { --crm-button-icon: var(--crm-icon-chevron-down); }
+
+body #appShell #leadDetailView :is(.drawer-remarks, .drawer-notes-view, .drawer-event-copy, .drawer-event-copy p, .lead-intel-section, .lead-intel-empty, .lead-intel-processing) {
+  color: var(--crm-text) !important;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+body #appShell #leadDetailView :is(.lead-ai-header, .lead-ai-toolbar, .lead-ai-card, .lead-ai-card-head, .lead-ai-card-body) {
+  border-color: var(--crm-divider) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+  box-shadow: none !important;
+}
+
+body #appShell #leadDetailView .lead-ai-header-top,
+body #appShell #leadDetailView .lead-ai-header-actions {
+  flex-wrap: wrap;
+  gap: var(--crm-space-2);
+}
+
+body #appShell #leadDetailView .lead-ai-minimize-button:not(.hidden):not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body #appShell #leadDetailView :is(.lead-ai-title-copy h2, .lead-ai-card h3) {
+  color: var(--crm-navy) !important;
+  font: 700 18px/1.4 var(--crm-font-ui);
+}
+
+body #appShell #leadDetailView :is(.lead-ai-card p, .lead-ai-card li, .lead-ai-note, .lead-ai-followup p) {
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.6;
+}
+
+body #appShell #leadDetailView :is(.lead-ai-title-copy > p, .lead-ai-generated, .lead-ai-card-meta, .lead-ai-empty-copy, .lead-ai-header .meta-label) {
+  color: var(--crm-text-secondary) !important;
+  background: var(--crm-surface) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body #appShell #leadDetailView .lead-ai-card {
+  border: 1px solid var(--crm-divider) !important;
+  border-left: 3px solid var(--crm-teal) !important;
+  border-radius: var(--crm-radius-control) !important;
+}
+
+body #appShell #leadDetailView .lead-ai-card.risk { border-left-color: var(--crm-health-red) !important; }
+body #appShell #leadDetailView .lead-ai-card.action { border-left-color: var(--crm-amber) !important; }
+
+body #appShell #leadDetailView .lead-ai-note {
+  border: 1px solid var(--crm-health-amber) !important;
+  background: var(--crm-health-amber-soft) !important;
+  color: var(--crm-health-amber) !important;
+}
+
+body #appShell #leadDetailView .lead-ai-badge {
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface-muted) !important;
+  color: var(--crm-navy) !important;
+  -webkit-text-fill-color: currentColor !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+body #appShell #leadDetailView .lead-ai-badge.freshness {
+  border-color: var(--crm-health-green) !important;
+  background: var(--crm-health-green-soft) !important;
+  color: var(--crm-health-green) !important;
+}
+
+body #appShell #leadDetailView .lead-ai-badge.freshness.warm {
+  border-color: var(--crm-health-amber) !important;
+  background: var(--crm-health-amber-soft) !important;
+  color: var(--crm-health-amber) !important;
+}
+
+body #appShell #leadDetailView .lead-ai-source { color: var(--crm-navy) !important; }
+
+body #appShell #leadDetailView .lead-ai-restore {
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  font: 600 14px/1.5 var(--crm-font-ui);
+}
+
+body #appShell #leadDetailView .lead-ai-restore span {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body #appShell #leadDetailView :is(.drawer-activity, .drawer-pmr, .handoff-event, .reminder-card) {
+  border: 1px solid var(--crm-divider) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+}
+
+body #appShell #leadDetailView .reminder-card.overdue {
+  border-left: 3px solid var(--crm-health-red) !important;
+}
+
+body #appShell #leadDetailView :is(.activity-note, .drawer-notes-view p, .reminder-card p, .handoff-event strong) {
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
+body #appShell #leadDetailView :is(.meta-label, .activity-type-label, .handoff-event small) {
+  color: var(--crm-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+@media (max-width: 1024px) {
+  body #appShell #leadDetailView {
+    grid-template-areas: "info" "ai";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body #appShell #leadDetailView .lead-detail-ai-column.minimized {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  body #appShell #leadDetailView .drawer-title-copy h2 { font-size: 20px; }
+  body #appShell #leadDetailView .drawer-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body #appShell #leadDetailView .drawer-field-grid { grid-template-columns: 1fr; }
+}

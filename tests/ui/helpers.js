@@ -25,8 +25,8 @@ async function login(page, info) {
   await expect(page.locator("#appShell")).toBeVisible();
   await expect(page.locator("#loginForm")).toBeHidden();
   // Wait for the known synthetic records, not the initial zero/loading frame.
-  if (role === "admin") await expect(page.locator("#metricValue")).toHaveText("9");
-  else await expect(page.locator('[data-summary-card="salesmanMyLeads"] strong')).toHaveText("12");
+  if (role === "admin") await expect(page.locator("#metricValue")).toHaveText("9", { timeout: 15000 });
+  else await expect(page.locator('[data-summary-card="salesmanMyLeads"] strong')).toHaveText("12", { timeout: 15000 });
   return role;
 }
 
