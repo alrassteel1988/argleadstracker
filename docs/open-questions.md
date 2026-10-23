@@ -467,3 +467,36 @@ Later owner decisions and completed phases supersede earlier pending notes.
   `tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`,
   `docs/functionality-inventory.md` and this file. No new component, route,
   dependency, authentication change or database change is included.
+
+## Mobile Activity Touch Checkpoint
+
+- The focused regression first failed with real undersized controls: 38px-high
+  buttons and 28px-wide pagination/menu triggers. The base selector's `:is()`
+  specificity overrode the intended mobile minimum. The mobile selector now
+  includes the same menu branch, with 44px minimum width/height; pagination uses
+  one centered existing chevron and retains original accessible names/actions.
+- Focused mobile regression PASS; core browser suite PASS (8); presentation
+  audit PASS (8). Tests check all rendered Activity buttons/menu triggers and
+  calendar links, plus five hit-test points on keyboard-focused Next pagination.
+- First broad core run: seven passed and Admin mobile hit the 60-second total
+  scenario deadline at final sign-out. Trace timing put the final menu click
+  59,528.62ms after the first navigation. There was no completed logout entry in
+  that trace, so this is not evidence of a rejected logout. Only this expanded
+  multi-route case's total budget changed to 120 seconds; all expectation limits
+  and business assertions remain. The rerun passed. No auth/runtime edits.
+- Matching 360x780 JPEG review captures are retained outside the repository;
+  automated mobile geometry is checked at 375x812. More Actions was opened and
+  hit-tested manually without submitting its deletion action. No speculative
+  extra clearance offset was added: pagination was not covered by the launcher.
+- Final `npm run verify` PASS, including syntax/auth safeguards, unit/API/security
+  tests, UI presentation contracts and build. Current targeted browser gates are
+  `npm run test:ui:baseline` (8 PASS) and `npm run test:ui:audit` (8 PASS); the full
+  44-check chain last passed at the preceding vocabulary checkpoint, not rerun
+  for this Activity-only CSS step. Native zoom was not rerun in this step.
+- Files: `crm-activity.css`, `sw.js`, `tests/crm-activity.test.js`,
+  `tests/ui/baseline.spec.js`, `tests/activity-dashboard-latest.test.js`,
+  `tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`,
+  `tests/ui/README.md`, `docs/functionality-inventory.md` and this file. No new
+  dependency, route, API, role rule, schema, production access or deployment.
+- Exact focused command (failed before CSS correction, passed afterward):
+  `node -e 'process.env.CRM_UI_SUITE="baseline";require("child_process").execFileSync(process.execPath,["node_modules/playwright/cli.js","test","--config=playwright.ui.config.js","--project=admin-mobile","-g","sign-in validation"],{stdio:"inherit"});'`.

@@ -224,6 +224,17 @@ body #appShell #activityView :is(.activity-table-status.overdue, .activity-table
 body #appShell #activityView :is(.activity-table-status.completed, .count-chip.success, .count-chip.upcoming) { color: var(--crm-health-green) !important; background: var(--crm-health-green-soft) !important; }
 body #appShell #activityView :is(.activity-table-status.scheduled, .activity-table-status.upcoming, .count-chip.warning) { color: var(--crm-health-amber) !important; background: var(--crm-health-amber-soft) !important; }
 body #appShell #activityView .activity-pagination { flex-wrap: wrap; gap: var(--crm-space-2); padding: var(--crm-space-3) !important; color: var(--crm-text-secondary) !important; font-size: 13px !important; }
+body #appShell #activityView .activity-pagination button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  padding: 8px !important;
+  font-size: 0 !important;
+}
+body #appShell #activityView .activity-pagination button::before { margin-inline-end: 0; }
+body #appShell #activityView .activity-pagination button[aria-label="Previous activity page"] { --crm-button-icon: var(--crm-icon-chevron-left); }
+body #appShell #activityView .activity-pagination button[aria-label="Next activity page"] { --crm-button-icon: var(--crm-icon-chevron-right); }
 body #appShell #activityView :is(.activity-reminders-filters, .activity-reminders-links) { margin: 0 !important; padding: var(--crm-space-4) !important; }
 body #appShell #activityView :is(.activity-reminders-filter-label, .reminder-stack-header, .activity-reminders-links-head) { color: var(--crm-text-secondary) !important; font-size: 12px !important; }
 body #appShell #activityView .activity-shortcut-chips { flex-wrap: wrap !important; gap: var(--crm-space-1) !important; }
@@ -250,7 +261,8 @@ body #appShell #activityView .activity-quick-link strong { font-size: 13px !impo
 
 @media (max-width: 720px) {
   body #appShell #activityView .activity-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-  body #appShell #activityView :is(button, .calendar-link, .calendar-range-pill) { min-height: 44px !important; }
+  /* Match the base :is() specificity, including its menu selector. */
+  body #appShell #activityView :is(button, .activity-row-menu summary, .calendar-link, .calendar-range-pill) { min-width: 44px !important; min-height: 44px !important; }
   body #appShell #activityView .activity-filter-bar :is(input, select) { min-height: 44px !important; font-size: 16px !important; }
   body #appShell #activityView :is(.activity-section-header, .activity-filter-shell, .activity-reminders-filters, .activity-reminders-links) { padding: var(--crm-space-3) !important; }
   body #appShell #activityView .activity-table { min-width: 0 !important; }

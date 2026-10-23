@@ -1,8 +1,33 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+### Mobile Activity Touch Checkpoint (23 October)
+
+Fresh-fixture regression reproduced mobile Activity controls below the intended
+44px target: calendar buttons were 40x38px, menu triggers were 28x38px and
+pagination was approximately 28x40.8px. The base `:is()` selector's complex menu
+branch had greater specificity than the mobile override. The override now
+matches that specificity and sets both minimum dimensions to 44px. Pagination
+uses existing Lucide chevrons with its original ARIA names and click handlers.
+
+Focused regression PASS, then `npm run test:ui:baseline` PASS (8), and
+`npm run test:ui:audit` PASS (8). The first broad run passed seven but exhausted
+the single sweep's 60-second total budget: the final menu click started at
+59.53 seconds. That expanded multi-route case now has a 120-second total budget;
+expectation limits and all assertions remain unchanged. Its rerun passed.
+No authentication code or runtime limit changed. Final `npm run verify` PASS,
+including syntax, auth guards, unit/API/security tests, UI contracts and build.
+
+Keyboard focus/hit-testing confirms the pagination target is not covered by the
+AI launcher. Manual synthetic-data review confirms the open More Actions item
+is reachable and 44px high; no deletion request was submitted. Matching live
+review captures are `crm-activity-touch-before-mobile.jpg` and
+`crm-activity-touch-after-mobile.jpg` in the OS temporary directory (360x780
+rendered images); automated mobile fixtures remain 375x812. Shared touch geometry
+outside Activity and full proposal visual/state sign-off remain pending.
+
 ### Activity Stage Vocabulary Checkpoint (23 October)
 
-Current clean gates: `node tests/crm-activity.test.js` PASS, `npm run test:ui`
+Vocabulary-checkpoint gates: `node tests/crm-activity.test.js` PASS, `npm run test:ui`
 PASS (all 44 checks in one sequential command), and `npm run verify` PASS.
 This clears the earlier combined-run auditor-fixture failure gate without
 weakening assertions. It does not resolve the separately investigated startup
@@ -122,7 +147,7 @@ Every screen, field and action below is **PENDING full after-re-skin verificatio
 | Command/check | Baseline result | Post-re-skin |
 | --- | --- | --- |
 | `git fetch origin main` | PASS; baseline above | PENDING |
-| `npm run verify` | PASS; exit 0 before any UI edits | PASS at latest Activity vocabulary checkpoint |
+| `npm run verify` | PASS; exit 0 before any UI edits | PASS at latest Activity touch checkpoint |
 | `npm run check` | PASS as part of verify; Node syntax checks | PASS within latest verify |
 | `npm run test:sales-lead-summary-auth-loading` | PASS; includes refresh-session tests | PASS within latest verify; not a transient-startup fix |
 | `npm test` | PASS; unit, API/HTTP, UI contract and security suites | PASS within latest verify; local/mocked providers |
@@ -130,7 +155,7 @@ Every screen, field and action below is **PENDING full after-re-skin verificatio
 | Separate lint | NOT AVAILABLE in package.json; no substitute tool invented | Owner approved a separate linting task; implementation PENDING |
 | Separate TypeScript check | NOT AVAILABLE; JavaScript application, no typecheck script | N/A unless owner configures tooling separately |
 | `npm run test:ui:baseline` | PASS: 8 tests across Admin/Salesman at desktop/mobile, synthetic local storage only | PASS: 8 within latest combined UI run; not every inventory item |
-| `npm run test:ui` | Combined chain added during migration | PASS: all 44 checks in one clean command at latest checkpoint |
+| `npm run test:ui` | Combined chain added during migration | PASS: 44 at vocabulary checkpoint 8770fda; subsequent touch step runs targeted core/audit gates |
 | Production browser UAT scripts | NOT RUN: default to production, create a user and lead, perform cleanup | Never run without separate explicit production authorization |
 | Before screenshots, 1440px and 375px, both roles | Main-flow screenshots captured by isolated suite; full state/dialog matrix incomplete | 68 matching main-flow Before/After files captured; full visual/state sign-off PENDING |
 | Production smoke test, external providers and live RLS | NOT RUN; no production access authorized by this visual task | Not a local-suite claim |

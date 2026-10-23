@@ -44,6 +44,9 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 - Admin Activity week navigation, busy-day scrolling/text visibility, log
   pagination, Salesman/type/date/company filters and reset, reminder-type chips,
   Add Activity open/close, control sizing and page/record overflow guards.
+- Mobile Activity buttons, row-menu triggers and calendar links have 44px
+  minimum targets. Keyboard-focused Next pagination is hit-tested at its center
+  and corners before exercising normal pagination; icons retain ARIA names.
 - Admin Salesmen list/cards, search/territory/status/stage/sort controls, empty
   reset, page-size controls, chart totals/pixels, lead popup, assignment window,
   CSV export and actions menu; Salesman role is denied the Admin directory.
@@ -80,6 +83,12 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 This is a main-flow baseline, not complete coverage of every inventory item.
 It does not verify production Supabase RLS, external providers, microphone
 permissions/recording, every report rejection/error state or every modal.
+
+The first baseline test is a multi-route screenshot/workflow sweep and has a
+120-second total budget. Per-expectation limits remain unchanged. A prior run
+exhausted its 60-second scenario budget after reaching the final menu action at
+59.53 seconds; increasing the scenario allowance is not a performance/SLO pass
+or an authentication repair. Other test budgets and application limits remain.
 
 The presentation audit checks loaded role pages, six lead tabs, flag/correction/
 deletion/import/closure dialogs, text sizes, computed text contrast, clipping,

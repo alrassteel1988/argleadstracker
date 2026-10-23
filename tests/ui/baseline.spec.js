@@ -4,6 +4,8 @@ const { phase, capture, login, blockExternalTraffic } = require("./helpers");
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
 test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({ page }, info) => {
+  // This case captures many route states; individual expectation limits stay unchanged.
+  test.setTimeout(120000);
   await page.goto("/");
   if (phase === "after") {
     const signInPresentation = await page.locator('#loginForm button[type="submit"]').evaluate(button => ({
@@ -167,6 +169,23 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
           "Prospect", "Outreach", "Engaged", "Active", "Blocked", "Dormant",
           "Prospect", "Outreach", "Engaged", "Active"
         ]);
+        if (info.project.name.endsWith("mobile")) {
+          const smallTargets = await page.locator('#activityView button, #activityView .activity-row-menu > summary, #activityView .calendar-link').evaluateAll(elements => elements.filter(element => {
+            const box = element.getBoundingClientRect();
+            return box.width > 0 && box.height > 0 && (box.width < 44 || box.height < 44);
+          }).map(element => ({name:element.getAttribute("aria-label") || element.textContent.trim(), width:element.getBoundingClientRect().width, height:element.getBoundingClientRect().height})));
+          expect(smallTargets).toEqual([]);
+          const nextPage = page.getByRole("button", {name:"Next activity page", exact:true});
+          await nextPage.focus();
+          await expect(nextPage).toBeFocused();
+          expect(await nextPage.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            return [[.5,.5],[.1,.1],[.9,.1],[.1,.9],[.9,.9]].every(([x,y]) => {
+              const hit = document.elementFromPoint(box.left + box.width * x, box.top + box.height * y);
+              return hit === element || element.contains(hit);
+            });
+          })).toBe(true);
+        }
         await page.getByRole("button", { name: "Next activity page", exact: true }).click();
         await expect(page.locator(".activity-table tbody tr")).toHaveCount(8);
         await page.getByRole("button", { name: "Previous activity page", exact: true }).click();
