@@ -2,6 +2,32 @@
 
 ## Scope
 
+Dataset-ready verification checkpoint (23 October): current full interactive
+chain PASS (48) in one `npm run test:ui` command; native Chromium zoom PASS (6,
+72 rendered states) in one `npm run test:ui:zoom` command; canonical
+`npm run verify` PASS. All 132 static HTML field contracts match the original
+source in a focused browser check. Static identity/validation/option preservation
+is not a blanket dynamic-form, provider or production-authentication pass.
+
+New primary comparison captures: Before PASS (4), After PASS (4), 44 matching
+screen pairs/88 PNGs at 1440/375 pixel widths, with hashes checked against
+manifests. The focused static-contract rerun refreshed Admin desktop After and
+recorded 132 fields. Source remains the same application UI as `63309f9`; no
+runtime, presentation, API, database, auth, permission or calculation changed in
+this checkpoint. Source readiness and matching records replace the old loading
+frame as evidence, not the retained original file itself.
+
+Files: `tests/ui/comparison.spec.js`, `tests/ui/helpers.js`,
+`playwright.ui.config.js`, `package.json`, `tests/ui/README.md`,
+`docs/functionality-inventory.md`, `docs/ui-proposal-acceptance.md`, and this
+register. The comparison gate is capture-only and separate from the 48 workflow
+checks. Exact Before command is in the UI README; After uses the same config
+with `CRM_UI_SUITE=comparison`, `CRM_UI_SCREENSHOT_PHASE=after`, replay unset
+and isolated ports. Additional commands: `node --check tests/ui/comparison.spec.js`,
+`git diff --check` and PNG/manifest hash-width-source checks. No failures in the
+current 48/6/capture runs. Separate lint/auth tasks and secondary visual/state
+acceptance remain open; no push, PR, merge, deployment or production-data access.
+
 Management-dialog checkpoint (23 October): fixed mobile submit-button overflow
 and 180px-tall deletion-review search fields in shared dialog CSS. Final
 `npm run test:ui:management` PASS (4) and `npm run verify` PASS. Existing audit

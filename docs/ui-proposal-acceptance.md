@@ -26,8 +26,19 @@ rules remain those of the existing CRM. See `functionality-inventory.md` and
 - Reinspection found the original Admin desktop `02-dashboard.png` was captured
   before data/user labels finished loading (zero counts and generic User).
   Existing file-pair counts therefore do not prove dataset-ready Before/After
-  parity. That image requires recapture; other original Before frames must be
-  revalidated rather than presumed comparable.
+  parity. The new `70-*` primary set supersedes those primary comparisons with
+  44 validated pairs (88 PNGs), matching synthetic records and exact pixel widths.
+  Both capture phases passed all four profiles. See JSON under
+  `arg-crm-ui-comparison-manifests` in the OS temporary directory. Old images are
+  preserved, not silently relabeled. Other original dialog/state frames still
+  require revalidation rather than presumed comparability.
+- The focused source-contract browser check matched all 132 static fields against
+  the original HTML, including form ownership, IDs/names, validation constraints
+  and stored select values. Dynamic report fields remain workflow-test scope.
+- Current native-zoom command PASS (6): both roles at 100%, 125% and 150%,
+  72 rendered states, with native DPR and viewport dimensions verified. This
+  proves those captured presentations, not every interaction at every zoom or
+  production authentication resilience.
 
 ## Page Crosswalk
 
@@ -90,8 +101,9 @@ workflow pass and is not hidden by the capture process.
 1. Complete reference comparison and secondary state captures, including
    duplicate lead, real Places-result equivalent, AI results/confirmations,
    recording/media, offline/outbox and pending deletion review cards.
-2. Run the complete interactive chain and native-zoom suite on the final source;
-   preserve and explain intermittent startup-authentication evidence separately.
+2. Current complete interactive chain PASS (48), native zoom PASS (6), and
+   canonical verification PASS. Rerun affected gates after any later UI changes.
+   These do not clear the separately recorded startup-authentication weakness.
 3. Update each inventory item only with evidence covering that exact action.
    Do not convert all SOURCE/PENDING entries to PASS from shared CSS checks.
 4. Obtain owner review of legitimate design/app differences and responsive

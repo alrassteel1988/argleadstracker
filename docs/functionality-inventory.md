@@ -1,5 +1,31 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+### Dataset-Ready Comparison Checkpoint (23 October)
+
+An additional capture-only gate now pairs primary screens from the fixed original
+commit and the current UI. Historical run PASS (4); current run PASS (4). Each
+phase contains 44 captures: 12 Admin and 10 Salesman states per desktop/mobile
+profile. All 88 PNG hashes, paired screen names and exact 1440/375 pixel widths
+were verified from manifests. These `70-*` images supersede the loading-frame
+primary comparisons without deleting or relabeling the old evidence.
+
+Capture waits for the synthetic user label, known dashboard totals, loaded rows,
+report state, selected tab and company/AI summary. Manifests record criteria,
+source, viewport, paths and SHA-256 under `arg-crm-ui-comparison-manifests` in
+the OS temporary directory. This is evidence readiness, not pixel-level approval
+or certification of every dialog/state/provider. Focused browser comparison
+also PASS for all 132 static input/select/textarea contracts: form/field identity,
+native validation attributes and stored option values match the original HTML.
+Dynamic report controls still rely on their workflow tests, not this parser.
+All six native-zoom cases PASS in one command (72 rendered states); measured
+content sizes are 1422x804, 1138x643 and 948x536 at DPR 1/1.25/1.5 respectively,
+inside a 1440x900 outer window. This does not repair or disprove the separately
+recorded transient-startup weakness. The complete `npm run test:ui` chain PASS
+(48): core 8, shell 4, data 4, team 4, reports 4, dashboard 4, dialogs 8,
+presentation audit 8 and management 4. Canonical verify PASS. No lint/typecheck
+pass is claimed; the separate approved linting task remains unimplemented.
+No application presentation or business logic changed during this checkpoint.
+
 ### Management Dialog and Evidence Checkpoint (23 October)
 
 Shared dialog CSS now contains direct form-submit buttons within their side
@@ -210,7 +236,7 @@ Every screen, field and action below is **PENDING full after-re-skin verificatio
 | Command/check | Baseline result | Post-re-skin |
 | --- | --- | --- |
 | `git fetch origin main` | PASS; baseline above | PENDING |
-| `npm run verify` | PASS; exit 0 before any UI edits | PASS at latest Activity touch checkpoint |
+| `npm run verify` | PASS; exit 0 before any UI edits | PASS at latest dataset-ready comparison checkpoint |
 | `npm run check` | PASS as part of verify; Node syntax checks | PASS within latest verify |
 | `npm run test:sales-lead-summary-auth-loading` | PASS; includes refresh-session tests | PASS within latest verify; not a transient-startup fix |
 | `npm test` | PASS; unit, API/HTTP, UI contract and security suites | PASS within latest verify; local/mocked providers |
@@ -218,7 +244,7 @@ Every screen, field and action below is **PENDING full after-re-skin verificatio
 | Separate lint | NOT AVAILABLE in package.json; no substitute tool invented | Owner approved a separate linting task; implementation PENDING |
 | Separate TypeScript check | NOT AVAILABLE; JavaScript application, no typecheck script | N/A unless owner configures tooling separately |
 | `npm run test:ui:baseline` | PASS: 8 tests across Admin/Salesman at desktop/mobile, synthetic local storage only | PASS: 8 within latest combined UI run; not every inventory item |
-| `npm run test:ui` | Combined chain added during migration | PASS: 44 at vocabulary checkpoint 8770fda; subsequent touch step runs targeted core/audit gates |
+| `npm run test:ui` | Combined chain added during migration | PASS: all 48 in one sequential command at the dataset-ready comparison checkpoint |
 | Production browser UAT scripts | NOT RUN: default to production, create a user and lead, perform cleanup | Never run without separate explicit production authorization |
 | Before screenshots, 1440px and 375px, both roles | Main-flow screenshots captured by isolated suite; full state/dialog matrix incomplete | 68 matching main-flow Before/After files captured; full visual/state sign-off PENDING |
 | Production smoke test, external providers and live RLS | NOT RUN; no production access authorized by this visual task | Not a local-suite claim |
@@ -698,7 +724,7 @@ does not clear a remaining PENDING state or certify a production provider.
 | P-01 | `/` when signed out | Work email/password, submit, validation, live login errors, current Forgot password control | index.html loginForm; auth-login-status, auth-refresh PASS suite; recovery has no handler | PASS local sign-in/presentation and existing auth tests; recovery gap Q-08 unchanged |
 | P-02 | `/?view=dashboard`, Admin | Dashboard Overview; four drill-down KPI cards; overdue report; Intel Overview; Director Alerts; location/sector market snapshot; funnel/comparison expand; action plans; cold relationships; interactions; pipeline health; database agent; configuration agent | render(), arrangeAdminDashboardLayout(); admin-dashboard-layout, dashboard-summary-modal PASS suite | PASS main layout/count drill-downs/collapse and route reentry; secondary/provider/error states PENDING |
 | P-03 | `/?view=dashboard`, Salesman | My Leads/Overdue Calls/Due Today; six pipeline stages including Dormant and Blocked (stored LOST); Top 3 actions; Call these next; live contact table; first touch/loss reasons; tools; daily briefing, news, portfolio/follow-up sections and summary popups | renderSalesman* functions; dashboard-summary-modal, salesperson-ai-actions PASS suite | PASS main flow, nine summary counts/search/close/focus and normal flow; secondary/provider states PENDING |
-| P-04 | `/?view=pipeline` | List only, KPIs, column search/filter/sort, page size/pagination, retry/refresh, lead open; Admin due-date report filter and Excel/PDF exports | renderPipeline*, pipelineVisibleLeads(); pipeline-live-leads, assignment-isolation, HTTP permissions PASS suite | PASS four-profile filters/sort/pagination/export/recovery, desktop table and mobile cards; native zoom PENDING |
+| P-04 | `/?view=pipeline` | List only, KPIs, column search/filter/sort, page size/pagination, retry/refresh, lead open; Admin due-date report filter and Excel/PDF exports | renderPipeline*, pipelineVisibleLeads(); pipeline-live-leads, assignment-isolation, HTTP permissions PASS suite | PASS four-profile filters/sort/pagination/export/recovery, desktop table and mobile cards; native zoom presentation PASS, complete visual sign-off PENDING |
 | P-05 | `/?view=salesmen` | Management directory; KPIs, search, territory/status/stage/sort filters, List/Cards, pagination, CSV export, profile/lead modal, assign/filter-pipeline actions, performance charts | configureRoleUi()/applyView(); salesmen-directory PASS suite | PASS four-profile role/list/cards/filters/chart totals/CSV/existing actions; full state matrix PENDING |
 | P-06 | `/?view=activity` | Management calendar, week navigation and Minimize/Expand, activity KPIs/log, date presets/range, salesman/type/company filters, reset, add/edit/view, deletion-review queue, reminders, quick links, pagination | Salesman access redirects to dashboard; activity-dashboard-latest, activity-workflow PASS suite | PASS calendar/minimize/filter/reset/readability and role redirect; deletion/review/media browser states PENDING |
 | P-07 | `/?view=tasks`, Salesman | Weekly report: week summary, secured orders/exceptions, expected orders/voice, problem accounts, market intel, next week plan, attestation, checkpoints, blockers, draft, submit/resubmit, history | weekly-report*, weekly-report-workflow PASS suite | PASS required-field feedback/draft/submit/history/revision flow; microphone/provider states PENDING |

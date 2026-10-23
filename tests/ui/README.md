@@ -133,6 +133,30 @@ owner selected separate proposal-image review tabs, not a routing change.
 
 ## Screenshots and traces
 
+`npm run test:ui:comparison` is a separate artifact-capture gate, not part of the
+48 interactive checks. It visits sign-in, each implemented role page and all
+six Lead Details tabs without creating/editing CRM records. Known synthetic
+totals, user labels, table rows and the selected lead/AI summary must be loaded
+before capture. It writes `70-*` images and per-profile manifests to
+`arg-crm-ui-comparison-manifests` under the OS temporary directory. Manifests
+include readiness criteria, viewport, source, absolute paths and PNG SHA-256.
+This set supersedes loading-frame primary comparisons; it does not replace
+dialog or workflow/state evidence. No visual acceptance is inferred from a hash.
+The same gate compares original/current static HTML with the browser's DOM
+parser: field/form identity, native validation constraints and stored select
+option values must match. Approved visible labels, classes and accessibility
+additions are not treated as stored values. Dynamically rendered report fields
+still require the report/workflow tests; this is not an API/schema comparison.
+
+Run the historical primary capture using the same fixed-source safeguards:
+
+```powershell
+node -e "process.env.CRM_UI_SUITE='comparison';process.env.CRM_UI_REPLAY_BASELINE='1';process.env.CRM_UI_SCREENSHOT_PHASE='before';process.env.CRM_UI_TEST_PORT='4379';require('child_process').execFileSync(process.execPath,['node_modules/playwright/cli.js','test','--config=playwright.ui.config.js','--output',require('node:path').join(require('node:os').tmpdir(),'arg-crm-ui-before-primary-results')],{stdio:'inherit'})"
+```
+
+Before requires the historical-replay flag; After rejects it. Each complete
+phase has 44 captures: 12 Admin and 10 Salesman screens per viewport profile.
+
 `npm run test:ui:management` runs the five reachable Admin review dialogs on
 fresh fixtures, with Salesman cases checking management controls remain hidden.
 It does not create accounts, confirm reassignment or approve/delete records.

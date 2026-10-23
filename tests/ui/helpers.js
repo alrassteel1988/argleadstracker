@@ -12,7 +12,9 @@ async function capture(page, info, name, {fullPage = true} = {}) {
   const directory = path.join(artifacts, phase, info.project.name);
   fs.mkdirSync(directory, { recursive: true });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: path.join(directory, `${name}.png`), fullPage });
+  const filename = path.join(directory, `${name}.png`);
+  await page.screenshot({ path: filename, fullPage });
+  return filename;
 }
 
 async function login(page, info) {
