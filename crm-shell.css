@@ -263,9 +263,59 @@ body #aiAssistantLauncher .ai-assistant-launcher__wave {
   display: none;
 }
 
+body #authScreen {
+  --login-gold: var(--crm-amber);
+  --login-gold-ink: var(--crm-gold-heading);
+  background: var(--crm-surface) !important;
+  color: var(--crm-text);
+  font-family: var(--crm-font-ui);
+}
+
+body #authScreen :is(.auth-shell, .auth-card) {
+  background: var(--crm-surface) !important;
+}
+
 body #authScreen .auth-hero {
   background-color: var(--crm-sidebar-end) !important;
   background-image: var(--crm-sidebar-background) !important;
+}
+
+body #authScreen .auth-brand {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--crm-space-2);
+}
+
+body #authScreen .auth-brand-caption,
+body #authScreen .auth-hero-kicker,
+body #authScreen .auth-stats span {
+  color: var(--crm-white) !important;
+  font-size: 12px;
+  line-height: var(--crm-leading-body);
+}
+
+body #authScreen .auth-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--crm-space-4);
+}
+
+body #authScreen .auth-hero-copy > :is(h1, p) {
+  margin: 0;
+}
+
+body #authScreen .auth-hero-kicker {
+  order: -1;
+}
+
+body #authScreen .auth-hero-description {
+  color: var(--crm-white) !important;
+  font-size: 16px;
+  line-height: var(--crm-leading-body);
+}
+
+body #authScreen .auth-stats strong {
+  color: var(--crm-amber) !important;
 }
 
 body #authScreen .auth-brand .crm-brand-image {
@@ -278,6 +328,54 @@ body #authScreen .auth-hero em {
 
 body #authScreen .auth-card h2 em {
   color: var(--crm-gold-heading) !important;
+}
+
+body #authScreen .auth-card :is(p, .auth-trust-row span) {
+  color: var(--crm-text-secondary) !important;
+  line-height: var(--crm-leading-body);
+}
+
+body #authScreen .auth-form-kicker {
+  color: var(--crm-navy) !important;
+  font-size: 13px;
+}
+
+body #authScreen .auth-card input {
+  border-color: var(--crm-control-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+
+body #authScreen .auth-card input::placeholder {
+  color: var(--crm-text-secondary);
+  opacity: 1;
+}
+
+body #authScreen .auth-card .primary-button {
+  border-radius: var(--crm-radius-control) !important;
+}
+
+body #authScreen .auth-trust-row span {
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  body #authScreen .auth-shell {
+    background: var(--crm-sidebar-end) !important;
+  }
+
+  body #authScreen .auth-hero-copy {
+    gap: var(--crm-space-3);
+  }
+
+  body #authScreen .auth-hero-kicker {
+    order: 0;
+  }
+
+  body #authScreen .auth-card {
+    border-radius: var(--crm-radius-dialog) var(--crm-radius-dialog) 0 0 !important;
+  }
 }
 
 @media (min-width: 1025px) {

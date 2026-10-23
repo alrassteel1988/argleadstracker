@@ -422,6 +422,59 @@ and exclusions; no production browser tests or provider operations were run.
   Real microphone/provider success, every deletion/import/handoff/error state,
   native zoom and final all-screen comparison remain pending.
 
+### Login and final presentation audit checkpoint
+
+- Public sign-in uses the same shared white/navy/amber tokens as both roles.
+  Preserved logo bytes/proportions, input names/types/autocomplete, native
+  validation, submit handler, error live region and existing recovery control.
+  Brand caption is visible; desktop kicker precedes the headline, while mobile
+  retains headline-first stacking. Field boundaries use the shared accessible
+  control border, with 16px input text and at least 44px targets.
+- The previous mobile parent surface masked the form's rounded top corners.
+  The narrow-screen shell now uses the existing navy token behind that surface;
+  no positioning, authentication, validation or viewport-scaling change.
+- Removed the WhatsApp configuration-example button at render time only,
+  as requested by management. Source example arrays, settings, API responses,
+  existing activity records and proposal/apply permissions remain unchanged.
+  Other examples, including Add Qatar to territories, remain available.
+- Updated the core browser assertion from five to six dashboard stage tiles
+  after the owner-approved Dormant addition; did not remove the assertion.
+- Public hero and form computed filter/backdrop-filter/box-shadow are all none.
+  The Sign in button has a solid amber fill and no background image or shadow.
+  Live desktop and 375px phone captures are kept outside the repository.
+- Existing Before/After capture pairs were checked by exact filename: 18 per
+  Admin profile and 16 per Salesman profile, 68 pairs total, with no missing
+  After counterpart. File presence is not visual signoff; extra state captures
+  and the complete all-dialog/native-zoom comparison remain outstanding.
+- `npm run verify`: PASS against the final login source. Separate lint/typecheck
+  commands remain unavailable, as documented in Q-05.
+- The expanded `npm run test:ui` passed core 8 (2.5m), shell 4 (31.9s), data 4
+  (42.7s), team 4 (44.2s) and reports 4 (1.9m), then stopped on the obsolete
+  dashboard assertion expecting eight Salesman summaries instead of nine.
+  Updated that assertion to nine and explicitly require the Dormant card; no
+  count check was removed. Corrected dashboard rerun: four profiles PASS (1.3m),
+  including every Dormant drill-down count. Final dialog rerun: four profiles
+  PASS (1.8m), including the added 1440px/375px Dormant summary captures.
+  All seven suites have passing evidence across the run and focused reruns, but
+  a new clean full-chain invocation remains part of the final migration gate;
+  do not describe the earlier full command as passing.
+- Final-source sign-in/role-route rerun: four profiles PASS (2.1m), using
+  `CRM_UI_TEST_PORT=4191` and the existing Playwright CLI with
+  `test --config=playwright.ui.config.js --grep "sign-in validation"`.
+  An initial npm/cmd wrapper split the filter argument and found no tests;
+  direct argument-array invocation fixed the command without altering tests.
+- Files in this checkpoint: client.js, crm-shell.css, index.html, sw.js;
+  tests/activity-dashboard-latest.test.js, tests/admin-dashboard-layout.test.js,
+  tests/crm-shell.test.js, tests/global-bauhaus-system.test.js,
+  tests/ui/baseline.spec.js, tests/ui/dashboard.spec.js, tests/ui/dialogs.spec.js,
+  tests/ui/shell.spec.js, tests/ui/README.md and these two migration documents.
+  No API request, data model, validation, role/permission or provider change.
+  No production UAT, push, PR, merge or deployment occurs.
+- The current in-app browser exposes viewport and visibility capabilities, not
+  native browser zoom. Effective-width checks are retained as responsive
+  evidence only; actual 125%/150% browser zoom still needs a supported browser
+  or human UAT, and has not been replaced with CSS zoom.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.

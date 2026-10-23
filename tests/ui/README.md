@@ -67,6 +67,10 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
   stepper/control sizing, required company validation and an activity save
   verified after navigation. Displayed Blocked/Prospect choices retain LOST/NEW
   values; an authenticated synthetic API read verifies stored stages unchanged.
+- Six dashboard stage tiles, including the existing Dormant stage and its
+  matching summary count. Login token/brand/field contrast and public mobile-tab
+  visibility checks; WhatsApp configuration suggestions are absent while other
+  existing examples remain available.
 
 This is a main-flow baseline, not complete coverage of every inventory item.
 It does not verify production Supabase RLS, external providers, microphone

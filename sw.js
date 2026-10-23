@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v94-revised-ui-dialogs";
+const CACHE_VERSION = "arg-pwa-v95-revised-ui-login";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -37,6 +37,7 @@ test("shared dialogs remain readable and existing forms preserve actions", async
     await dormant.click();
     await expect(page.locator("#summaryCardDetailsTitle")).toContainText("Dormant Leads Summary (2)");
     await expect(page.locator("#summaryCardDetailsDialog")).toContainText("Previously active leads that have gone quiet.");
+    await capture(page, info, "50-dormant-summary");
     await page.locator("#summaryCardDetailsDialog").press("Escape");
     await expect(page.locator("#summaryCardDetailsDialog")).not.toBeVisible();
   }

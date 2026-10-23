@@ -33,6 +33,8 @@ test("shared shell branding, navigation and existing management actions", async 
     expect(width).toBe(188);
   }
   if (role === "admin") {
+    await expect(page.locator("#configAgentExamples")).not.toContainText(/whats\s*app/i);
+    await expect(page.locator("#configAgentExamples")).toContainText("Add Qatar to territories");
     await page.locator("#sidebarToolsMenu > summary").click();
     await page.locator("#openSalesmanForm").click();
     await expect(page.locator("#salesmanDialog")).toBeVisible();

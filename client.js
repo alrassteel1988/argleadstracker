@@ -7816,7 +7816,7 @@ function renderConfigAgentPanel() {
     const examples = state.configAgent.examples?.length
       ? state.configAgent.examples
       : state.integrations.configuration_agent_examples || [];
-    els.configAgentExamples.innerHTML = examples.map(prompt => `
+    els.configAgentExamples.innerHTML = examples.filter(prompt => !/whats\s*app/i.test(String(prompt))).map(prompt => `
       <button class="agent-chip" type="button" data-config-agent-example="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>
     `).join("");
   }

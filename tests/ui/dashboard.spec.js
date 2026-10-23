@@ -44,7 +44,8 @@ test("dashboard layout, existing drill-down counts and management controls", asy
   const cards = await page.locator(selector).evaluateAll(elements => elements.map(e => ({
     type: e.dataset.summaryCard, count: Number(e.querySelector("strong").textContent)
   })));
-  expect(cards).toHaveLength(role === "admin" ? 4 : 8);
+  expect(cards).toHaveLength(role === "admin" ? 4 : 9);
+  if (role === "salesman") expect(cards.map(card => card.type)).toContain("salesmanStageDormant");
   for (const { type, count } of cards) {
     const card = page.locator(`[data-summary-card="${type}"]`);
     await card.click();

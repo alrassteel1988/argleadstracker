@@ -266,6 +266,23 @@ Do not hide existing counterparts just because the proposed version is out of sc
   Native zoom, external providers, all modal states and full design comparison
   remain pending; this checkpoint is not full migration or production approval.
 
+## Login presentation audit
+
+- Shared tokens replace the remaining public-screen legacy surface/accent values.
+  Existing login fields, form submission, required states and live errors stay.
+  The proposal's Show-password control is omitted because it has no implemented
+  equivalent; the pre-existing recovery gap remains Q-08, not a new feature.
+- The only WhatsApp reference rendered as an action was a configuration example
+  supplied by the server. The UI omits that example without changing API data,
+  configuration permissions, stored records or the server's proposal parser.
+- Before/After artifacts have 68 matching main-flow filenames across four
+  role/viewport profiles. This establishes capture coverage, not exhaustive
+  pixel/contrast/state approval. Native 125%/150% zoom remains unverified.
+- Final `npm run verify` and the four-profile sign-in, dashboard and dialog
+  reruns passed. The full browser chain stopped on a stale eight-card assertion
+  after Dormant added the ninth summary; the corrected dashboard rerun passed.
+  A fresh clean full-chain run remains a final gate, not a claimed success here.
+
 ## Dialog and status-label checkpoint
 
 - Shared native dialogs and sheets keep every existing form field, hook,

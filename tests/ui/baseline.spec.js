@@ -14,6 +14,21 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     expect(signInPresentation.icon).toContain("data:image/svg+xml");
     expect(signInPresentation.foreground).toBe("rgb(8, 61, 119)");
     expect(signInPresentation.background).toBe("rgb(255, 177, 0)");
+    await expect(page.locator("#loginForm")).toHaveCSS("background-color", "rgb(254, 252, 253)");
+    await expect(page.locator(".auth-brand-caption")).toBeVisible();
+    await expect(page.locator(".auth-hero h1 em")).toHaveCSS("color", "rgb(255, 177, 0)");
+    await expect(page.locator(".auth-card h2 em")).toHaveCSS("color", "rgb(184, 122, 0)");
+    await expect(page.locator('#loginForm input[name="password"]')).toHaveAttribute("autocomplete", "current-password");
+    const loginField = await page.locator('#loginForm input[name="email"]').evaluate(element => ({
+      font: parseFloat(getComputedStyle(element).fontSize),
+      height: element.getBoundingClientRect().height,
+      border: getComputedStyle(element).borderTopColor
+    }));
+    expect(loginField.font).toBeGreaterThanOrEqual(16);
+    expect(loginField.height).toBeGreaterThanOrEqual(44);
+    expect(loginField.border).toBe("rgb(102, 120, 138)");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await expect(page.locator("#mobileTabs")).toBeHidden();
   }
   await capture(page, info, "01-login");
   await page.locator('#loginForm button[type="submit"]').click();
@@ -40,7 +55,7 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     expect(surface.color).toBe("rgb(254, 252, 253)");
     expect(surface.border).toBe("rgb(91, 192, 190)");
     expect(surface.headingColor).toBe("rgb(8, 61, 119)");
-    await expect(page.locator("#salesmanSimplifiedPipeline [data-summary-card]")).toHaveCount(5);
+    await expect(page.locator("#salesmanSimplifiedPipeline [data-summary-card]")).toHaveCount(6);
     const actions = await page.locator(".salesman-dashboard-top-actions").boundingBox();
     const calls = await page.locator(".salesman-dashboard-call-queue").boundingBox();
     const list = await page.locator(".salesman-dashboard-live-leads").boundingBox();

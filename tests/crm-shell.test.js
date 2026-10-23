@@ -64,4 +64,10 @@ assert.ok(html.indexOf('/mobile-ui.css?v=') > html.indexOf('/crm-shell.css?v='))
 assert.ok(vercel.builds.some(item => item.src === "crm-shell.css" && item.use === "@vercel/static"));
 assert.ok(vercel.routes.some(item => item.src === "/crm-shell.css" && item.dest === "/crm-shell.css"));
 assert.ok(worker.includes('"/crm-shell.css"'));
+assert.match(html, /class="auth-brand-caption">UAE &amp; GCC CRM<\/span>/);
+assert.match(css, /body #authScreen\s*\{[^}]*--login-gold:\s*var\(--crm-amber\)/s);
+assert.match(css, /body #authScreen :is\(\.auth-shell, \.auth-card\)\s*\{[^}]*var\(--crm-surface\)/s);
+assert.match(css, /body #authScreen \.auth-card input\s*\{[^}]*var\(--crm-control-border\)/s);
+assert.match(client, /examples\.filter\(prompt => !\/whats\\s\*app\/i\.test\(String\(prompt\)\)\)\.map/,
+  "Hide only WhatsApp UI suggestions, without altering configuration data or APIs");
 console.log("PASS shared CRM shell, safe title markup, branding and preserved action contracts");
