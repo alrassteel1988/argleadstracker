@@ -121,6 +121,67 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     } else {
       await expect(page.locator(`#${view}View`)).toBeVisible();
       if (view === "tasks") await expect(page.locator("#tasksPrimary")).not.toBeEmpty();
+      if (view === "activity" && phase === "after") {
+        await expect(page.locator(".activity-weekly-card .activity-section-header")).toHaveCSS("background-color", "rgb(254, 252, 253)");
+        await expect(page.locator(".activity-weekly-card h2")).toHaveCSS("color", "rgb(8, 61, 119)");
+        await expect(page.locator(".activity-kpi-card").first()).toHaveCSS("background-color", "rgb(254, 252, 253)");
+        await expect(page.locator(".activity-weekly-day")).toHaveCount(7);
+        if (info.project.name.endsWith("mobile")) {
+          const chipHeights = await page.locator("#overdueBanner .overdue-owner-chip").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().height));
+          expect(chipHeights.length).toBeGreaterThan(0);
+          expect(chipHeights.every(height => height < 80)).toBe(true);
+        }
+        const dayListHeights = await page.locator(".activity-weekly-day-items").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().height));
+        expect(dayListHeights.every(height => height <= 181)).toBe(true);
+        const eventTextClipped = await page.locator(".activity-day-event strong").evaluateAll(elements => elements.some(e => e.scrollHeight > e.clientHeight + 1));
+        expect(eventTextClipped).toBe(false);
+        await page.locator("#activityCalendarToggle").click();
+        await expect(page.locator("#activityWeeklyLog")).toBeHidden();
+        await expect(page.locator("#activityCalendarToggle")).toHaveAttribute("aria-expanded", "false");
+        await capture(page, info, "05-activity-calendar-minimized");
+        await page.locator("#activityCalendarToggle").click();
+        await expect(page.locator("#activityWeeklyLog")).toBeVisible();
+        const range = await page.locator("#activityWeekRange").innerText();
+        await page.locator("#activityNextWeek").click();
+        await expect(page.locator("#activityWeekRange")).not.toHaveText(range);
+        await page.locator("#activityPrevWeek").click();
+        await expect(page.locator("#activityWeekRange")).toHaveText(range);
+        if (!await page.locator("#activityCompanySearch").isVisible()) await page.locator("#activityFilterToggle").click();
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(10);
+        await page.getByRole("button", { name: "Next activity page", exact: true }).click();
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(8);
+        await page.getByRole("button", { name: "Previous activity page", exact: true }).click();
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(10);
+        await page.locator("#activitySalesmanFilter").selectOption({ label: "Other Demo Salesman" });
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(6);
+        await page.locator("#activityResetFilters").click();
+        await page.locator("#activityTypeSelect").selectOption("Note");
+        await expect(page.locator("#activityFeed")).toContainText("No activities match");
+        await page.locator("#activityResetFilters").click();
+        await page.locator("#activityDateFrom").fill("2026-10-02");
+        await page.locator("#activityDateTo").fill("2026-10-03");
+        await expect(page.locator("#activityFeed")).toContainText("No activities match");
+        await page.locator("#activityResetFilters").click();
+        await page.locator("#activityCompanySearch").fill("Unmatched synthetic activity search");
+        await expect(page.locator("#activityFeed")).toContainText("No activities match");
+        await page.locator("#activityResetFilters").click();
+        await expect(page.locator("#activityCompanySearch")).toHaveValue("");
+        await page.locator('[data-activity-shortcut="Phone Call"]').click();
+        await expect(page.locator("#activityTypeSelect")).toHaveValue("Phone Call");
+        await page.locator("#activityResetFilters").click();
+        const activityAction = page.locator(".activity-table-actions .small-action").first();
+        await expect(activityAction).toBeVisible();
+        await expect(activityAction).toHaveCSS("white-space", "nowrap");
+        const activityBottom = await page.locator("#activityView").evaluate(e => e.getBoundingClientRect().bottom + scrollY);
+        expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThanOrEqual(Math.floor(activityBottom));
+        await page.locator("#openActivityCreate").click();
+        await expect(page.locator("#activityDialog")).toBeVisible();
+        await page.locator("#cancelActivityDialog").click();
+        const control = await page.locator("#activityDateFrom").evaluate(element => ({ height: element.getBoundingClientRect().height, size: parseFloat(getComputedStyle(element).fontSize) }));
+        expect(control.height).toBeGreaterThanOrEqual(info.project.name.endsWith("mobile") ? 44 : 40);
+        expect(control.size).toBeGreaterThanOrEqual(info.project.name.endsWith("mobile") ? 16 : 14);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      }
       await capture(page, info, `05-${view}`);
     }
   }

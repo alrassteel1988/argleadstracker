@@ -180,3 +180,24 @@ Do not hide existing counterparts just because the proposed version is out of sc
   final minimized-summary width guard. `npm run verify` also passes against
   the final record styling. These are isolated synthetic checks, not production
   acceptance or proof of a complete application-wide visual migration.
+
+## Activity checkpoint
+
+- Proposal page 40 uses compact empty samples. Real activity rows, deletion
+  requests, filters, calendar events, reminders and quick links remain present;
+  the sample layout does not authorize removing existing data or actions.
+- All existing activity types are retained (Q-09). No append-only/deletion,
+  status, reminder, date or permission logic changed. This phase is CSS and
+  static heading markup, plus tests and public-asset registration only.
+- Busy calendar days use an internal scroll area instead of truncating events
+  or expanding the entire page indefinitely. Long company names wrap.
+- Phone filters retain the existing toggle. The original 66/34 desktop intent
+  remains approximately 65/35; tablet/phone panels stack without hiding data.
+- Full Activity error/deletion-review/provider states and native browser zoom
+  remain in the final matrix; synthetic main-flow checks are not production UAT.
+- The global Add Lead action remains the current primary header action. The
+  proposal promotes Add Activity on this page; final cross-page action-hierarchy
+  and icon cleanup must reconcile that presentation without moving handlers.
+- Final supported verification gate passed. All 16 browser regression flows
+  passed; the final Activity-only page/banner corrections then passed both
+  Admin desktop/mobile profiles (1.2m). Phone owner chips now wrap normally.

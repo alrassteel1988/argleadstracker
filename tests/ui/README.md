@@ -32,6 +32,9 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
   record-first mobile placement, AI minimize/restore and inline Notes edit/save.
 - Add Activity dialog open/cancel and AI Assistant dialog open/close.
 - Salesman weekly draft save; Admin calendar minimize/expand.
+- Admin Activity week navigation, busy-day scrolling/text visibility, log
+  pagination, Salesman/type/date/company filters and reset, reminder-type chips,
+  Add Activity open/close, control sizing and page/record overflow guards.
 - Supplied logo loading, white header/title accents, stable desktop rail,
   existing Admin account dialog through Tools, footer sign-out and mobile menu.
 - Mobile Home/Leads/Log/Map/Alerts navigation and their existing windows.

@@ -256,6 +256,48 @@ and exclusions; no production browser tests or provider operations were run.
   every Intel job state, provider UAT, native zoom and final legacy CSS cleanup
   remain part of the full migration audit, not claimed complete here.
 
+### Activity presentation phase
+
+- Compared the existing Admin Activity hierarchy, renderers and filters with
+  revised proposal page 40. Added `crm-activity.css` using shared tokens only:
+  white panels/metrics, teal boundaries, amber metric top rules, navy text and
+  Playfair italic accents in the existing calendar/log headings.
+- Preserved all original IDs, fields, options, handlers, requests, counts and
+  permissions. `client.js` is unchanged in this phase. Admin-only Activity access
+  remains unchanged; shared Salesman report/lead activity functions are retained.
+- Removed old fixed viewport-height constraints for this page. Calendar days
+  have bounded, independently scrollable event lists; Activity and Reminders
+  keep scoped list scrolling. Phone filters still use their existing drawer.
+  Fields are 40px desktop/44px phone, with 14px/16px text respectively; record
+  text is 14px, metadata/labels 12-13px, headings 20px and metrics 28px.
+- Browser coverage adds calendar minimize/expand and previous/next navigation,
+  pagination, Salesman/type/date/company filters, reset, reminder-type chips,
+  Add Activity open/close, control sizing and page-overflow checks.
+- An initial mobile test attempted a collapsed search field; it now opens the
+  existing Filters toggle. A later added filter test incorrectly assumed IDs
+  for option values; source `fillSelect` uses names, so the test selects the
+  visible label. No production filtering or data logic was changed for tests.
+- Live synthetic preview also exposed event text shrinking inside a busy day;
+  max-content event rows preserve text while the day list itself scrolls.
+- Rendered desktop review found legacy page clipping and narrow action buttons.
+  The Activity root/body now use natural flow; action text stays on one line and
+  the table scrolls horizontally within its panel when its columns need space.
+  New browser assertions cover nonwrapping actions and document reachability.
+- Phone screenshot review also found legacy owner chips shrinking to a
+  one-character column. The Activity overdue banner now stacks/wraps at phone
+  widths, with the same counts/actions and no hidden records.
+- `npm run test:ui`: PASS, 8 core flows (3.4m), 4 shell flows (48.4s), 4 data
+  flows (1.0m). The final Activity-only flow/banner corrections additionally
+  passed both Admin desktop/mobile profiles (1.2m) using
+  `CRM_UI_TEST_PORT=4190 npm run test:ui:baseline -- --grep "sign-in validation"
+  --project=admin-desktop --project=admin-mobile` (set the environment variable
+  using the host shell syntax).
+- `npm run verify`: PASS after final styling, including supported syntax,
+  API/security, presentation contracts and build checks. Desktop/mobile After
+  screenshots are under the existing OS-temporary artifact directory.
+- These results are not full application migration signoff, native browser
+  zoom testing, provider UAT or production acceptance.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.
