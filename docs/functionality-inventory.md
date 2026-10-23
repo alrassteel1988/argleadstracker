@@ -330,6 +330,30 @@ and exclusions; no production browser tests or provider operations were run.
   Jump to Leads / Filter Pipeline assertions passed again, 4 profiles in 34.2s.
 - Native zoom, all error/provider states and the full migration remain pending.
 
+### Tasks and weekly reports presentation phase
+
+- Compared revised proposal pages 28 and 41 with the existing Salesman authoring
+  and Admin review views. `crm-reports.css` shares white/teal panels, navy text,
+  gold italic title accents, readable date ranges and compact status badges.
+- Preserved every field path, required/optional completion rule, voice target,
+  draft/submit/review event handler and API. Only two client title-rendering
+  lines use the existing escaping title helper. No report workflow changed.
+- Desktop columns scroll independently; tablet/phone use natural single-column
+  flow, readable wrapping and 44px/16px fields. Tasks keeps the shared navy rail.
+- Required-empty amber and filled green reuse existing completeness classes.
+  Corrected CSS specificity so the neutral field rule cannot override these
+  states; completion count and optional fields retain their original behavior.
+- Browser verification found the fixed AI launcher obscuring desktop Submit.
+  Action-card bottom clearance now applies on desktop as well as mobile; tests
+  click normally without forcing events or hiding the launcher.
+- `npm run verify`: PASS. `npm run test:ui:reports`: PASS, all four role/viewport
+  profiles in 1.8m. Covers draft, submit, revision note validation, revision,
+  resubmission, acceptance, immutable versions and required-field feedback.
+- Full `npm run test:ui`: PASS, all 24 flows (8 core in 2.7m, 4 shell in 31.7s,
+  4 data in 51.3s, 4 team in 34.7s, 4 reports in 1.7m).
+  Microphone permissions, production UAT,
+  provider errors, native zoom and the complete design/state matrix remain pending.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.

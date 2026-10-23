@@ -220,3 +220,19 @@ Do not hide existing counterparts just because the proposed version is out of sc
 - Verification gate and all 20 browser flows pass. Explicit menu actions then
   passed in a final four-profile team rerun (34.2s). Full provider/error/zoom and
   design-state comparison coverage remains outstanding.
+
+## Reports checkpoint
+
+- Preserve existing report sections, voice controls, immutable history, draft
+  actions and Admin review even where proposal illustrations omit them. No
+  submission, revision, acceptance, checkpoint or market-field logic changed.
+- The existing required-field amber/green states remain semantic health colors.
+  Specificity was corrected after the first browser run exposed neutral fill
+  overriding amber; tests keep checking actual rendered colors.
+- A second run exposed the fixed AI launcher covering desktop Submit. Added
+  scrollable action-card clearance rather than forcing test clicks or moving
+  report handlers. Both desktop flows now pass with ordinary clicks.
+- Shared navy sidebar and 13px progress/audit copy remain readable in Tasks.
+- Local verification and four report browser profiles pass (1.8m). Full 24-flow
+  regression then passed, including the report rerun in 1.7m; provider/voice permissions, all error/rejection states,
+  native zoom and full screenshot comparison are not yet verified.

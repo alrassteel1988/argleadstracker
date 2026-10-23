@@ -12011,7 +12011,7 @@ function weeklyReportCard(title, subtitle, body, tone = "", headerCap = "") {
     <section class="tasks-section-card ${tone}${headerCapClass}">
       <div class="tasks-section-head">
         <div>
-          <h3>${escapeHtml(title)}</h3>
+          <h3>${pageTitleMarkup(title)}</h3>
           ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
         </div>
       </div>
@@ -12806,7 +12806,7 @@ function renderWeeklyReviewView() {
 function renderTasksView() {
   if (!els.tasksPrimary || !els.tasksSidebar) return;
   const admin = isAdminOrManager();
-  els.tasksViewTitle.textContent = admin ? "Weekly Sales Report Review" : "Weekly Sales Report";
+  els.tasksViewTitle.innerHTML = pageTitleMarkup(admin ? "Weekly Sales Report Review" : "Weekly Sales Report");
   els.tasksViewSubtitle.textContent = admin
     ? "Review submitted reports, challenge contradictions, and chase missing weekly submissions."
     : "Capture the week once, at the source, then lock it with an honest digital sign-off.";

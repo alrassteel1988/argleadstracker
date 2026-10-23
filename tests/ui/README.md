@@ -3,6 +3,7 @@
 Run `npm run test:ui` from the repository root. It runs `test:ui:baseline` (8
 core-flow tests), `test:ui:shell` (4 shell/navigation tests), then `test:ui:data`
 (4 Pipeline data-surface tests), then `test:ui:team` (4 directory/role checks),
+then `test:ui:reports` (4 authoring/review checks),
 each with fresh servers. Chromium must already
 be available through the existing Playwright dependency. This suite does not
 use the production add-lead script or production credentials.
@@ -33,6 +34,10 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
   record-first mobile placement, AI minimize/restore and inline Notes edit/save.
 - Add Activity dialog open/cancel and AI Assistant dialog open/close.
 - Salesman weekly draft save; Admin calendar minimize/expand.
+- Report required-empty/filled feedback and checkpoint synchronization, all
+  expected-order/market fields, draft save, submit and locked fields. Admin
+  checks require a revision note, request revision, resubmit as version two,
+  accept and retain both immutable versions. All writes use synthetic fixtures.
 - Admin Activity week navigation, busy-day scrolling/text visibility, log
   pagination, Salesman/type/date/company filters and reset, reminder-type chips,
   Add Activity open/close, control sizing and page/record overflow guards.
@@ -55,7 +60,7 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 
 This is a main-flow baseline, not complete coverage of every inventory item.
 It does not verify production Supabase RLS, external providers, microphone
-permissions/recording, every report submission/review state or every modal.
+permissions/recording, every report rejection/error state or every modal.
 
 ## Screenshots and traces
 
