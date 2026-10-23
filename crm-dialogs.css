@@ -88,6 +88,8 @@ body dialog .summary-card-details-table thead th { background: var(--crm-surface
 body dialog .summary-card-details-table tbody tr:is(:hover, :focus) td { background: var(--crm-surface-muted) !important; }
 body dialog .summary-sort-button { color: var(--crm-navy) !important; font-size: 13px !important; }
 body dialog .summary-card-details-pagination { flex-wrap: wrap; font-size: 13px; line-height: 1.5; }
+body dialog :is(.import-step, .import-step b) { font-size: 13px !important; }
+body dialog #lostReasonCount { font-size: 13px !important; }
 body dialog .ai-assistant-header small { font-size: 12px !important; }
 body dialog .ai-assistant-state { background: var(--crm-surface-muted) !important; color: var(--crm-text) !important; border-color: var(--crm-divider) !important; }
 body dialog :is(.ai-assistant-kicker, .ai-assistant-section-heading span, .ai-assistant-badge) { font-size: 12px !important; line-height: 1.5; letter-spacing: 0; }

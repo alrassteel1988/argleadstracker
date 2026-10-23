@@ -8,6 +8,22 @@ request payloads, CRM-data fallback, unavailable response and flag cancellation.
 `npm run verify` passes. Existing provider APIs and permissions are unchanged;
 external provider success and the whole-route presentation audit remain pending.
 
+### Presentation Audit Checkpoint (23 October)
+
+`npm run verify` and `npm run test:ui:audit` pass for this phase. The latter has
+eight checks: four controlled auditor fixtures and four role/viewport sweeps.
+The sweeps captured 68 screen/dialog states with zero findings under their
+limited computed-style rules. Activity Edit uses the existing shared Activity
+modal; flag, deletion-request, import and closure windows were opened without
+submitting changes. External providers, recording, native zoom, full workflow
+coverage and complete visual comparison remain pending. The expanded combined
+44-check `npm run test:ui` chain has not been rerun as a whole after this phase.
+
+Quotes/Accounts have a baseline duplicate-nav-handler defect and return to
+Dashboard, despite declaring Pipeline quick views. Their actual destination was
+captured, not certified as a working module. The owner selected separate review
+tabs for the proposal images; no app route or backend module was added.
+
 ## 1. Scope and evidence
 
 - Inventory date: 22 October 2026 (Asia/Dubai).
@@ -539,8 +555,8 @@ does not clear a remaining PENDING state or certify a production provider.
 | P-13 | Lead Reminders | Add, complete, reschedule, note, calendar links, overdue/upcoming display | reminderCard(), follow-up handlers; activity-workflow PASS suite, complete browser path NOT RUN | PASS tab presentation; add/complete/reschedule/calendar browser paths PENDING |
 | P-14 | Lead Intel | Report/job state; generate/refresh/retry; PDF upload/preview/open/download; source information and prior-report safety | lead-intelligence-service/api/ui PASS suite | PASS current empty/configuration-state presentation and API tests; live job/upload/PDF browser UAT PENDING |
 | P-15 | Lead Notes | Edit and save existing notes | drawerNotesMarkup(), API PATCH; SOURCE | PASS four-profile edit/PATCH response/updated UI; production persistence not tested |
-| P-16 | Quotes navigation | Existing shortcut opens Pipeline; no standalone quote route, builder, approval, sending or quotation CRUD endpoint | data-quick-view; parseAppRoute(); N/A separate module | PENDING shortcut only |
-| P-17 | Accounts navigation | Existing shortcut opens Pipeline; no standalone receivables/credit/utilization module | data-quick-view; N/A standalone module | PENDING shortcut only |
+| P-16 | Quotes navigation | Declares Pipeline, but baseline duplicate handlers return to Dashboard; no quote route/builder/approval/send/CRUD | Baseline source and four-profile audit; N/A separate module | Known baseline workflow defect; proposal images reviewed separately, no routing repair authorized |
+| P-17 | Accounts navigation | Declares Pipeline, but baseline duplicate handlers return to Dashboard; no receivables/credit/utilization module | Baseline source and four-profile audit; N/A standalone module | Known baseline workflow defect; proposal images reviewed separately, no routing repair authorized |
 | P-18 | Search Places | Dialog with keyword/location, results, Use Business into Add Lead, enrichment/duplicate review | placesForm and /api/places/search; enrichment PASS suite | PASS dialog/fields/focus/bounds; live provider/results UAT PENDING |
 | P-19 | Mobile Home/Leads/Log/Map/Alerts | Bottom tabs; raised Log opens Quick Log; Map dialog/list/external navigation; Alerts opens pending changes (not a new notification inbox); sidebar drawer and backdrops | initPwaShell(), nav handlers; pwa-shell/mobile-ui PASS suite | PASS bottom tabs/drawer/Quick Log/Map/Pending open-close and public hiding; offline/external actions PENDING |
 | P-20 | Install/update/offline surfaces | Install banner, update/refresh, sync status, IndexedDB pending items, retry/sync now, toast/error/loading/empty states | sw.js and outbox handlers; pwa-shell/static-assets-security PASS suite | PASS static asset/cache protection tests; offline/install/update/sync full browser matrix PENDING |

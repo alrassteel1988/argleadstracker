@@ -95,6 +95,19 @@ body #appShell #leadDetailView :is(.drawer-stage-pill, .drawer-stage-select, .dr
   font: 600 13px/1.4 var(--crm-font-ui);
 }
 
+body #appShell #leadDetailView .drawer-stage-select {
+  font-size: 14px !important;
+}
+
+body #appShell #leadDetailView .activity-type-label i {
+  font-size: 12px !important;
+}
+
+body #appShell #leadDetailView .drawer-body h4 {
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
 body #appShell #leadDetailView .drawer-badges .chip.hot {
   border-color: var(--crm-health-red) !important;
   background: var(--crm-health-red-soft) !important;
@@ -354,6 +367,7 @@ body #appShell #leadDetailView :is(.meta-label, .activity-type-label, .handoff-e
 }
 
 @media (max-width: 720px) {
+  body #appShell #leadDetailView .drawer-stage-select { font-size: 16px !important; }
   body #appShell #leadDetailView .drawer-title-copy h2 { font-size: 20px; }
   body #appShell #leadDetailView .drawer-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body #appShell #leadDetailView .drawer-field-grid { grid-template-columns: 1fr; }

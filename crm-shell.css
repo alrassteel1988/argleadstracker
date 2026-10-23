@@ -9,6 +9,23 @@ body #appShell .topbar #openPlacesSearch {
   border-color: var(--crm-control-border) !important;
 }
 
+body #appShell .topbar :is(#openPlacesSearch, #openLeadForm) {
+  font-size: 14px !important;
+}
+
+body #mobileSidebar :is(#sidebarUserAvatar, .sidebar-tools-label) {
+  font-size: 12px !important;
+}
+body #mobileSidebar #sidebarUserAvatar {
+  background: var(--crm-amber) !important;
+  color: var(--crm-navy) !important;
+}
+
+body #appShell #overdueBanner :is(strong, b, span, .overdue-banner-copy > div, .overdue-action) {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
 body #mobileSidebar {
   background-color: var(--crm-sidebar-end) !important;
   background-image: var(--crm-sidebar-background) !important;

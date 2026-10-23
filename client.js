@@ -7227,7 +7227,7 @@ function renderSalesmanSimplifiedDashboard() {
       return `
         <button class="salesman-simplified-queue-item" type="button" data-salesman-queue-open="${escapeHtml(lead.id)}">
           <div>
-            <strong>${escapeHtml(lead.company_name || "Unnamed lead")}</strong>
+            <strong>${escapeHtml(lead.company_name || "Unnamed lead")}<span class="salesman-queue-icon" aria-hidden="true"></span></strong>
             <p>${escapeHtml(lead.next_action || "Next step")} - ${escapeHtml(lead.activity_purpose || "Follow-up")}</p>
           </div>
           <span class="chip ${leadHasOverdueNextAction(lead) ? "hot" : ""}">${escapeHtml(overdueLabel)}</span>
@@ -7267,7 +7267,7 @@ function renderSalesmanSimplifiedDashboard() {
       return `
         <article class="salesman-loss-card">
           <div class="salesman-loss-card-copy">
-            <span class="salesman-loss-kicker">Lost lead follow-through</span>
+            <span class="salesman-loss-kicker">Blocked lead follow-through</span>
             <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
             <p>${escapeHtml(lead.lost_reason_detail || "Capture the reason now while the context is still fresh.")}</p>
             <div class="chip-row">
@@ -7440,8 +7440,8 @@ function salesmanPriorityActions() {
       key: "loss-reasons",
       tone: "danger",
       kicker: "3-day deadline",
-      title: `${lossReasonPrompts.length} lost lead${lossReasonPrompts.length === 1 ? "" : "s"} still need a reason`,
-      bodyEntity: lossReasonPrompts[0].company_name || "A lost lead",
+      title: `${lossReasonPrompts.length} blocked lead${lossReasonPrompts.length === 1 ? "" : "s"} still need a reason`,
+      bodyEntity: lossReasonPrompts[0].company_name || "A blocked lead",
       bodySuffix: "has crossed the reason-capture deadline.",
       detail: "Capture the decision context while the customer conversation is still fresh.",
       cta: "Capture reason"
@@ -7647,7 +7647,7 @@ function renderSalesmanLossPromptPanel() {
     return `
       <article class="salesman-loss-card">
         <div class="salesman-loss-card-copy">
-          <span class="salesman-loss-kicker">Lost lead follow-through</span>
+          <span class="salesman-loss-kicker">Blocked lead follow-through</span>
           <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
           <p>${escapeHtml(lead.lost_reason_detail || lead.notes || "Capture the primary loss reason and any context for coaching.")}</p>
           <div class="chip-row">
@@ -14398,7 +14398,7 @@ els.lostReasonForm?.addEventListener("submit", event => {
   event.preventDefault();
   const payload = Object.fromEntries(new FormData(els.lostReasonForm).entries());
   if (!payload.lost_reason) {
-    setMessage(els.lostReasonMessage, "Select the primary reason before marking this lead as lost.", "error");
+    setMessage(els.lostReasonMessage, "Select the primary reason before marking this lead as blocked.", "error");
     return;
   }
   resolveLostReason({

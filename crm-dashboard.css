@@ -1,4 +1,43 @@
 /* Proposal dashboard presentation. Existing datasets and actions remain. */
+body.salesman-dashboard-mode #appShell #dailyAiGreeting { color: var(--crm-navy) !important; }
+body.salesman-dashboard-mode #appShell #dailyAiSummary { background: var(--crm-surface-muted) !important; }
+body.admin-dashboard-mode #appShell :is(#actionPlanSummary, #needsAttentionCount, .ghost-button, .agent-chip, .meta-label, .chip, .stage-badge, .dashboard-funnel-note, .market-snapshot-total, .panel-icon) {
+  font-size: 13px !important;
+  line-height: 1.5;
+}
+body.admin-dashboard-mode #appShell :is(.pipeline-funnel-stage-stats, #marketSnapshotPanel .market-snapshot-bar-meta) small {
+  font-size: 12px !important;
+}
+body.admin-dashboard-mode #appShell #marketSnapshotPanel .market-snapshot-total strong { font-size: 14px !important; }
+body.admin-dashboard-mode #appShell #marketSnapshotPanel .market-snapshot-bar-meta span { font-size: 13px !important; }
+body.salesman-dashboard-mode #appShell :is(#salesmanSimplifiedAddLead, #salesmanSimplifiedViewAll, .small-action, .empty-copy, .salesman-loss-kicker, .salesman-loss-card .chip) {
+  font-size: 13px !important;
+  line-height: 1.5;
+}
+body.salesman-dashboard-mode #appShell .salesman-loss-kicker { color: var(--crm-text-secondary) !important; }
+body #appShell .salesman-queue-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+  background: currentColor;
+  mask: var(--crm-icon-arrow-up-right) center / contain no-repeat;
+}
+body #appShell #salesmanSimplifiedDashboard :is(.salesman-simplified-block, .salesman-simplified-metric, .salesman-simplified-stage) {
+  background: var(--crm-surface) !important;
+}
+body #appShell #salesmanSimplifiedDashboard :is(.salesman-summary-card-label, .salesman-summary-card-action, .salesman-summary-card-copy small, .salesman-stage-label, .salesman-stage-action) {
+  font-size: 12px !important;
+}
+body #appShell .salesman-triage-card::before {
+  content: "";
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  mask: var(--crm-icon-clipboard-list) center / contain no-repeat;
+}
 body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
   height: auto !important;
   max-height: none !important;
@@ -397,6 +436,14 @@ body.admin-dashboard-mode #appShell #dashboardView .panel {
   background: var(--crm-surface) !important;
   box-shadow: var(--crm-shadow-panel) !important;
 }
+body.admin-dashboard-mode #appShell :is(#adminTaskSummary, #needsAttentionCount) {
+  background: var(--crm-surface-muted) !important;
+}
+
+body.admin-dashboard-mode #appShell .admin-task-table-wrap {
+  background: var(--crm-surface) !important;
+}
+
 body.admin-dashboard-mode #appShell #dashboardView .panel-header {
   flex-wrap: wrap;
   gap: var(--crm-space-3);

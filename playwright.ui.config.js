@@ -6,7 +6,7 @@ const port = Number(process.env.CRM_UI_TEST_PORT || 4179);
 if (!Number.isInteger(port) || port < 1024 || port > 65532) throw new Error("Invalid fixture port range");
 const baseURL = `http://127.0.0.1:${port}`;
 const suite = process.env.CRM_UI_SUITE || "baseline";
-if (!["baseline", "shell", "data", "team", "reports", "dashboard", "dialogs"].includes(suite)) throw new Error("Invalid UI suite");
+if (!["baseline", "shell", "data", "team", "reports", "dashboard", "dialogs", "audit"].includes(suite)) throw new Error("Invalid UI suite");
 const profiles = ["admin-desktop", "salesman-desktop", "admin-mobile", "salesman-mobile"];
 
 module.exports = defineConfig({

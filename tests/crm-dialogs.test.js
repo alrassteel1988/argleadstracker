@@ -19,6 +19,9 @@ assert.ok(config.routes.some(item => item.src === "/crm-dialogs.css" && item.des
 assert.ok(read("server.js").includes('["/crm-dialogs.css", "crm-dialogs.css"]'));
 assert.ok(read("sw.js").includes('"/crm-dialogs.css"'));
 const client = read("client.js");
+assert.match(html, />Mark as Blocked<\/button>/);
+assert.doesNotMatch(html, /Mark as Lost|Why deals were marked lost|crm-title-accent">lost\?/);
+assert.doesNotMatch(client, /Lost lead follow-through|marking this lead as lost\./);
 const declaration = name => client.match(new RegExp(`function ${name}\\([^]*?\\n}`, "m"))[0];
 const context = { kanbanStageForLead: ({stage}) => String(stage).toUpperCase(), KANBAN_STAGE_BY_KEY: { LOST: {label:"Lost"}, NEW: {label:"New"} } };
 vm.createContext(context);

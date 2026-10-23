@@ -16,7 +16,7 @@ This register accompanies [functionality-inventory.md](functionality-inventory.m
 | Q-03 | Owner supplied landscape and portrait silk-white PNGs with embedded bottom logo, then Al-Ras-Steel-White-Logo.png. All three are preserved unchanged under assets/brand. | RESOLVED: use supplied artwork, preserve proportions and transparency. See assets/brand/README.md for provenance and hashes. No redraw or extraction needed. | None |
 | Q-04 | Existing Playwright spec defaults to production, reads .env and creates/deletes a disposable user/lead. Existing HTTP E2E is not browser coverage. | New test:ui:baseline uses a temporary allowlisted copy of runtime files, synthetic Admin/Salesman records, no .env, no inherited provider credentials, blocked server outbound fetch, and a loopback-only server. Screenshots/traces stay outside the repository. No production UAT performed. | Full screenshot/state matrix still requires coverage |
 | Q-05 | package.json has check/test/verify/build, but no lint or typecheck scripts. App is JavaScript, not TypeScript. | Use supported commands now. Owner must supply/approve additional tooling if separate lint/typecheck is mandatory; do not add a framework/compiler merely for this UI task. | Literal lint/typecheck acceptance |
-| Q-06 | Quotes and Accounts buttons currently use Pipeline quick-view destinations; parseAppRoute has no quotes/accounts route. PDF pages 52-56 mark quote/account concepts Proposed. | Preserve existing shortcuts and Pipeline destination. Do not create quote builder, receivables, ERP synchronization, new routes or backend endpoints. | No blocker for styling existing shortcuts |
+| Q-06 | Quotes and Accounts buttons declare Pipeline destinations, but a second legacy nav handler returns them to Dashboard. Both handlers exist in the baseline; no quotes/accounts route exists. PDF pages 52-56 are Proposed. | Owner chose separate review tabs for the supplied proposal screenshots, not new modules or a routing repair. Keep the current runtime unchanged and document the existing shortcut defect. No quote builder, receivables, ERP sync or backend endpoints. | Existing shortcut workflow sign-off remains unavailable |
 | Q-07 | PDF describes dedicated Companies, Today, Statuses, Director AI, recovery/coaching screens. Existing equivalents are embedded dashboard/Pipeline/lead/tool surfaces; the exact five Director AI actions are not present as a matching standalone feature set. | Style only implemented equivalents. No new screens, buttons, calculations, ranking or automation. List omitted proposed actions during per-page comparison. | Exact screen-for-screen matching where behavior is absent |
 | Q-08 | Login contains Forgot password button without a handler/reset API. PDF adds Show password control, which is not implemented. | Keep existing recovery control styled without claiming it works; do not add Show/reset features within a visual-only migration. Functional password recovery needs a separate approved task. | Login functionality signoff must acknowledge existing gap |
 | Q-09 | Design mentions seven activity types and no rankings; code has existing user/meta activity types, reminders/corrections/handoffs and performance/status metrics. | Keep all existing options, activity history, charts, performance and directory data. Removing them would violate the preserve-functionality rule. No modification of activity or score calculations. | Resolve design/app content difference, not a backend task |
@@ -351,3 +351,30 @@ Later owner decisions and completed phases supersede earlier pending notes.
   five seconds. This has not been classified as a regression or repaired.
   Partial text/contrast findings are retained outside the repository in the
   temporary presentation-audit directory for follow-up; they are not sign-off.
+
+## Presentation Audit Follow-Up
+
+- The activity Edit observation above was an audit locator error: the existing
+  `openActivityEdit` calls `openActivityModal`, using `#activityDialog`, not the
+  unused `#activityEditDialog`. The audit now opens the shared modal and checks
+  that its existing activity ID is populated. No activity behavior was changed.
+- Audit color compositing now accounts for approved navy gradient stops rather
+  than incorrectly treating the transparent gradient base as white. Controlled
+  browser fixtures still detect faint text, small text, clipping, missing icons
+  and unapproved gradients. This is a limited computed-style audit, not WCAG
+  certification or a substitute for visual inspection of bitmap backgrounds.
+- The owner requested the supplied Accounts and Quotes proposal images in
+  separate review tabs. Local file previews were queued in Codex; the in-app
+  browser rejects file URLs, so no browser workaround or new app route was used.
+- Quotes and Accounts still return to Dashboard because the existing generic
+  nav handler runs after their quick-view handler. Baseline source contains the
+  same handlers. The presentation sweep captures that actual destination only;
+  it must not be described as a functional Quotes/Accounts or Pipeline check.
+- Shared typography now fixes remaining small header controls, warning text,
+  avatars, import steps and report/record captions. Old summary gradients are
+  replaced with shared opaque surfaces, including loading cards. Closure copy
+  uses Blocked while original LOST keys and reason workflows remain unchanged.
+- Final phase verification: `npm run verify` PASS and `npm run test:ui:audit`
+  PASS (8 checks, 68 captured role/screen states, zero computed-style findings).
+  The combined 44-check UI chain has not yet been rerun after this phase.
+  Native browser zoom and full before/after visual acceptance are still pending.

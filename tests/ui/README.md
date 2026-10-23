@@ -4,8 +4,9 @@ Run `npm run test:ui` from the repository root. It runs `test:ui:baseline` (8
 core-flow tests), `test:ui:shell` (4 shell/navigation tests), then `test:ui:data`
 (4 Pipeline data-surface tests), then `test:ui:team` (4 directory/role checks),
 then `test:ui:reports` (4 authoring/review checks) and `test:ui:dashboard`
-(4 dashboard/counter/drill-down checks) and `test:ui:dialogs` (4 shared-dialog
-and display-label checks),
+(4 dashboard/counter/drill-down checks), `test:ui:dialogs` (8 shared-dialog,
+company AI and display-label checks), and `test:ui:audit` (8 presentation and
+auditor-control checks),
 each with fresh servers. Chromium must already
 be available through the existing Playwright dependency. This suite does not
 use the production add-lead script or production credentials.
@@ -79,6 +80,18 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 This is a main-flow baseline, not complete coverage of every inventory item.
 It does not verify production Supabase RLS, external providers, microphone
 permissions/recording, every report rejection/error state or every modal.
+
+The presentation audit checks loaded role pages, six lead tabs, flag/correction/
+deletion/import/closure dialogs, text sizes, computed text contrast, clipping,
+icons and page overflow. Its controlled fixture must detect known defects while
+accepting the approved navy gradient. Gradient-stop compositing is conservative;
+bitmap content, native zoom, focus-state contrast and whole-chart/canvas pixels
+still need separate visual testing. A passing audit is not WCAG certification.
+
+Quotes/Accounts remain the pre-existing sidebar shortcuts, not implemented
+modules. Duplicate legacy handlers return them to Dashboard. The audit captures
+that actual destination and does not certify the shortcuts as functional. The
+owner selected separate proposal-image review tabs, not a routing change.
 
 ## Screenshots and traces
 

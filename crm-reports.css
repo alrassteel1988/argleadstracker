@@ -1,4 +1,8 @@
 /* One report presentation for authoring and management review. */
+body #appShell #tasksView .tasks-review-empty span {
+  font-size: 14px !important;
+  line-height: 1.5;
+}
 body.tasks-mode { height: auto !important; min-height: 100dvh !important; overflow-y: auto !important; }
 body.tasks-mode #appShell > .main {
   height: auto !important;

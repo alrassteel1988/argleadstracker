@@ -1,4 +1,7 @@
 /* Proposal Activity surfaces. Existing filters, calendar and actions are retained. */
+body #appShell #activityView .reminder-stack-header span {
+  font-size: 13px !important;
+}
 body.activity-admin-mode {
   height: auto !important;
   min-height: 100dvh !important;
