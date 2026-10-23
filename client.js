@@ -6355,6 +6355,16 @@ function applyPerformanceChartWidth(rows) {
   frame.style.setProperty("--performance-chart-min-width", `${chartMinWidth}px`);
 }
 
+function crmChartColors() {
+  const styles = getComputedStyle(document.documentElement);
+  const token = name => styles.getPropertyValue(`--crm-${name}`).trim();
+  return {
+    navy: token("navy"), surface: token("surface"), divider: token("divider"),
+    text: token("text"), secondary: token("text-secondary"),
+    success: token("health-green"), risk: token("health-red"), warning: token("health-amber")
+  };
+}
+
 function renderPerformanceChart(rows) {
   if (!els.performanceChart) return;
   if (typeof Chart === "undefined") {
@@ -6362,6 +6372,7 @@ function renderPerformanceChart(rows) {
     return;
   }
   if (performanceChartInstance) performanceChartInstance.destroy();
+  const colors = crmChartColors();
   performanceChartInstance = new Chart(els.performanceChart, {
     type: "bar",
     data: {
@@ -6370,8 +6381,8 @@ function renderPerformanceChart(rows) {
         {
           label: "Assigned leads",
           data: rows.map(row => row.totalAssigned),
-          backgroundColor: "#1f6aa5",
-          borderColor: "#06283d",
+          backgroundColor: colors.navy,
+          borderColor: colors.navy,
           borderWidth: 1,
           borderRadius: 2,
           borderSkipped: false,
@@ -6387,14 +6398,14 @@ function renderPerformanceChart(rows) {
       plugins: { legend: { display: false } },
       scales: {
         x: {
-          grid: { color: "#d8e0e8" },
+          grid: { color: colors.divider },
           beginAtZero: true,
-          ticks: { font: { size: 12, weight: "600" }, color: "#475569", precision: 0 },
-          title: { display: true, text: "Assigned leads", color: "#475569", font: { size: 12, weight: "600" } }
+          ticks: { font: { family: "Inter", size: 12, weight: "600" }, color: colors.secondary, precision: 0 },
+          title: { display: true, text: "Assigned leads", color: colors.secondary, font: { family: "Inter", size: 12, weight: "600" } }
         },
         y: {
           grid: { display: false },
-          ticks: { font: { size: 12, weight: "600" }, color: "#172b4d", autoSkip: false }
+          ticks: { font: { family: "Inter", size: 12, weight: "600" }, color: colors.text, autoSkip: false }
         }
       }
     }
@@ -6409,11 +6420,12 @@ function renderSalesmenSummaryChart(rows) {
   const overdue = rows.reduce((sum, row) => sum + row.overdueFollowups, 0);
   const tasksDue = rows.reduce((sum, row) => sum + row.tasksDue, 0);
   const conversionRate = percentOf(converted, totalAssigned);
+  const colors = crmChartColors();
   const metrics = [
-    { label: "Converted leads", value: converted, color: "#6d9f3d" },
-    { label: "Open leads", value: open, color: "#1f6aa5" },
-    { label: "Overdue follow-ups", value: overdue, color: "#de8b20" },
-    { label: "Tasks due", value: tasksDue, color: "#d94a48" }
+    { label: "Converted leads", value: converted, color: colors.success },
+    { label: "Open leads", value: open, color: colors.navy },
+    { label: "Overdue follow-ups", value: overdue, color: colors.risk },
+    { label: "Tasks due", value: tasksDue, color: colors.warning }
   ];
   els.salesmenConversionRate.textContent = `${conversionRate}%`;
   els.salesmenSummaryLegend.innerHTML = metrics.map(metric => `
@@ -6435,7 +6447,7 @@ function renderSalesmenSummaryChart(rows) {
       datasets: [{
         data: metrics.map(metric => metric.value),
         backgroundColor: metrics.map(metric => metric.color),
-        borderColor: "#ffffff",
+        borderColor: colors.surface,
         borderWidth: 2,
         hoverOffset: 3
       }]

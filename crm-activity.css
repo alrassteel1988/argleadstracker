@@ -246,55 +246,6 @@ body #appShell #activityView .activity-quick-link strong { font-size: 13px !impo
 }
 
 @media (max-width: 720px) {
-  body.activity-admin-mode #appShell #overdueBanner:not(.hidden) {
-    display: flex !important;
-    flex-direction: column;
-    align-items: stretch !important;
-    gap: var(--crm-space-2) !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    padding: var(--crm-space-3) !important;
-  }
-  body.activity-admin-mode #appShell #overdueBanner .overdue-banner-icon { display: none; }
-  body.activity-admin-mode #appShell #overdueBanner .overdue-banner-copy {
-    display: flex !important;
-    flex-direction: column;
-    align-items: stretch !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    padding: 0 !important;
-    gap: var(--crm-space-2) !important;
-  }
-  body.activity-admin-mode #appShell #overdueBanner .overdue-banner-copy > * {
-    width: auto !important;
-    max-width: 100%;
-    color: var(--crm-text) !important;
-    font-size: 13px !important;
-    line-height: 1.5 !important;
-    white-space: normal !important;
-    word-break: normal !important;
-  }
-  body.activity-admin-mode #appShell #overdueBanner :is(.overdue-banner-kpis, .overdue-owner-chips, .overdue-banner-actions) {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    align-items: center !important;
-    gap: var(--crm-space-2) !important;
-  }
-  body.activity-admin-mode #appShell #overdueBanner .overdue-owner-chip {
-    flex: 0 1 auto !important;
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: 100%;
-    padding: 4px 8px !important;
-    font-size: 13px !important;
-    line-height: 1.5 !important;
-    white-space: normal !important;
-    word-break: normal !important;
-    overflow-wrap: anywhere;
-    color: var(--crm-health-red) !important;
-    background: var(--crm-health-red-soft) !important;
-  }
   body #appShell #activityView .activity-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   body #appShell #activityView :is(button, .calendar-link, .calendar-range-pill) { min-height: 44px !important; }
   body #appShell #activityView .activity-filter-bar :is(input, select) { min-height: 44px !important; font-size: 16px !important; }

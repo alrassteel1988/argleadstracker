@@ -201,3 +201,22 @@ Do not hide existing counterparts just because the proposed version is out of sc
 - Final supported verification gate passed. All 16 browser regression flows
   passed; the final Activity-only page/banner corrections then passed both
   Admin desktop/mobile profiles (1.2m). Phone owner chips now wrap normally.
+
+## Salesmen checkpoint
+
+- The proposal omits the current card view and places performance on a separate
+  concept screen. Keep both directory views and the embedded performance
+  snapshot; a new route or removing information is outside this UI-only task.
+- All existing status values, rankings, counts, percentages, assignments and
+  action handlers remain. Chart changes resolve presentation colors only.
+- A single phone overdue-banner pattern is shared through the shell. The old
+  Activity-only copy is removed without changing any warning calculations.
+- Dense tables may scroll within their panel instead of shrinking text or
+  removing columns/actions. This differs from the tiny prototype type but
+  preserves accessible control and data sizes.
+- Synthetic fixture has two salesmen; browser page-size/disabled controls are
+  verified, and a VM test covers multi-page ranges with twelve rows. This does
+  not claim production account counts or full live pagination acceptance.
+- Verification gate and all 20 browser flows pass. Explicit menu actions then
+  passed in a final four-profile team rerun (34.2s). Full provider/error/zoom and
+  design-state comparison coverage remains outstanding.

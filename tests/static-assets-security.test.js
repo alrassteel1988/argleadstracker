@@ -19,6 +19,7 @@ const publicRequests = [
   ["/crm-data.css?v=test", "text/css"],
   ["/crm-record.css?v=test", "text/css"],
   ["/crm-activity.css?v=test", "text/css"],
+  ["/crm-team.css?v=test", "text/css"],
   ["/assets/brand/crm-silk-white-desktop.png", "image/png"],
   ["/assets/brand/crm-silk-white-mobile.png", "image/png"],
   ["/assets/brand/al-ras-steel-white-logo.png", "image/png"],

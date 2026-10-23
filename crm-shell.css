@@ -452,3 +452,58 @@ body #authScreen .auth-card h2 em {
     color: var(--crm-navy) !important;
   }
 }
+
+/* One readable phone warning layout for both roles and every CRM view. */
+@media (max-width: 720px) {
+  body #appShell #overdueBanner:not(.hidden) {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    box-sizing: border-box;
+    gap: var(--crm-space-2) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: var(--crm-space-3) !important;
+  }
+  body #appShell #overdueBanner .overdue-banner-icon { display: none; }
+  body #appShell #overdueBanner .overdue-banner-copy {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    box-sizing: border-box;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    gap: var(--crm-space-2) !important;
+  }
+  body #appShell #overdueBanner .overdue-banner-copy > * {
+    width: auto !important;
+    max-width: 100%;
+    color: var(--crm-text) !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    white-space: normal !important;
+    word-break: normal !important;
+  }
+  body #appShell #overdueBanner :is(.overdue-banner-kpis, .overdue-owner-chips, .overdue-banner-actions) {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: var(--crm-space-2) !important;
+  }
+  body #appShell #overdueBanner .overdue-owner-chip {
+    flex: 0 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    padding: 4px 8px !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: anywhere;
+    color: var(--crm-health-red) !important;
+    background: var(--crm-health-red-soft) !important;
+  }
+}

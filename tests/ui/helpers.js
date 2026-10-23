@@ -11,6 +11,7 @@ const artifacts = path.resolve(process.env.CRM_UI_ARTIFACT_DIR || path.join(os.t
 async function capture(page, info, name) {
   const directory = path.join(artifacts, phase, info.project.name);
   fs.mkdirSync(directory, { recursive: true });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: path.join(directory, `${name}.png`), fullPage: true });
 }
 

@@ -298,6 +298,38 @@ and exclusions; no production browser tests or provider operations were run.
 - These results are not full application migration signoff, native browser
   zoom testing, provider UAT or production acceptance.
 
+### Salesmen presentation phase
+
+- Compared revised proposal page 38 with the existing Admin Salesmen directory.
+  `crm-team.css` uses the shared white/teal/navy/amber system for four metrics,
+  filters, list/cards, paging and the existing performance snapshot. All current
+  controls and data remain, including card progress, last activity and tasks due.
+- Decorative per-person accent attributes remain in markup but render through
+  one shared palette. Health/status meaning remains in labelled badges, warnings
+  and chart indicators, rather than arbitrary violet/orange identity colors.
+- Names/emails/territories wrap; fields use 14px desktop/16px phone text and
+  40px/44px controls. Tables retain scoped horizontal scrolling; cards stack on
+  phones. Footer paging reserves space for the fixed AI Assistant.
+- Removed the legacy outer panel highlight that washed out directory controls.
+  The phone overdue-banner layout now lives once in `crm-shell.css`, shared by
+  both roles/views rather than duplicated as an Activity-specific exception.
+- Added a presentation-only `crmChartColors` helper. It resolves existing CSS
+  tokens for canvas fills, borders, axis text and legend markers. Original chart
+  rows, labels, values, percentages, order, axes, cutout and tooltips remain.
+  A focused VM test verifies unchanged example totals and pagination ranges.
+- New isolated `test:ui:team` covers Admin list/cards, search, territory, status,
+  stage and sort; empty reset, page size, chart values/pixels, profile leads,
+  assignment form, CSV and menu actions. Both Salesman profiles retain denied
+  directory access. No production records or external providers are used.
+- Capture now returns the document to its top before full-page screenshots so
+  sticky headers do not appear midway down the artifact. Existing Before images
+  are retained; the complete final comparison matrix remains outstanding.
+- `npm run verify`: PASS after the final shared banner consolidation. Expanded
+  `npm run test:ui`: PASS, all 20 flows (8 core in 3.0m, 4 shell in 26.3s,
+  4 data in 57.3s, 4 team in 35.2s). The final team suite including explicit
+  Jump to Leads / Filter Pipeline assertions passed again, 4 profiles in 34.2s.
+- Native zoom, all error/provider states and the full migration remain pending.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.

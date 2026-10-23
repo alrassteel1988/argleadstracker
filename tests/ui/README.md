@@ -2,7 +2,8 @@
 
 Run `npm run test:ui` from the repository root. It runs `test:ui:baseline` (8
 core-flow tests), `test:ui:shell` (4 shell/navigation tests), then `test:ui:data`
-(4 Pipeline data-surface tests), each with fresh servers. Chromium must already
+(4 Pipeline data-surface tests), then `test:ui:team` (4 directory/role checks),
+each with fresh servers. Chromium must already
 be available through the existing Playwright dependency. This suite does not
 use the production add-lead script or production credentials.
 
@@ -35,6 +36,9 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 - Admin Activity week navigation, busy-day scrolling/text visibility, log
   pagination, Salesman/type/date/company filters and reset, reminder-type chips,
   Add Activity open/close, control sizing and page/record overflow guards.
+- Admin Salesmen list/cards, search/territory/status/stage/sort controls, empty
+  reset, page-size controls, chart totals/pixels, lead popup, assignment window,
+  CSV export and actions menu; Salesman role is denied the Admin directory.
 - Supplied logo loading, white header/title accents, stable desktop rail,
   existing Admin account dialog through Tools, footer sign-out and mobile menu.
 - Mobile Home/Leads/Log/Map/Alerts navigation and their existing windows.

@@ -16,7 +16,7 @@ assert.match(css, /\.activity-table-scroll\s*\{[^}]*max-height:\s*520px[^}]*over
 assert.match(css, /\.activity-weekly-day-items\s*\{[^}]*max-height:\s*180px[^}]*overflow-y:\s*auto/s);
 assert.match(css, /\.activity-filter-bar :is\(input, select\)\s*\{[^}]*-webkit-text-fill-color:\s*var\(--crm-text\)/s);
 assert.match(css, /@media \(max-width: 720px\)[\s\S]*min-height:\s*44px[^}]*font-size:\s*16px/s);
-assert.match(css, /#overdueBanner \.overdue-owner-chip\s*\{[^}]*flex:\s*0 1 auto[^}]*white-space:\s*normal/s);
+assert.match(read("crm-shell.css"), /#overdueBanner \.overdue-owner-chip\s*\{[^}]*flex:\s*0 1 auto[^}]*white-space:\s*normal/s);
 assert.match(css, /:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--crm-focus\)/s);
 assert.doesNotMatch(css, /gradient\(|rgba\(|blur\(|opacity:\s*0\.|\.sidebar\b/);
 assert.doesNotMatch(css, /\[hidden\][^{]*\{[^}]*display:\s*(?:flex|grid|block)/s);
