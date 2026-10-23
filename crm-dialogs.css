@@ -46,7 +46,11 @@ body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-heade
 body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) button:hover { background: var(--crm-surface-muted) !important; border-color: var(--crm-amber) !important; }
 body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) { padding: 0 !important; margin: 0; background: var(--crm-surface) !important; }
 body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) > :not(.dialog-header):not(input):not(button) { margin-inline: var(--crm-space-5); }
-body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) > button { margin: var(--crm-space-4) var(--crm-space-5); }
+body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) > button {
+  box-sizing: border-box;
+  max-width: calc(100% - 2 * var(--crm-space-5));
+  margin: var(--crm-space-4) var(--crm-space-5);
+}
 body dialog :is(.lead-wizard-shell, .form-grid, .places-search-row, .salesman-leads-summary, .ai-result) { padding-block: var(--crm-space-4); }
 body dialog :is(label, .form-message, .voice-status, .activity-voice-state, .activity-attachments p, .ai-assistant-transcript) { font-size: 13px !important; line-height: 1.5 !important; color: var(--crm-text-secondary) !important; letter-spacing: 0 !important; }
 body dialog .form-message.error { color: var(--crm-health-red) !important; }
@@ -99,6 +103,13 @@ body dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidd
 body dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea, button):disabled { opacity: 1 !important; background: var(--crm-surface-muted) !important; color: var(--crm-text-secondary) !important; -webkit-text-fill-color: currentColor !important; border-color: var(--crm-control-border) !important; }
 
 @media (max-width: 720px) {
+  body dialog .activity-queue-toolbar > input {
+    flex: 0 0 auto;
+  }
+  body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) > button {
+    display: flex;
+    justify-content: center;
+  }
   body dialog { width: calc(100vw - 16px) !important; max-width: calc(100vw - 16px) !important; max-height: calc(100dvh - 16px) !important; margin-inline: auto !important; }
   body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) { padding: var(--crm-space-4) !important; }
   body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .ai-assistant-header) { flex-direction: row !important; }

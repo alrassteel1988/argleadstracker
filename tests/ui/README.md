@@ -133,6 +133,28 @@ owner selected separate proposal-image review tabs, not a routing change.
 
 ## Screenshots and traces
 
+`npm run test:ui:management` runs the five reachable Admin review dialogs on
+fresh fixtures, with Salesman cases checking management controls remain hidden.
+It does not create accounts, confirm reassignment or approve/delete records.
+It is separate from the presentation sweep to preserve normal rate-limit
+buckets. Normal After captures require pointer interaction and control bounds;
+Before captures document historical appearance, not current styling acceptance.
+
+To replay the approved original source for these Before captures, run:
+
+```powershell
+node -e "process.env.CRM_UI_SUITE='management';process.env.CRM_UI_REPLAY_BASELINE='1';process.env.CRM_UI_SCREENSHOT_PHASE='before';process.env.CRM_UI_TEST_PORT='4279';require('child_process').execFileSync(process.execPath,['node_modules/playwright/cli.js','test','--config=playwright.ui.config.js','--output',require('node:path').join(require('node:os').tmpdir(),'arg-crm-ui-before-dialog-results')],{stdio:'inherit'})"
+```
+
+Replay copies only allowlisted runtime bytes from the fixed initial commit
+`62ec92668261142e5c0fa8b3a1be91359fee9241`, then creates the same synthetic data.
+It cannot select an arbitrary Git ref and requires the Before phase. Historical
+fixture construction alone has a 120-second startup budget (normal startup is
+30 seconds); application/expectation limits and rate protections are unchanged.
+Because the historical Activity layout intercepts pointer clicks, Before uses
+native Enter activation. Do not report those historical captures as a passing
+pointer workflow. After continues to require regular pointer clicks.
+
 The presentation sweep enables `checkTouchTargets` for mobile profiles. Rendered
 buttons, summaries, explicit button roles and styled action links must have
 both dimensions at least 44px (0.5px measurement tolerance). A controlled fixture

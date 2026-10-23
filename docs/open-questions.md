@@ -2,6 +2,37 @@
 
 ## Scope
 
+Management-dialog checkpoint (23 October): fixed mobile submit-button overflow
+and 180px-tall deletion-review search fields in shared dialog CSS. Final
+`npm run test:ui:management` PASS (4) and `npm run verify` PASS. Existing audit
+PASS (8) before the final queue addition; final management test covers that
+addition. An earlier 12-case audit passed but logged report rate limiting, so
+management now uses its own fresh fixtures rather than weakening runtime limits.
+The new complete 48-check chain and final native zoom have not been run.
+
+Before replay is fixed to the initial commit and uses allowlisted runtime bytes,
+synthetic records and blocked providers. Source bytes were compared with Git;
+initial setup timed out at 30 seconds and only historical setup now allows 120.
+Historical Activity pointer activation was intercepted; native keyboard capture
+can navigate to the lead instead of opening Details. Missing historical states
+are annotated/captured as unavailable, never fabricated. Final replay PASS (4
+capture/role checks) with three paired dialogs per Admin viewport; Details/Edit
+remain unavailable in the historical route. Current After has all five states.
+Per-run Temp manifests distinguish these valid captures from stale earlier files.
+Original Before Dashboard capture was a loading frame; paired file counts alone
+must not be called visual/data parity. See `ui-proposal-acceptance.md`.
+
+Files: `crm-dialogs.css`, `sw.js`, `package.json`, `playwright.ui.config.js`,
+`tests/crm-dialogs.test.js`, the three cache-version contract tests,
+`tests/ui/management.spec.js`, `tests/ui/fixture-server.js`,
+`tests/ui/helpers.js`, `tests/ui/README.md`, this register, the inventory and
+`docs/ui-proposal-acceptance.md`. Commands: `npm run test:ui:management`,
+`npm run test:ui:audit`, `npm run verify`, the exact Before replay command in
+`tests/ui/README.md`, and `git diff --check`. First real regression: Create
+Salesman submit exceeded dialog bounds; second: search height 180px >52px.
+No auth, API, schema, permission or business-rule change. No account creation,
+confirmed reassignment/deletion, production access, push, PR, merge or deployment.
+
 Shared mobile touch checkpoint (23 October): the expanded existing audit found
 undersized overdue actions/dismiss controls across both roles, a narrow Admin
 collapse button, and the Intel disclosure. Fixes are limited to three shared

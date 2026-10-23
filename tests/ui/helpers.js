@@ -8,11 +8,11 @@ const phase = process.env.CRM_UI_SCREENSHOT_PHASE || "after";
 if (!["before", "after"].includes(phase)) throw new Error("Screenshot phase must be before or after");
 const artifacts = path.resolve(process.env.CRM_UI_ARTIFACT_DIR || path.join(os.tmpdir(), "arg-crm-ui-screenshots"));
 
-async function capture(page, info, name) {
+async function capture(page, info, name, {fullPage = true} = {}) {
   const directory = path.join(artifacts, phase, info.project.name);
   fs.mkdirSync(directory, { recursive: true });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: path.join(directory, `${name}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(directory, `${name}.png`), fullPage });
 }
 
 async function login(page, info) {

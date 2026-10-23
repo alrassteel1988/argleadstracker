@@ -1,5 +1,50 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+### Management Dialog and Evidence Checkpoint (23 October)
+
+Shared dialog CSS now contains direct form-submit buttons within their side
+margins and puts them on their own line on mobile. A regression reproduced the
+Create Salesman button extending beyond the panel; the same shared rule covers
+reassignment confirmation. Mobile deletion-review search inputs also inherited
+a 180px flex basis as height when the toolbar changed to a column. Their mobile
+flex sizing now stays natural; bounds and 44-52px height assertions pass.
+
+`npm run test:ui:management` PASS (4): five Admin dialog states at 1440x900 and
+375x812, normal pointer activation, visible close controls, computed presentation,
+keyboard/field constraints and cancellation without administrative writes.
+Salesman cases verify management controls stay hidden, not fictitious dialog
+entry points. Existing read-only `/api/ai/lead-summary` POST is explicitly
+distinguished from writes. First harness attempts used a nonexistent Lead-tab
+View action and an overbroad POST guard; those were corrected, not app logic.
+
+`npm run verify` PASS on final runtime CSS. `npm run test:ui:audit` PASS (8,
+68 states) before the final queue-sizing addition, which is covered by the
+final management regression and CSS contract. An initial combined 12-case audit
+passed assertions but hit normal report rate limits; management is now a separate
+fresh-fixture suite. No runtime limits or assertions were loosened. The complete
+interactive chain is now 48 checks and has not been rerun as one command at this
+checkpoint. Native zoom and separate lint/type checking are not claimed.
+
+Historical replay uses fixed baseline `62ec92668261142e5c0fa8b3a1be91359fee9241`,
+allowlisted runtime files, synthetic data and no `.env`. Byte equality was
+verified against Git for client/server/index/styles. Historical construction
+alone has a 120-second setup budget after the first 30-second setup timeout.
+Normal fixture startup remains 30 seconds. Final replay PASS (4 capture/role
+checks), with three matching Before/After dialogs per Admin profile: deletion
+review, Create Salesman and reassignment. Activity Details and its Edit state
+are unavailable through the historical route and are explicitly annotated,
+not counted as paired captures or passing historical pointer workflows.
+Per-run manifests under `arg-crm-ui-management-manifests` in the OS temporary
+directory record source, dimensions, activation method, captures and limitations.
+The current run has all five After states per Admin profile, without limitations.
+
+Reinspection also found the original Before Admin desktop Dashboard image was
+captured during loading (zero counts/generic User). The prior count of 68 paired
+filenames is not proof of dataset-ready comparison. Recapture/revalidation is
+required. The full 57-page proposal crosswalk and remaining acceptance work are
+in [ui-proposal-acceptance.md](ui-proposal-acceptance.md). Full visual sign-off is
+still pending. Cache revision: `arg-pwa-v103-revised-ui-dialog-bounds`.
+
 ### Shared Mobile Touch Checkpoint (23 October)
 
 The expanded presentation sweep reproduced undersized controls in both mobile

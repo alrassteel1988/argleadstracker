@@ -9,6 +9,9 @@ assert.match(css, /\.ai-assistant-header\)\s*\{[^}]*background:\s*var\(--crm-nav
 assert.match(css, /\.crm-title-accent\s*\{[^}]*var\(--crm-amber\)/s);
 assert.match(css, /\[aria-invalid="true"\]\s*\{[^}]*var\(--crm-health-red\)/s);
 assert.match(css, /:disabled\s*\{[^}]*opacity:\s*1\s*!important/s);
+assert.match(css, /> button\s*\{[^}]*box-sizing:\s*border-box[^}]*max-width:\s*calc\(100% - 2 \* var\(--crm-space-5\)\)/s);
+assert.match(css, /@media \(max-width: 720px\)[\s\S]*> button\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*center/s);
+assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.activity-queue-toolbar > input\s*\{[^}]*flex:\s*0 0 auto/s);
 assert.match(css, /@media \(max-width: 720px\)[\s\S]*min-height:\s*44px[^}]*font-size:\s*16px/s);
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter:\s*blur|filter:\s*blur|rgba\(/);
 const html = read("index.html");

@@ -2,8 +2,11 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const {execFileSync} = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "../..");
+const BASELINE_REF = "62ec92668261142e5c0fa8b3a1be91359fee9241";
+const RUNTIME_FILE = /^(?:server\.js|client\.js|supabase-client\.js|enrichment\.js|index\.html|manifest\.json|favicon\.svg|sw\.js|[^/]+\.css|src\/.+\.js|icons\/.+\.png|assets\/brand\/.+\.png)$/;
 const FIXTURE_PASSWORD = "SyntheticUiOnly123!";
 const FIXTURE_USERS = [
   { id: "ui-admin", name: "Demo Admin", email: "admin@crm-ui.test", role: "admin", territory: "Mixed" },
@@ -20,11 +23,21 @@ function copyRuntime(source, destination, prefix = "") {
       copyRuntime(path.join(source, item.name), destination, `${relative}/`);
       continue;
     }
-    const allowed = /^(?:server\.js|client\.js|supabase-client\.js|enrichment\.js|index\.html|manifest\.json|favicon\.svg|sw\.js|[^/]+\.css|src\/.+\.js|icons\/.+\.png|assets\/brand\/.+\.png)$/.test(relative);
+    const allowed = RUNTIME_FILE.test(relative);
     if (!item.isFile() || !allowed) continue;
     const target = path.join(destination, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(source, item.name), target);
+  }
+}
+
+function copyBaselineRuntime(destination) {
+  const files = execFileSync("git", ["ls-tree", "-r", "--name-only", BASELINE_REF], {cwd:ROOT, encoding:"utf8"}).trim().split(/\r?\n/);
+  for (const file of files.filter(file => RUNTIME_FILE.test(file))) {
+    const target = path.resolve(destination, file);
+    if (!target.startsWith(`${path.resolve(destination)}${path.sep}`)) throw new Error("Invalid baseline runtime path");
+    fs.mkdirSync(path.dirname(target), {recursive:true});
+    fs.writeFileSync(target, execFileSync("git", ["show", `${BASELINE_REF}:${file}`], {cwd:ROOT, maxBuffer:32 * 1024 * 1024}));
   }
 }
 
@@ -73,7 +86,11 @@ function syntheticDatabase() {
 
 function createFixtureSnapshot() {
   const snapshot = fs.mkdtempSync(path.join(os.tmpdir(), "arg-crm-ui-baseline-"));
-  copyRuntime(ROOT, snapshot);
+  if (process.env.CRM_UI_REPLAY_BASELINE === "1") {
+    if (process.env.CRM_UI_SCREENSHOT_PHASE !== "before") throw new Error("Baseline replay requires Before screenshot phase");
+    copyBaselineRuntime(snapshot);
+    console.log(`Synthetic runtime source: ${BASELINE_REF}`);
+  } else copyRuntime(ROOT, snapshot);
   fs.mkdirSync(path.join(snapshot, "data"));
   fs.writeFileSync(path.join(snapshot, "data", "db.json"), JSON.stringify(syntheticDatabase()));
   if (fs.existsSync(path.join(snapshot, ".env"))) throw new Error("UI fixture must never contain .env");
@@ -111,4 +128,4 @@ function startFixture() {
 
 if (require.main === module) startFixture();
 
-module.exports = { FIXTURE_PASSWORD, FIXTURE_USERS, copyRuntime, syntheticDatabase, createFixtureSnapshot, startFixture };
+module.exports = { BASELINE_REF, FIXTURE_PASSWORD, FIXTURE_USERS, copyRuntime, syntheticDatabase, createFixtureSnapshot, startFixture };
