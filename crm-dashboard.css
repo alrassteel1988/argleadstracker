@@ -103,6 +103,10 @@ body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-heade
   line-height: 1.5;
   letter-spacing: 0;
   text-transform: none;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
 }
 
 body.salesman-dashboard-mode #appShell .salesman-simplified-metrics {
@@ -376,6 +380,13 @@ body.salesman-dashboard-mode #appShell .salesman-dashboard-lead-table {
 }
 
 @media (max-width: 720px) {
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header {
+    flex-flow: column nowrap !important;
+    align-items: stretch !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
   body.salesman-dashboard-mode #appShell .salesman-simplified-metrics {
     grid-template-columns: 1fr;
   }
@@ -512,6 +523,32 @@ body.admin-dashboard-mode #appShell #dashboardView .agent-collapsed { flex-wrap:
   body.admin-dashboard-mode #appShell #adminDashboardWorkRow { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 720px) {
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header h2 {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header-actions {
+    flex-flow: row wrap !important;
+    flex: 0 0 auto !important;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header-actions > label {
+    flex: 1 1 160px;
+    width: auto;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header select {
+    width: 100%;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
   body.admin-dashboard-mode #appShell #dashboardView .panel-header { padding: var(--crm-space-3); }
   body.admin-dashboard-mode #appShell #dashboardView .panel-header-actions { flex: 1 1 100%; justify-content: flex-start; }
   body.admin-dashboard-mode #appShell #dashboardView button { min-height: 44px; }

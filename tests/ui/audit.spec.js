@@ -8,7 +8,7 @@ const {inspectPresentation} = require("./presentation-audit");
 test.beforeEach(async ({page}) => blockExternalTraffic(page));
 
 test("presentation audit distinguishes real defects from approved navy gradients", async ({page}) => {
-  await page.setContent(`<style>
+  await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>
     body { margin:0; font:16px Arial; color:#000; background:#fff; }
     #mobileSidebar { background:linear-gradient(135deg,#0F2B47,#07192B); color:#fff; }
     #faint { color:#ddd; } #tiny { font-size:11px; }
@@ -25,6 +25,9 @@ test("presentation audit distinguishes real defects from approved navy gradients
     "clipped-text|#clipped", "contrast|#faint", "gradient|#decorative",
     "missing-icon|#textOnly", "small-text|#tiny"
   ].sort());
+  await page.setContent('<meta name="viewport" content="width=device-width, initial-scale=1"><style>html{overflow-x:hidden}body{margin:0}#appShell{width:calc(100vw + 20px)}</style><main id="appShell">Overflow probe</main>');
+  expect(await page.evaluate(() => document.documentElement.clientWidth)).toBe(page.viewportSize().width);
+  expect((await page.evaluate(inspectPresentation)).some(finding => finding.kind === "page-overflow")).toBe(true);
 });
 
 

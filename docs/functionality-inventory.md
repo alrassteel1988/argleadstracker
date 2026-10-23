@@ -1,5 +1,52 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+### Native Zoom and Mobile Overflow Checkpoint (23 October)
+
+`npm run test:ui:zoom` passes all six isolated role/zoom cases: Admin and
+Salesman at native Chromium page zoom 100%, 125% and 150%. The 72 captured
+screen/dialog states cover login, implemented main pages, six Lead Details tabs
+and Add Lead. The harness uses temporary synthetic profiles and confirms actual
+device-pixel ratio and visual viewport scale; this is not CSS scaling or pinch
+zoom. At a 1440x900 outer window, measured content widths are 1422, 1138 and
+948 CSS pixels respectively. It does not exercise every action at each zoom.
+
+The sweep found and fixed mobile Admin dashboard header controls wrapping into
+an overflowing second flex column, and two Salesman panel subtitles clipping at
+125%. Headers now grow in normal flow and subtitles wrap without shrinking
+text. The computed auditor now checks both body and document scroll widths;
+earlier zero-finding audits used the narrower document-only check and did not
+rule out hidden body overflow. The focused four-profile dashboard suite passes.
+The serial combined browser run passed all 36 functional checks, then failed
+two new mobile auditor-control checks. Their deliberate overflow expanded
+`innerWidth`; the corrected auditor uses layout-viewport `clientWidth`. Focused
+audit (8 checks) and dashboard (4 checks) reruns pass with that stronger check.
+The full combined command has not been rerun since that test correction.
+
+Final `npm run verify` passes. The initial native-zoom command passed six cases;
+the stricter-auditor rerun passed five but returned Salesman 125% to sign-in at
+PMR. Its isolated rerun passed without code changes. The failed request trace
+ended with an unfinished `/api/auth/me`, not a confirmed HTTP 401. The startup
+catch-all session reset exists in baseline source unchanged. The owner approved
+a separate authentication investigation; this intermittent result is not
+silently counted as a clean full-command pass or production readiness.
+
+Owner decision: linting is an approved separate follow-up, not a new toolchain
+inside this migration. No separate lint or TypeScript result is claimed.
+
+Remaining display-label review: `activityCardMarkup` and `activityTableStatus`
+still render stored activity stage strings directly. Their stage badges need
+the approved display-only mapping (for example LOST to Blocked) in a subsequent
+presentation step, preserving reminder/status semantics and stored history.
+The current typography/overflow audit does not check label vocabulary.
+
+Checkpoint files: `crm-dashboard.css`, `sw.js`, `package.json`,
+`playwright.ui.config.js`, `tests/activity-dashboard-latest.test.js`,
+`tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`,
+`tests/ui/README.md`, `tests/ui/audit.spec.js`, `tests/ui/dashboard.spec.js`,
+`tests/ui/presentation-audit.js`, `tests/ui/zoom.spec.js`, this inventory and
+`docs/open-questions.md`. No API, database, authentication or permission source
+was changed. Temporary artifacts and unrelated untracked files are excluded.
+
 ### Company AI Actions Checkpoint (23 October)
 
 Owner-approved exposure: active Lead Overview now includes the five existing
@@ -61,7 +108,7 @@ Every screen, field and action below is **PENDING full after-re-skin verificatio
 | `npm run test:sales-lead-summary-auth-loading` | PASS; includes refresh-session tests | PENDING |
 | `npm test` | PASS; unit, API/HTTP, UI contract and security suites | PENDING |
 | `npm run build` | PASS; existing build reports no asset compilation required | PENDING |
-| Separate lint | NOT AVAILABLE in package.json; no substitute tool invented | BLOCKED pending owner-approved command |
+| Separate lint | NOT AVAILABLE in package.json; no substitute tool invented | Owner approved a separate linting task; implementation PENDING |
 | Separate TypeScript check | NOT AVAILABLE; JavaScript application, no typecheck script | N/A unless owner configures tooling separately |
 | `npm run test:ui:baseline` | PASS: 8 tests across Admin/Salesman at desktop/mobile, synthetic local storage only | PENDING after styling; main flows, not every inventory item |
 | Production browser UAT scripts | NOT RUN: default to production, create a user and lead, perform cleanup | Never run without separate explicit production authorization |

@@ -16,6 +16,12 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     else expect(positions.intel.left).toBeGreaterThan(positions.plans.right);
     await expect(page.locator("#actionPlanPanel")).toHaveCSS("background-color", "rgb(254, 252, 253)");
     if (info.project.name.endsWith("mobile")) {
+      const clippedControls = await page.locator("#dashboardView .panel-header select, #dashboardView .panel-header-actions button").evaluateAll(elements => elements.filter(element => {
+        const box = element.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && (box.left < 0 || box.right > document.documentElement.clientWidth + 1);
+      }).map(element => ({id:element.id, text:element.textContent, right:element.getBoundingClientRect().right})));
+      expect(clippedControls).toEqual([]);
+      expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
       const report = await page.locator("#overdueBanner .overdue-action").boundingBox();
       const dismiss = await page.locator("#overdueBanner .overdue-dismiss").boundingBox();
       expect(Math.abs(report.y - dismiss.y)).toBeLessThanOrEqual(1);

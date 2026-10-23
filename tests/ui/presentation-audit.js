@@ -83,7 +83,9 @@ function inspectPresentation() {
       if (/^[×x‹›<>⋯…+\-]$/.test(element.textContent.trim()) && !element.getAttribute("aria-label") && !element.title) add("icon-name", element, "Icon-only control needs a descriptive name", element.textContent);
     }
   }
-  if (document.documentElement.scrollWidth > innerWidth + 1) findings.push({kind:"page-overflow",detail:`${document.documentElement.scrollWidth}/${innerWidth}px`});
+  const pageWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+  const viewportWidth = document.documentElement.clientWidth || innerWidth;
+  if (pageWidth > viewportWidth + 1) findings.push({kind:"page-overflow",detail:`${pageWidth}/${viewportWidth}px`});
   return findings;
 }
 

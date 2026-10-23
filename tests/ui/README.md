@@ -50,7 +50,7 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 - Supplied logo loading, white header/title accents, stable desktop rail,
   existing Admin account dialog through Tools, footer sign-out and mobile menu.
 - Mobile Home/Leads/Log/Map/Alerts navigation and their existing windows.
-- Salesman dashboard white/teal/navy surfaces, unchanged five stage actions,
+- Salesman dashboard white/teal/navy surfaces, six existing-stage actions,
   nonoverlapping action/list flow, 14px company names and page overflow checks.
 - Admin alert/KPI/work-row order, both dashboards' existing count-to-popup
   parity, summary search/reset, Escape and focus restoration; management plan
@@ -85,8 +85,37 @@ The presentation audit checks loaded role pages, six lead tabs, flag/correction/
 deletion/import/closure dialogs, text sizes, computed text contrast, clipping,
 icons and page overflow. Its controlled fixture must detect known defects while
 accepting the approved navy gradient. Gradient-stop compositing is conservative;
-bitmap content, native zoom, focus-state contrast and whole-chart/canvas pixels
+bitmap content, focus-state contrast and whole-chart/canvas pixels
 still need separate visual testing. A passing audit is not WCAG certification.
+Overflow checks compare body/document scroll width against the layout viewport
+(`documentElement.clientWidth`), not mobile `innerWidth`, which can expand to
+include overflowing content. Controlled pages include a device-width viewport.
+
+## Native browser zoom
+
+Run `npm run test:ui:zoom` separately, after the main browser suite. It requires
+the full Playwright Chromium binary (`channel: "chromium"`); the headless shell
+does not honor the same profile preferences. No new dependency is introduced.
+Each Admin/Salesman and 100%/125%/150% case has its own synthetic server, normal
+rate-limit bucket and fresh temporary browser profile. Do not share a profile
+or disable rate limits to make repeated page navigation pass.
+
+The harness sets Chromium's default storage-partition page-zoom preference in
+its own temporary profile, then verifies devicePixelRatio, visualViewport.scale
+and outer/content window dimensions. This is native page zoom, not CSS zoom,
+device emulation or pinch zoom. The outer window is 1440x900; window chrome
+means its content area is smaller. It visits login, implemented role pages,
+six Lead Details tabs and Add Lead, collecting computed-style findings and
+screenshots. It does not repeat every interactive workflow at every zoom.
+
+Chromium preference reference:
+https://chromium.googlesource.com/chromium/src/+/lkgr/chrome/browser/ui/zoom/chrome_zoom_level_prefs.cc
+
+Zoom uses loopback ports 4191-4196 by default, separate trace output under
+`arg-crm-ui-zoom-results` and JSON under `arg-crm-ui-native-zoom` in the OS
+temporary directory. Its screenshots use `90-zoom-*` filenames in the existing
+After artifact directory. Temporary profiles are retained. No normal browser
+profile, production record, provider credential or environment file is used.
 
 Quotes/Accounts remain the pre-existing sidebar shortcuts, not implemented
 modules. Duplicate legacy handlers return them to Dashboard. The audit captures

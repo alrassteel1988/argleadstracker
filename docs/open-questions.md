@@ -15,7 +15,7 @@ This register accompanies [functionality-inventory.md](functionality-inventory.m
 | Q-02 | Stored stages are NEW, CONTACTED, NEGOTIATION, WON, DORMANT, LOST. Design shows Prospect, Outreach, Engaged, Sampling, Active, Dormant. | RESOLVED 23 October: use proposal display labels for existing stages; owner clarified "Instead of Lost replace it with Blocked". Preserve canonical keys, request values, closure/risk rules, reason history and sort behavior. Sampling stays omitted because no independent stored stage exists. | None for display-only mapping |
 | Q-03 | Owner supplied landscape and portrait silk-white PNGs with embedded bottom logo, then Al-Ras-Steel-White-Logo.png. All three are preserved unchanged under assets/brand. | RESOLVED: use supplied artwork, preserve proportions and transparency. See assets/brand/README.md for provenance and hashes. No redraw or extraction needed. | None |
 | Q-04 | Existing Playwright spec defaults to production, reads .env and creates/deletes a disposable user/lead. Existing HTTP E2E is not browser coverage. | New test:ui:baseline uses a temporary allowlisted copy of runtime files, synthetic Admin/Salesman records, no .env, no inherited provider credentials, blocked server outbound fetch, and a loopback-only server. Screenshots/traces stay outside the repository. No production UAT performed. | Full screenshot/state matrix still requires coverage |
-| Q-05 | package.json has check/test/verify/build, but no lint or typecheck scripts. App is JavaScript, not TypeScript. | Use supported commands now. Owner must supply/approve additional tooling if separate lint/typecheck is mandatory; do not add a framework/compiler merely for this UI task. | Literal lint/typecheck acceptance |
+| Q-05 | package.json has check/test/verify/build, but no lint or typecheck scripts. App is JavaScript, not TypeScript. | Owner approved adding linting as a separate task. Do not introduce that toolchain during this UI migration; use existing syntax, verification and browser gates here. | Separate linting task approved, implementation pending; no lint pass claimed |
 | Q-06 | Quotes and Accounts buttons declare Pipeline destinations, but a second legacy nav handler returns them to Dashboard. Both handlers exist in the baseline; no quotes/accounts route exists. PDF pages 52-56 are Proposed. | Owner chose separate review tabs for the supplied proposal screenshots, not new modules or a routing repair. Keep the current runtime unchanged and document the existing shortcut defect. No quote builder, receivables, ERP sync or backend endpoints. | Existing shortcut workflow sign-off remains unavailable |
 | Q-07 | PDF describes dedicated Companies, Today, Statuses, Director AI, recovery/coaching screens. Existing equivalents are embedded dashboard/Pipeline/lead/tool surfaces; the exact five Director AI actions are not present as a matching standalone feature set. | Style only implemented equivalents. No new screens, buttons, calculations, ranking or automation. List omitted proposed actions during per-page comparison. | Exact screen-for-screen matching where behavior is absent |
 | Q-08 | Login contains Forgot password button without a handler/reset API. PDF adds Show password control, which is not implemented. | Keep existing recovery control styled without claiming it works; do not add Show/reset features within a visual-only migration. Functional password recovery needs a separate approved task. | Login functionality signoff must acknowledge existing gap |
@@ -377,4 +377,62 @@ Later owner decisions and completed phases supersede earlier pending notes.
 - Final phase verification: `npm run verify` PASS and `npm run test:ui:audit`
   PASS (8 checks, 68 captured role/screen states, zero computed-style findings).
   The combined 44-check UI chain has not yet been rerun after this phase.
-  Native browser zoom and full before/after visual acceptance are still pending.
+  Native browser zoom and full before/after visual acceptance were still pending
+  at that checkpoint; see the native zoom follow-up below for current evidence.
+
+## Native Zoom Follow-Up
+
+- `npm run test:ui:zoom` now passes six isolated Admin/Salesman cases at native
+  100%, 125% and 150% page zoom, with 72 captured states and zero findings under
+  the limited presentation auditor. See tests/ui/README.md for scope and method.
+- The initial repeated-zoom harness shared a normal report rate-limit bucket
+  and received a real 429. Each role/zoom now has its own fresh synthetic server;
+  no application limit, authorization predicate or API behavior was relaxed.
+- Testing found mobile Admin panel-header actions extending to approximately
+  660px in a 375px viewport. A legacy column/wrap height constraint was removed
+  locally so those controls stay in normal vertical flow. Body scroll width is
+  now checked in addition to document width, including a controlled regression
+  fixture that hides outer overflow but must still be reported.
+- Native Salesman 125% zoom found two clipped section subtitles. They now wrap
+  at the existing readable font size. All six native cases pass after the fix.
+- A subsequent concurrent full-workflow run hit its existing 60-second deadline
+  waiting for the Activity empty-filter result. The clean serial rerun is the
+  release gate; no timeout or workflow assertion was weakened to hide this.
+- The serial run passed all 36 functional checks and all four application-page
+  sweeps, but failed two new mobile auditor-control checks: the deliberate
+  overflow expanded `innerWidth` along with the page. The auditor now compares
+  against layout-viewport `clientWidth`, and its control fixture declares a
+  device-width viewport. This corrects a mobile false negative, not application
+  behavior. Focused audit/dashboard/zoom reruns are required after this change;
+  the earlier combined command's exit code remains a reported failure.
+- These are isolated local checks, not production UAT, provider success, full
+  WCAG certification or exhaustive visual approval. No production changes.
+- Final checkpoint: `npm run verify`, `npm run test:ui:audit` (8) and
+  `npm run test:ui:dashboard` (4) PASS. The original combined UI command is not
+  reported as a clean pass after its control-fixture failure; all 36 functional
+  checks had passed before that failure. A whole-chain rerun remains pending.
+- The strengthened native-zoom rerun passed five cases but Salesman 125%
+  returned to sign-in when navigating to PMR. Sanitized trace review found
+  `/api/auth/me` unfinished (status -1), with preceding API requests 200 and no
+  confirmed 401. An isolated rerun of that exact project passed without source
+  changes. The baseline `init()` has the same broad catch that clears the session
+  on startup failure. Causality is not yet established; do not call it repaired
+  or hide it with authentication retries. Owner approved separate investigation.
+- Focused reproduction command: `node -e 'process.env.CRM_UI_SUITE="zoom";process.env.CRM_UI_TEST_PORT="4191";require("child_process").execFileSync(process.execPath,["node_modules/playwright/cli.js","test","--config=playwright.ui.config.js","--project=salesman-desktop-zoom-125"],{stdio:"inherit"});'`.
+
+## Approved Separate Task: JavaScript Linting
+
+- Owner approved this follow-up on 23 October; implementation has not started.
+  It is separate from the presentation migration, not a claimed lint pass.
+- Inspect browser, Node/server and test environments before choosing configuration.
+  Add one reproducible supported lint command using the existing JavaScript
+  architecture; do not add TypeScript or change runtime module semantics.
+- Exclude generated assets, temporary snapshots, archives, backups, recordings,
+  uploads and private environment files. Do not read those as lint inputs.
+- Record the initial findings before corrections. Keep any necessary behavior
+  fixes separately scoped; do not run broad automatic rewrites or suppress
+  meaningful security/correctness findings just to produce a green command.
+- Acceptance: documented command, appropriate environment-specific globals,
+  deterministic local/CI results, existing verification and browser workflows
+  preserved. Dependency/configuration and CI changes belong to that task's
+  separate reviewed commit, not this UI checkpoint.

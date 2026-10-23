@@ -3,11 +3,13 @@ const path = require("node:path");
 const { defineConfig } = require("@playwright/test");
 
 const port = Number(process.env.CRM_UI_TEST_PORT || 4179);
-if (!Number.isInteger(port) || port < 1024 || port > 65532) throw new Error("Invalid fixture port range");
 const baseURL = `http://127.0.0.1:${port}`;
 const suite = process.env.CRM_UI_SUITE || "baseline";
-if (!["baseline", "shell", "data", "team", "reports", "dashboard", "dialogs", "audit"].includes(suite)) throw new Error("Invalid UI suite");
-const profiles = ["admin-desktop", "salesman-desktop", "admin-mobile", "salesman-mobile"];
+if (!["baseline", "shell", "data", "team", "reports", "dashboard", "dialogs", "audit", "zoom"].includes(suite)) throw new Error("Invalid UI suite");
+const profiles = suite === "zoom"
+  ? ["admin-desktop", "salesman-desktop"].flatMap(role => [1, 1.25, 1.5].map(zoom => ({name:`${role}-zoom-${Math.round(zoom * 100)}`, zoom})))
+  : ["admin-desktop", "salesman-desktop", "admin-mobile", "salesman-mobile"].map(name => ({name}));
+if (!Number.isInteger(port) || port < 1024 || port + profiles.length - 1 > 65535) throw new Error("Invalid fixture port range");
 
 module.exports = defineConfig({
   testDir: "./tests/ui",
@@ -16,7 +18,7 @@ module.exports = defineConfig({
   workers: 1,
   timeout: 60000,
   reporter: "list",
-  outputDir: path.join(os.tmpdir(), "arg-crm-ui-playwright-results"),
+  outputDir: path.join(os.tmpdir(), suite === "zoom" ? "arg-crm-ui-zoom-results" : "arg-crm-ui-playwright-results"),
   use: {
     baseURL,
     browserName: "chromium",
@@ -25,8 +27,9 @@ module.exports = defineConfig({
     serviceWorkers: "block",
     trace: "retain-on-failure"
   },
-  projects: profiles.map((name, index) => ({
+  projects: profiles.map(({name, zoom}, index) => ({
     name,
+    metadata: zoom ? {zoom} : {},
     use: {
       baseURL: `http://127.0.0.1:${port + index}`,
       viewport: name.endsWith("mobile") ? { width: 375, height: 812 } : { width: 1440, height: 900 },
