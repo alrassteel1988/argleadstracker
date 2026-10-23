@@ -30,9 +30,24 @@ body #appShell #salesmanSimplifiedDashboard :is(.salesman-simplified-block, .sal
 body #appShell #salesmanSimplifiedDashboard :is(.salesman-summary-card-label, .salesman-summary-card-action, .salesman-summary-card-copy small, .salesman-stage-label, .salesman-stage-action) {
   font-size: 12px !important;
 }
+body #appShell .salesman-triage-card {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: var(--crm-space-2);
+}
+body #appShell .salesman-triage-card > * { grid-column: 1 / -1; }
+body #appShell .salesman-triage-card > .salesman-triage-kicker {
+  grid-column: 2;
+  grid-row: 1;
+}
 body #appShell .salesman-triage-card::before {
   content: "";
+  position: static;
+  inset: auto;
   display: inline-block;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
   width: 18px;
   height: 18px;
   background: currentColor;

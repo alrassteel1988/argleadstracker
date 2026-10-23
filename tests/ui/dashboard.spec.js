@@ -44,7 +44,35 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     const clipped = await page.locator("#adminDashboardBottomRow .dashboard-collapsible-body-inner").evaluateAll(elements => elements.map(e => e.scrollHeight - e.clientHeight));
     expect(Math.max(...clipped)).toBeLessThanOrEqual(1);
     await expect(page.locator(".market-snapshot-bar-track > i").first()).toHaveCSS("background-color", "rgb(91, 192, 190)");
-  } else await expect(page.locator("#adminDashboardWorkRow")).toBeHidden();
+  } else {
+    await expect(page.locator("#adminDashboardWorkRow")).toBeHidden();
+    const actionCards = page.locator("#salesmanSimplifiedActions .salesman-triage-card");
+    await expect(actionCards).toHaveCount(3);
+    const iconLayouts = await actionCards.evaluateAll(elements => elements.map(element => {
+      const icon = getComputedStyle(element, "::before");
+      const label = element.querySelector(".salesman-triage-kicker");
+      const cardBox = element.getBoundingClientRect();
+      const labelBox = label.getBoundingClientRect();
+      return {
+        position: icon.position,
+        row: icon.gridRowStart,
+        column: icon.gridColumnStart,
+        labelRow: getComputedStyle(label).gridRowStart,
+        labelColumn: getComputedStyle(label).gridColumnStart,
+        labelInset: labelBox.left - cardBox.left,
+        overflow: element.scrollWidth - element.clientWidth
+      };
+    }));
+    for (const layout of iconLayouts) {
+      expect(layout.position).toBe("static");
+      expect(layout.row).toBe("1");
+      expect(layout.column).toBe("1");
+      expect(layout.labelRow).toBe("1");
+      expect(layout.labelColumn).toBe("2");
+      expect(layout.labelInset).toBeGreaterThanOrEqual(30);
+      expect(layout.overflow).toBeLessThanOrEqual(1);
+    }
+  }
 
   const selector = role === "admin" ? "#metricsPanel [data-summary-card]" : "#salesmanSimplifiedMetrics [data-summary-card], #salesmanSimplifiedPipeline [data-summary-card]";
   const cards = await page.locator(selector).evaluateAll(elements => elements.map(e => ({

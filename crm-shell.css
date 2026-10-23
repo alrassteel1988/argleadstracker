@@ -439,6 +439,10 @@ body #authScreen .auth-trust-row span {
     min-height: 44px;
   }
 
+  body #mobileSidebar .nav-item {
+    min-height: 44px;
+  }
+
   body #appShell #mobileMenuToggle {
     display: inline-flex;
     min-width: 44px;

@@ -1,5 +1,40 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+### Action-Card Alignment and AI Dialog Capture Checkpoint (23 October)
+
+The revised 57-page PDF remains authoritative, including Salesman Home page 8.
+Live local review uses synthetic records, not production data. Existing sections
+absent from the proposal remain available and use the shared presentation layer.
+
+Salesman triage icons inherited absolute positioning from an old decorative
+overlay. The regression first failed on `position: absolute`; after resetting
+that positioning it also caught a desktop-only inherited flex layout. The shared
+card now explicitly uses a grid, with the icon and kicker in its first row and
+all remaining content spanning both columns. Desktop/mobile dashboard regression
+PASS (4), including the existing nine Salesman/four Admin summary drill-downs.
+Canonical `npm run verify` PASS. Cache revision is
+`arg-pwa-v105-revised-ui-mobile-nav`; no API/auth/data behavior changed.
+
+The company AI browser test now captures the existing flag confirmation, four
+CRM-data fallback results and provider-error dialog while they are open. It
+checks panel/header colors, keyboard focus, bounds, field readability and the
+shared presentation audit. These are local synthetic/provider-disabled states,
+not proof of external AI generation, mail sending or attention-flag persistence.
+`npm run test:ui:dialogs` PASS (8), including six new open-dialog captures per
+profile (24 total). Previous complete-chain/zoom results apply to the preceding
+source, not an unperformed rerun of those entire commands for this small change.
+
+The subsequent presentation sweep exposed sidebar rows below 44px while a
+mobile shortcut menu was still visible (seven tests passed, Salesman mobile
+failed). A focused shell check reproduced 41.1875px with the menu fully open,
+confirming a real 40px minimum rather than only a transition measurement.
+The shared mobile sidebar navigation minimum is now 44px; desktop width and
+navigation handlers are untouched. Shell and presentation gates are rerun for
+that final adjustment rather than calling the first sweep a pass.
+Final shell suite PASS (4), final presentation sweep PASS (8), and final
+canonical verification PASS. Dedicated
+lint/typechecking and external-provider/device UAT are still not claimed.
+
 ### Dataset-Ready Comparison Checkpoint (23 October)
 
 An additional capture-only gate now pairs primary screens from the fixed original

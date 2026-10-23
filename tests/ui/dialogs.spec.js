@@ -1,9 +1,11 @@
 const { test, expect } = require("@playwright/test");
 const { capture, login, blockExternalTraffic } = require("./helpers");
+const { inspectPresentation } = require("./presentation-audit");
 
 test.beforeEach(async ({page}) => blockExternalTraffic(page));
 
 test("existing company AI actions are exposed on Lead Details", async ({page}, info) => {
+  test.setTimeout(90000);
   await login(page, info);
   await page.goto("/leads/ui-lead-1?tab=overview");
   const actions = page.locator("#leadDetailView [data-company-ai-action]");
@@ -18,6 +20,9 @@ test("existing company AI actions are exposed on Lead Details", async ({page}, i
   });
   await page.locator('[data-company-ai-action="flag"]').click();
   await expect(page.locator("#flagAttentionDialog")).toBeVisible();
+  await checkDialog(page, "flagAttentionDialog", info.project.name.endsWith("mobile"));
+  expect(await page.evaluate(inspectPresentation, {checkTouchTargets:true})).toEqual([]);
+  await capture(page, info, "61-company-ai-flag");
   await page.locator("#closeFlagAttention").click();
   expect(mutations).toBe(0);
   for (const action of ["prepare", "next", "email", "summary"]) {
@@ -27,12 +32,18 @@ test("existing company AI actions are exposed on Lead Details", async ({page}, i
     expect((await requestPromise).postDataJSON()).toEqual({action});
     await expect(page.locator("#aiActionDialog")).toBeVisible();
     await expect(page.locator("#aiActionDialog")).toContainText("CRM-data fallback was used.");
+    await checkDialog(page, "aiActionDialog", info.project.name.endsWith("mobile"));
+    expect(await page.evaluate(inspectPresentation, {checkTouchTargets:true})).toEqual([]);
+    await capture(page, info, `61-company-ai-result-${action}`);
     await page.locator("#aiActionDialog").press("Escape");
   }
   await page.goto("/leads/ui-lead-1?tab=overview");
   await page.route("**/api/leads/ui-lead-1/ai-actions", route => route.fulfill({status:503, contentType:"application/json", body:JSON.stringify({error:"Synthetic provider unavailable"})}));
   await page.locator('[data-company-ai-action="prepare"]').click();
   await expect(page.locator("#aiActionDialog")).toContainText("Couldn't generate this right now.");
+  await checkDialog(page, "aiActionDialog", info.project.name.endsWith("mobile"));
+  expect(await page.evaluate(inspectPresentation, {checkTouchTargets:true})).toEqual([]);
+  await capture(page, info, "61-company-ai-error");
   await page.locator("#aiActionDialog").press("Escape");
   await capture(page, info, "61-company-ai-actions");
 });

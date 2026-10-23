@@ -578,3 +578,48 @@ Later owner decisions and completed phases supersede earlier pending notes.
   dependency, route, API, role rule, schema, production access or deployment.
 - Exact focused command (failed before CSS correction, passed afterward):
   `node -e 'process.env.CRM_UI_SUITE="baseline";require("child_process").execFileSync(process.execPath,["node_modules/playwright/cli.js","test","--config=playwright.ui.config.js","--project=admin-mobile","-g","sign-in validation"],{stdio:"inherit"});'`.
+
+## Reference Reconfirmation and Action-Card Alignment
+
+- The owner reattached `Revised CRM UI Design Proposal.pdf`; 57 pages and its
+  SHA-256 are recorded in the acceptance map. Salesman Home page 8 was visually
+  inspected again. The former Bauhaus scheme is not the new visual reference.
+- Shared triage icons inherited an absolute decorative-overlay position. A new
+  browser assertion first failed (`static` expected, `absolute` received).
+  Resetting position alone exposed another desktop override: flex layout left
+  the label only 13px from the edge. Explicit grid layout now places icon and
+  label in the same first row; the rest of each card spans both columns.
+- Focused dashboard command, failed before correction and PASS (4) afterward:
+  `node -e "process.env.CRM_UI_SUITE='dashboard';require('child_process').execFileSync(process.execPath,['node_modules/playwright/cli.js','test','--config=playwright.ui.config.js'],{stdio:'inherit'})"`.
+- `npm run test:ui:dialogs` PASS (8), including flag confirmation, four existing
+  AI fallback results and a synthetic 503 error. Their 24 new screenshots were
+  checked for exact 1440/375 pixel widths. No attention flag was submitted and
+  no real provider was called. The expanded AI case has a 90-second scenario
+  budget for six additional audits/captures; expectation limits are unchanged.
+- `npm run verify`, `node --check tests/ui/dashboard.spec.js` and
+  `node --check tests/ui/dialogs.spec.js` PASS. Previous whole-chain and native
+  zoom evidence is historical to the preceding checkpoint, not rerun here.
+- No route, API, permission, auth, schema, saved data, dependency or production
+  operation changed. The live preview contains synthetic `.test` records.
+  Manual proposal fidelity approval and the remaining state matrix are pending.
+
+- The first final-source presentation sweep passed seven cases and failed
+  Salesman mobile with 40/41.2px sidebar rows after Quotes' existing shortcut.
+  A focused fully-open menu regression reproduced 41.1875px, eliminating the
+  closing-transition-only explanation. The shared <=1024px sidebar rule now
+  requires 44px navigation rows; desktop width and route handlers are unchanged.
+  The test asserts every visible navigation row, including the active one.
+  Shell/presentation/canonical checks are rerun for this adjustment. A combined
+  shell/audit launcher attempt failed in PowerShell argument parsing before
+  any tests started; the existing package commands are used separately instead.
+  Final `npm run test:ui:shell` PASS (4), final `npm run test:ui:audit` PASS (8)
+  and final `npm run verify` PASS. Cache
+  revision `arg-pwa-v105-revised-ui-mobile-nav` includes both presentation fixes.
+
+- Checkpoint files: `crm-dashboard.css`, `crm-shell.css`, `sw.js`,
+  `tests/activity-dashboard-latest.test.js`, `tests/admin-dashboard-layout.test.js`,
+  `tests/global-bauhaus-system.test.js`, `tests/ui/dashboard.spec.js`,
+  `tests/ui/shell.spec.js`, `tests/ui/dialogs.spec.js`, `tests/ui/README.md`,
+  `docs/functionality-inventory.md`, `docs/open-questions.md` and
+  `docs/ui-proposal-acceptance.md`. No component, dependency or backend file was
+  added. All original unrelated untracked paths remain excluded.

@@ -194,6 +194,14 @@ or set `CRM_UI_ARTIFACT_DIR` to another
 local output directory. Traces on failure go to `arg-crm-ui-playwright-results`
 under the OS temporary directory. These outputs are not staged with source code.
 
+The dialogs suite also captures `61-company-ai-flag`,
+`61-company-ai-result-{prepare,next,email,summary}` and `61-company-ai-error`
+while those existing dialogs are open. Both roles and viewport profiles use
+synthetic records and disabled external providers. Each state is checked for
+computed presentation, focus, bounds and mobile touch sizes. Opening/cancelling
+the flag dialog must not issue an attention-flag write; generating a fallback
+result is not evidence that a production AI or mail provider works.
+
 `CRM_UI_TEST_PORT` selects the first of four consecutive loopback ports, default
 4179 through 4182. An occupied port fails the run; the suite never reuses an
 unknown server. Temporary snapshots are retained, not removed by this suite.

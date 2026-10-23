@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v103-revised-ui-dialog-bounds";
+const CACHE_VERSION = "arg-pwa-v105-revised-ui-mobile-nav";
 const APP_SHELL = [
   "/",
   "/index.html",

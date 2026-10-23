@@ -6,6 +6,12 @@ visual approval or authority to add features. All runtime sources and business
 rules remain those of the existing CRM. See `functionality-inventory.md` and
 `open-questions.md` for the full action inventory, exceptions and decisions.
 
+The owner reattached and reconfirmed this reference on 23 October. Verified
+source SHA-256:
+`29ca3eba15864e96da2db4827d513e247871f04a6db31baaedfd8363fef7c645`.
+Salesman Home is page 8. Earlier Bauhaus guidance is not the visual target for
+this migration; existing workflows absent from the mockups remain functional.
+
 ## Evidence Rules
 
 - Automated presentation checks cover computed typography, contrast, blur,
@@ -99,8 +105,11 @@ workflow pass and is not hidden by the capture process.
 ## Still Required Before UI Sign-Off
 
 1. Complete reference comparison and secondary state captures, including
-   duplicate lead, real Places-result equivalent, AI results/confirmations,
-   recording/media, offline/outbox and pending deletion review cards.
+   duplicate lead, real Places-result equivalent, recording/media, offline/outbox
+   and pending deletion review cards. Current AI flag/four fallback results/error
+   states now have 24 After captures and passing computed presentation checks
+   through the dialogs suite; historical Before equivalence and visual proposal
+   approval for those AI states remain pending.
 2. Current complete interactive chain PASS (48), native zoom PASS (6), and
    canonical verification PASS. Rerun affected gates after any later UI changes.
    These do not clear the separately recorded startup-authentication weakness.

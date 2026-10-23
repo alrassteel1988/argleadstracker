@@ -28,6 +28,12 @@ test("shared shell branding, navigation and existing management actions", async 
     await page.locator("#mobileMenuToggle").click();
     await expect(page.locator("#mobileMenuToggle")).toHaveAttribute("aria-expanded", "true");
     await expect.poll(async () => Math.abs((await page.locator("#mobileSidebar").boundingBox()).x)).toBeLessThanOrEqual(1);
+    const navigationTargets = await page.locator("#mobileSidebar .nav-item:visible").evaluateAll(elements => elements.map(element => ({
+      name: element.textContent.trim(),
+      height: element.getBoundingClientRect().height
+    })));
+    expect(navigationTargets.length).toBeGreaterThanOrEqual(5);
+    for (const target of navigationTargets) expect(target.height, target.name).toBeGreaterThanOrEqual(44);
   } else {
     const width = await page.locator("#mobileSidebar").evaluate(element => element.getBoundingClientRect().width);
     expect(width).toBe(188);
