@@ -37,6 +37,7 @@ for (const type of [
   "salesmanStageContacted",
   "salesmanStageNegotiation",
   "salesmanStageWon",
+  "salesmanStageDormant",
   "salesmanStageLost",
   "salesmanActionOverdue",
   "salesmanActionCoverageGap",

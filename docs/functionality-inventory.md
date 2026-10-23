@@ -384,6 +384,44 @@ and exclusions; no production browser tests or provider operations were run.
   refinement is covered by the fresh dashboard suite and token contract test.
   Full provider/error/zoom coverage and final all-screen comparison remain pending.
 
+### Dialogs and approved display-label phase
+
+- Compared proposal dialog pages 36 and 44-47 with native forms. New shared
+  `crm-dialogs.css` styles navy/white/teal surfaces, gold title accents, readable
+  labels/fields, clear focus and disabled/error states, responsive bounds and
+  scrolling. Existing IDs, field names, state, API calls and event handlers stay.
+- Title rendering uses the already escaped `pageTitleMarkup` helper. Native
+  dialog close/Escape/backdrop and AI save-confirmation mechanics are unchanged.
+  Stepper numbers serve as their own navigation markers; removed duplicate
+  auto-inserted arrows that caused excess height and narrow text columns.
+- Owner clarified Lost should display as Blocked. The approved proposal display
+  map is Prospect/Outreach/Engaged/Active/Dormant/Blocked for unchanged canonical
+  NEW/CONTACTED/NEGOTIATION/WON/DORMANT/LOST. Sampling remains omitted. Form values,
+  counters, datasets, closure/risk rules, reason history and API fields stay.
+  Pipeline sorting retains the pre-migration canonical-label comparison.
+- Four-profile dialog checks cover required-company validation, Places, PMR,
+  voice/attachment control presence, activity save/read-back, AI prompt entry,
+  bounds/readability, filter values and raw stage persistence. A pre-existing
+  duplicate saveActivity ID required a scoped test locator, not an app-ID rename.
+- Keyboard checks exposed a genuine specificity conflict: the shared control
+  rule overrode amber header focus with navy. The open-dialog selector now wins;
+  tests navigate by Tab/Shift+Tab instead of relying on programmatic focus.
+- `npm run verify`: PASS after the final primary-button consolidation and the
+  owner-requested Dormant tile. The clean expanded 32-flow suite passed before
+  the Dormant addition (8 core, 4 shell, 4 data, 4 team, 4 report, 4 dashboard,
+  4 dialog checks). The authenticated API read proves LOST/NEW remain stored
+  unchanged. Earlier keyboard-focus failures were fixed, not waived.
+- Dormant already exists in the data model and stage selectors. Added its
+  assigned-record count and shared summary popup to the dashboard status row,
+  between Active and Blocked. The popup describes previously active leads that
+  have gone quiet; no automatic reclassification or closure-rule change occurs.
+  Six desktop tiles reuse the existing responsive grid and mobile breakpoints.
+  After this addition, `npm run test:ui:dialogs` passed all four role/viewport
+  profiles (1.2m), including Dormant popup count, description, Escape close and
+  canonical DORMANT selector-value assertions.
+  Real microphone/provider success, every deletion/import/handoff/error state,
+  native zoom and final all-screen comparison remain pending.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.

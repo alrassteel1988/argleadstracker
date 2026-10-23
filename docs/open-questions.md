@@ -12,7 +12,7 @@ This register accompanies [functionality-inventory.md](functionality-inventory.m
 | ID | Observation | Decision needed / safe default | Blocks |
 | --- | --- | --- | --- |
 | Q-01 | Prompt names Al_Ras_Steel_CRM_Comprehensive_UI_Proposal_A4.pdf; actual attachment is Revised CRM UI Design Proposal.pdf, 57 pages. Cover says developer brief v22; internal footer says V18. | RESOLVED: owner confirmed "Use the attached revised proposal." | None |
-| Q-02 | Stored stages are NEW, CONTACTED, NEGOTIATION, WON, DORMANT, LOST. Design shows Prospect, Outreach, Engaged, Sampling, Active, Dormant. Owner replied "remove Sampling and Lost." | Sampling can be omitted because no independent stored stage exists. Lost removal conflicts with preserving every existing feature and status; clarification requested on whether only the dashboard tile/design chip is meant. Until resolved, retain Lost records, options, counts and actions. Other display mappings below remain unapproved. | Stage/pill/title migration |
+| Q-02 | Stored stages are NEW, CONTACTED, NEGOTIATION, WON, DORMANT, LOST. Design shows Prospect, Outreach, Engaged, Sampling, Active, Dormant. | RESOLVED 23 October: use proposal display labels for existing stages; owner clarified "Instead of Lost replace it with Blocked". Preserve canonical keys, request values, closure/risk rules, reason history and sort behavior. Sampling stays omitted because no independent stored stage exists. | None for display-only mapping |
 | Q-03 | Owner supplied landscape and portrait silk-white PNGs with embedded bottom logo, then Al-Ras-Steel-White-Logo.png. All three are preserved unchanged under assets/brand. | RESOLVED: use supplied artwork, preserve proportions and transparency. See assets/brand/README.md for provenance and hashes. No redraw or extraction needed. | None |
 | Q-04 | Existing Playwright spec defaults to production, reads .env and creates/deletes a disposable user/lead. Existing HTTP E2E is not browser coverage. | New test:ui:baseline uses a temporary allowlisted copy of runtime files, synthetic Admin/Salesman records, no .env, no inherited provider credentials, blocked server outbound fetch, and a loopback-only server. Screenshots/traces stay outside the repository. No production UAT performed. | Full screenshot/state matrix still requires coverage |
 | Q-05 | package.json has check/test/verify/build, but no lint or typecheck scripts. App is JavaScript, not TypeScript. | Use supported commands now. Owner must supply/approve additional tooling if separate lint/typecheck is mandatory; do not add a framework/compiler merely for this UI task. | Literal lint/typecheck acceptance |
@@ -32,19 +32,25 @@ This register accompanies [functionality-inventory.md](functionality-inventory.m
 | Q-19 | Existing unit/UI contract tests pin old color literals/CSS structure. | Review and update only obsolete presentation assertions alongside replacement visual/accessibility coverage. Do not weaken ownership, API, form validation, private-file, cache or approval protections. | Test-migration reviews |
 | Q-20 | PDF sample figures, names, health classifications, counts and timings are prototype data. | Preserve real application data bindings and calculations. Never copy example values or change filtering to make screenshots resemble samples. | Every visual review |
 
-## Proposed display-only status mapping (NOT IMPLEMENTED)
+## Display-only status mapping
 
 | Stored value | Current display | Proposed display | Status |
 | --- | --- | --- | --- |
-| NEW | New | Prospect | Owner approval pending |
-| CONTACTED | Contacted | Outreach | Owner approval pending |
-| NEGOTIATION | Negotiation | Engaged | Owner approval pending |
-| WON | Won | Active | Owner approval pending |
-| DORMANT | Dormant | Dormant | No semantic change; owner acknowledgement pending |
-| LOST | Lost | Lost | Must stay distinct; proposal omits it |
+| NEW | Prospect | Prospect | Applied from approved proposal, display only |
+| CONTACTED | Outreach | Outreach | Applied from approved proposal, display only |
+| NEGOTIATION | Engaged | Engaged | Applied from approved proposal, display only |
+| WON | Active | Active | Applied from approved proposal, display only |
+| DORMANT | Dormant | Dormant | Same display; no semantic change |
+| LOST | Blocked | Blocked | Owner approved 23 October; display only, stored value remains LOST |
 | No independent stored value | N/A | Sampling | Omit; do not create or infer a new stage |
 
 Existing contact-rule aliases already map both ENGAGED and SAMPLING to NEGOTIATION, so they cannot be converted back into two truthful independent counts without changing the data model. This visual-only task does not authorize that change. Any display mapping must be applied consistently to labels/options/chart legends, while option values, API payloads, filters, calculations and exports retain their current contracts unless a separate display-only export decision is approved.
+
+Blocked is the display name for the existing closed LOST stage, not a new
+temporary hold state. Existing loss reasons, history fields and closure/risk
+calculations remain. A different operational meaning requires a separate task.
+Pipeline stage sorting retains the original canonical-label comparison, and
+server-generated exports still receive only record IDs and existing date fields.
 
 ## Omitted proposal-only functionality
 
@@ -259,3 +265,29 @@ Do not hide existing counterparts just because the proposed version is out of sc
   changing row order, percentages, filters or inline data-derived widths.
   Native zoom, external providers, all modal states and full design comparison
   remain pending; this checkpoint is not full migration or production approval.
+
+## Dialog and status-label checkpoint
+
+- Shared native dialogs and sheets keep every existing form field, hook,
+  validation, role guard, voice control, attachment limit and AI confirmation.
+  Title markup uses the existing escaping helper; no raw record HTML is inserted.
+- Owner approved Blocked in place of Lost. All six proposal display labels are
+  mapped over existing stored stages; no new stage/alias/database field is added.
+  Existing closed-stage behavior and historical loss reasons remain. Exports
+  retain their server contracts; display labels do not rewrite record values.
+- Browser save coverage found a pre-existing duplicate saveActivity ID in the
+  legacy detail page and the modal. Tests scope to the modal; changing app IDs
+  is outside this visual-only task and has not been attempted.
+- Initial programmatic-focus testing did not establish keyboard visibility; real
+  Tab/Shift+Tab then confirmed a conflicting shared rule overriding amber focus.
+  Corrected the open-dialog selector and retained the stronger keyboard check.
+- The clean expanded 32-flow regression passed, including activity save/read-back
+  and raw API stage verification. Final verification also passes after the
+  owner-requested Dormant tile. Real microphone/provider success, all
+  import/deletion/handoff/error states and native zoom remain unverified.
+- Dormant is an existing stored status, not a new database value. Its dashboard
+  tile uses the same current-assignment selector as the shared popup; stage
+  selectors already expose it. Previously active, now quiet is descriptive only:
+  no time-based automatic stage change or new business rule is introduced.
+  The final four-profile dialog rerun passed with the Dormant popup and selector
+  assertions; the complete migration and production UAT remain outstanding.

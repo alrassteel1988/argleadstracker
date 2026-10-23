@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="/crm-activity.css?v=1">
   <link rel="stylesheet" href="/crm-team.css?v=1">
   <link rel="stylesheet" href="/crm-reports.css?v=1">
+  <link rel="stylesheet" href="/crm-dialogs.css?v=1">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
   <body>
@@ -1197,7 +1198,7 @@
       <form method="dialog" class="lead-form" id="pmrForm">
         <div class="dialog-header">
           <div>
-            <h2>File Post-Meeting Report</h2>
+            <h2>File Post-Meeting <em class="crm-title-accent">Report</em></h2>
             <p>Structured PMR intelligence is linked to this company and activity log.</p>
           </div>
           <button type="button" class="ghost-button" id="closePmrForm">Close</button>
@@ -1240,7 +1241,7 @@
       <form method="dialog" class="lead-form" id="activityEditForm">
         <div class="dialog-header">
           <div>
-            <h2>Add Activity Correction</h2>
+            <h2>Add Activity <em class="crm-title-accent">Correction</em></h2>
             <p>Activity history is append-only. This creates a new correction entry and keeps the original record unchanged.</p>
           </div>
           <button type="button" class="ghost-button" id="closeActivityEditForm">Close</button>
@@ -1289,7 +1290,7 @@
       <form method="dialog" class="lead-form lost-reason-form" id="lostReasonForm">
         <div class="dialog-header">
           <div>
-            <h2>Why was this deal lost?</h2>
+            <h2>Why was this deal <em class="crm-title-accent">lost?</em></h2>
             <p id="lostReasonLeadName">Lead</p>
           </div>
           <button type="button" class="ghost-button" id="closeLostReasonForm">Close</button>
@@ -1330,7 +1331,7 @@
       <form method="dialog" class="lead-form" id="placesForm">
         <div class="dialog-header">
           <div>
-            <h2>Search Google Places</h2>
+            <h2>Search Google <em class="crm-title-accent">Places</em></h2>
             <p>Find a UAE business, then apply its public details to a new lead.</p>
           </div>
           <button type="button" class="ghost-button" id="closePlacesSearch">Close</button>
@@ -1349,7 +1350,7 @@
       <form method="dialog" class="lead-form" id="salesmanForm">
         <div class="dialog-header">
           <div>
-            <h2>Create Salesman Account</h2>
+            <h2>Create Salesman <em class="crm-title-accent">Account</em></h2>
             <p>Only the administrator can create new salesman sign-in accounts.</p>
           </div>
           <button type="button" class="ghost-button" id="closeSalesmanForm">Close</button>
@@ -1424,7 +1425,7 @@
         <div class="sheet-handle"></div>
         <div class="dialog-header">
           <div>
-            <h2>Quick Log Activity</h2>
+            <h2>Quick Log <em class="crm-title-accent">Activity</em></h2>
             <p>Capture the visit, call, email, quotation, or order in under 30 seconds.</p>
           </div>
           <button type="button" class="ghost-button" id="closeQuickLog">Close</button>
@@ -1575,7 +1576,7 @@
         <header class="activity-workflow-header activity-workflow-header--danger">
           <div>
             <span>Approval required</span>
-            <h2 id="activityDeletionTitle">Request Activity Deletion</h2>
+            <h2 id="activityDeletionTitle">Request Activity <em class="crm-title-accent">Deletion</em></h2>
           </div>
           <button type="button" data-close-activity-deletion aria-label="Close deletion request">&times;</button>
         </header>
@@ -1610,7 +1611,7 @@
         <header class="activity-workflow-header">
           <div>
             <span>Management review</span>
-            <h2 id="activityDeletionQueueTitle">Activity Deletion Requests</h2>
+            <h2 id="activityDeletionQueueTitle">Activity Deletion <em class="crm-title-accent">Requests</em></h2>
           </div>
           <button type="button" data-close-activity-queue aria-label="Close deletion request queue">&times;</button>
         </header>
@@ -1641,7 +1642,7 @@
         <div class="sheet-handle"></div>
         <div class="dialog-header">
           <div>
-            <h2>Pending Changes</h2>
+            <h2>Pending <em class="crm-title-accent">Changes</em></h2>
             <p>Items saved on this device that still need to sync.</p>
           </div>
           <button type="button" class="ghost-button" id="closePendingChanges">Close</button>
@@ -1656,7 +1657,7 @@
         <div class="sheet-handle"></div>
         <div class="dialog-header">
           <div>
-            <h2>Nearby Map Links</h2>
+            <h2>Nearby Map <em class="crm-title-accent">Links</em></h2>
             <p>Use saved Google Maps links or coordinates for field navigation.</p>
           </div>
           <button type="button" class="ghost-button" id="closeMobileMap">Close</button>
@@ -1675,7 +1676,7 @@
         <header class="ai-assistant-header">
           <div>
             <span class="ai-assistant-kicker">Voice-enabled CRM tools</span>
-            <h2 id="aiAssistantTitle">AI Sales Assistant <small>Beta</small></h2>
+            <h2 id="aiAssistantTitle">AI Sales <em class="crm-title-accent">Assistant</em> <small>Beta</small></h2>
           </div>
           <button class="ai-assistant-close" id="closeAiAssistant" type="button" aria-label="Close AI Sales Assistant">&times;</button>
         </header>

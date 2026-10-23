@@ -4,7 +4,8 @@ Run `npm run test:ui` from the repository root. It runs `test:ui:baseline` (8
 core-flow tests), `test:ui:shell` (4 shell/navigation tests), then `test:ui:data`
 (4 Pipeline data-surface tests), then `test:ui:team` (4 directory/role checks),
 then `test:ui:reports` (4 authoring/review checks) and `test:ui:dashboard`
-(4 dashboard/counter/drill-down checks),
+(4 dashboard/counter/drill-down checks) and `test:ui:dialogs` (4 shared-dialog
+and display-label checks),
 each with fresh servers. Chromium must already
 be available through the existing Playwright dependency. This suite does not
 use the production add-lead script or production credentials.
@@ -62,6 +63,10 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 - Additional desktop effective-layout widths of 1280, 1152 and 960px. The latter
   two approximate available layout widths at 125%/150% on a 1440px screen; these
   are not a claim of native browser-zoom testing.
+- Shared Add Lead/Places/Activity/PMR/AI dialog surfaces and bounds, mobile
+  stepper/control sizing, required company validation and an activity save
+  verified after navigation. Displayed Blocked/Prospect choices retain LOST/NEW
+  values; an authenticated synthetic API read verifies stored stages unchanged.
 
 This is a main-flow baseline, not complete coverage of every inventory item.
 It does not verify production Supabase RLS, external providers, microphone

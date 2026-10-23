@@ -770,6 +770,8 @@ const KANBAN_STAGES = [
   { key: "LOST", label: "Lost", color: "stage-lost", aliases: ["LOST", "AT RISK"] }
 ];
 const CANONICAL_STAGE_KEYS = KANBAN_STAGES.map(stage => stage.key);
+// Display labels never replace stored stage keys or workflow rules.
+const STAGE_DISPLAY_LABELS = Object.freeze({ NEW: "Prospect", CONTACTED: "Outreach", NEGOTIATION: "Engaged", WON: "Active", DORMANT: "Dormant", LOST: "Blocked" });
 const CANONICAL_STAGE_SET = new Set(CANONICAL_STAGE_KEYS);
 const CLOSED_STAGE_KEYS = new Set(["WON", "DORMANT", "LOST"]);
 
@@ -2093,7 +2095,7 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
     && item.request_status === "pending"
   ));
   activityDetailsSelection = { leadId, activityIndex, activity, pendingRequest };
-  els.activityDetailsTitle.textContent = `${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`;
+  els.activityDetailsTitle.innerHTML = pageTitleMarkup(`${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`);
   const attachments = (activity.attachments || []).filter(item => !item.removed_at);
   const history = activity.audit_history || [];
   els.activityDetailsBody.innerHTML = `
@@ -2991,7 +2993,7 @@ function renderAiActionDialog() {
   if (!els.aiActionDialog) return;
   const lead = aiLead();
   const action = state.aiAction.action;
-  els.aiActionTitle.textContent = state.aiAction.label || AI_ACTION_LABELS[action] || "AI Action";
+  els.aiActionTitle.innerHTML = pageTitleMarkup(state.aiAction.label || AI_ACTION_LABELS[action] || "AI Action");
   els.aiActionSubtitle.textContent = state.aiAction.scope === "salesperson"
     ? "Generated from your visible portfolio only"
     : lead.company_name ? `${lead.company_name} - grounded in CRM records` : "Generated from CRM records";
@@ -3163,7 +3165,7 @@ function openFlagAttentionModal(lead) {
   if (!lead || !els.flagAttentionDialog) return;
   els.flagAttentionForm.reset();
   els.flagAttentionForm.elements.company_id.value = lead.id;
-  els.flagAttentionTitle.textContent = `Flag ${lead.company_name} for director attention`;
+  els.flagAttentionTitle.innerHTML = pageTitleMarkup(`Flag ${lead.company_name} for director attention`);
   setMessage(els.flagAttentionMessage, "");
   els.flagAttentionDialog.showModal();
 }
@@ -3268,7 +3270,7 @@ function setLeadFormMode(mode = "create") {
   const title = document.querySelector("#leadFormTitle");
   const subtitle = document.querySelector("#leadFormSubtitle");
   if (title) {
-    title.textContent = mode === "edit" ? "Edit Lead" : "Add New Lead";
+    title.innerHTML = pageTitleMarkup(mode === "edit" ? "Edit Lead" : "Add New Lead");
   }
   if (subtitle) {
     subtitle.textContent = mode === "edit"
@@ -4077,7 +4079,9 @@ function renderImportLeadsModal() {
     4: ["Importing Leads", "The server is saving rows in controlled batches."],
     5: ["Import Complete", "Review the result and download any error report if needed."]
   };
-  [els.importLeadsTitle.textContent, els.importLeadsSubtitle.textContent] = titles[importState.step] || titles[1];
+  const [dialogTitle, dialogSubtitle] = titles[importState.step] || titles[1];
+  els.importLeadsTitle.innerHTML = pageTitleMarkup(dialogTitle);
+  els.importLeadsSubtitle.textContent = dialogSubtitle;
 
   if (importState.step === 1) renderImportUploadStep();
   if (importState.step === 2) renderImportMappingStep();
@@ -5032,50 +5036,60 @@ function summaryCardDetailsConfig(type) {
       fullList: { view: "pipeline", dueTodayOnly: true }
     },
     salesmanStageNew: {
-      title: "New Leads",
-      description: "Your leads currently in the New stage.",
+      title: "Prospect Leads",
+      description: "Your leads currently in the Prospect stage.",
       tone: "green",
-      searchPlaceholder: "Search New-stage leads",
+      searchPlaceholder: "Search Prospect-stage leads",
       leads: salesmanDatasets.stageNew,
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "NEW" }
     },
     salesmanStageContacted: {
-      title: "Contacted Leads",
-      description: "Your leads currently in the Contacted stage.",
+      title: "Outreach Leads",
+      description: "Your leads currently in the Outreach stage.",
       tone: "blue",
-      searchPlaceholder: "Search Contacted-stage leads",
+      searchPlaceholder: "Search Outreach-stage leads",
       leads: salesmanDatasets.stageContacted,
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "CONTACTED" }
     },
     salesmanStageNegotiation: {
-      title: "Negotiation Leads",
-      description: "Your leads currently in the Negotiation stage.",
+      title: "Engaged Leads",
+      description: "Your leads currently in the Engaged stage.",
       tone: "amber",
-      searchPlaceholder: "Search Negotiation-stage leads",
+      searchPlaceholder: "Search Engaged-stage leads",
       leads: salesmanDatasets.stageNegotiation,
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "NEGOTIATION" }
     },
     salesmanStageWon: {
-      title: "Won Leads",
-      description: "Your leads currently in the Won stage.",
+      title: "Active Leads",
+      description: "Your leads currently in the Active stage.",
       tone: "navy",
-      searchPlaceholder: "Search Won-stage leads",
+      searchPlaceholder: "Search Active-stage leads",
       leads: salesmanDatasets.stageWon,
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "WON" }
     },
+    salesmanStageDormant: {
+      title: "Dormant Leads",
+      description: "Previously active leads that have gone quiet.",
+      tone: "navy",
+      searchPlaceholder: "Search Dormant-stage leads",
+      leads: salesmanDatasets.stageDormant,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline", stageKey: "DORMANT" }
+    },
     salesmanStageLost: {
-      title: "Lost Leads",
-      description: "Your leads currently in the Lost stage.",
+      title: "Blocked Leads",
+      description: "Your leads currently in the Blocked stage.",
       tone: "red",
-      searchPlaceholder: "Search Lost-stage leads",
+      searchPlaceholder: "Search Blocked-stage leads",
       leads: salesmanDatasets.stageLost,
       filters: salesmanFilters,
       columns: salesmanColumns,
@@ -5290,7 +5304,7 @@ function renderSummaryCardDetailsModal() {
   const config = summaryCardDetailsConfig(state.summaryCardDetails.type);
   if (!config || !els.summaryCardDetailsShell) return;
   els.summaryCardDetailsShell.className = `summary-card-details-shell tone-${config.tone}`;
-  els.summaryCardDetailsTitle.textContent = `${config.title} Summary (${config.records.length})`;
+  els.summaryCardDetailsTitle.innerHTML = `${pageTitleMarkup(`${config.title} Summary`)} (${config.records.length})`;
   els.summaryCardDetailsDescription.textContent = config.description;
   const overdueCount = config.records.filter(record => record.taskStatus === "Overdue").length;
   els.summaryCardDetailsCount.textContent = state.summaryCardDetails.type === "tasksDue"
@@ -5490,7 +5504,7 @@ function pipelineFunnelStageRows(metrics) {
     },
     {
       key: "lost",
-      label: "Lost Deals",
+      label: "Blocked Deals",
       count: metrics.lostDeals,
       percentage: percentOf(metrics.lostDeals, total),
       dropoff: metrics.stageDropOffs.openPipelineToLost,
@@ -5637,7 +5651,7 @@ function pipelineFunnelComparisonTableRowsMarkup(rows) {
       <td data-label="Contacted">${escapeHtml(String(row.contactedLeads))}</td>
       <td data-label="Open Pipeline">${escapeHtml(String(row.openPipelineLeads))}</td>
       <td data-label="Won">${escapeHtml(String(row.wonDeals))}</td>
-      <td data-label="Lost">${escapeHtml(String(row.lostDeals))}</td>
+      <td data-label="Blocked">${escapeHtml(String(row.lostDeals))}</td>
       <td data-label="Conversion Rate"><span class="chip ${row.conversionRate >= 35 ? "green" : row.conversionRate >= 15 ? "warm" : ""}">${escapeHtml(String(row.conversionRate))}%</span></td>
     </tr>
   `).join("");
@@ -5688,7 +5702,7 @@ function dashboardPipelineFunnelCompactMarkup(leads, { dialogTitleId = "dashboar
               <th>Contacted</th>
               <th>Open Pipeline</th>
               <th>Won</th>
-              <th>Lost</th>
+              <th>Blocked</th>
               <th>Conversion Rate</th>
             </tr>
           </thead>
@@ -5763,7 +5777,7 @@ function pipelineFunnelMarkup(
               <article><span>Contacted</span><strong>${escapeHtml(String(metrics.contactedLeads))}</strong></article>
               <article><span>Open</span><strong>${escapeHtml(String(metrics.openPipelineLeads))}</strong></article>
               <article><span>Won</span><strong>${escapeHtml(String(metrics.wonDeals))}</strong></article>
-              <article><span>Lost</span><strong>${escapeHtml(String(metrics.lostDeals))}</strong></article>
+              <article><span>Blocked</span><strong>${escapeHtml(String(metrics.lostDeals))}</strong></article>
               <article><span>Conversion</span><strong>${escapeHtml(String(metrics.conversionRate))}%</strong></article>
             </div>
           </div>
@@ -5813,7 +5827,7 @@ function pipelineFunnelMarkup(
                     <th>Contacted</th>
                     <th>Open Pipeline</th>
                     <th>Won</th>
-                    <th>Lost</th>
+                    <th>Blocked</th>
                     <th>Conversion Rate</th>
                   </tr>
                 </thead>
@@ -7093,6 +7107,7 @@ function salesmanDashboardSummaryDatasets() {
     stageContacted: byStage("CONTACTED"),
     stageNegotiation: byStage("NEGOTIATION"),
     stageWon: byStage("WON"),
+    stageDormant: byStage("DORMANT"),
     stageLost: byStage("LOST")
   };
 }
@@ -7141,6 +7156,7 @@ function renderSalesmanSimplifiedDashboard() {
     CONTACTED: datasets.stageContacted.length,
     NEGOTIATION: datasets.stageNegotiation.length,
     WON: datasets.stageWon.length,
+    DORMANT: datasets.stageDormant.length,
     LOST: datasets.stageLost.length
   };
 
@@ -7271,11 +7287,12 @@ function renderSalesmanSimplifiedDashboard() {
   if (els.salesmanSimplifiedPipeline) {
     const summaryLoading = state.leadsLoading && !state.leadsLoaded;
     els.salesmanSimplifiedPipeline.innerHTML = [
-      { label: "New", value: pipelineCounts.NEW, type: "salesmanStageNew", icon: "stageNew", tone: "new" },
-      { label: "Contacted", value: pipelineCounts.CONTACTED, type: "salesmanStageContacted", icon: "stageContacted", tone: "contacted" },
-      { label: "Negotiation", value: pipelineCounts.NEGOTIATION, type: "salesmanStageNegotiation", icon: "stageNegotiation", tone: "negotiation" },
-      { label: "Won", value: pipelineCounts.WON, type: "salesmanStageWon", icon: "stageWon", tone: "won" },
-      { label: "Lost", value: pipelineCounts.LOST, type: "salesmanStageLost", icon: "stageLost", tone: "lost" }
+      { label: stageDisplayLabel("NEW"), value: pipelineCounts.NEW, type: "salesmanStageNew", icon: "stageNew", tone: "new" },
+      { label: stageDisplayLabel("CONTACTED"), value: pipelineCounts.CONTACTED, type: "salesmanStageContacted", icon: "stageContacted", tone: "contacted" },
+      { label: stageDisplayLabel("NEGOTIATION"), value: pipelineCounts.NEGOTIATION, type: "salesmanStageNegotiation", icon: "stageNegotiation", tone: "negotiation" },
+      { label: stageDisplayLabel("WON"), value: pipelineCounts.WON, type: "salesmanStageWon", icon: "stageWon", tone: "won" },
+      { label: stageDisplayLabel("DORMANT"), value: pipelineCounts.DORMANT, type: "salesmanStageDormant", icon: "dueToday", tone: "dormant" },
+      { label: "Blocked", value: pipelineCounts.LOST, type: "salesmanStageLost", icon: "stageLost", tone: "lost" }
     ].map(card => `
       <button class="salesman-simplified-stage tone-${escapeHtml(card.tone)} ${summaryLoading ? "is-loading" : ""}" type="button" data-summary-card="${escapeHtml(card.type)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" aria-label="${escapeHtml(`${card.label} leads, ${card.value}. View summary`)}" title="${escapeHtml(`View ${card.label} leads breakdown`)}" aria-busy="${summaryLoading}" ${summaryLoading ? "disabled" : ""}>
         <span class="salesman-stage-copy">
@@ -7945,7 +7962,7 @@ function renderDashboardView() {
     const count = state.leads.filter(lead => lead.stage === stage).length;
     return `
       <article class="status-card">
-        <span class="meta-label">${escapeHtml(stage)}</span>
+        <span class="meta-label">${escapeHtml(stageDisplayLabel(stage))}</span>
         <strong>${count}</strong>
       </article>
     `;
@@ -8190,14 +8207,14 @@ function pipelineDaysOverdue(lead) {
   return dueDate ? Math.max(0, -daysUntil(dueDate)) : null;
 }
 
-function pipelineFilterOptions(values, selected, allLabel) {
+function pipelineFilterOptions(values, selected, allLabel, displayLabel = value => value) {
   const normalizedValues = [...new Set(values
     .map(value => String(value || "").trim())
     .filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
   return [
     `<option value="all" ${selected === "all" ? "selected" : ""}>${escapeHtml(allLabel)}</option>`,
-    ...normalizedValues.map(value => `<option value="${escapeHtml(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(value)}</option>`)
+    ...normalizedValues.map(value => `<option value="${escapeHtml(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(displayLabel(value))}</option>`)
   ].join("");
 }
 
@@ -8252,7 +8269,7 @@ function pipelineSortValue(lead, key) {
     daysOverdue: pipelineDaysOverdue(lead) ?? -1,
     dueDate: String(lead.next_action_date || "").slice(0, 10),
     salesman: lead.assigned_salesman || "",
-    stage: stageDisplayLabel(lead.stage),
+    stage: KANBAN_STAGE_BY_KEY[kanbanStageForLead(lead)]?.label || "New",
     priority: presentation.priorityLabel || "",
     territory: lead.territory || inferEmirate(lead) || ""
   };
@@ -8364,7 +8381,7 @@ function pipelineFilterHeaderMarkup() {
       </th>
       <th>${salesmanControl}</th>
       <th>
-        <label><span class="sr-only">Filter by stage</span><select class="${state.filters.stage !== "all" ? "is-active" : ""}" data-pipeline-filter="stage">${pipelineFilterOptions(stages, state.filters.stage, "All stages")}</select></label>
+        <label><span class="sr-only">Filter by stage</span><select class="${state.filters.stage !== "all" ? "is-active" : ""}" data-pipeline-filter="stage">${pipelineFilterOptions(stages, state.filters.stage, "All stages", value => STAGE_DISPLAY_LABELS[normalizeStageKey(value, "")] || value)}</select></label>
       </th>
       <th>
         <label><span class="sr-only">Filter by priority</span><select class="${state.filters.priority !== "all" ? "is-active" : ""}" data-pipeline-filter="priority">${pipelineFilterOptions(priorities, state.filters.priority, "All priorities")}</select></label>
@@ -8608,6 +8625,7 @@ function firstName(value) {
 
 function stageDisplayLabel(stage) {
   const key = kanbanStageForLead({ stage });
+  if (STAGE_DISPLAY_LABELS[key]) return STAGE_DISPLAY_LABELS[key];
   return KANBAN_STAGE_BY_KEY[key]?.label || "New";
 }
 
@@ -8713,6 +8731,7 @@ function leadInitial(lead) {
 }
 
 function drawerStageLabel(stage) {
+  if (STAGE_DISPLAY_LABELS[normalizeStageKey(stage)]) return STAGE_DISPLAY_LABELS[normalizeStageKey(stage)];
   const match = KANBAN_STAGE_BY_KEY[normalizeStageKey(stage)];
   return match?.label || stage || "New";
 }
@@ -8778,7 +8797,7 @@ function promptHandoff(existingLead, newSalesmanName) {
   const oldTerritory = existingLead.territory || "Not set";
   const newTerritory = newProfile?.territory || oldTerritory;
   els.handoffForm.reset();
-  if (els.handoffTitle) els.handoffTitle.textContent = `Reassign ${existingLead.company_name || "lead"}`;
+  if (els.handoffTitle) els.handoffTitle.innerHTML = pageTitleMarkup(`Reassign ${existingLead.company_name || "lead"}`);
   if (els.handoffSubtitle) els.handoffSubtitle.textContent = "Add a handoff note so the ownership change is auditable.";
   if (els.handoffSummary) {
     els.handoffSummary.innerHTML = `
@@ -9987,7 +10006,7 @@ function openActivityModal(leadId = "", trigger = null, activity = null) {
   els.activityForm.elements.activity_id.value = activity?.id || "";
   els.activityForm.elements.activity_version.value = String(activity?.version || 1);
   els.activityForm.dataset.clientId = activity?.id || activityClientId();
-  els.activityDialogTitle.textContent = activity ? "Edit Activity" : "Add New Activity";
+  els.activityDialogTitle.innerHTML = pageTitleMarkup(activity ? "Edit Activity" : "Add New Activity");
   els.saveActivity.textContent = activity ? "Save Changes" : "Save Activity";
   els.closeActivityDialog.setAttribute("aria-label", `Close ${activity ? "Edit Activity" : "Add New Activity"} modal`);
   els.activityLeadName.textContent = lead.company_name || "Selected lead";
@@ -10219,7 +10238,7 @@ function renderKanbanView() {
     const count = leads.filter(lead => kanbanStageForLead(lead) === stage.key).length;
     return `
       <button class="kanban-stage-tab ${stage.key === activeStage ? "active" : ""}" type="button" data-kanban-tab="${stage.key}">
-        ${escapeHtml(stage.label)} <span>${count}</span>
+        ${escapeHtml(stageDisplayLabel(stage.key))} <span>${count}</span>
       </button>
     `;
   }).join("");
@@ -10265,7 +10284,7 @@ function renderKanbanView() {
       <section class="kanban-column ${stage.key === activeStage ? "active" : ""}" data-kanban-stage="${stage.key}">
         <div class="kanban-column-header ${stage.color}">
           <div>
-            <h3>${escapeHtml(stage.label)}</h3>
+            <h3>${escapeHtml(stageDisplayLabel(stage.key))}</h3>
             <span>${stageLeads.length} lead${stageLeads.length === 1 ? "" : "s"}</span>
           </div>
           <strong>${escapeHtml(formatAED(stageValue))}</strong>
@@ -10746,7 +10765,7 @@ function renderSalesmanLeadsViewer() {
   if (!els.salesmanLeadsList || !els.salesmanLeadsTitle || !els.salesmanLeadsSummary || !els.salesmanLeadsSubtitle) return;
   const viewer = state.salesmanLeadsViewer;
   if (!viewer) {
-    els.salesmanLeadsTitle.textContent = "Salesman leads";
+    els.salesmanLeadsTitle.innerHTML = pageTitleMarkup("Salesman leads");
     els.salesmanLeadsSubtitle.textContent = "Most recent leads";
     els.salesmanLeadsSummary.innerHTML = "";
     els.salesmanLeadsList.innerHTML = `<p class="empty-copy">No salesman selected.</p>`;
@@ -10757,7 +10776,7 @@ function renderSalesmanLeadsViewer() {
   const value = leads.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
   const overdue = leads.filter(isOverdue).length;
   const hot = leads.filter(lead => lead.priority === "Hot").length;
-  els.salesmanLeadsTitle.textContent = viewer.name;
+  els.salesmanLeadsTitle.innerHTML = pageTitleMarkup(viewer.name);
   els.salesmanLeadsSubtitle.textContent = `${leads.length} ${leads.length === 1 ? "lead" : "leads"} - most recent first`;
   els.salesmanLeadsSummary.innerHTML = `
     <span><strong>${leads.length}</strong> companies</span>
@@ -13198,7 +13217,7 @@ function renderDetail() {
   }
 
   const stageOptions = state.settings.stages.map(stage =>
-    `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(stage)}</option>`
+    `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(stageDisplayLabel(stage))}</option>`
   ).join("");
   const activities = (lead.activities || []).map((activity, index) => activityItemMarkup(activity, lead.id, index)).join("");
   const reminders = remindersForLead(lead);
@@ -13819,6 +13838,13 @@ async function loadWorkspace() {
     els.formSalesman.value = state.currentUser.name;
   }
   fillSelect(els.formStage, state.settings.stages);
+  [els.formStage, els.performanceStageFilter, els.portfolioStageFilter].forEach(select => {
+    if (!select) return;
+    [...select.options].forEach(option => {
+      const label = STAGE_DISPLAY_LABELS[normalizeStageKey(option.value, "")];
+      if (label) option.textContent = label;
+    });
+  });
   fillSelect(els.formPriority, state.settings.priorities);
   fillSelect(els.formSector, state.settings.sectors || []);
   fillSelect(els.formTier, state.settings.tiers || []);

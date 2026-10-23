@@ -145,7 +145,7 @@ body.salesman-dashboard-mode #appShell .salesman-dashboard-pipeline > .panel-hea
 
 body.salesman-dashboard-mode #appShell .salesman-simplified-pipeline-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--crm-space-2);
   padding: 0 var(--crm-space-4) var(--crm-space-4);
 }
