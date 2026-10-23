@@ -1,4 +1,4 @@
-function inspectPresentation() {
+function inspectPresentation({checkTouchTargets = false} = {}) {
   const root = document.querySelector("dialog[open]") || document.querySelector("#appShell:not(.hidden)") || document.querySelector("#authScreen");
   const findings = [];
   const seen = new Set();
@@ -70,6 +70,13 @@ function inspectPresentation() {
   for (const element of [root, ...root.querySelectorAll("*")]) {
     if (!visible(element)) continue;
     const style = getComputedStyle(element);
+    if (checkTouchTargets && document.documentElement.clientWidth <= 720
+      && element.matches('button, summary, [role="button"], a.ghost-button, a.primary-button, a.small-action')) {
+      const box = element.getBoundingClientRect();
+      if (box.width < 43.5 || box.height < 43.5) {
+        add("small-touch-target", element, `${box.width.toFixed(1)} x ${box.height.toFixed(1)}px < 44px`, element.textContent);
+      }
+    }
     if (/blur\(/.test(`${style.filter} ${style.backdropFilter}`)) add("blur", element, `${style.filter} / ${style.backdropFilter}`);
     if (/gradient\(/.test(style.backgroundImage) && !element.matches("#mobileSidebar, #authScreen .auth-hero")) add("gradient", element, style.backgroundImage);
     if (element.matches('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea')) {

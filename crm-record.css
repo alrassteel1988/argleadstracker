@@ -367,6 +367,11 @@ body #appShell #leadDetailView :is(.meta-label, .activity-type-label, .handoff-e
 }
 
 @media (max-width: 720px) {
+  body #appShell #leadDetailView .lead-intel-market-feed > summary {
+    box-sizing: border-box;
+    min-height: 44px;
+    padding-block: var(--crm-space-3);
+  }
   body #appShell #leadDetailView .drawer-stage-select { font-size: 16px !important; }
   body #appShell #leadDetailView .drawer-title-copy h2 { font-size: 20px; }
   body #appShell #leadDetailView .drawer-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

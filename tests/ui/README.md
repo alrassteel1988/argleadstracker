@@ -133,6 +133,13 @@ owner selected separate proposal-image review tabs, not a routing change.
 
 ## Screenshots and traces
 
+The presentation sweep enables `checkTouchTargets` for mobile profiles. Rendered
+buttons, summaries, explicit button roles and styled action links must have
+both dimensions at least 44px (0.5px measurement tolerance). A controlled fixture
+checks a compliant target, a 32px target, and a hidden control inside closed
+details. Inline text links and native checkbox/radio internals are not covered
+by this target-size rule. This is not complete WCAG or hit-area certification.
+
 Screenshots default to the OS temporary directory under
 `arg-crm-ui-screenshots/after/<project>/`. The default changed to After once the
 migration started, so routine reruns do not overwrite the initial Before captures.

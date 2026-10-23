@@ -18,6 +18,7 @@ assert.match(css, /\.lead-ai-card\.risk[^\n]*--crm-health-red/);
 assert.match(css, /\.lead-ai-note\s*\{[^}]*var\(--crm-health-amber-soft\)/s);
 assert.match(css, /\.lead-ai-minimize-button:not\(\.hidden\):not\(\[hidden\]\)\s*\{[^}]*display:\s*inline-flex/s);
 assert.doesNotMatch(css, /rgba\(|gradient\(|backdrop-filter|filter:\s*blur/);
+assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.lead-intel-market-feed > summary\s*\{[^}]*min-height:\s*44px[^}]*padding-block:\s*var\(--crm-space-3\)/s);
 assert.match(read("client.js"), /aria-label="Lead details sections"/);
 assert.match(read("client.js"), /aria-current="\$\{state\.leadDrawerTab === tab \? "page" : "false"\}"/);
 assert.ok(html.indexOf('/crm-record.css?v=') > html.indexOf('/crm-data.css?v='));

@@ -1,5 +1,23 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+### Shared Mobile Touch Checkpoint (23 October)
+
+The expanded presentation sweep reproduced undersized controls in both mobile
+roles: overdue actions (33.5-36px high), overdue dismiss controls (36x34px),
+Admin panel collapse controls (32x44px), and the Intel market-feed disclosure
+(21px high). Desktop audit profiles passed. Shared mobile-only styles now
+give these controls minimum 44px dimensions, preserving handlers, text, native
+disclosure markers, desktop density, authorization and calculations.
+
+The first expanded audit returned 6 PASS / 2 FAIL on mobile target-size findings;
+this is additional coverage, not a new runtime regression. Its controlled fixture
+also checks exact-sized positive controls and hidden closed-details content.
+`npm run verify` PASS after the fix. `npm run test:ui:audit` then PASS (8),
+covering 68 rendered page/dialog states across both roles and viewport profiles.
+No separate lint/typecheck, full 44-test interactive chain or native-zoom rerun
+is claimed for this checkpoint. Full proposal visual/state acceptance remains
+pending. Cache revision: `arg-pwa-v102-revised-ui-shared-touch`.
+
 ### Mobile Activity Touch Checkpoint (23 October)
 
 Fresh-fixture regression reproduced mobile Activity controls below the intended

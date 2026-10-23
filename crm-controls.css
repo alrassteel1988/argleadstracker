@@ -223,6 +223,11 @@ body #appShell .panel-collapse-toggle {
 }
 
 @media (max-width: 720px) {
+  body #appShell .panel-collapse-toggle {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
   body :is(.auth-screen, .app-shell, dialog) :is(.primary-button, .ghost-button, .small-action, .text-button, .danger-button, .voice-button, .tasks-voice-button, .sheet-save) {
     min-height: 44px !important;
   }

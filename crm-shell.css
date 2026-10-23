@@ -582,6 +582,11 @@ body #authScreen .auth-trust-row span {
     padding: var(--crm-space-3) !important;
   }
   body #appShell #overdueBanner .overdue-banner-icon { display: none; }
+  body #appShell #overdueBanner :is(.overdue-action, .overdue-dismiss) {
+    box-sizing: border-box;
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
   body #appShell #overdueBanner .overdue-banner-copy {
     display: flex !important;
     flex-direction: column;

@@ -59,6 +59,7 @@ assert.match(css, /\.topbar-actions:not\(\.hidden\):not\(\[hidden\]\)/, "Toolbar
 assert.match(css, /\.mobile-log-tab\s*\{[^}]*border-radius:\s*50%\s*!important[^}]*var\(--crm-amber\)/s);
 assert.match(css, /padding-bottom:\s*calc\(100px \+ env\(safe-area-inset-bottom\)\)/);
 assert.doesNotMatch(css, /rgba\(|filter:\s*blur|backdrop-filter:\s*blur/);
+assert.match(css, /#overdueBanner :is\(\.overdue-action, \.overdue-dismiss\)\s*\{[^}]*min-width:\s*44px\s*!important[^}]*min-height:\s*44px\s*!important/s);
 assert.ok(html.indexOf('/crm-shell.css?v=') > html.indexOf('/crm-controls.css?v='));
 assert.ok(html.indexOf('/mobile-ui.css?v=') > html.indexOf('/crm-shell.css?v='));
 assert.ok(vercel.builds.some(item => item.src === "crm-shell.css" && item.use === "@vercel/static"));

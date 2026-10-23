@@ -2,6 +2,27 @@
 
 ## Scope
 
+Shared mobile touch checkpoint (23 October): the expanded existing audit found
+undersized overdue actions/dismiss controls across both roles, a narrow Admin
+collapse button, and the Intel disclosure. Fixes are limited to three shared
+presentation stylesheets; no client/server behavior changed. `npm run verify`
+PASS; final `npm run test:ui:audit` PASS (8, 68 rendered states). The full
+migration is not yet signed off.
+
+Changed files for this checkpoint: `crm-controls.css`, `crm-shell.css`,
+`crm-record.css`, `sw.js`, `tests/crm-controls.test.js`,
+`tests/crm-shell.test.js`, `tests/crm-record.test.js`,
+`tests/activity-dashboard-latest.test.js`, `tests/admin-dashboard-layout.test.js`,
+`tests/global-bauhaus-system.test.js`, `tests/ui/presentation-audit.js`,
+`tests/ui/audit.spec.js`, `tests/ui/README.md`, this register and the inventory.
+Commands: `npm run test:ui:audit` (first expanded run: 6 PASS / 2 FAIL on touch
+targets), `npm run verify` (PASS), `git diff --check` (PASS after a changed-line
+CRLF normalization). Screenshots/JSON/traces remain outside Git. Live synthetic
+Salesman preview measured the updated banner action at 296x44px and dismiss at
+44x44px. Capture: `crm-shared-touch-mobile-after.jpg` in the OS temporary folder.
+No secret, production-data, database, API, permission or authentication change;
+no push, PR, merge or deployment. Separate auth and lint follow-ups stay separate.
+
 Date: 22 October 2026 (Asia/Dubai).
 Baseline: `62ec92668261142e5c0fa8b3a1be91359fee9241`.
 Branch: `codex/crm-ui-proposal-inventory`.

@@ -25,6 +25,18 @@ test("presentation audit distinguishes real defects from approved navy gradients
     "clipped-text|#clipped", "contrast|#faint", "gradient|#decorative",
     "missing-icon|#textOnly", "small-text|#tiny"
   ].sort());
+  await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>
+    body { margin:0; font:16px Arial; color:#000; background:#fff; }
+    button { min-width:44px; height:44px; }
+    #smallTarget { min-width:32px; width:32px; height:32px; }
+  </style><main id="appShell">
+    <button id="goodTarget" aria-label="Large target">+</button>
+    <button id="smallTarget" aria-label="Small target">+</button>
+    <details><summary>Closed details</summary><button id="hiddenTarget" style="min-width:20px;width:20px;height:20px">Hidden</button></details>
+  </main>`);
+  const touchFindings = (await page.evaluate(inspectPresentation, {checkTouchTargets:true}))
+    .filter(finding => finding.kind === "small-touch-target").map(finding => finding.element);
+  expect(touchFindings).toEqual(page.viewportSize().width <= 720 ? ["#smallTarget", "summary."] : []);
   await page.setContent('<meta name="viewport" content="width=device-width, initial-scale=1"><style>html{overflow-x:hidden}body{margin:0}#appShell{width:calc(100vw + 20px)}</style><main id="appShell">Overflow probe</main>');
   expect(await page.evaluate(() => document.documentElement.clientWidth)).toBe(page.viewportSize().width);
   expect((await page.evaluate(inspectPresentation)).some(finding => finding.kind === "page-overflow")).toBe(true);
@@ -37,7 +49,7 @@ test("rendered presentation across role pages and secondary dialogs", async ({pa
   const directory = path.join(os.tmpdir(), "arg-crm-ui-presentation-audit");
   fs.mkdirSync(directory, {recursive:true});
   const audit = async name => {
-    reports.push({name, findings:await page.evaluate(inspectPresentation)});
+    reports.push({name, findings:await page.evaluate(inspectPresentation, {checkTouchTargets:true})});
     fs.writeFileSync(path.join(directory, `${info.project.name}.json`), JSON.stringify(reports, null, 2));
     await capture(page, info, `60-${name}`);
   };

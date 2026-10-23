@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v101-revised-ui-activity-touch";
+const CACHE_VERSION = "arg-pwa-v102-revised-ui-shared-touch";
 const APP_SHELL = [
   "/",
   "/index.html",

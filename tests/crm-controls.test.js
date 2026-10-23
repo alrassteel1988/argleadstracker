@@ -39,6 +39,7 @@ assert.match(css, /\[aria-invalid="true"\][^}]*var\(--crm-health-red\)/s);
 assert.match(css, /:disabled\s*\{[^}]*var\(--crm-text-secondary\)[^}]*opacity:\s*1/s);
 assert.match(css, /:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--crm-focus\)/s);
 assert.match(css, /@media \(max-width: 720px\)[\s\S]*min-height:\s*44px[\s\S]*font-size:\s*16px\s*!important/s);
+assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.panel-collapse-toggle\s*\{[^}]*min-width:\s*44px\s*!important[^}]*min-height:\s*44px\s*!important/s);
 assert.match(css, /\.dialog-form button\.primary-button\[type="submit"\]/, "Only primary submit buttons get amber, never destructive submits");
 let depth = 0;
 for (const char of css.replace(/\/\*[\s\S]*?\*\//g, "")) {
