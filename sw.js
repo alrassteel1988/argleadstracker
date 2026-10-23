@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v95-revised-ui-login";
+const CACHE_VERSION = "arg-pwa-v96-revised-ui-mobile-pipeline";
 const APP_SHELL = [
   "/",
   "/index.html",

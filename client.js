@@ -8329,20 +8329,22 @@ function pipelineSortableHeader(key, label) {
 
 function pipelineLeadRowMarkup(lead) {
   const { plan, dueDate, overdueTone, overdueLabel, priorityLabel, priorityTone, stageKey, companyMeta } = leadTablePresentation(lead);
+  const contact = primaryLeadContact(lead);
   return `
     <tr class="lead-table-row ${lead.id === state.selectedId ? "active" : ""}" data-lead-id="${escapeHtml(lead.id)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
       <td class="lead-table-company">
         <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
         ${companyMeta ? `<small>${escapeHtml(companyMeta)}</small>` : ""}
       </td>
-      <td class="lead-table-next-action">${escapeHtml(plan.action)}</td>
-      <td><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(overdueLabel)}</span></td>
-      <td>${escapeHtml(dueDate ? formatPlanDate(dueDate) : "Not set")}</td>
-      <td>${escapeHtml(lead.assigned_salesman || "Unassigned")}</td>
-      <td><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
-      <td><span class="lead-table-badge lead-table-priority-${priorityTone}">${escapeHtml(priorityLabel)}</span></td>
-      <td class="lead-table-territory">${escapeHtml(lead.territory || inferEmirate(lead) || "Not set")}</td>
+      <td class="lead-table-next-action" data-label="Next action">${escapeHtml(plan.action)}</td>
+      <td data-label="Days overdue"><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(overdueLabel)}</span></td>
+      <td data-label="Due date">${escapeHtml(dueDate ? formatPlanDate(dueDate) : "Not set")}</td>
+      <td data-label="Salesman">${escapeHtml(lead.assigned_salesman || "Unassigned")}</td>
+      <td data-label="Stage"><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
+      <td data-label="Priority"><span class="lead-table-badge lead-table-priority-${priorityTone}">${escapeHtml(priorityLabel)}</span></td>
+      <td class="lead-table-territory" data-label="Territory">${escapeHtml(lead.territory || inferEmirate(lead) || "Not set")}</td>
       <td class="pipeline-row-actions">
+        ${contact.phone ? `<a class="pipeline-mobile-call" href="tel:${escapeHtml(contact.phone)}" aria-label="Call ${escapeHtml(contact.name || lead.company_name || "contact")}">Call</a>` : ""}
         <button class="pipeline-row-action" type="button" data-pipeline-open="${escapeHtml(lead.id)}" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">Open</button>
       </td>
     </tr>
@@ -8397,7 +8399,7 @@ function pipelineFilterHeaderMarkup() {
 function pipelineTableMarkup(leads) {
   const rows = leads.map(pipelineLeadRowMarkup).join("");
   return `
-    <table class="live-lead-table pipeline-lead-table">
+    <table class="live-lead-table pipeline-lead-table" role="table" aria-label="Live leads">
       <thead>
         <tr class="pipeline-column-row">
           ${pipelineSortableHeader("company", "Company / Contact")}

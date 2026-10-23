@@ -40,7 +40,7 @@ function syntheticDatabase() {
       company_name: `Synthetic Steel Company ${String(index + 1).padStart(2, "0")}`,
       contact_person: `Demo Contact ${index + 1}`,
       email: `contact-${index + 1}@example.test`,
-      phone: "",
+      phone: index === 0 ? "+12025550101" : "",
       assigned_to: owner.id,
       assigned_salesman: owner.name,
       created_by: users[0].id,

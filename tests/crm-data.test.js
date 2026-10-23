@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 const read = file => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
 const css = read("crm-data.css");
 const html = read("index.html");
@@ -21,4 +22,21 @@ assert.ok(html.indexOf('/mobile-ui.css?v=') > html.indexOf('/crm-data.css?v='));
 assert.ok(vercel.builds.some(item => item.src === "crm-data.css" && item.use === "@vercel/static"));
 assert.ok(vercel.routes.some(item => item.src === "/crm-data.css" && item.dest === "/crm-data.css"));
 assert.ok(read("sw.js").includes('"/crm-data.css"'));
+assert.match(css, /\.pipeline-lead-table thead\s*\{[^}]*overflow-x:\s*auto/s);
+assert.match(css, /\.pipeline-lead-table \.lead-table-row\s*\{[^}]*display:\s*grid[^}]*repeat\(2, minmax\(0, 1fr\)\)/s);
+assert.match(css, /td\[data-label\]::before\s*\{[^}]*content:\s*attr\(data-label\)/s);
+const client = read("client.js");
+const functionSource = name => client.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`))[0];
+const rowMarkup = vm.runInNewContext(`${functionSource("escapeHtml")}\n${functionSource("pipelineLeadRowMarkup")}\npipelineLeadRowMarkup`, {
+  state: {selectedId:""},
+  primaryLeadContact: () => ({phone:'+12025550101" onclick="bad',name:'<unsafe>'}),
+  leadTablePresentation: () => ({plan:{action:"To Call"},dueDate:"",overdueTone:"red",overdueLabel:"3 days",
+    priorityLabel:"Hot",priorityTone:"red",stageKey:"new",companyMeta:"Demo location"}),
+  stageDisplayLabel: () => "Prospect", inferEmirate: () => "", formatPlanDate: value => value
+});
+const rendered = rowMarkup({id:"test-lead",company_name:'<img src=x onerror="bad">',assigned_salesman:"Demo"});
+assert.equal((rendered.match(/<td[ >]/g)||[]).length, 9, "Mobile cards retain every table cell");
+assert.equal((rendered.match(/data-label=/g)||[]).length, 7, "Metadata stays labeled on mobile");
+assert.match(rendered, /href="tel:\+12025550101&quot; onclick=&quot;bad"/);
+assert.doesNotMatch(rendered, /<img|onclick="bad/);
 console.log("PASS shared CRM metric, table, badge, state and static asset presentation contracts");

@@ -66,6 +66,9 @@ Do not hide existing counterparts just because the proposed version is out of sc
 
 ## Inventory step outcome
 
+Checkpoint notes below are chronological evidence, not current hold points.
+Later owner decisions and completed phases supersede earlier pending notes.
+
 - Baseline `npm run verify`: PASS, exit 0 on the baseline above.
 - Lint/typecheck: no dedicated scripts.
 - Preparation checkpoint: `npm run test:ui:baseline` PASS, 8 tests across both roles at 1440x900 and 375x812. Main-flow Before screenshots captured; complete state/dialog matrix and all After captures remain PENDING.
@@ -266,6 +269,26 @@ Do not hide existing counterparts just because the proposed version is out of sc
   Native zoom, external providers, all modal states and full design comparison
   remain pending; this checkpoint is not full migration or production approval.
 
+## Mobile Pipeline presentation audit
+
+- The proposal's phone card treatment now uses the existing Pipeline table rows,
+  not a separate role-specific dataset or duplicate list renderer. Desktop keeps
+  the nine-column table. Below 720px, each row becomes a full-width labeled card;
+  all company/action/overdue/date/owner/stage/priority/territory/actions remain.
+- Existing column filters and sort controls remain in a horizontally scrollable
+  table-header band. This differs from the prototype's four compact filter chips
+  because the working app has more filters and none may be removed or redefined.
+  Record cards themselves do not require horizontal scrolling.
+- Mobile Call links reuse primaryLeadContact and the existing tel-link pattern.
+  No number means no Call link; nothing is invented, sent or dialed by the CRM.
+  The fixture uses reserved +1 202-555-0101 only and tests never launch a call.
+  Open/Call actions are left-aligned below metadata to avoid the floating AI
+  launcher; card hover is one surface rather than tinted individual cells.
+- Four-profile data checks pass after final styling (55.4s); canonical verify
+  passes. A new clean complete browser chain passed all 32 checks, exit 0.
+  No API, authorization,
+  stage/overdue calculation, data model, filter, sort or pagination change.
+
 ## Login presentation audit
 
 - Shared tokens replace the remaining public-screen legacy surface/accent values.
@@ -281,7 +304,8 @@ Do not hide existing counterparts just because the proposed version is out of sc
 - Final `npm run verify` and the four-profile sign-in, dashboard and dialog
   reruns passed. The full browser chain stopped on a stale eight-card assertion
   after Dormant added the ninth summary; the corrected dashboard rerun passed.
-  A fresh clean full-chain run remains a final gate, not a claimed success here.
+  The subsequent mobile Pipeline clean chain passed all 32 checks and clears
+  that rerun gate; the full visual/state/native-zoom audit remains incomplete.
 
 ## Dialog and status-label checkpoint
 

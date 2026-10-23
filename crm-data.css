@@ -296,6 +296,10 @@ body.pipeline-compact-mode #appShell .pipeline-row-action:hover {
   background: var(--crm-surface-muted);
 }
 
+body.pipeline-compact-mode #appShell .pipeline-mobile-call {
+  display: none;
+}
+
 body.pipeline-compact-mode #appShell .pipeline-pagination {
   flex-wrap: wrap;
   padding: var(--crm-space-3) var(--crm-space-4);
@@ -334,6 +338,126 @@ body.pipeline-compact-mode #appShell .pipeline-loading-state span {
 
   body.pipeline-compact-mode #appShell .pipeline-row-action {
     min-height: 44px;
+  }
+
+  /* One dataset and table: only the phone presentation becomes lead cards. */
+  body.pipeline-compact-mode #appShell .pipeline-lead-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table thead {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    border-bottom: 1px solid var(--crm-divider);
+    background: var(--crm-surface-muted);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table :is(.pipeline-column-row, .pipeline-filter-row) {
+    display: grid;
+    grid-template-columns: 180px repeat(7, 130px) 90px;
+    width: 1180px;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table thead th {
+    position: static;
+    width: auto !important;
+    min-width: 0;
+    height: auto;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table tbody {
+    display: grid;
+    gap: var(--crm-space-3);
+    width: 100%;
+    padding: var(--crm-space-3);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--crm-space-3);
+    min-width: 0;
+    padding: var(--crm-space-3);
+    border: 1px solid var(--crm-border);
+    border-radius: var(--crm-radius-panel);
+    background: var(--crm-surface);
+    box-shadow: var(--crm-shadow-panel);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border-bottom: 0 !important;
+    background: none !important;
+    white-space: normal;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: var(--crm-space-1);
+    color: var(--crm-text-secondary);
+    font: 600 12px/1.4 var(--crm-font-ui);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-company {
+    grid-column: 1 / -1;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-company strong {
+    font-size: 16px !important;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .pipeline-row-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--crm-space-2);
+    align-items: end;
+    justify-content: start;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-row:is(:hover, :focus-visible, .active) {
+    background: var(--crm-surface-muted);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-mobile-call {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--crm-space-1);
+    min-height: 44px;
+    padding: 8px;
+    border: 1px solid var(--crm-navy);
+    border-radius: var(--crm-radius-control);
+    background: var(--crm-amber);
+    color: var(--crm-navy) !important;
+    font: 600 13px/1.4 var(--crm-font-ui);
+    text-decoration: none;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-mobile-call::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    background: currentColor;
+    -webkit-mask: var(--crm-icon-phone) center / contain no-repeat;
+    mask: var(--crm-icon-phone) center / contain no-repeat;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-mobile-call:hover {
+    text-decoration: underline;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-empty {
+    display: block;
   }
 
   body.pipeline-compact-mode #appShell .pipeline-pagination {

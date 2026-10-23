@@ -5,6 +5,7 @@ test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
 test("shared Pipeline filters, sorting, pagination, reports and recovery", async ({ page }, info) => {
   const role = await login(page, info);
+  const mobile = info.project.name.endsWith("mobile");
   let releaseLoading;
   const loadingGate = new Promise(resolve => { releaseLoading = resolve; });
   await page.route("**/api/leads", async route => {
@@ -45,9 +46,33 @@ test("shared Pipeline filters, sorting, pagination, reports and recovery", async
   const tableType = await page.locator("#leadList .lead-table-company strong").first().evaluate(element => ({
     size: parseFloat(getComputedStyle(element).fontSize), color: getComputedStyle(element).color
   }));
-  expect(tableType).toEqual({ size: 14, color: "rgb(8, 61, 119)" });
+  expect(tableType).toEqual({ size: mobile ? 16 : 14, color: "rgb(8, 61, 119)" });
+  await expect(page.getByRole("table", {name:"Live leads", exact:true})).toBeVisible();
   await capture(page, info, "13-pipeline-data");
-
+  const call = page.locator('#leadList a[href="tel:+12025550101"]');
+  if (mobile) {
+    await expect(call).toBeVisible();
+    expect((await call.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    await expect(rows.first()).toHaveCSS("display", "grid");
+    const layout = await page.locator("#leadList .pipeline-lead-table").evaluate(table => {
+      const body = table.querySelector("tbody"), head = table.querySelector("thead");
+      return {bodyOverflow:body.scrollWidth-body.clientWidth, headOverflow:head.scrollWidth-head.clientWidth,
+        valuesFit:Array.from(body.querySelectorAll("td")).every(e=>e.scrollWidth<=e.clientWidth+1),
+        fields:body.querySelector("tr").querySelectorAll("td").length};
+    });
+    expect(layout.bodyOverflow).toBeLessThanOrEqual(1);
+    expect(layout.headOverflow).toBeGreaterThan(0);
+    expect(layout.valuesFit).toBe(true);
+    expect(layout.fields).toBe(9);
+    await expect(rows.first().locator('td[data-label="Stage"]')).toBeVisible();
+    await rows.first().locator("[data-pipeline-open]").scrollIntoViewIfNeeded();
+    const action = await rows.first().locator("[data-pipeline-open]").boundingBox();
+    const ai = await page.locator("#aiAssistantLauncher").boundingBox();
+    expect(action.x + action.width).toBeLessThanOrEqual(ai.x);
+  } else {
+    await expect(call).toBeHidden();
+    await expect(rows.first()).toHaveCSS("display", "table-row");
+  }
   await filter("search").fill("Demo Contact 2");
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText("Synthetic Steel Company 02");
@@ -116,6 +141,7 @@ test("shared Pipeline filters, sorting, pagination, reports and recovery", async
   await page.locator("[data-pipeline-retry]").click();
   await expect(rows).toHaveCount(10);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-  await rows.first().locator("[data-pipeline-open]").click();
+  if (mobile) await rows.first().press("Enter");
+  else await rows.first().locator("[data-pipeline-open]").click();
   await expect(page.locator("#leadDetailView")).toBeVisible();
 });

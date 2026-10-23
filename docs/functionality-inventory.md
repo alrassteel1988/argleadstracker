@@ -456,8 +456,8 @@ and exclusions; no production browser tests or provider operations were run.
   including every Dormant drill-down count. Final dialog rerun: four profiles
   PASS (1.8m), including the added 1440px/375px Dormant summary captures.
   All seven suites have passing evidence across the run and focused reruns, but
-  a new clean full-chain invocation remains part of the final migration gate;
-  do not describe the earlier full command as passing.
+  that earlier full command remains a failed historical run. The subsequent
+  clean mobile Pipeline chain below passes and clears the rerun gate.
 - Final-source sign-in/role-route rerun: four profiles PASS (2.1m), using
   `CRM_UI_TEST_PORT=4191` and the existing Playwright CLI with
   `test --config=playwright.ui.config.js --grep "sign-in validation"`.
@@ -475,32 +475,67 @@ and exclusions; no production browser tests or provider operations were run.
   evidence only; actual 125%/150% browser zoom still needs a supported browser
   or human UAT, and has not been replaced with CSS zoom.
 
+### Mobile Pipeline card checkpoint
+
+- Shared pipelineLeadRowMarkup still renders one role-scoped record set and all
+  nine existing cells. Added presentation labels and a phone-only call link using
+  primaryLeadContact and the existing tel convention. No new backend operation,
+  API field, workflow, role guard, filtering, sorting or pagination calculation.
+- At <=720px, the existing table rows present as labeled two-column cards with
+  16px company names, 14px values, 12px labels and 44px actions. Desktop remains
+  a table. All existing filters/sort controls stay in a scoped horizontal header
+  band; only that header scrolls sideways, never the mobile record cards/page.
+- Existing row/Open keyboard and click handlers are unchanged; links are already
+  excluded by bindLeadTableRows. No Call link is rendered for a missing number.
+  The phone test fixture uses the reserved +1 202-555-0101, never called.
+- Regression coverage verifies nine cells and escaped values, phone/desktop
+  visibility, card bounds, header-only horizontal overflow, retained filters,
+  sorting, pagination, exports, role restrictions, error/retry and row Enter.
+  Mobile Open remains clear of the AI launcher. Actual API/business tests stay.
+- Commands: node tests/crm-data.test.js PASS; npm run test:ui:data PASS all four
+  profiles after final styling (55.4s); npm run verify PASS. Fresh clean
+  npm run test:ui PASS, exit 0, all 32 checks: 8 core (4.0m), 4 shell (32.1s),
+  4 data (1.1m), 4 team (34.9s), 4 reports (2.3m), 4 dashboard (58.8s) and
+  4 dialogs (1.5m). No assertion was skipped or removed to obtain this result.
+- Files: client.js, crm-data.css, sw.js; tests/crm-data.test.js,
+  tests/activity-dashboard-latest.test.js, tests/admin-dashboard-layout.test.js,
+  tests/global-bauhaus-system.test.js, tests/ui/data.spec.js,
+  tests/ui/fixture-server.js, tests/ui/README.md and the two migration documents.
+  Shipped CSS stays on the existing static route; cache revision v96 preserves
+  all existing private/API cache exclusions. No production release performed.
+- Existing mobile prototype has fewer metadata fields and filters than the
+  application. Keeping every live field makes these cards taller; none are
+  omitted to imitate the prototype. Native zoom/provider/full-state UAT remains.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.
 
+After results below are scoped to their named synthetic checks. A PASS prefix
+does not clear a remaining PENDING state or certify a production provider.
+
 | ID | Route/surface | Roles and existing content/actions | Evidence / baseline | After |
 | --- | --- | --- | --- | --- |
-| P-01 | `/` when signed out | Work email/password, submit, validation, live login errors, current Forgot password control | index.html loginForm; auth-login-status, auth-refresh PASS suite; recovery has no handler | PENDING |
-| P-02 | `/?view=dashboard`, Admin | Dashboard Overview; four drill-down KPI cards; overdue report; Intel Overview; Director Alerts; location/sector market snapshot; funnel/comparison expand; action plans; cold relationships; interactions; pipeline health; database agent; configuration agent | render(), arrangeAdminDashboardLayout(); admin-dashboard-layout, dashboard-summary-modal PASS suite | PENDING |
-| P-03 | `/?view=dashboard`, Salesman | My Leads/Overdue Calls/Due Today; pipeline including Lost; Top 3 actions; Call these next; live contact table; first touch/loss reasons; tools; daily briefing, news, portfolio/follow-up sections and summary popups | renderSalesman* functions; dashboard-summary-modal, salesperson-ai-actions PASS suite | PENDING |
-| P-04 | `/?view=pipeline` | List only, KPIs, column search/filter/sort, page size/pagination, retry/refresh, lead open; Admin due-date report filter and Excel/PDF exports | renderPipeline*, pipelineVisibleLeads(); pipeline-live-leads, assignment-isolation, HTTP permissions PASS suite | PENDING |
-| P-05 | `/?view=salesmen` | Management directory; KPIs, search, territory/status/stage/sort filters, List/Cards, pagination, CSV export, profile/lead modal, assign/filter-pipeline actions, performance charts | configureRoleUi()/applyView(); salesmen-directory PASS suite | PENDING |
-| P-06 | `/?view=activity` | Management calendar, week navigation and Minimize/Expand, activity KPIs/log, date presets/range, salesman/type/company filters, reset, add/edit/view, deletion-review queue, reminders, quick links, pagination | Salesman access redirects to dashboard; activity-dashboard-latest, activity-workflow PASS suite | PENDING |
-| P-07 | `/?view=tasks`, Salesman | Weekly report: week summary, secured orders/exceptions, expected orders/voice, problem accounts, market intel, next week plan, attestation, checkpoints, blockers, draft, submit/resubmit, history | weekly-report*, weekly-report-workflow PASS suite | PENDING |
-| P-08 | `/?view=tasks`, leadership | Weekly review, selected report/version, missing submissions, date/week selection, start review, accept/reject/request revision, review notes and immutable history | renderWeeklyReviewView(); weekly-report-workflow/ui PASS suite | PENDING |
-| P-09 | `/leads/:id?tab=...` | Both roles, authorized record only; company/owner/stage/territory header; back navigation; Overview, Activities, PMR, Reminders, Intel, Notes | leadRouteUrl()/applyRouteState(); lead-detail-bauhaus and related suites PASS | PENDING |
-| P-10 | Lead Overview | Snapshot, contacts, commercial/additional/secondary fields, health, call/email, log/edit, enrichment review/field apply, LinkedIn search, AI summary, one-click company actions, attention flags | drawerOverviewMarkup and renderDetail; lead-ai-summary, company-ai-actions PASS suite | PENDING |
-| P-11 | Lead Activities | Timeline/structured activity, view/edit/correction/delete-request, attachments, protected audio, quote reference | activity-modal/workflow, pmr-voice-note, voice-note-security PASS suite | PENDING |
-| P-12 | Lead PMR | File/report display, meeting/activity linkage, transcript/recording, structured fields | pmr-voice-note and role-access PASS suite | PENDING |
-| P-13 | Lead Reminders | Add, complete, reschedule, note, calendar links, overdue/upcoming display | reminderCard(), follow-up handlers; activity-workflow PASS suite, complete browser path NOT RUN | PENDING |
-| P-14 | Lead Intel | Report/job state; generate/refresh/retry; PDF upload/preview/open/download; source information and prior-report safety | lead-intelligence-service/api/ui PASS suite | PENDING |
-| P-15 | Lead Notes | Edit and save existing notes | drawerNotesMarkup(), API PATCH; SOURCE | PENDING |
+| P-01 | `/` when signed out | Work email/password, submit, validation, live login errors, current Forgot password control | index.html loginForm; auth-login-status, auth-refresh PASS suite; recovery has no handler | PASS local sign-in/presentation and existing auth tests; recovery gap Q-08 unchanged |
+| P-02 | `/?view=dashboard`, Admin | Dashboard Overview; four drill-down KPI cards; overdue report; Intel Overview; Director Alerts; location/sector market snapshot; funnel/comparison expand; action plans; cold relationships; interactions; pipeline health; database agent; configuration agent | render(), arrangeAdminDashboardLayout(); admin-dashboard-layout, dashboard-summary-modal PASS suite | PASS main layout/count drill-downs/collapse and route reentry; secondary/provider/error states PENDING |
+| P-03 | `/?view=dashboard`, Salesman | My Leads/Overdue Calls/Due Today; six pipeline stages including Dormant and Blocked (stored LOST); Top 3 actions; Call these next; live contact table; first touch/loss reasons; tools; daily briefing, news, portfolio/follow-up sections and summary popups | renderSalesman* functions; dashboard-summary-modal, salesperson-ai-actions PASS suite | PASS main flow, nine summary counts/search/close/focus and normal flow; secondary/provider states PENDING |
+| P-04 | `/?view=pipeline` | List only, KPIs, column search/filter/sort, page size/pagination, retry/refresh, lead open; Admin due-date report filter and Excel/PDF exports | renderPipeline*, pipelineVisibleLeads(); pipeline-live-leads, assignment-isolation, HTTP permissions PASS suite | PASS four-profile filters/sort/pagination/export/recovery, desktop table and mobile cards; native zoom PENDING |
+| P-05 | `/?view=salesmen` | Management directory; KPIs, search, territory/status/stage/sort filters, List/Cards, pagination, CSV export, profile/lead modal, assign/filter-pipeline actions, performance charts | configureRoleUi()/applyView(); salesmen-directory PASS suite | PASS four-profile role/list/cards/filters/chart totals/CSV/existing actions; full state matrix PENDING |
+| P-06 | `/?view=activity` | Management calendar, week navigation and Minimize/Expand, activity KPIs/log, date presets/range, salesman/type/company filters, reset, add/edit/view, deletion-review queue, reminders, quick links, pagination | Salesman access redirects to dashboard; activity-dashboard-latest, activity-workflow PASS suite | PASS calendar/minimize/filter/reset/readability and role redirect; deletion/review/media browser states PENDING |
+| P-07 | `/?view=tasks`, Salesman | Weekly report: week summary, secured orders/exceptions, expected orders/voice, problem accounts, market intel, next week plan, attestation, checkpoints, blockers, draft, submit/resubmit, history | weekly-report*, weekly-report-workflow PASS suite | PASS required-field feedback/draft/submit/history/revision flow; microphone/provider states PENDING |
+| P-08 | `/?view=tasks`, leadership | Weekly review, selected report/version, missing submissions, date/week selection, start review, accept/reject/request revision, review notes and immutable history | renderWeeklyReviewView(); weekly-report-workflow/ui PASS suite | PASS synthetic submitted/accepted/revision and empty selection; every rejection/error state PENDING |
+| P-09 | `/leads/:id?tab=...` | Both roles, authorized record only; company/owner/stage/territory header; back navigation; Overview, Activities, PMR, Reminders, Intel, Notes | leadRouteUrl()/applyRouteState(); lead-detail-bauhaus and related suites PASS | PASS all six tabs, role routes, active state and responsive bounds; complete tab-state matrix PENDING |
+| P-10 | Lead Overview | Snapshot, contacts, commercial/additional/secondary fields, health, call/email, log/edit, enrichment review/field apply, LinkedIn search, AI summary, one-click company actions, attention flags | drawerOverviewMarkup and renderDetail; lead-ai-summary, company-ai-actions PASS suite | PASS Overview presentation and AI minimize/expand; enrichment/provider/action-state browser UAT PENDING |
+| P-11 | Lead Activities | Timeline/structured activity, view/edit/correction/delete-request, attachments, protected audio, quote reference | activity-modal/workflow, pmr-voice-note, voice-note-security PASS suite | PASS timeline and activity save/read after navigation; correction/deletion/media browser paths PENDING |
+| P-12 | Lead PMR | File/report display, meeting/activity linkage, transcript/recording, structured fields | pmr-voice-note and role-access PASS suite | PASS tab/dialog presentation and open/close; microphone/provider workflow UAT PENDING |
+| P-13 | Lead Reminders | Add, complete, reschedule, note, calendar links, overdue/upcoming display | reminderCard(), follow-up handlers; activity-workflow PASS suite, complete browser path NOT RUN | PASS tab presentation; add/complete/reschedule/calendar browser paths PENDING |
+| P-14 | Lead Intel | Report/job state; generate/refresh/retry; PDF upload/preview/open/download; source information and prior-report safety | lead-intelligence-service/api/ui PASS suite | PASS current empty/configuration-state presentation and API tests; live job/upload/PDF browser UAT PENDING |
+| P-15 | Lead Notes | Edit and save existing notes | drawerNotesMarkup(), API PATCH; SOURCE | PASS four-profile edit/PATCH response/updated UI; production persistence not tested |
 | P-16 | Quotes navigation | Existing shortcut opens Pipeline; no standalone quote route, builder, approval, sending or quotation CRUD endpoint | data-quick-view; parseAppRoute(); N/A separate module | PENDING shortcut only |
 | P-17 | Accounts navigation | Existing shortcut opens Pipeline; no standalone receivables/credit/utilization module | data-quick-view; N/A standalone module | PENDING shortcut only |
-| P-18 | Search Places | Dialog with keyword/location, results, Use Business into Add Lead, enrichment/duplicate review | placesForm and /api/places/search; enrichment PASS suite | PENDING |
-| P-19 | Mobile Home/Leads/Log/Map/Alerts | Bottom tabs; raised Log opens Quick Log; Map dialog/list/external navigation; Alerts opens pending changes (not a new notification inbox); sidebar drawer and backdrops | initPwaShell(), nav handlers; pwa-shell/mobile-ui PASS suite | PENDING |
-| P-20 | Install/update/offline surfaces | Install banner, update/refresh, sync status, IndexedDB pending items, retry/sync now, toast/error/loading/empty states | sw.js and outbox handlers; pwa-shell/static-assets-security PASS suite | PENDING |
+| P-18 | Search Places | Dialog with keyword/location, results, Use Business into Add Lead, enrichment/duplicate review | placesForm and /api/places/search; enrichment PASS suite | PASS dialog/fields/focus/bounds; live provider/results UAT PENDING |
+| P-19 | Mobile Home/Leads/Log/Map/Alerts | Bottom tabs; raised Log opens Quick Log; Map dialog/list/external navigation; Alerts opens pending changes (not a new notification inbox); sidebar drawer and backdrops | initPwaShell(), nav handlers; pwa-shell/mobile-ui PASS suite | PASS bottom tabs/drawer/Quick Log/Map/Pending open-close and public hiding; offline/external actions PENDING |
+| P-20 | Install/update/offline surfaces | Install banner, update/refresh, sync status, IndexedDB pending items, retry/sync now, toast/error/loading/empty states | sw.js and outbox handlers; pwa-shell/static-assets-security PASS suite | PASS static asset/cache protection tests; offline/install/update/sync full browser matrix PENDING |
 
 No new route may be added to simulate the proposal's Today, Companies, Statuses, Performance or Director AI screens. Re-skin the current equivalent surface, retain existing controls not pictured, and record missing equivalents instead.
 

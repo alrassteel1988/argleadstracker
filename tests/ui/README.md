@@ -71,6 +71,10 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
   matching summary count. Login token/brand/field contrast and public mobile-tab
   visibility checks; WhatsApp configuration suggestions are absent while other
   existing examples remain available.
+- Mobile Pipeline cards reuse all nine table cells, retain every filter/sort
+  control in a scrollable header band, and reuse existing phone-call links only
+  when a number exists. Desktop remains a table. Checks cover card overflow,
+  labeled fields, 44px Call targets, AI-launcher clearance and row Enter.
 
 This is a main-flow baseline, not complete coverage of every inventory item.
 It does not verify production Supabase RLS, external providers, microphone
