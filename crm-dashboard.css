@@ -1,4 +1,4 @@
-/* Proposal dashboard presentation. Existing datasets, actions and order remain. */
+/* Proposal dashboard presentation. Existing datasets and actions remain. */
 body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
   height: auto !important;
   max-height: none !important;
@@ -353,4 +353,124 @@ body.salesman-dashboard-mode #appShell .salesman-dashboard-lead-table {
     height: 65dvh;
     min-height: 400px;
   }
+}
+
+/* Management layout uses the same panels and controls, not a second theme. */
+body.admin-dashboard-mode #appShell #dashboardView {
+  gap: var(--crm-space-4);
+  align-items: start;
+}
+body.admin-dashboard-mode #appShell #adminDashboardWorkRow {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  align-items: start;
+  gap: var(--crm-space-4);
+  min-width: 0;
+}
+body.admin-dashboard-mode #appShell #adminDashboardWorkRow > * { grid-column: auto; min-width: 0; }
+body.admin-dashboard-mode #appShell #adminDashboardTriageRow {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--crm-space-4);
+}
+body.admin-dashboard-mode #appShell #dashboardView > #overdueBanner {
+  grid-column: 1 / -1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--crm-space-3);
+  border: 1px solid var(--crm-health-red) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-health-red-soft) !important;
+  color: var(--crm-text) !important;
+}
+body.admin-dashboard-mode #appShell #overdueBanner :is(.overdue-banner-copy, .overdue-banner-kpis, .overdue-banner-kpis span) {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--crm-space-2);
+}
+body.admin-dashboard-mode #appShell #overdueBanner :is(strong, b, span) { font-size: 13px !important; line-height: 1.5; }
+body.admin-dashboard-mode #appShell #dashboardView .panel {
+  min-width: 0;
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-surface) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView .panel-header {
+  flex-wrap: wrap;
+  gap: var(--crm-space-3);
+  padding: var(--crm-space-4);
+  background: var(--crm-surface) !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView .panel-header h2 {
+  color: var(--crm-navy) !important;
+  font: 700 20px/1.35 var(--crm-font-ui) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView :is(.panel-header span, .empty-copy, .salesman-plan-head p, .salesman-plan-row-meta) {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+body.admin-dashboard-mode #appShell #dashboardView :is(.panel-header button, .action-plan-toolbar-button) {
+  border-color: var(--crm-control-border) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  font-size: 13px !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView :is(.salesman-plan-head, .salesman-plan-head-meta, .action-plan-bulk-actions) { flex-wrap: wrap; gap: var(--crm-space-2); }
+body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-head h3 { font-size: 15px; line-height: 1.5; color: var(--crm-navy); overflow-wrap: anywhere; }
+body.admin-dashboard-mode #appShell #dashboardView :is(.salesman-plan-card, .status-card) { border-color: var(--crm-divider) !important; background: var(--crm-surface) !important; }
+body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-table-wrap { overflow: auto; }
+body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-table { min-width: 740px; }
+body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-table :is(td, th) { padding: 10px; font-size: 13px; line-height: 1.5; color: var(--crm-text); }
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow { height: auto !important; grid-auto-rows: auto !important; align-items: start; }
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow :is(#dashboardFocus, #dashboardActivityFeed, #dashboardStatus) { height: auto !important; max-height: none !important; overflow: visible !important; }
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow > .panel:not(.is-collapsed),
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow > .panel:not(.is-collapsed) > .dashboard-collapsible-body,
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow > .panel:not(.is-collapsed) > .dashboard-collapsible-body > .dashboard-collapsible-body-inner {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView :is(#marketIntelFeed, #needsAttentionList, #configAgentPanel .dashboard-collapsible-body-inner) { padding: var(--crm-space-4); }
+body.admin-dashboard-mode #appShell #dashboardView .admin-dashboard-bottom-row .dashboard-activity-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--crm-space-2);
+  height: auto !important;
+  min-height: 72px;
+  padding: var(--crm-space-3) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--crm-divider) !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+  text-align: left !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView .dashboard-focus-item .stage-badge { grid-column: 2; justify-self: start; }
+body.admin-dashboard-mode #appShell #dashboardView .dashboard-activity-item :is(strong, p) { display: block; text-align: left; white-space: normal; overflow-wrap: anywhere; font-size: 14px !important; line-height: 1.5; color: var(--crm-text) !important; }
+body.admin-dashboard-mode #appShell #dashboardView #dashboardStatus { gap: var(--crm-space-3); }
+body.admin-dashboard-mode #appShell #dashboardView .market-snapshot-bar-track { background: var(--crm-surface-muted) !important; }
+body.admin-dashboard-mode #appShell #dashboardView .market-snapshot-bar-track > i { background: var(--crm-teal) !important; }
+body.admin-dashboard-mode #appShell #dashboardView #dashboardStatus .meta-label { font-size: 12px !important; line-height: 1.5; color: var(--crm-text-secondary) !important; }
+body.admin-dashboard-mode #appShell #dashboardView .agent-collapsed { flex-wrap: wrap; gap: var(--crm-space-2); padding: var(--crm-space-3); }
+
+@media (max-width: 1100px) {
+  body.admin-dashboard-mode #appShell #adminDashboardWorkRow { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header { padding: var(--crm-space-3); }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header-actions { flex: 1 1 100%; justify-content: flex-start; }
+  body.admin-dashboard-mode #appShell #dashboardView button { min-height: 44px; }
+  body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-head-meta { justify-content: flex-start; }
+  body.admin-dashboard-mode #appShell #dashboardView #overdueBanner .overdue-banner-copy { flex-direction: row; }
+  body.admin-dashboard-mode #appShell #dashboardView #overdueBanner .overdue-banner-actions { width: 100%; flex-wrap: nowrap !important; }
+  body.admin-dashboard-mode #appShell #dashboardView #overdueBanner .overdue-action { flex: 1 1 auto; width: auto !important; min-width: 0 !important; }
+  body.admin-dashboard-mode #appShell #dashboardView #overdueBanner .overdue-dismiss { flex: 0 0 44px; width: 44px !important; min-width: 44px !important; }
 }

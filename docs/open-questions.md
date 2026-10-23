@@ -236,3 +236,26 @@ Do not hide existing counterparts just because the proposed version is out of sc
 - Local verification and four report browser profiles pass (1.8m). Full 24-flow
   regression then passed, including the report rerun in 1.7m; provider/voice permissions, all error/rejection states,
   native zoom and full screenshot comparison are not yet verified.
+
+## Admin Dashboard checkpoint
+
+- Proposal page 32's Assigned Leads mini-chart is not an existing dashboard
+  component. Do not add a new chart/feature or duplicate API calls. The actual
+  Salesmen performance snapshot remains intact on its existing page.
+- Preserve Dashboard Overview collapse, all management tools, configuration/audit,
+  lower relationship/activity/status panels, market snapshot and funnel even
+  where the proposal omits them. They remain below the redesigned work row.
+- Existing DOM arrangement now places overdue before KPIs and Lead Action Plans
+  beside intelligence. Route exit restores existing elements before the legacy
+  page arranger runs; no route, role decision or stored preference is changed.
+- Lower panels use natural height because the old 320px parent and 300px mobile
+  child caps clipped real text after readability improvements. Expanded content
+  is checked in the browser; collapse behavior remains separately verified.
+- First full verification stopped at an obsolete presentation-order assertion;
+  its replacement verifies the equivalent retained operational section. No
+  business/security assertions were removed. Final verify passed, and all 28
+  browser flows passed, including the final four dashboard profiles in 41.9s.
+  The market distribution bars use decorative teal, not success green, without
+  changing row order, percentages, filters or inline data-derived widths.
+  Native zoom, external providers, all modal states and full design comparison
+  remain pending; this checkpoint is not full migration or production approval.

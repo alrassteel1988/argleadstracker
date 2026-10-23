@@ -3,7 +3,8 @@
 Run `npm run test:ui` from the repository root. It runs `test:ui:baseline` (8
 core-flow tests), `test:ui:shell` (4 shell/navigation tests), then `test:ui:data`
 (4 Pipeline data-surface tests), then `test:ui:team` (4 directory/role checks),
-then `test:ui:reports` (4 authoring/review checks),
+then `test:ui:reports` (4 authoring/review checks) and `test:ui:dashboard`
+(4 dashboard/counter/drill-down checks),
 each with fresh servers. Chromium must already
 be available through the existing Playwright dependency. This suite does not
 use the production add-lead script or production credentials.
@@ -49,6 +50,10 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
 - Mobile Home/Leads/Log/Map/Alerts navigation and their existing windows.
 - Salesman dashboard white/teal/navy surfaces, unchanged five stage actions,
   nonoverlapping action/list flow, 14px company names and page overflow checks.
+- Admin alert/KPI/work-row order, both dashboards' existing count-to-popup
+  parity, summary search/reset, Escape and focus restoration; management plan
+  bulk expand/collapse, Intel collapse and route return. Expanded lower-panel
+  content must not clip on desktop or mobile.
 - Search places button foreground/background contrast for both roles.
 - The data suite separately exercises all Pipeline column filters, combined
   sorting/pagination, Admin-only report ranges and Excel/PDF downloads, loading,

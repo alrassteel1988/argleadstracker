@@ -273,6 +273,7 @@ const els = {
   metricsShell: document.querySelector("#metricsShell"),
   sharedDashboardTopSlot: document.querySelector("#sharedDashboardTopSlot"),
   adminDashboardOverviewSlot: document.querySelector("#adminDashboardOverviewSlot"),
+  adminDashboardWorkRow: document.querySelector("#adminDashboardWorkRow"),
   adminDashboardTriageRow: document.querySelector("#adminDashboardTriageRow"),
   adminDashboardAnalyticsRow: document.querySelector("#adminDashboardAnalyticsRow"),
   adminDashboardBottomRow: document.querySelector("#adminDashboardBottomRow"),
@@ -6978,14 +6979,17 @@ function renderSalesmanDashboard() {
 function arrangeAdminDashboardLayout() {
   if (!els.dashboardView || !els.metricsShell || !els.overdueBanner) return;
   const isAdminDashboard = currentView === "dashboard" && !isSalesmanRole();
+  els.adminDashboardWorkRow?.classList.toggle("hidden", !isAdminDashboard);
 
   if (isAdminDashboard) {
     els.adminDashboardOverviewSlot?.appendChild(els.metricsShell);
-    [els.overdueBanner, els.marketIntelPanel, els.needsAttentionPanel].forEach(panel => {
+    els.adminDashboardOverviewSlot?.before(els.overdueBanner);
+    [els.marketIntelPanel, els.needsAttentionPanel].forEach(panel => {
       if (panel) els.adminDashboardTriageRow?.appendChild(panel);
     });
-    els.adminDashboardTriageRow?.after(els.actionPlanPanel);
-    els.actionPlanPanel?.after(els.adminTaskPanel, els.lossReasonsPanel, els.adminDashboardBottomRow);
+    els.adminDashboardWorkRow?.prepend(els.actionPlanPanel);
+    els.adminDashboardOverviewSlot?.after(els.adminDashboardWorkRow);
+    els.adminDashboardWorkRow?.after(els.adminTaskPanel, els.lossReasonsPanel, els.adminDashboardBottomRow);
     [els.marketSnapshotPanel, els.dashboardPipelineFunnelPanel].forEach(panel => {
       if (panel) els.adminDashboardAnalyticsRow?.appendChild(panel);
     });
@@ -6993,6 +6997,8 @@ function arrangeAdminDashboardLayout() {
     ADMIN_DASHBOARD_COLLAPSIBLES.forEach(definition => {
       const section = document.getElementById(definition.id);
       if (!section) return;
+      const heading = section.querySelector(".panel-header h2");
+      if (heading) heading.innerHTML = pageTitleMarkup(heading.textContent);
       section.classList.add("collapsible-enabled");
       section.querySelector(".panel-collapse-toggle")?.classList.remove("hidden");
       updateDashboardCollapsibleButton(section);
@@ -7011,6 +7017,9 @@ function arrangeAdminDashboardLayout() {
     els.sharedDashboardTopSlot?.insertBefore(els.overdueBanner, els.sharedDashboardTopSlot.firstChild);
   }
 
+  if (els.actionPlanPanel?.parentElement === els.adminDashboardWorkRow) {
+    els.adminDashboardWorkRow.before(els.actionPlanPanel);
+  }
   const dashboardAnchor = els.actionPlanPanel || els.dashboardView.firstElementChild;
   [
     els.marketIntelPanel,
@@ -7969,7 +7978,7 @@ function renderMarketIntelPanel() {
   if (!visible) return;
   els.refreshMarketIntel?.classList.toggle("hidden", !admin);
   if (els.marketIntelKicker) els.marketIntelKicker.textContent = admin ? "Intel Overview" : "Market Intel";
-  if (els.marketIntelTitle) els.marketIntelTitle.textContent = admin ? "Last 7 days across territories" : "Signals matched to your prospects";
+  if (els.marketIntelTitle) els.marketIntelTitle.innerHTML = pageTitleMarkup(admin ? "Last 7 days across territories" : "Signals matched to your prospects");
   const items = (state.marketIntel.items || []).slice(0, admin ? 8 : 5);
   if (state.marketIntel.disabled) {
     els.marketIntelFeed.innerHTML = `<p class="empty-copy">Market intelligence feed is disabled until ZAWYA_API_KEY and feed URL are configured.</p>`;

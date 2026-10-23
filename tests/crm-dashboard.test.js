@@ -21,4 +21,9 @@ assert.ok(html.indexOf('/mobile-ui.css?v=') > html.indexOf('/crm-dashboard.css?v
 assert.ok(vercel.builds.some(item => item.src === "crm-dashboard.css" && item.use === "@vercel/static"));
 assert.ok(vercel.routes.some(item => item.src === "/crm-dashboard.css" && item.dest === "/crm-dashboard.css"));
 assert.ok(worker.includes('"/crm-dashboard.css"'));
+assert.match(css, /#adminDashboardWorkRow\s*\{[^}]*minmax\(0, 1\.5fr\) minmax\(300px, 1fr\)/s);
+assert.match(css, /\.dashboard-activity-item\s*\{[^}]*height:\s*auto\s*!important[^}]*text-align:\s*left/s);
+assert.match(css, /@media \(max-width: 1100px\)[\s\S]*#adminDashboardWorkRow\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+assert.match(html, /id="adminDashboardWorkRow"[^>]*aria-label="Lead plans and intelligence"/);
+assert.match(css, /#adminDashboardBottomRow\s*\{[^}]*height:\s*auto\s*!important/s);
 console.log("PASS proposal dashboard surfaces, readable content, normal flow and static asset contracts");

@@ -354,6 +354,36 @@ and exclusions; no production browser tests or provider operations were run.
   Microphone permissions, production UAT,
   provider errors, native zoom and the complete design/state matrix remain pending.
 
+### Admin Dashboard presentation phase
+
+- Compared proposal page 32 with the current dashboard. The overdue alert now
+  precedes KPIs; existing Lead Action Plans and intelligence/Director Alerts
+  share a desktop work row and stack in document order on smaller screens.
+  Existing overview collapse, lower operational cards, configuration agent,
+  market snapshot and funnel remain available; no proposed feature is added.
+- Extended shared `crm-dashboard.css`, rather than creating a role-specific
+  theme. Uses the same white/teal panels, navy typography and safe gold-italic
+  title helper. The DOM arranger moves existing elements only; dataset, API,
+  permission, count, collapse-storage and event-handler logic are unchanged.
+- The proposal's Assigned Leads chart has no matching existing dashboard
+  component and is omitted; the existing performance snapshot stays on Salesmen.
+- Corrected lower-card left alignment and removed legacy parent/child fixed
+  heights that clipped enlarged records and mobile Pipeline Health totals.
+  Regression checks compare rendered scroll/client heights, not CSS alone.
+- Added four-profile `test:ui:dashboard`: counts in all four Admin summaries and
+  eight Salesman KPI/stage summaries match their sources; search/reset, Escape,
+  focus restoration, bulk plan expand/collapse, Intel collapse, route return,
+  mobile wrapping and page overflow are covered. Final four-profile dashboard
+  run passed in 41.9s, including alert-button alignment and teal market bars.
+- First verify failure was the old direct-after-action-plan DOM assertion in
+  `dashboard-summary-modal.test.js`; replaced it with the new work-row equivalent
+  while retaining count, permission, focus and data-source assertions. Verify
+  passed. Final `npm run verify`: PASS. Full `npm run test:ui`: PASS, 28 flows
+  (8 core in 2.7m, 4 shell in 24.2s, 4 data in 39.7s, 4 team in 28.5s,
+  4 reports in 1.0m and 4 dashboard in 41.9s). A final market-bar-only color
+  refinement is covered by the fresh dashboard suite and token contract test.
+  Full provider/error/zoom coverage and final all-screen comparison remain pending.
+
 ## 4. Existing page and route inventory
 
 Frontend: static SPA in `index.html` and `client.js`, not React/Vue/Angular. Query views are restricted by `parseAppRoute()`; nested lead URLs retain browser history and tab state. Keep IDs, data attributes, event delegation and focus restoration stable.
