@@ -9180,6 +9180,20 @@ function renderLossDetails(lead) {
   `;
 }
 
+function companyAiActionsMarkup(lead) {
+  const actions = [
+    ["prepare", "Prepare Me For This Meeting"],
+    ["next", "What Should I Do Next?"],
+    ["email", "Draft Follow-Up Email"],
+    ["summary", "Summarise Relationship"],
+    ["flag", "Flag Needs Attention"]
+  ];
+  return `<section class="drawer-section company-ai-actions" aria-label="Company AI actions">
+    <h3>Company AI actions</h3>
+    <div class="drawer-primary-actions">${actions.map(([action, label]) => `<button class="ghost-button${action === "flag" ? " danger" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}">${label}</button>`).join("")}</div>
+  </section>`;
+}
+
 function renderDrawerOverview(lead) {
   const overdue = lead.next_action_date && lead.next_action_date < today();
   const primaryContact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ");
@@ -9212,6 +9226,7 @@ function renderDrawerOverview(lead) {
   return `
     ${autoEnrichmentBanner(lead)}
     ${overviewSnapshot}
+    ${companyAiActionsMarkup(lead)}
     <section class="drawer-section drawer-overview-panel drawer-overview-panel--contact">
       <div class="drawer-tab-heading">
         <div>
@@ -9623,6 +9638,17 @@ function renderLeadDrawer() {
 }
 
 function bindLeadDrawerEvents() {
+  els.leadDetailPageContent?.querySelectorAll("[data-company-ai-action]").forEach(button => {
+    button.addEventListener("click", () => {
+      const lead = state.leads.find(item => item.id === button.dataset.companyAiLead);
+      if (!lead) return;
+      if (button.dataset.companyAiAction === "flag") {
+        openFlagAttentionModal(lead);
+        return;
+      }
+      runLeadAiAction(lead, button.dataset.companyAiAction);
+    });
+  });
   document.querySelectorAll("[data-lead-intelligence-pdf-download]").forEach(button => {
     button.addEventListener("click", async () => {
       try {

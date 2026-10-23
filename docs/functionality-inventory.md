@@ -1,5 +1,13 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+### Company AI Actions Checkpoint (23 October)
+
+Owner-approved exposure: active Lead Overview now includes the five existing
+company AI controls. Four synthetic role/viewport tests pass for controls,
+request payloads, CRM-data fallback, unavailable response and flag cancellation.
+`npm run verify` passes. Existing provider APIs and permissions are unchanged;
+external provider success and the whole-route presentation audit remain pending.
+
 ## 1. Scope and evidence
 
 - Inventory date: 22 October 2026 (Asia/Dubai).

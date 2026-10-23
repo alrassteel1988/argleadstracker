@@ -1,4 +1,17 @@
 /* Shared record presentation; all six tabs and existing forms stay intact. */
+body #appShell #leadDetailView .company-ai-actions .drawer-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--crm-space-2);
+  margin-top: var(--crm-space-2);
+}
+
+body #appShell #leadDetailView .company-ai-actions button {
+  min-height: 44px;
+  white-space: normal;
+  text-align: left;
+}
+
 body #appShell #leadDetailView {
   grid-template-areas: "ai info";
 }

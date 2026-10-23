@@ -332,3 +332,22 @@ Later owner decisions and completed phases supersede earlier pending notes.
   no time-based automatic stage change or new business rule is introduced.
   The final four-profile dialog rerun passed with the Dormant popup and selector
   assertions; the complete migration and production UAT remain outstanding.
+
+## Approved Company AI Action Exposure
+
+- Owner approved exposing existing company AI actions on active Lead Details.
+  Baseline rendered these controls only in an always-hidden legacy panel.
+- Overview now exposes all five existing company actions, reusing their handlers,
+  endpoint, cooldown, CRM-data fallback and Flag Needs Attention confirmation.
+  No provider, authorization, database or routing changes are included.
+- Four role/viewport browser checks pass for visibility, 44px controls, exact
+  action request payloads, real CRM-data fallback, explicit unavailable response
+  and cancelling Flag Needs Attention. External AI generation remains unverified.
+- Expanded presentation audit is work in progress, separate from the previously
+  passing 32-flow browser baseline. Its addition is not full accessibility or
+  full-route sign-off.
+- Expanded audit first navigation failure: Admin desktop clicked the existing
+  lead-timeline Edit control, but `#activityEditDialog` remained hidden after
+  five seconds. This has not been classified as a regression or repaired.
+  Partial text/contrast findings are retained outside the repository in the
+  temporary presentation-audit directory for follow-up; they are not sign-off.

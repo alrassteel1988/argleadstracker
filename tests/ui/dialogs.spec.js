@@ -3,6 +3,40 @@ const { capture, login, blockExternalTraffic } = require("./helpers");
 
 test.beforeEach(async ({page}) => blockExternalTraffic(page));
 
+test("existing company AI actions are exposed on Lead Details", async ({page}, info) => {
+  await login(page, info);
+  await page.goto("/leads/ui-lead-1?tab=overview");
+  const actions = page.locator("#leadDetailView [data-company-ai-action]");
+  await expect(actions).toHaveCount(5);
+  for (const button of await actions.all()) {
+    await expect(button).toBeVisible();
+    expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  }
+  let mutations = 0;
+  page.on("request", request => {
+    if (request.method() !== "GET" && /attention-flags/.test(request.url())) mutations++;
+  });
+  await page.locator('[data-company-ai-action="flag"]').click();
+  await expect(page.locator("#flagAttentionDialog")).toBeVisible();
+  await page.locator("#closeFlagAttention").click();
+  expect(mutations).toBe(0);
+  for (const action of ["prepare", "next", "email", "summary"]) {
+    await page.goto("/leads/ui-lead-1?tab=overview");
+    const requestPromise = page.waitForRequest(request => request.url().endsWith("/api/leads/ui-lead-1/ai-actions") && request.method() === "POST");
+    await page.locator(`[data-company-ai-action="${action}"]`).click();
+    expect((await requestPromise).postDataJSON()).toEqual({action});
+    await expect(page.locator("#aiActionDialog")).toBeVisible();
+    await expect(page.locator("#aiActionDialog")).toContainText("CRM-data fallback was used.");
+    await page.locator("#aiActionDialog").press("Escape");
+  }
+  await page.goto("/leads/ui-lead-1?tab=overview");
+  await page.route("**/api/leads/ui-lead-1/ai-actions", route => route.fulfill({status:503, contentType:"application/json", body:JSON.stringify({error:"Synthetic provider unavailable"})}));
+  await page.locator('[data-company-ai-action="prepare"]').click();
+  await expect(page.locator("#aiActionDialog")).toContainText("Couldn't generate this right now.");
+  await page.locator("#aiActionDialog").press("Escape");
+  await capture(page, info, "61-company-ai-actions");
+});
+
 async function checkDialog(page, id, mobile) {
   const dialog = page.locator(`#${id}`);
   await expect(dialog).toBeVisible();
