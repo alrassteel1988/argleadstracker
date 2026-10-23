@@ -410,7 +410,8 @@ Later owner decisions and completed phases supersede earlier pending notes.
 - Final checkpoint: `npm run verify`, `npm run test:ui:audit` (8) and
   `npm run test:ui:dashboard` (4) PASS. The original combined UI command is not
   reported as a clean pass after its control-fixture failure; all 36 functional
-  checks had passed before that failure. A whole-chain rerun remains pending.
+  checks had passed before that failure. The later Activity stage-label
+  checkpoint below records the subsequently completed clean whole-chain run.
 - The strengthened native-zoom rerun passed five cases but Salesman 125%
   returned to sign-in when navigating to PMR. Sanitized trace review found
   `/api/auth/me` unfinished (status -1), with preceding API requests 200 and no
@@ -436,3 +437,33 @@ Later owner decisions and completed phases supersede earlier pending notes.
   deterministic local/CI results, existing verification and browser workflows
   preserved. Dependency/configuration and CI changes belong to that task's
   separate reviewed commit, not this UI checkpoint.
+
+## Activity Stage Label Checkpoint
+
+- Recognized Activity stage badges reuse `STAGE_DISPLAY_LABELS`, including
+  LOST to Blocked and NEW to Prospect. No stored field, alias, stage selector
+  value, business classification, reminder rule or API payload is changed.
+- Both the active Activity table and retained card renderer use that map;
+  custom/unrecognized stage text remains visible unchanged. Reminder, deletion,
+  completed and upcoming status precedence is preserved.
+- The focused VM checks use production declarations and frozen synthetic inputs
+  for Admin and Salesman. They cover all six stages, aliases, custom text,
+  escaping and status precedence. The initial expected failure was `NEW !==
+  Prospect`; a missing audio/transcript renderer stub in the test context was
+  then corrected. `node tests/crm-activity.test.js` passes.
+- Existing browser Activity coverage now asserts ten mapped row labels before
+  exercising the same filters and pagination. Service-worker revision v100
+  invalidates presentation assets only; API-cache exclusions remain unchanged.
+- Authentication resilience and linting remain separately approved work. No
+  authentication code or new lint toolchain is included in this checkpoint.
+- Final `npm run test:ui` PASS: all 44 checks in one clean sequential command,
+  including the new Activity row labels, unchanged workflows and the corrected
+  auditor controls. Final `npm run verify` PASS, including syntax, authentication
+  safeguards, unit/API/security tests, presentation contracts and build. This
+  clears the prior whole-chain fixture gate, not the separately documented
+  transient-startup weakness, manual proposal comparison or production UAT.
+- Files in this step: `client.js`, `sw.js`, `tests/crm-activity.test.js`,
+  `tests/ui/baseline.spec.js`, `tests/activity-dashboard-latest.test.js`,
+  `tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`,
+  `docs/functionality-inventory.md` and this file. No new component, route,
+  dependency, authentication change or database change is included.

@@ -11449,7 +11449,7 @@ function activityCardMarkup(activity) {
   const reminderOverdue = isReminder && dueDate && dueDate.slice(0, 10) < today() && activity.reminder_status !== "completed";
   const statusLabel = isReminder
     ? activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled")
-    : activity.stage || "Prospect";
+    : STAGE_DISPLAY_LABELS[normalizeStageKey(activity.stage, "")] || activity.stage || "Prospect";
   const statusClass = reminderOverdue ? "hot" : "activity-status-neutral";
   const actionLabel = isReminder ? `${statusLabel}${dueDate ? ` · ${formatDisplayDate(dueDate)}` : ""}` : formatDisplayDate(activityDisplayDate(activity));
   const timeLabel = activityDisplayTime(activity);
@@ -11617,7 +11617,7 @@ function activityTableStatus(activity) {
   if (status.toLowerCase() === "completed") return { label: "Completed", tone: "completed" };
   if (reminder) return { label: status || "Scheduled", tone: "scheduled" };
   if (dueDate && dueDate >= today()) return { label: "Upcoming", tone: "upcoming" };
-  return { label: activity.stage || status || "Logged", tone: "neutral" };
+  return { label: STAGE_DISPLAY_LABELS[normalizeStageKey(activity.stage, "")] || activity.stage || status || "Logged", tone: "neutral" };
 }
 
 function activityTableMarkup(activities) {

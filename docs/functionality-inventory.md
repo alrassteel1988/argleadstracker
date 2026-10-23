@@ -1,5 +1,20 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+### Activity Stage Vocabulary Checkpoint (23 October)
+
+Current clean gates: `node tests/crm-activity.test.js` PASS, `npm run test:ui`
+PASS (all 44 checks in one sequential command), and `npm run verify` PASS.
+This clears the earlier combined-run auditor-fixture failure gate without
+weakening assertions. It does not resolve the separately investigated startup
+authentication weakness or constitute complete visual/production acceptance.
+
+Activity stage badges use the approved shared display mapping while stored
+keys, unknown custom values, reminder status precedence, API payloads and
+history remain unchanged. Frozen-input regression checks cover both roles;
+browser checks verify ten mapped Activity rows before the existing filters and
+pagination tests. Desktop Before/After and mobile review captures were taken
+with synthetic records. No authentication, schema or permission change.
+
 ### Native Zoom and Mobile Overflow Checkpoint (23 October)
 
 `npm run test:ui:zoom` passes all six isolated role/zoom cases: Admin and
@@ -20,7 +35,8 @@ The serial combined browser run passed all 36 functional checks, then failed
 two new mobile auditor-control checks. Their deliberate overflow expanded
 `innerWidth`; the corrected auditor uses layout-viewport `clientWidth`. Focused
 audit (8 checks) and dashboard (4 checks) reruns pass with that stronger check.
-The full combined command has not been rerun since that test correction.
+The full combined command had not been rerun at that checkpoint; the latest
+Activity vocabulary checkpoint above now records its clean 44-check pass.
 
 Final `npm run verify` passes. The initial native-zoom command passed six cases;
 the stricter-auditor rerun passed five but returned Salesman 125% to sign-in at
@@ -33,11 +49,14 @@ silently counted as a clean full-command pass or production readiness.
 Owner decision: linting is an approved separate follow-up, not a new toolchain
 inside this migration. No separate lint or TypeScript result is claimed.
 
-Remaining display-label review: `activityCardMarkup` and `activityTableStatus`
-still render stored activity stage strings directly. Their stage badges need
-the approved display-only mapping (for example LOST to Blocked) in a subsequent
-presentation step, preserving reminder/status semantics and stored history.
-The current typography/overflow audit does not check label vocabulary.
+Activity display-label follow-up: `activityCardMarkup` and `activityTableStatus`
+now use the existing approved map for recognized stage values. Unknown custom
+values, reminder/completion/deletion/overdue/upcoming status precedence and
+stored activity history remain unchanged. The focused regression first failed
+with `NEW !== Prospect`, then passed after the two display expressions changed.
+Browser assertions now check the first ten Activity row labels, in addition to
+the existing navigation, filter and pagination coverage. Full browser and
+canonical verification results are recorded in the checkpoint below.
 
 Checkpoint files: `crm-dashboard.css`, `sw.js`, `package.json`,
 `playwright.ui.config.js`, `tests/activity-dashboard-latest.test.js`,
@@ -103,16 +122,17 @@ Every screen, field and action below is **PENDING full after-re-skin verificatio
 | Command/check | Baseline result | Post-re-skin |
 | --- | --- | --- |
 | `git fetch origin main` | PASS; baseline above | PENDING |
-| `npm run verify` | PASS; exit 0 before any UI edits | PENDING after each step |
-| `npm run check` | PASS as part of verify; Node syntax checks | PENDING |
-| `npm run test:sales-lead-summary-auth-loading` | PASS; includes refresh-session tests | PENDING |
-| `npm test` | PASS; unit, API/HTTP, UI contract and security suites | PENDING |
-| `npm run build` | PASS; existing build reports no asset compilation required | PENDING |
+| `npm run verify` | PASS; exit 0 before any UI edits | PASS at latest Activity vocabulary checkpoint |
+| `npm run check` | PASS as part of verify; Node syntax checks | PASS within latest verify |
+| `npm run test:sales-lead-summary-auth-loading` | PASS; includes refresh-session tests | PASS within latest verify; not a transient-startup fix |
+| `npm test` | PASS; unit, API/HTTP, UI contract and security suites | PASS within latest verify; local/mocked providers |
+| `npm run build` | PASS; existing build reports no asset compilation required | PASS within latest verify; no asset compilation |
 | Separate lint | NOT AVAILABLE in package.json; no substitute tool invented | Owner approved a separate linting task; implementation PENDING |
 | Separate TypeScript check | NOT AVAILABLE; JavaScript application, no typecheck script | N/A unless owner configures tooling separately |
-| `npm run test:ui:baseline` | PASS: 8 tests across Admin/Salesman at desktop/mobile, synthetic local storage only | PENDING after styling; main flows, not every inventory item |
+| `npm run test:ui:baseline` | PASS: 8 tests across Admin/Salesman at desktop/mobile, synthetic local storage only | PASS: 8 within latest combined UI run; not every inventory item |
+| `npm run test:ui` | Combined chain added during migration | PASS: all 44 checks in one clean command at latest checkpoint |
 | Production browser UAT scripts | NOT RUN: default to production, create a user and lead, perform cleanup | Never run without separate explicit production authorization |
-| Before screenshots, 1440px and 375px, both roles | Main-flow screenshots captured by isolated suite; full state/dialog matrix incomplete | After captures PENDING |
+| Before screenshots, 1440px and 375px, both roles | Main-flow screenshots captured by isolated suite; full state/dialog matrix incomplete | 68 matching main-flow Before/After files captured; full visual/state sign-off PENDING |
 | Production smoke test, external providers and live RLS | NOT RUN; no production access authorized by this visual task | Not a local-suite claim |
 
 First baseline test failure: **none**. No behavioral test was changed or removed during this inventory.

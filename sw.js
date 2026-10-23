@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v99-revised-ui-mobile-dashboard";
+const CACHE_VERSION = "arg-pwa-v100-revised-ui-activity-labels";
 const APP_SHELL = [
   "/",
   "/index.html",

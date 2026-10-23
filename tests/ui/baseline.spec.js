@@ -163,6 +163,10 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
         await expect(page.locator("#activityWeekRange")).toHaveText(range);
         if (!await page.locator("#activityCompanySearch").isVisible()) await page.locator("#activityFilterToggle").click();
         await expect(page.locator(".activity-table tbody tr")).toHaveCount(10);
+        await expect(page.locator('.activity-table tbody tr [data-label="Status"]')).toHaveText([
+          "Prospect", "Outreach", "Engaged", "Active", "Blocked", "Dormant",
+          "Prospect", "Outreach", "Engaged", "Active"
+        ]);
         await page.getByRole("button", { name: "Next activity page", exact: true }).click();
         await expect(page.locator(".activity-table tbody tr")).toHaveCount(8);
         await page.getByRole("button", { name: "Previous activity page", exact: true }).click();
