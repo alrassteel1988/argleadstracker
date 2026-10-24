@@ -43,7 +43,7 @@ test("AI workspace routes reuse authorized company and portfolio actions", async
   await page.locator("#aiActionDialog").press("Escape");
 
   await page.goto("/?view=meeting-prep");
-  await expect(page.locator('[data-workspace-company-action="prepare"]')).toBeVisible();
+  await expect(page.locator('[data-meeting-generate]')).toBeVisible();
   await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).toHaveClass(/active/);
   if (role === "salesman") {
     for (const [view, action] of [["focus", "focus_today"], ["neglected", "neglected"]]) {

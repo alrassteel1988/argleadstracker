@@ -28,6 +28,20 @@ assert.match(client, /if \(!isSalesmanRole\(\) && \["focus", "neglected"\]\.incl
 console.log("PASS AI workspace routes, existing action reuse and escaped caller-scoped company selection");
 
 {
+  const parse = vm.runInNewContext(`${client.match(/function meetingBriefSections\([^]*?\n\}/)[0]}; meetingBriefSections`);
+  const sections = parse("## Recommended ask\r\nConfirm a contact.\r\n## Talking points\n- Recorded demand\n## Additional context\n<untrusted>");
+  assert.equal(sections["Recommended ask"].trim(), "Confirm a contact.");
+  assert.match(sections["Talking points"], /Recorded demand/);
+  assert.equal(sections["Additional context"].trim(), "<untrusted>");
+  assert.equal(parse("No headings supplied").Brief.trim(), "No headings supplied");
+  assert.equal(parse("## constructor\nSafe text").constructor.trim(), "Safe text");
+  assert.match(client, /if \(meetingBriefState === request && String\(state\.currentUser\?\.id\) === request\.owner && currentView === "meeting-prep"\)/);
+  assert.match(client, /if \(meetingBriefState\?\.owner !== owner\) meetingBriefState = null/);
+  assert.match(client, /state\.leads\.find\(item => String\(item\.id\) === meetingBriefState\.leadId\)/);
+  console.log("PASS meeting sections preserve extra output and scope late results to the selected owner and company");
+}
+
+{
   const leads = [{id:'a',company_name:'<img src=x>',tier:'1',stage:'NEGOTIATION'}, {id:'b',company_name:'Second',stage:'CONTACTED'}, {id:'c',company_name:'Never',stage:'NEW'}];
   const metrics = {contact_overdue_companies:[
     {id:'b',contact_overdue_by:10,days_since_activity:31,expected_contact_days:21},

@@ -1,5 +1,25 @@
 # UI Proposal: Open Questions, Mismatches and Hold Points
 
+## Meeting Brief Reference: 24 October
+
+- Dedicated meeting-prep workspace now uses the supplied two-column reference:
+  recommended ask, talking points, source sections, key facts, temporary checklist
+  and after-meeting actions. A company selector preserves explicit record scope.
+- Generate and Regenerate reuse the existing company AI action. Merely opening
+  the page or changing companies does not call a provider. Existing dialog users
+  can open the full brief without generating it a second time.
+- The complete generated output remains available via Copy brief. Unrecognized
+  sections are retained and escaped. Provider fallback and errors are explicit;
+  no sample ask, intelligence, buyer, health score or quotation is invented.
+- Key facts use existing CRM fields and current CRM health, not the unapproved
+  multi-signal model. PMR details link to the actual PMR tab rather than implying
+  no PMR exists when the workspace has not loaded that list.
+- Checklist state is temporary, company-scoped and explicitly not saved. Log
+  meeting opens the existing activity form with Meeting selected; nothing is
+  recorded until the user saves. File PMR opens the existing selected-lead form.
+- Quote creation remains omitted. This design update performs no database,
+  permission, AI-provider, production deployment or automatic activity writes.
+
 ## Release Status Correction: 24 October
 
 - Latest owner definition: Block is for Active customers with payment issues,

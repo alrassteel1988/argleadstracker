@@ -5,7 +5,7 @@ const { defineConfig } = require("@playwright/test");
 const port = Number(process.env.CRM_UI_TEST_PORT || 4179);
 const baseURL = `http://127.0.0.1:${port}`;
 const suite = process.env.CRM_UI_SUITE || "baseline";
-if (!["baseline", "record", "shell", "data", "team", "reports", "dashboard", "dialogs", "audit", "management", "comparison", "zoom", "ai-workspace"].includes(suite)) throw new Error("Invalid UI suite");
+if (!["baseline", "record", "meeting", "shell", "data", "team", "reports", "dashboard", "dialogs", "audit", "management", "comparison", "zoom", "ai-workspace"].includes(suite)) throw new Error("Invalid UI suite");
 const profiles = suite === "zoom"
   ? ["admin-desktop", "salesman-desktop"].flatMap(role => [1, 1.25, 1.5].map(zoom => ({name:`${role}-zoom-${Math.round(zoom * 100)}`, zoom})))
   : ["admin-desktop", "salesman-desktop", "admin-mobile", "salesman-mobile"].map(name => ({name}));
