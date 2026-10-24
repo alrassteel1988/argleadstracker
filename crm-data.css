@@ -470,3 +470,107 @@ body.pipeline-compact-mode #appShell .pipeline-loading-state span {
     grid-template-columns: 1fr !important;
   }
 }
+/* Salesman Pipeline reference; Admin retains the shared full-width worklist. */
+body.pipeline-salesman-mode #appShell .topbar { background: transparent !important; }
+body.pipeline-salesman-mode #appShell #topbarPageTitle { font: 700 34px/1.2 var(--crm-font-ui); }
+body.pipeline-salesman-mode #appShell #metricsShell { margin: 0 0 20px; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+body.pipeline-salesman-mode #appShell #metricsShell > .panel-header { display: none; }
+body.pipeline-salesman-mode #appShell #metricsPanel { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; }
+body.pipeline-salesman-mode #appShell #metricsPanel > article { padding: 16px 20px; border: 1px solid var(--crm-divider) !important; border-top: 2px solid var(--crm-teal) !important; border-radius: 14px !important; background: #FFFFFF !important; box-shadow: none !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel > .metric-active { border-top-color: var(--crm-navy) !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel > .metric-risk { border-top-color: var(--crm-health-red) !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel > .metric-due { border-top-color: var(--crm-amber) !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel > article > span { font-size: 12px !important; letter-spacing: .08em; text-transform: uppercase; }
+body.pipeline-salesman-mode #appShell #metricsPanel > article > span::before { content: none; }
+body.pipeline-salesman-mode #appShell #metricsPanel strong { font-size: 28px !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel .metric-risk strong { color: var(--crm-health-red) !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel { padding: 0 !important; border: 1px solid var(--crm-card-border) !important; border-radius: 14px !important; background: #FFFFFF !important; box-shadow: none !important; }
+body.pipeline-salesman-mode #appShell .pipeline-list-header { display: none; }
+body.pipeline-salesman-mode #appShell #leadList { min-height: 0; max-height: none; overflow: visible; }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--crm-divider); background: #FFFFFF; border-radius: 14px 14px 0 0; }
+body.pipeline-salesman-mode .salesman-pipeline-filter { flex: 1 1 120px; min-width: 120px; }
+body.pipeline-salesman-mode .salesman-pipeline-filter:first-child { flex: 1.6 1 190px; min-width: 190px; }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-filter :is(input,select) { width: 100%; min-width: 0; min-height: 44px; font-size: 14px; background: #FFFFFF !important; }
+body.pipeline-salesman-mode .salesman-pipeline-filter-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+body.pipeline-salesman-mode #appShell #clearPipelineFilters { font-size: 0 !important; white-space: nowrap; min-height: 44px; padding: 8px 10px; }
+body.pipeline-salesman-mode #appShell #clearPipelineFilters::after { content: "Clear"; font-size: 12px; }
+body.pipeline-salesman-mode #appShell #refreshPipelineLeads { font-size: 0 !important; width: 44px; min-height: 44px; padding: 8px; }
+body.pipeline-salesman-mode #refreshPipelineLeads::before { margin: 0; }
+body.pipeline-salesman-mode .salesman-pipeline-more { position: relative; flex: 0 0 auto; }
+body.pipeline-salesman-mode .salesman-pipeline-more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--crm-navy); font-size: 13px; }
+body.pipeline-salesman-mode .salesman-pipeline-more-fields { position: absolute; top: 100%; right: 0; z-index: 12; display: grid; gap: 14px; width: 280px; padding: 16px; border: 1px solid var(--crm-control-border); border-radius: 10px; background: #FFFFFF; box-shadow: var(--crm-shadow-panel); }
+body.pipeline-salesman-mode .salesman-pipeline-more-fields label { color: var(--crm-navy); font-size: 14px; }
+body.pipeline-salesman-mode .salesman-pipeline-more-fields input[type="checkbox"] { width: 18px; min-height: 18px; accent-color: var(--crm-navy); }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-due { display: block; margin-top: 4px; font-size: 12px; color: var(--crm-text-secondary); }
+body.pipeline-salesman-mode #appShell #pipelinePagination { margin: 0; padding: 12px 20px; border-top: 1px solid var(--crm-divider); border-radius: 0 0 14px 14px; background: #FFFFFF; }
+body.pipeline-salesman-mode #appShell #aiAssistantLauncher { position: static !important; inset: auto !important; transform: none !important; min-height: 44px; margin: 0; }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-log { background: var(--crm-amber) !important; border-color: var(--crm-amber) !important; color: var(--crm-navy) !important; white-space: nowrap; }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-alert:not(.hidden) { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--crm-health-red); border-radius: 12px; background: var(--crm-health-red-soft); color: var(--crm-navy); }
+body.pipeline-salesman-mode .salesman-pipeline-alert p { flex: 1; margin: 0; font-size: 13px; line-height: 1.5; }
+body.pipeline-salesman-mode .salesman-pipeline-alert strong { color: var(--crm-health-red); }
+body.pipeline-salesman-mode .salesman-pipeline-alert button { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+body.pipeline-salesman-mode [data-salesman-pipeline-dismiss] { font-size: 0 !important; width: 44px; --crm-button-icon: var(--crm-icon-x); }
+body.pipeline-salesman-mode [data-salesman-pipeline-dismiss]::before { margin: 0; }
+@media (min-width: 721px) {
+  body.pipeline-salesman-mode #appShell .pipeline-lead-table { min-width: 0; width: 100%; table-layout: auto; }
+  body.pipeline-salesman-mode #leadList:not(.salesman-pipeline-all-columns) .pipeline-lead-table :is(th,td):is(:nth-child(4),:nth-child(5),:nth-child(8)) { display: none; }
+  body.pipeline-salesman-mode #appShell .pipeline-lead-table :is(th,td) { padding: 12px 16px; background: #FFFFFF; }
+  body.pipeline-salesman-mode #appShell .pipeline-lead-table th { position: static; font-size: 12px; }
+  body.pipeline-salesman-mode #appShell .lead-table-company { width: 33%; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions { display: table-cell; white-space: nowrap; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions button { display: inline-flex; vertical-align: middle; min-height: 36px; padding: 8px 10px; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions .pipeline-row-action { font-size: 0 !important; min-width: 36px; padding: 8px; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions .pipeline-row-action::before { margin: 0; }
+  body.pipeline-salesman-mode #appShell .lead-table-overdue-red,
+  body.pipeline-salesman-mode #appShell .lead-table-overdue-amber { padding: 0; border: 0; background: none; color: var(--crm-health-red); }
+  body.pipeline-salesman-mode #appShell #leadList.salesman-pipeline-all-columns { overflow-x: auto; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-all-columns .pipeline-lead-table { min-width: 1120px; }
+}
+@media (max-width: 720px) {
+  body.pipeline-salesman-mode #appShell #metricsPanel { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  body.pipeline-salesman-mode #appShell #metricsPanel > article { padding: 12px; }
+  body.pipeline-salesman-mode #appShell #topbarPageTitle { font-size: 28px; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-alert:not(.hidden) { flex-wrap: wrap; }
+  body.pipeline-salesman-mode .salesman-pipeline-alert p { flex-basis: 100%; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-filters { padding: 12px; }
+  body.pipeline-salesman-mode .salesman-pipeline-filter { flex-basis: calc(50% - 10px); min-width: 0; }
+  body.pipeline-salesman-mode .salesman-pipeline-filter:first-child { flex-basis: 100%; min-width: 0; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-filter :is(input,select) { font-size: 16px; }
+  body.pipeline-salesman-mode .salesman-pipeline-more-fields { right: auto; left: 0; max-width: calc(100vw - 64px); }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions { flex-wrap: wrap; gap: 8px; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions button { min-height: 44px; }
+}
+body.pipeline-salesman-mode #appShell #overdueBanner { display: none !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-button { min-height: 32px; padding: 0 !important; background: none !important; font-size: 12px !important; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-button::before { content: none !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-indicator { display: inline; font-size: 12px; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-button:not(.active) .pipeline-sort-indicator { visibility: hidden; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .live-lead-table :is(th,td) { background: #FFFFFF !important; padding: 8px 16px; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .lead-table-badge { border: 0 !important; box-shadow: none !important; border-radius: 5px !important; color: var(--crm-navy) !important; background: var(--crm-surface-muted) !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel [class*="lead-table-overdue-"] { background: transparent !important; padding: 0; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel :is(.lead-table-overdue-red,.lead-table-overdue-amber) { color: var(--crm-health-red) !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel [class*="lead-table-priority-"] { background: transparent !important; padding: 0; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel [class*="lead-table-priority-"]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--crm-text-secondary); }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .lead-table-priority-red::before { background: var(--crm-health-red); }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .lead-table-priority-amber::before { background: var(--crm-health-amber); }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .lead-table-priority-green::before { background: var(--crm-health-green); }
+body.pipeline-salesman-mode #appShell :is(#pipelineWorkspace,#pipelineView,#pipelineListPanel,.pipeline-worklist-column) { height: auto !important; min-height: 0; max-height: none; overflow: visible; }
+@media (max-width: 720px) {
+  body.pipeline-salesman-mode #appShell .lead-table-row td[data-label="Stage"]::before { content: "Status"; }
+}
+@media (min-width: 721px) {
+  body.pipeline-salesman-mode #appShell #leadList { max-height: max(300px,calc(100dvh - 460px)); overflow: auto !important; }
+  body.pipeline-salesman-mode #appShell #pipelineListPanel .live-lead-table td { padding: 6px 16px !important; line-height: 1.35; }
+  body.pipeline-salesman-mode #appShell #pipelineListPanel .live-lead-table td small { line-height: 1.35; }
+}
+@media (max-width: 720px) {
+  body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-button { min-height: 44px !important; }
+  body.pipeline-salesman-mode #appShell #refreshPipelineLeads { min-width: 44px; flex: 0 0 44px; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-due { display: none; }
+  body.pipeline-salesman-mode .salesman-pipeline-more-fields label { min-height: 44px; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-alert button { width: auto !important; min-width: 44px; }
+  body.pipeline-salesman-mode #appShell #metricsPanel > article { display: flex; flex-direction: column; gap: 6px; }
+  body.pipeline-salesman-mode #appShell #metricsPanel > article small { font-size: 12px !important; }
+}
+body.pipeline-salesman-mode #appShell #pipelineWorkspace { flex: 0 0 auto !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+body.pipeline-salesman-mode #appShell #pipelineView { flex: 0 0 auto; border: 0 !important; background: transparent !important; }

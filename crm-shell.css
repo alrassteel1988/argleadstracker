@@ -26,6 +26,13 @@ body #appShell #overdueBanner :is(strong, b, span, .overdue-banner-copy > div, .
   line-height: 1.5 !important;
 }
 
+body #appShell #overdueBanner .overdue-banner-copy,
+body #appShell #overdueBanner .overdue-banner-copy > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 body #mobileSidebar {
   background-color: var(--crm-sidebar-end) !important;
   background-image: var(--crm-sidebar-background) !important;
@@ -35,6 +42,8 @@ body #mobileSidebar {
 
 body #mobileSidebar .sidebar-top {
   gap: 20px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 body #mobileSidebar .brand {
@@ -47,39 +56,41 @@ body #mobileSidebar .brand {
   max-width: 100%;
   height: auto;
   object-fit: contain;
+  /* Keep the original bars and lettering; omit only the embedded lower tagline. */
+  clip-path: polygon(0 0, 100% 0, 100% 58%, 20% 58%, 20% 100%, 0 100%);
 }
+body #mobileSidebar .crm-brand-image { width: 192px; }
 
 body #mobileSidebar .nav-item {
   min-height: 40px;
-  padding: 8px 12px 8px 16px;
+  padding: 10px 12px;
   border: 0 !important;
-  border-left: 3px solid var(--crm-sidebar-end) !important;
-  border-radius: 4px !important;
-  background-color: var(--crm-sidebar-end) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: none !important;
   color: var(--crm-white) !important;
   font-family: var(--crm-font-ui);
   font-size: 14px;
+  font-weight: 500;
   line-height: 1.4;
   letter-spacing: 0;
 }
 
 body #mobileSidebar .nav-item:is(:hover, :focus-visible) {
-  border-left-color: var(--crm-amber) !important;
   background-color: var(--crm-sidebar-start) !important;
   outline-color: var(--crm-amber) !important;
 }
 
 body #mobileSidebar .nav-item.active {
-  border-left-color: var(--crm-amber) !important;
-  background-color: var(--crm-sidebar-start) !important;
+  background-color: var(--crm-sidebar-active) !important;
   color: var(--crm-amber) !important;
   font-family: var(--crm-font-title);
-  font-size: 18px;
+  font-size: 16px;
   font-style: italic;
   font-weight: 700;
 }
 
 body #mobileSidebar .nav-item-icon {
+  display: inline-block !important;
   flex: 0 0 18px;
   width: 18px;
   height: 18px;
@@ -98,6 +109,9 @@ body #mobileSidebar [data-view="pipeline"] { --crm-nav-icon: var(--crm-icon-list
 body #mobileSidebar [data-view="salesmen"] { --crm-nav-icon: var(--crm-icon-users); }
 body #mobileSidebar [data-view="activity"] { --crm-nav-icon: var(--crm-icon-calendar-days); }
 body #mobileSidebar [data-view="tasks"] { --crm-nav-icon: var(--crm-icon-clipboard-list); }
+body #mobileSidebar [data-view="focus"] { --crm-nav-icon: var(--crm-icon-calendar-days); }
+body #mobileSidebar [data-view="neglected"] { --crm-nav-icon: var(--crm-icon-users); }
+body #mobileSidebar [data-view="ai-actions"] { --crm-nav-icon: var(--crm-icon-sparkles); }
 body #mobileSidebar [data-quick-view] { --crm-nav-icon: var(--crm-icon-file-text); }
 body #mobileSidebar #sidebarSearchPlaces { --crm-nav-icon: var(--crm-icon-map-pin); }
 
@@ -196,7 +210,7 @@ body #appShell .topbar-title {
 
 body #appShell .topbar-copy h1 {
   color: var(--crm-navy) !important;
-  font-family: var(--crm-font-title) !important;
+  font-family: var(--crm-font-ui) !important;
   font-size: 28px !important;
   font-weight: 700;
   line-height: 1.25 !important;
@@ -336,7 +350,7 @@ body #authScreen .auth-stats strong {
 }
 
 body #authScreen .auth-brand .crm-brand-image {
-  width: 176px;
+  width: 264px;
 }
 
 body #authScreen .auth-hero em {
@@ -377,6 +391,162 @@ body #authScreen .auth-trust-row span {
   font-size: 12px;
 }
 
+/* Login reference: split desktop, compact brand header and full-height form on phones. */
+body #authScreen {
+  padding: 0 !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: stretch;
+}
+body #authScreen .auth-shell {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+body #authScreen .auth-hero {
+  min-height: 0;
+  padding: 48px 9%;
+  gap: 48px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background-image: repeating-linear-gradient(115deg, transparent 0 34px, #FFFFFF08 34px 35px), var(--crm-sidebar-background) !important;
+}
+body #authScreen .auth-brand-caption { display: none; }
+body #authScreen .auth-hero h1 { font-size: 48px; line-height: 1.12; }
+body #authScreen .auth-hero-kicker {
+  color: var(--crm-amber) !important;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+}
+body #authScreen .auth-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+body #authScreen .auth-stats strong { font: 700 24px var(--crm-font-ui); }
+body #authScreen .auth-stats span { font-size: 10px; letter-spacing: .12em; }
+body #authScreen .auth-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 0;
+  padding: 104px 9% 40px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #FFFFFF !important;
+  box-shadow: none !important;
+}
+body #authScreen .auth-form-body {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 390px;
+  margin: auto;
+}
+body #authScreen .auth-form-intro { margin-bottom: 28px; }
+body #authScreen .auth-form-kicker {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  letter-spacing: .14em;
+}
+body #authScreen .auth-card h2 { margin: 0 0 10px; font-size: 38px; }
+body #authScreen .auth-card p { margin: 0; font-size: 14px; line-height: 1.6; }
+body #authScreen .auth-card label { font-size: 13px; color: var(--crm-navy); }
+body #authScreen .auth-input-wrap { position: relative; margin-top: 8px; }
+body #authScreen .auth-email-wrap::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  width: 16px;
+  height: 16px;
+  background: var(--crm-text-secondary);
+  mask: var(--crm-icon-mail) center / contain no-repeat;
+  pointer-events: none;
+}
+body #authScreen .auth-card input {
+  min-height: 48px;
+  padding: 12px 14px;
+  background: #FFFFFF !important;
+  font-size: 16px;
+}
+body #authScreen .auth-password-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+}
+body #authScreen .auth-email-wrap input { padding-left: 40px; }
+body #authScreen .auth-card .reset-link {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 !important;
+  font-size: 12px;
+  text-decoration: none;
+}
+body #authScreen .reset-link::before { content: none; }
+body #authScreen .auth-password-wrap input { padding-right: 48px; }
+body #authScreen .auth-password-toggle {
+  position: absolute;
+  inset: 2px 2px 2px auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 8px;
+  background: transparent !important;
+  color: var(--crm-text-secondary);
+  box-shadow: none !important;
+  cursor: pointer;
+}
+body #authScreen .auth-password-toggle[aria-pressed="true"] { color: var(--crm-navy); }
+body #authScreen .auth-card .primary-button {
+  display: flex !important;
+  flex-direction: row-reverse;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  margin-top: 28px;
+  --crm-button-icon: var(--crm-icon-arrow-right);
+}
+body #authScreen .auth-card .primary-button::before { margin: 0; }
+body #authScreen #loginMessage:not(:empty) { margin-top: 16px; }
+body #authScreen .auth-secure-badge {
+  position: absolute;
+  top: 40px;
+  right: 9%;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--crm-surface-muted);
+  color: var(--crm-navy);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+body #authScreen .auth-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--crm-divider);
+  color: var(--crm-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+body #authScreen .auth-admin-contact { color: var(--crm-navy); font-weight: 600; text-decoration: underline; }
+
 @media (max-width: 900px) {
   body #authScreen .auth-shell {
     background: var(--crm-sidebar-end) !important;
@@ -395,6 +565,48 @@ body #authScreen .auth-trust-row span {
   }
 }
 
+@media (max-width: 900px) {
+  body #authScreen .auth-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  body #authScreen .auth-hero { padding: 48px 24px 36px; gap: 0; }
+  body #authScreen .auth-brand { gap: 20px; }
+  body #authScreen .auth-brand .crm-brand-image { width: 128px; }
+  body #authScreen .auth-brand-caption {
+    display: block;
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  body #authScreen .auth-brand-caption strong {
+    display: inline;
+    font: 700 13px var(--crm-font-ui);
+    color: var(--crm-amber) !important;
+  }
+  body #authScreen :is(.auth-hero-copy, .auth-stats, .auth-secure-badge) { display: none; }
+  body #authScreen .auth-card {
+    min-height: 590px;
+    padding: 32px 24px 24px;
+    justify-content: flex-start;
+    border-radius: 24px 24px 0 0 !important;
+  }
+  body #authScreen .auth-form-body { max-width: 480px; margin: 0 auto; }
+  body #authScreen .auth-form-intro { margin-bottom: 24px; }
+  body #authScreen .auth-card h2 { font-size: 32px; }
+  body #authScreen .auth-card .reset-link { min-height: 44px; }
+  body #authScreen .auth-password-label { margin-top: 12px; }
+  body #authScreen .auth-password-wrap { margin-top: 0; }
+  body #authScreen .auth-footer {
+    width: 100%;
+    max-width: 480px;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin: auto auto 0;
+    padding-top: 16px;
+    text-align: center;
+  }
+  body #authScreen .auth-form-body { margin-bottom: 48px; }
+}
+
 @media (min-width: 1025px) {
   body #appShell {
     grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr) !important;
@@ -404,7 +616,7 @@ body #authScreen .auth-trust-row span {
     box-sizing: border-box;
     width: var(--app-sidebar-width) !important;
     max-width: var(--app-sidebar-width) !important;
-    padding: 18px 0 0 !important;
+    padding: 24px 14px 0 !important;
   }
 }
 

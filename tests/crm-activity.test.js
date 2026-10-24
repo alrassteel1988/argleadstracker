@@ -46,7 +46,7 @@ for (const role of ["admin", "salesman"]) {
     activityAudioMarkup:() => "", activityTranscriptMarkup:() => ""
   });
   vm.runInContext(`${stageDeclarations}\n${declaration("escapeHtml")}\n${declaration("activityTableStatus")}\n${declaration("activityCardMarkup")}`, context);
-  for (const [stage, label] of Object.entries({NEW:"Prospect", CONTACTED:"Outreach", NEGOTIATION:"Engaged", WON:"Active", DORMANT:"Dormant", LOST:"Blocked", lost:"Blocked", Sampling:"Engaged", "Custom stage":"Custom stage"})) {
+  for (const [stage, label] of Object.entries({NEW:"Prospect", CONTACTED:"Outreach", NEGOTIATION:"Engaged", WON:"Active", DORMANT:"Dormant", LOST:"Lost", lost:"Lost", Sampling:"Engaged", "Custom stage":"Custom stage"})) {
     const activity = Object.freeze({stage, type:"Note", company_name:"Synthetic company", note:"Synthetic note"});
     assert.equal(context.activityTableStatus(activity).label, label);
     assert.equal(context.activityTableStatus(activity).tone, "neutral");

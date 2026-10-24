@@ -9,10 +9,21 @@ body.tasks-mode #appShell > .main {
   min-height: 100dvh !important;
   overflow: visible !important;
   background-image: var(--crm-background) !important;
+  padding: 28px 36px !important;
 }
+body.tasks-mode #appShell #overdueBanner { display: none !important; }
 body.tasks-mode #appShell #mobileSidebar { background: var(--crm-sidebar-background) !important; }
-body.tasks-mode #appShell .topbar { background: var(--crm-surface) !important; border: 0 !important; }
+body.tasks-mode #appShell .topbar { background: var(--crm-surface) !important; border: 0 !important; padding: 0 !important; margin-bottom: 18px !important; gap: 16px; }
 body.tasks-mode #appShell .topbar-copy :is(h1, p) { color: var(--crm-navy) !important; }
+body.tasks-mode #appShell .topbar #aiAssistantLauncher {
+  position: static;
+  inset: auto;
+  flex: 0 1 auto;
+  align-self: center;
+  min-width: 0;
+  max-width: 100%;
+}
+body.tasks-mode #appShell .topbar #aiAssistantLauncher span:last-child { display: inline; }
 body #appShell #tasksView,
 body #appShell #tasksView :is(.tasks-dashboard, .tasks-shell, .tasks-layout) {
   height: auto !important;
@@ -39,7 +50,7 @@ body #appShell #tasksView .tasks-header h2 { color: var(--crm-navy) !important; 
 body #appShell #tasksView .tasks-header > div > span { color: var(--crm-text-secondary) !important; font: 400 13px/1.5 var(--crm-font-ui) !important; text-transform: none !important; letter-spacing: 0 !important; }
 body #appShell #tasksView .tasks-header-meta { flex-wrap: wrap; gap: var(--crm-space-2); }
 body #appShell #tasksView #tasksWeekLabel { border-color: var(--crm-border) !important; background: var(--crm-surface-muted) !important; color: var(--crm-navy) !important; -webkit-text-fill-color: currentColor !important; white-space: normal; }
-body #appShell #tasksView .tasks-layout { grid-template-columns: minmax(0, 1.7fr) minmax(290px, 0.8fr) !important; gap: var(--crm-space-4) !important; padding: 0 !important; }
+body #appShell #tasksView .tasks-layout { grid-template-columns: minmax(0, 1.6fr) minmax(290px, 1fr) !important; gap: var(--crm-space-4) !important; padding: 0 !important; }
 body #appShell #tasksView :is(.tasks-primary, .tasks-sidebar) {
   min-width: 0;
   min-height: 240px !important;
@@ -59,15 +70,16 @@ body #appShell #tasksView :is(.tasks-section-card, .tasks-status-card, .tasks-re
 body #appShell #tasksView :is(.tasks-section-head, .tasks-section-card--blue-cap > .tasks-section-head) {
   flex-wrap: wrap;
   gap: var(--crm-space-2);
-  padding: var(--crm-space-4) !important;
+  padding: 18px 18px 0 !important;
   border: 0 !important;
-  border-bottom: 1px solid var(--crm-divider) !important;
+  border-bottom: 0 !important;
   border-radius: 0 !important;
   background: var(--crm-surface) !important;
 }
 body #appShell #tasksView .tasks-section-head h3 { color: var(--crm-navy) !important; font: 700 20px/1.3 var(--crm-font-ui) !important; }
 body #appShell #tasksView .tasks-section-head p { color: var(--crm-text-secondary) !important; font: 400 13px/1.5 var(--crm-font-ui) !important; }
-body #appShell #tasksView :is(.tasks-section-body, .tasks-status-card) { padding: var(--crm-space-4) !important; }
+body #appShell #tasksView .tasks-section-body { padding: 14px 18px 18px !important; }
+body #appShell #tasksView .tasks-status-card { padding: 18px !important; }
 body #appShell #tasksView :is(.tasks-row-card, .tasks-review-block, .tasks-audit-item, .tasks-lock-banner) {
   border: 1px solid var(--crm-divider) !important;
   border-radius: var(--crm-radius-control) !important;
@@ -85,6 +97,8 @@ body #appShell #tasksView :is(p, li, .empty-copy, .tasks-muted-line, .tasks-revi
 body #appShell #tasksView :is(.tasks-status-notes, .tasks-audit-item > span, .tasks-review-card-meta, .tasks-progress-copy, .tasks-voice-status) { color: var(--crm-text-secondary) !important; font-size: 13px !important; line-height: 1.5 !important; }
 body #appShell #tasksView :is(.tasks-status-notes > span, .tasks-progress-copy > span, .tasks-progress-copy > strong, .tasks-version-row span) { font-size: 13px !important; line-height: 1.5 !important; }
 body #appShell #tasksView .tasks-checkline span { font-size: 14px !important; line-height: 1.5 !important; }
+body #appShell #tasksView .tasks-checkline { display: flex; align-items: flex-start; gap: 10px; }
+body #appShell #tasksView .tasks-checkline input { flex: 0 0 20px; width: 20px; height: 20px; margin: 0; }
 body #appShell #tasksView :is(.tasks-context-pill, .tasks-review-block) { background: var(--crm-surface-muted) !important; border-color: var(--crm-divider) !important; }
 body #appShell #tasksView :is(.tasks-context-pill strong, .tasks-audit-item strong, .tasks-review-card strong) { color: var(--crm-navy) !important; font-size: 14px !important; line-height: 1.5; }
 body #appShell #tasksView :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
@@ -93,14 +107,14 @@ body #appShell #tasksView :is(input:not([type="checkbox"]):not([type="radio"]), 
   padding: 8px 10px !important;
   border: 1px solid var(--crm-control-border) !important;
   border-radius: var(--crm-radius-control) !important;
-  background: var(--crm-surface) !important;
+  background: var(--crm-field-surface) !important;
   color: var(--crm-text) !important;
   -webkit-text-fill-color: currentColor !important;
   font: 400 14px/1.5 var(--crm-font-ui) !important;
 }
 body #appShell #tasksView textarea { resize: vertical; min-height: 96px !important; }
-body #appShell #tasksView :is(select, textarea)[data-weekly-completion-field].field--required-empty { border: 1.5px solid var(--crm-health-amber) !important; background: var(--crm-health-amber-soft) !important; }
-body #appShell #tasksView :is(select, textarea)[data-weekly-completion-field].field--filled { border: 1.5px solid var(--crm-health-green) !important; background: var(--crm-health-green-soft) !important; }
+body #appShell #tasksView :is(select, textarea)[data-weekly-completion-field].field--required-empty { border: 1.5px solid var(--crm-health-amber) !important; background: var(--crm-field-surface) !important; }
+body #appShell #tasksView :is(select, textarea)[data-weekly-completion-field].field--filled { border: 1.5px solid var(--crm-health-green) !important; background: var(--crm-field-surface) !important; }
 body #appShell #tasksView :is(button, input, select, textarea):focus-visible { outline: 2px solid var(--crm-focus) !important; outline-offset: 2px !important; }
 body #appShell #tasksView .tasks-checkline input { accent-color: var(--crm-navy); }
 body #appShell #tasksView :is(button, .chip, .activity-count-pill) { font: 600 13px/1.4 var(--crm-font-ui) !important; letter-spacing: 0 !important; }
@@ -112,7 +126,7 @@ body #appShell #tasksView .chip.hot { border-color: var(--crm-health-red) !impor
 body #appShell #tasksView :is(.tasks-progress-meter, .tasks-progress-fill) { border-radius: var(--crm-radius-control) !important; }
 body #appShell #tasksView .tasks-progress-meter { background: var(--crm-surface-muted) !important; }
 body #appShell #tasksView .tasks-progress-fill { background: var(--crm-teal) !important; }
-body #appShell #tasksView .tasks-actions-card { border: 0 !important; background: var(--crm-surface) !important; padding: var(--crm-space-3) !important; padding-bottom: 76px !important; }
+body #appShell #tasksView .tasks-actions-card { border: 0 !important; background: var(--crm-surface) !important; padding: var(--crm-space-3) !important; }
 body #appShell #tasksView .tasks-review-card { border-color: var(--crm-divider) !important; text-align: left; }
 body #appShell #tasksView .tasks-review-card.active { border: 2px solid var(--crm-navy) !important; }
 body #appShell #tasksView .tasks-review-card .tasks-open-report-copy { color: var(--crm-navy) !important; font-size: 13px; }
@@ -128,7 +142,11 @@ body #appShell #tasksView .tasks-message.error { border-color: var(--crm-health-
 }
 
 @media (max-width: 720px) {
-  body #appShell #tasksView :is(.tasks-header, .tasks-section-head, .tasks-section-body, .tasks-status-card) { padding: var(--crm-space-3) !important; }
+  body.tasks-mode #appShell > .main { padding: 16px 16px calc(100px + env(safe-area-inset-bottom)) !important; }
+  body.tasks-mode #appShell .topbar #aiAssistantLauncher { grid-column: 1 / -1; width: 100%; }
+  body #appShell #tasksView :is(.tasks-header, .tasks-status-card) { padding: 12px 14px !important; }
+  body #appShell #tasksView .tasks-section-head { padding: 14px 16px 0 !important; }
+  body #appShell #tasksView .tasks-section-body { padding: 8px 16px 14px !important; }
   body #appShell #tasksView :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { min-height: 44px !important; font-size: 16px !important; }
   body #appShell #tasksView button { min-height: 44px !important; }
   body #appShell #tasksView :is(.tasks-inline-grid, .tasks-review-grid, .tasks-context-grid, .tasks-checkbox-grid, .tasks-actions-card) { grid-template-columns: minmax(0, 1fr) !important; }

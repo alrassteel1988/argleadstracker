@@ -26,6 +26,10 @@ function inspectPresentation({checkTouchTargets = false} = {}) {
   };
   const rendered = element => {
     const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const isAccessibleMobileCaption = innerWidth <= 720 && element.matches("small.crm-visually-hidden-mobile")
+      && box.width <= 1 && box.height <= 1 && style.clipPath === "inset(50%)";
+    if (isAccessibleMobileCaption) return false;
     return box.width > 0 && box.height > 0
       && element.checkVisibility({checkOpacity:true, checkVisibilityCSS:true});
   };
@@ -85,8 +89,11 @@ function inspectPresentation({checkTouchTargets = false} = {}) {
       contrast(element, style, "Form value");
     }
     if (element.matches("button, a.ghost-button, a.primary-button, a.small-action")) {
-      const isRecord = element.matches('.activity-card-button, [data-lead-id], [data-dashboard-activity-lead], .salesman-call-next-item, .salesman-first-touch-item, .salesman-loss-item');
-      if (!isRecord && !icon(element)) add("missing-icon", element, "No visible SVG, bitmap or masked icon", element.textContent);
+      const isRecord = element.matches('.activity-card-button, [data-lead-id], [data-dashboard-activity-lead], .salesman-call-next-item, .salesman-simplified-queue-item, .salesman-first-touch-item, .salesman-loss-item, .crm-today-company-link, .crm-neglected-company');
+      const isSummaryMetric = element.matches('.salesman-simplified-metric, .salesman-simplified-stage, .crm-today-stage');
+      const isSortHeader = element.matches('body.pipeline-salesman-mode .pipeline-sort-button[data-pipeline-sort][aria-label^="Sort "]') && element.closest('th[aria-sort]');
+      const isSectionNavigation = innerWidth <= 720 && element.matches('.lead-detail-tabs [data-drawer-tab][aria-current]') && element.closest('#leadDetailView nav[aria-label="Lead details sections"]');
+      if (!isRecord && !isSummaryMetric && !isSortHeader && !isSectionNavigation && !icon(element)) add("missing-icon", element, "No visible SVG, bitmap or masked icon", element.textContent);
       if (/^[×x‹›<>⋯…+\-]$/.test(element.textContent.trim()) && !element.getAttribute("aria-label") && !element.title) add("icon-name", element, "Icon-only control needs a descriptive name", element.textContent);
     }
   }

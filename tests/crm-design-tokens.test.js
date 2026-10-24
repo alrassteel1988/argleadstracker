@@ -39,6 +39,10 @@ assert.ok(contrast(token("gold-heading"), token("white")) >= 3, "Gold is reserve
 assert.ok(contrast(token("gold-heading"), token("white")) < 4.5, "Do not advertise gold as normal-text AA");
 assert.equal(token("font-ui"), '"Inter", sans-serif');
 assert.equal(token("font-title"), '"Playfair Display", Georgia, serif');
+assert.equal(token("radius-control"), "10px");
+assert.equal(token("radius-panel"), "14px");
+assert.equal(token("field-surface"), "#FFFFFF");
+assert.ok(contrast(token("amber"), token("sidebar-active")) >= 4.5, "Amber active menu text must pass AA");
 assert.match(css, /--font-display: var\(--crm-font-ui\)/, "Legacy display token also styles UI labels; reserve serif for explicit page titles");
 assert.match(index, /Playfair\+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700/);
 assert.ok(index.lastIndexOf('/crm-theme.css?v=') > index.lastIndexOf('/bauhaus-global.css?v='), "Canonical foundation must follow legacy theme definitions");

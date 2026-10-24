@@ -28,11 +28,13 @@ test("presentation audit distinguishes real defects from approved navy gradients
   await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>
     body { margin:0; font:16px Arial; color:#000; background:#fff; }
     button { min-width:44px; height:44px; }
+    @media (max-width:720px) { .crm-visually-hidden-mobile { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); } }
     #smallTarget { min-width:32px; width:32px; height:32px; }
   </style><main id="appShell">
     <button id="goodTarget" aria-label="Large target">+</button>
     <button id="smallTarget" aria-label="Small target">+</button>
     <details><summary>Closed details</summary><button id="hiddenTarget" style="min-width:20px;width:20px;height:20px">Hidden</button></details>
+    <small class="crm-visually-hidden-mobile">Accessible supplementary caption</small>
   </main>`);
   const touchFindings = (await page.evaluate(inspectPresentation, {checkTouchTargets:true}))
     .filter(finding => finding.kind === "small-touch-target").map(finding => finding.element);
@@ -40,6 +42,9 @@ test("presentation audit distinguishes real defects from approved navy gradients
   await page.setContent('<meta name="viewport" content="width=device-width, initial-scale=1"><style>html{overflow-x:hidden}body{margin:0}#appShell{width:calc(100vw + 20px)}</style><main id="appShell">Overflow probe</main>');
   expect(await page.evaluate(() => document.documentElement.clientWidth)).toBe(page.viewportSize().width);
   expect((await page.evaluate(inspectPresentation)).some(finding => finding.kind === "page-overflow")).toBe(true);
+  await page.setContent('<style>body{font:16px Arial;color:#000;background:#fff}button{min-width:80px;min-height:44px;font:16px Arial}</style><main id="appShell"><section id="leadDetailView"><nav class="lead-detail-tabs" aria-label="Lead details sections"><button id="sectionNav" data-drawer-tab="overview" aria-current="page">Overview</button></nav><button id="command">Run action</button></section></main>');
+  const missingIcons = (await page.evaluate(inspectPresentation)).filter(finding => finding.kind === 'missing-icon').map(finding => finding.element);
+  expect(missingIcons.sort()).toEqual(page.viewportSize().width <= 720 ? ['#command'] : ['#command', '#sectionNav']);
 });
 
 
@@ -91,6 +96,7 @@ test("rendered presentation across role pages and secondary dialogs", async ({pa
   await page.goto("/?view=dashboard");
   await expect(page.locator("#dashboardView")).toBeVisible();
   if (role === "salesman") {
+    await page.locator(".salesman-dashboard-more-tools > summary").click();
     await page.locator('[data-loss-prompt-capture]:visible').first().click();
     await expect(page.locator("#lostReasonDialog")).toBeVisible();
     await audit("closure-reason");

@@ -9,11 +9,13 @@ const vercel = JSON.parse(read("vercel.json"));
 
 assert.match(css, /#salesmanSimplifiedDashboard\s*\{[^}]*grid-template-rows:\s*none\s*!important/s);
 assert.match(css, /#salesmanSimplifiedDashboard\s*\{[^}]*overflow:\s*visible\s*!important/s);
-assert.match(css, /\.salesman-simplified-block\s*\{[^}]*var\(--crm-border\)[^}]*var\(--crm-surface\)/s);
+assert.match(css, /\.salesman-simplified-block\s*\{[^}]*var\(--crm-card-border\)[^}]*var\(--crm-card-surface\)/s);
 assert.match(css, /\.salesman-summary-card-copy small\s*\{[^}]*overflow:\s*visible[^}]*white-space:\s*normal/s);
-assert.match(css, /\.salesman-simplified-queue\s*\{[^}]*max-height:\s*340px[^}]*overflow-y:\s*auto/s);
+assert.match(css, /\.salesman-simplified-queue\s*\{[^}]*max-height:\s*204px[^}]*overflow-y:\s*auto/s);
+assert.match(html, /<details class="salesman-dashboard-more-tools">[\s\S]*id="salesmanSimplifiedActions"[\s\S]*id="salesmanDashboardLeadList"/);
+assert.ok(html.indexOf('class="salesman-simplified-block salesman-dashboard-call-queue"') < html.indexOf('class="salesman-dashboard-more-tools"'));
 assert.match(css, /\.salesman-dashboard-lead-table\s*\{[^}]*overflow:\s*auto/s);
-assert.match(css, /@media \(max-width: 720px\)[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.salesman-simplified-pipeline-strip\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/s);
 assert.doesNotMatch(css, /rgba\(|gradient\(|filter:\s*blur|backdrop-filter|opacity:\s*0\./);
 assert.doesNotMatch(css, /data-summary-card[^}]*display:\s*none/, "Do not remove stage or metric actions");
 assert.ok(html.indexOf('/crm-dashboard.css?v=') > html.indexOf('/crm-shell.css?v='));

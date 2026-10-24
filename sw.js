@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v105-revised-ui-mobile-nav";
+const CACHE_VERSION = "arg-pwa-v122-truthful-legacy-status";
 const APP_SHELL = [
   "/",
   "/index.html",

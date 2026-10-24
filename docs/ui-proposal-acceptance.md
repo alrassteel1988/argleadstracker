@@ -1,7 +1,9 @@
 # Revised CRM UI Proposal Acceptance Map
 
-Authoritative reference: `Revised CRM UI Design Proposal.pdf` (57 pages), approved
-by the owner. Audit date: 23 October 2026. This is a verification map, not final
+Primary per-screen reference is now the owner-supplied
+`Al_Ras_Steel_CRM_UI_HTML.zip` (96 HTML screens), mapped in
+`ui-html-reference-map.md`. The approved `Revised CRM UI Design Proposal.pdf`
+(57 pages) remains supporting context. Audit date: 23 October 2026. This is a verification map, not final
 visual approval or authority to add features. All runtime sources and business
 rules remain those of the existing CRM. See `functionality-inventory.md` and
 `open-questions.md` for the full action inventory, exceptions and decisions.

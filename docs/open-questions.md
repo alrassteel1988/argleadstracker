@@ -1,5 +1,155 @@
 # UI Proposal: Open Questions, Mismatches and Hold Points
 
+## Release Status Correction: 24 October
+
+- Latest owner definition: Block is for Active customers with payment issues,
+  bad behavior or another reason. It must not alias the existing LOST status.
+- Removed the misleading LOST-to-Blocked/Block display mapping from forms,
+  filters, dashboards, reports and loss-reason controls. Stored LOST remains
+  truthfully labelled Lost until a separately reviewed status implementation.
+- Block setup and new health scoring remain pending; this UI release does not
+  implement Block eligibility, suppression, reopening or a new database status.
+- Owner explicitly selected eight existing Lost leads for Outreach. Their
+  live status update to CONTACTED was independently read back; unrelated fields
+  were verified unchanged apart from the automatic update timestamp. The scoped
+  backup is private and excluded from Git. No blanket historical migration ran.
+- Owner authorized committing/pushing the UI feature branch and a one-time
+  production deployment exception, but not merging main. Earlier chronological
+  status aliases and release-authorization notes below are superseded by this
+  section. Deployment still requires working Vercel project access.
+
+## Latest Mobile Overview and Scoring Hold: 24 October
+
+- Owner chose defining new health rules before implementing scoring, confirmed
+  retaining current status-and-tier cadence, and confirmed PMR heat 5 means
+  strong buying intent/positive relationship.
+- The proposed thresholds and overall-rating combination are still unapproved.
+  Further screenshots are design references, not approval of business rules.
+- The newly requested mobile layout is implemented independently: action cards,
+  existing summary guidance, pill navigation and a visibly pending health card.
+  Do not score missing data as bad, copy mockup risk badges, duplicate cadence
+  formulas or introduce the proposed multi-signal calculation yet.
+- The newer desktop Overview layout is still held with the scoring decision.
+  Its earlier desktop redesign remains in place. Quote/Create quote is omitted
+  until a real authorized workflow exists.
+
+## Lead Details Mobile Reference: 24 October
+
+- Latest owner request now authorizes the mobile redesign. It supersedes the
+  earlier desktop-only scope; existing data and role permissions stay unchanged.
+- Quote/Create quote and the sample quote insight remain omitted until an
+  approved workflow and supporting quote data exist.
+- Keep all six original sections reachable; do not discard PMR, Reminders or
+  Intel to reproduce a three-tab mockup. The Notes action opens the existing
+  text editor rather than inventing a separate append-only notes collection.
+- The Assistant remains available in the record header. The fixed footer
+  replaces the global mobile navigation only while a lead is open.
+
+## Lead Details Desktop Reference: 24 October
+
+- Original desktop scope was subsequently extended to mobile. All tabs and tools
+  remain available, with the desktop AI summary below the record.
+- Reschedule reuses the lead editor, not a new scheduling dialog. Log outcome
+  reuses the activity form and does not automatically record a completed call.
+- Status/priority values in the metadata card are read-only. Existing Admin/
+  Manager stage editing and the authorized lead editor remain unchanged.
+- No sample quote advice, Create quote action, automatic scheduling claim or
+  invented contact-frequency number. The real reminder preview may include the
+  next-action reminder derived by the existing CRM logic.
+- Verification uses synthetic local records only; no production-data changes,
+  migration, provider calls, commit, push, PR or deployment are authorized here.
+
+## My Pipeline Reference: 24 October
+
+- Scope is Salesman My Pipeline. Admin's full worklist/export controls remain.
+- Keep exact-date/overdue filters under More filters; Show all columns restores
+  every original column and sort action. No existing stored values are removed.
+- Counts/amounts/priority labels use current CRM logic, not screenshot samples.
+  At Risk is not redefined as 60 days without business-rule approval.
+- Omit the proposed Add quote link until a real approved quotation workflow
+  exists. No new backend workflow is added for this redesign.
+- The latest reference explicitly adds a Pipeline overdue notice; this is a
+  route-specific exception to the earlier Dashboard-only banner design.
+- Toolbar Assistant placement prevents content/pagination overlap. Mobile
+  keeps all existing data fields as responsive cards, rather than a compressed
+  desktop table. Status is the visible heading; database fields stay unchanged.
+
+## Neglected Accounts Decisions: 24 October
+
+- Owner approved preserving Salesman export restrictions; omit the reference's
+  Export button rather than introduce a browser-side permission bypass.
+- Task opens the existing Lead Details Reminders tab. It does not invent a
+  task-creation API or record a task on click.
+- Use existing backend cadence thresholds, not the reference's sample intervals.
+- Log call opens the existing activity form; the user must complete and save it.
+- Keep the existing sidebar/mobile navigation. Mobile search and actions remain
+  accessible under Tools; the Assistant is docked there to avoid row overlap.
+
+## Login Reference Decisions: 24 October
+
+- Owner approved retaining tab-scoped sessions and omitting Keep me signed in.
+  Persistent sign-in remains a separate security decision, not an inert checkbox.
+- Administrator footer destination: `mailto:glory@alrassteel.com` (owner supplied).
+- Existing Forgot password button has no client reset handler or server recovery
+  endpoint. Functional account recovery remains pending as a separate task;
+  moving the button beside the password label does not implement it.
+- Latest mobile screenshot supersedes the earlier large headline: show the
+  compact logo/heritage header and round only the form's top corners (24px).
+
+## Owner Decisions: 24 October (Supersede Earlier Status and Menu Notes)
+
+- Keep the existing activity correction and deletion-request workflows.
+- Historical LOST records belong under Outreach. Plan a distinct stored Block
+  status, not a LOST alias; omit Sampling. The old display-only Blocked/Block
+  alias still exists locally and is a release hold, not the final design.
+- No production migration or historical-record write has been performed.
+  See `crm-brief-v2-gap-plan.md` for the status implementation/rollback plan.
+- Block excludes leads from follow-up/reminder queues until a salesman reopens
+  them (owner confirmed 24 October). This behavior is planned, not yet shipped.
+- Deliver online pages first. Full offline customer/PMR access remains a
+  separate security phase; protected cache exclusions remain unchanged.
+- Sidebar labels now require outline icons. This overrides text-only menus.
+- New online AI pages reuse existing company and salesperson actions. Management
+  briefings, digest delivery and the remaining brief reconciliation are pending.
+
+
+## Latest Home Decisions (23 October)
+
+- Owner rejected the previous styling-only Home preview and supplied the exact
+  compact editorial Home screenshot. Extra existing tools stay available in an
+  expandable section so they do not cover the background watermark initially.
+- Owner explicitly chose to omit Sampling and add `Block` to the Home strip.
+  The existing indicator dataset is retained with that display label only.
+  No new stored status, fake count, or historical-record update is authorized
+  by this presentation change. The separate LOST-to-Outreach data migration
+  has not been applied.
+- White lightly translucent cards, subtle shadows and quiet teal borders are
+  approved for this modern editorial direction. This supersedes the earlier
+  blanket opaque-card/Bauhaus requirement; fields stay white and error/disabled
+  protections remain. No backdrop blur is introduced.
+
+## Latest Owner Corrections (Supersede Earlier Display Decisions)
+
+- The supplied `Al_Ras_Steel_CRM_UI_HTML.zip` is now the primary per-screen
+  visual source; the PDF is supporting context. See `ui-html-reference-map.md`
+  for all 96 reference files, real route/component mappings and source hash.
+- Work in the owner's order: report overflow/Assistant overlap; generated-text
+  status labels; six statuses and a separate Blocked flag; navy dialog caps;
+  sort/page-number icons; usable filters/dates/priorities; one nonnumeric accent
+  word per title; shared radii/white fields/menu/Dashboard-only banner treatment.
+- Earlier LOST-to-Blocked-as-stage and omit-Sampling decisions are superseded.
+  Target statuses are Prospect, Outreach, Engaged, Sampling, Active, Dormant.
+  Blocked must be separate, never a status. The owner requests existing LOST
+  records become CONTACTED/Outreach. No production records have been changed.
+  A reviewed persistence/migration plan is still required; no database operation
+  follows merely from accepting the presentation mapping.
+- Sampling has no existing stored stage in the current source. Its real-stage
+  versus display-only implementation remains unresolved; do not manufacture
+  stored data, counts or a successful API capability from a prototype option.
+- Explicit owner corrections (14px cards, 10px buttons, opaque white fields,
+  one accent word, navy dialog caps) take precedence over inconsistent prototype
+  overrides such as 16px/translucent cards or multiword accent spans.
+
 ## Scope
 
 Dataset-ready verification checkpoint (23 October): current full interactive

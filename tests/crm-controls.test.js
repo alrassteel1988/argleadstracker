@@ -33,8 +33,8 @@ assert.match(css, /pointer-events:\s*none/, "Decorative icons cannot intercept e
 assert.match(css, /content:\s*""/, "Decorative masks must not add screen-reader label text");
 assert.doesNotMatch(css, /\.hidden\s*\{/, "Do not change functional visibility rules");
 assert.doesNotMatch(css, /(?:backdrop-filter|filter):\s*blur|rgba\(|gradient\(/, "Controls remain opaque and crisp");
-assert.match(css, /\.field--required-empty\s*\{[^}]*1\.5px solid var\(--crm-health-amber\)[^}]*var\(--crm-health-amber-soft\)/s);
-assert.match(css, /\.field--filled\s*\{[^}]*1\.5px solid var\(--crm-health-green\)[^}]*var\(--crm-health-green-soft\)/s);
+assert.match(css, /\.field--required-empty\s*\{[^}]*1\.5px solid var\(--crm-health-amber\)[^}]*var\(--crm-field-surface\)/s);
+assert.match(css, /\.field--filled\s*\{[^}]*1\.5px solid var\(--crm-health-green\)[^}]*var\(--crm-field-surface\)/s);
 assert.match(css, /\[aria-invalid="true"\][^}]*var\(--crm-health-red\)/s);
 assert.match(css, /:disabled\s*\{[^}]*var\(--crm-text-secondary\)[^}]*opacity:\s*1/s);
 assert.match(css, /:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--crm-focus\)/s);

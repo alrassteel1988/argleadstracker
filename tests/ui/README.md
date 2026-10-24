@@ -69,7 +69,7 @@ Admin and Salesman at 1440 x 900 and 375 x 812:
   are not a claim of native browser-zoom testing.
 - Shared Add Lead/Places/Activity/PMR/AI dialog surfaces and bounds, mobile
   stepper/control sizing, required company validation and an activity save
-  verified after navigation. Displayed Blocked/Prospect choices retain LOST/NEW
+  verified after navigation. Displayed Lost/Prospect choices retain LOST/NEW
   values; an authenticated synthetic API read verifies stored stages unchanged.
 - Six dashboard stage tiles, including the existing Dormant stage and its
   matching summary count. Login token/brand/field contrast and public mobile-tab

@@ -644,7 +644,7 @@ function isLeadRoutePath(pathname = window.location.pathname) {
 function parseAppRoute(locationLike = window.location) {
   const pathname = locationLike.pathname || "/";
   const search = new URLSearchParams(locationLike.search || "");
-  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks"]);
+  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
   if (isLeadRoutePath(pathname)) {
     return {
       view: "lead",
@@ -771,7 +771,7 @@ const KANBAN_STAGES = [
 ];
 const CANONICAL_STAGE_KEYS = KANBAN_STAGES.map(stage => stage.key);
 // Display labels never replace stored stage keys or workflow rules.
-const STAGE_DISPLAY_LABELS = Object.freeze({ NEW: "Prospect", CONTACTED: "Outreach", NEGOTIATION: "Engaged", WON: "Active", DORMANT: "Dormant", LOST: "Blocked" });
+const STAGE_DISPLAY_LABELS = Object.freeze({ NEW: "Prospect", CONTACTED: "Outreach", NEGOTIATION: "Engaged", WON: "Active", DORMANT: "Dormant", LOST: "Lost" });
 const CANONICAL_STAGE_SET = new Set(CANONICAL_STAGE_KEYS);
 const CLOSED_STAGE_KEYS = new Set(["WON", "DORMANT", "LOST"]);
 
@@ -2855,6 +2855,184 @@ const SALESPERSON_ACTION_LABELS = {
   new_intel: "Any new intel on my prospects?"
 };
 
+function aiWorkspacePage(view = currentView) {
+  return {
+    "ai-actions": { title: "One-tap AI actions", context: "Relationship intelligence grounded in your visible CRM records." },
+    focus: { title: "Today", context: "Your follow-ups, starting with the most urgent.", portfolioAction: "focus_today" },
+    neglected: { title: "Who have I neglected?", context: "Review contact gaps using the CRM's existing tier and status rules.", portfolioAction: "neglected" },
+    "meeting-prep": { title: "Prepare for this meeting", context: "Review relationship history, PMRs and relevant intelligence.", companyAction: "prepare" },
+    "draft-email": { title: "Draft follow-up email", context: "Review a grounded draft, then edit it in your mail app before sending.", companyAction: "email" }
+  }[view] || null;
+}
+
+function renderTodayWorkspace(workspace) {
+  const datasets = salesmanDashboardSummaryDatasets();
+  const queue = actionableSalesmanLeads();
+  const busy = Boolean(state.leadsLoading && !state.leadsLoaded);
+  const unavailable = Boolean(state.leadsError && !state.leadsLoaded);
+  const stages = [
+    ["Prospect", datasets.stageNew, "salesmanStageNew"],
+    ["Outreach", datasets.stageContacted, "salesmanStageContacted"],
+    ["Engaged", datasets.stageNegotiation, "salesmanStageNegotiation"],
+    ["Active", datasets.stageWon, "salesmanStageWon"],
+    ["Dormant", datasets.stageDormant, "salesmanStageDormant"]
+  ];
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `
+    <div class="crm-today-layout">
+      <section class="crm-today-panel crm-today-calls" aria-labelledby="aiWorkspaceHeading">
+        <header class="crm-today-panel-heading"><h2 id="aiWorkspaceHeading">Call next</h2>
+          <button class="ghost-button" type="button" data-today-summary="salesmanScheduled" ${busy || unavailable ? "disabled" : ""}>View all</button>
+        </header>
+        <div class="crm-today-call-list">${busy ? `<p class="crm-today-state" role="status">Loading your follow-ups...</p>` : unavailable ? `<p class="crm-today-state">Follow-ups could not be loaded. Retry below.</p>` : queue.slice(0, 4).map(lead => {
+          const contact = primaryLeadContact(lead);
+          const due = daysUntil(lead.next_action_date);
+          const dueLabel = due < 0 ? `${Math.abs(due)} days overdue` : due === 0 ? "Due today" : formatDisplayDate(lead.next_action_date);
+          return `<article class="crm-today-call-row">
+            <div class="crm-today-company"><button type="button" class="crm-today-company-link" data-today-lead="${escapeHtml(lead.id)}">${escapeHtml(lead.company_name || "Unnamed company")}</button>
+              <p>${escapeHtml([lead.next_action || "Follow up", contact.name, lead.location || lead.territory].filter(Boolean).join(" · "))}</p>
+            </div>
+            <span class="crm-today-due ${due < 0 ? "is-overdue" : ""}">${escapeHtml(dueLabel)}</span>
+            <div class="crm-today-contact-actions">
+              ${contact.email ? `<a class="ghost-button crm-today-email" href="mailto:${escapeHtml(encodeURIComponent(contact.email))}" aria-label="Email ${escapeHtml(lead.company_name || "company")}">Email</a>` : `<button type="button" class="ghost-button crm-today-email" disabled title="No email address saved">Email</button>`}
+              ${contact.phone ? `<a class="primary-button crm-today-call" href="tel:${escapeHtml(contact.phone.replace(/[^+\d*#,;]/g, ""))}" aria-label="Call ${escapeHtml(lead.company_name || "company")}">Call</a>` : `<button type="button" class="primary-button crm-today-call" disabled title="No phone number saved">Call</button>`}
+            </div>
+          </article>`;
+        }).join("") || `<p class="crm-today-state">No scheduled follow-ups. Your assigned leads are available in Pipeline.</p>`}</div>
+      </section>
+      <div class="crm-today-side">
+        <section class="crm-today-panel" aria-labelledby="todayQuickActionsTitle">
+          <header class="crm-today-panel-heading"><h2 id="todayQuickActionsTitle">Quick actions</h2></header>
+          <div class="crm-today-quick-grid">
+            <button class="ghost-button" type="button" data-today-action="add">Add lead</button>
+            <button class="ghost-button" type="button" data-today-action="places">Search places</button>
+            <button class="ghost-button" type="button" data-workspace-view="draft-email">Draft email</button>
+            <button class="ghost-button" type="button" data-today-action="report">Weekly report</button>
+          </div>
+        </section>
+        <section class="crm-today-panel" aria-labelledby="todayPipelineTitle">
+          <header class="crm-today-panel-heading"><h2 id="todayPipelineTitle">My pipeline</h2></header>
+          <div class="crm-today-pipeline">${stages.map(([label, records, type]) => `<button type="button" class="crm-today-stage ${label === "Engaged" ? "is-engaged" : ""}" data-today-summary="${type}" ${busy || unavailable ? "disabled" : ""} aria-label="${label}: ${busy || unavailable ? "unavailable" : `${records.length} leads`}. View summary">
+            <span>${label}</span><span class="crm-today-track" aria-hidden="true"><i style="width:${Math.round(records.length / Math.max(1, datasets.myLeads.length) * 100)}%"></i></span><strong>${busy || unavailable ? "—" : records.length}</strong>
+          </button>`).join("")}
+          <div class="crm-today-stage is-unavailable"><span>Block</span><span class="crm-today-track" aria-hidden="true"></span><span aria-label="Not available">—</span></div>
+          </div>
+          <p class="crm-today-note">Block status setup is pending.${datasets.stageLost.length ? ` ${datasets.stageLost.length} legacy Lost records await Outreach reclassification.` : ""}</p>
+        </section>
+      </div>
+    </div>
+    <details class="crm-today-more"><summary>More tools</summary><button class="ghost-button" type="button" data-workspace-portfolio-action="focus_today" ${busy || state.dailyAiLoading ? "disabled" : ""}>Generate AI daily focus</button></details>
+    ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
+  `;
+}
+
+let neglectedWorkspace = null;
+let neglectedToolsOpen = false;
+
+async function loadNeglectedWorkspace(request) {
+  try {
+    const result = await api("/api/salesperson-ai-actions", {
+      method: "POST", body: JSON.stringify({ action: "pipeline_health" })
+    });
+    if (!Array.isArray(result.metrics?.contact_overdue_companies) && request.leads.length) {
+      throw new Error("Contact-frequency details are unavailable. Please retry.");
+    }
+    request.metrics = result.metrics || { contact_overdue_companies: [] };
+  } catch (error) {
+    request.error = error.message || "Neglected accounts could not be loaded.";
+  } finally {
+    request.loading = false;
+    if (neglectedWorkspace === request && isSalesmanRole()
+      && String(state.currentUser?.id || state.currentUser?.email) === request.owner
+      && currentView === "neglected") renderAiWorkspace();
+  }
+}
+
+function neglectedAccountRows(metrics) {
+  const visible = new Map(salesmanDashboardLeads().map(lead => [String(lead.id), lead]));
+  return (metrics?.contact_overdue_companies || []).filter(company => visible.has(String(company.id)))
+    .map(company => ({ ...company, lead: visible.get(String(company.id)) }))
+    .sort((a, b) => Number(b.contact_overdue_by == null) - Number(a.contact_overdue_by == null)
+      || Number(b.contact_overdue_by || 0) - Number(a.contact_overdue_by || 0)
+      || String(a.lead.company_name || "").localeCompare(String(b.lead.company_name || "")));
+}
+
+function renderNeglectedWorkspace(workspace) {
+  const owner = String(state.currentUser.id || state.currentUser.email);
+  const leadsBusy = !state.leadsLoaded && !state.leadsError;
+  const leadsFailed = state.leadsError && !state.leadsLoaded;
+  if (!leadsBusy && !leadsFailed && (!neglectedWorkspace || neglectedWorkspace.owner !== owner || neglectedWorkspace.leads !== state.leads)) {
+    neglectedWorkspace = { owner, leads: state.leads, loading: true, error: "", metrics: null };
+    loadNeglectedWorkspace(neglectedWorkspace);
+  }
+  const result = neglectedWorkspace?.owner === owner ? neglectedWorkspace : null;
+  const busy = Boolean(leadsBusy || result?.loading);
+  const error = leadsFailed ? state.leadsError : result?.error;
+  const rows = !busy && !error ? neglectedAccountRows(result?.metrics) : [];
+  const known = rows.filter(row => row.contact_overdue_by != null);
+  const worst = known[0];
+  const tierOne = rows.filter(row => String(row.lead.tier || "2") === "1").length;
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `
+    <div class="crm-neglected-toolbar"><span>Territory ${escapeHtml(state.currentUser.territory || "Not set")}</span><button type="button" class="ghost-button crm-neglected-tools" data-neglected-tools aria-expanded="${neglectedToolsOpen}" aria-controls="smartSearchShell">Tools</button><button type="button" class="ghost-button" data-workspace-view="focus">Back</button></div>
+    <div class="crm-neglected-stats" aria-label="Neglected account summary">
+      <article><span>Accounts overdue</span><strong class="is-overdue">${busy || error ? "—" : rows.length}</strong><small>Past their expected contact date</small></article>
+      <article><span>Most overdue</span><strong>${busy || error || !worst ? "—" : `${Number(worst.contact_overdue_by)} d`}</strong><small>${escapeHtml(busy ? "Loading contact history" : worst?.lead.company_name || (rows.length ? "No activity date recorded" : "No overdue accounts"))}</small></article>
+      <article><span>Tier 1 overdue</span><strong>${busy || error ? "—" : tierOne}</strong><small>High-value accounts needing contact</small></article>
+    </div>
+    <section class="crm-neglected-panel" aria-labelledby="aiWorkspaceHeading">
+      <div class="crm-neglected-source"><button class="ghost-button" type="button" data-workspace-portfolio-action="neglected" ${busy || error || state.dailyAiLoading ? "disabled" : ""}>AI answer</button><span>Built from: activity log, tier and status rules · sorted by days overdue</span></div>
+      <h2 id="aiWorkspaceHeading" class="sr-only">Neglected accounts</h2>
+      ${busy ? `<p class="crm-neglected-state" role="status">Loading contact-frequency details...</p>` : error ? `<div class="crm-neglected-state" role="alert"><p>${escapeHtml(error)}</p><button class="ghost-button" type="button" data-neglected-retry>Retry</button></div>` : !rows.length ? `<p class="crm-neglected-state">No accounts are past their expected contact frequency.</p>` : `<div class="crm-neglected-table-wrap"><table class="crm-neglected-table"><thead><tr><th>Company</th><th>Status</th><th>Tier</th><th>Last activity</th><th>Expected</th><th>Overdue</th><th>Actions</th></tr></thead><tbody>${rows.map(row => {
+        const lead = row.lead;
+        const status = stageDisplayLabel(lead.stage || "NEW");
+        const last = row.days_since_activity == null ? "No activity recorded" : `${Number(row.days_since_activity)} days ago`;
+        const overdue = row.contact_overdue_by == null ? "Unknown" : `${Number(row.contact_overdue_by)} d`;
+        return `<tr><td><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(lead.id)}">${escapeHtml(lead.company_name || "Unnamed company")}<span class="crm-neglected-mobile-meta">${escapeHtml(status)} · Tier ${escapeHtml(lead.tier || "2")} · ${escapeHtml(last)}</span></button><span class="crm-neglected-mobile-gap">${row.contact_overdue_by == null ? "No recorded contact" : `${escapeHtml(overdue)} overdue`} · every ${Number(row.expected_contact_days)} d</span></td><td><span class="crm-neglected-status">${escapeHtml(status)}</span></td><td><span class="crm-neglected-tier">Tier ${escapeHtml(lead.tier || "2")}</span></td><td>${escapeHtml(last)}</td><td>every ${Number(row.expected_contact_days)} days</td><td class="is-overdue">${escapeHtml(overdue)}</td><td><div class="crm-neglected-actions"><button class="primary-button" type="button" data-neglected-log="${escapeHtml(lead.id)}" aria-label="Log call for ${escapeHtml(lead.company_name || "company")}"><span>Log call</span></button><button class="ghost-button" type="button" data-neglected-task="${escapeHtml(lead.id)}">Task</button></div></td></tr>`;
+      }).join("")}</tbody></table></div>`}
+    </section>`;
+}
+
+function renderAiWorkspace() {
+  const workspace = document.querySelector("#aiWorkspaceView");
+  const config = aiWorkspacePage();
+  if (!workspace || !config || !state.currentUser) return;
+  if (currentView === "focus" && isSalesmanRole()) return renderTodayWorkspace(workspace);
+  if (currentView === "neglected" && isSalesmanRole()) return renderNeglectedWorkspace(workspace);
+  const previousCompany = workspace.querySelector("#aiWorkspaceCompany")?.value || "";
+  const leads = [...state.leads].sort((a, b) => String(a.company_name || "").localeCompare(String(b.company_name || "")));
+  const selectedCompany = leads.some(lead => String(lead.id) === previousCompany) ? previousCompany : "";
+  const busy = Boolean(state.leadsLoading && !state.leadsLoaded);
+  const portfolioActions = config.portfolioAction ? [config.portfolioAction] : Object.keys(SALESPERSON_ACTION_LABELS);
+  const companyActions = config.companyAction ? [config.companyAction] : ["prepare", "next", "email", "summary", "flag"];
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `
+    <div class="crm-ai-workspace-heading"><h2 id="aiWorkspaceHeading">${pageTitleMarkup(config.title)}</h2>
+      <div class="crm-ai-workspace-links">
+        <button class="ghost-button" type="button" data-workspace-view="ai-actions">All AI actions</button>
+        <button class="ghost-button" type="button" data-workspace-view="meeting-prep">Meeting preparation</button>
+        <button class="ghost-button" type="button" data-workspace-view="draft-email">Draft email</button>
+      </div>
+    </div>
+    ${isSalesmanRole() && !config.companyAction ? `<section class="crm-ai-workspace-panel" aria-label="Portfolio intelligence">
+      <h3>Your daily <em class="crm-title-accent">intelligence</em></h3><div class="crm-ai-action-grid">${portfolioActions.map(action => `
+        <button class="ghost-button crm-ai-action-card" type="button" data-workspace-portfolio-action="${action}" ${busy || state.dailyAiLoading ? "disabled" : ""}>${escapeHtml(SALESPERSON_ACTION_LABELS[action])}</button>
+      `).join("")}</div></section>` : ""}
+    ${!config.portfolioAction ? `<section class="crm-ai-workspace-panel" aria-label="Company intelligence">
+      <h3>Company <em class="crm-title-accent">intelligence</em></h3>
+      <label for="aiWorkspaceCompany">Company</label>
+      <select id="aiWorkspaceCompany" ${busy || !leads.length ? "disabled" : ""}>
+        <option value="">Choose a company</option>${leads.map(lead => `<option value="${escapeHtml(String(lead.id))}" ${String(lead.id) === selectedCompany ? "selected" : ""}>${escapeHtml(lead.company_name || "Unnamed company")}</option>`).join("")}
+      </select>
+      <div class="crm-ai-action-grid">${companyActions.map(action => `
+        <button class="ghost-button crm-ai-action-card" type="button" data-workspace-company-action="${action}" ${!selectedCompany || busy ? "disabled" : ""}>${escapeHtml(action === "flag" ? "Flag needs attention" : AI_ACTION_LABELS[action])}</button>
+      `).join("")}</div>
+      <p class="crm-ai-workspace-status" aria-live="polite">${busy ? "Loading your visible companies..." : selectedCompany ? "Company actions are ready." : leads.length ? "Choose a company to enable its actions." : "No visible companies are available. Add a lead or check your current assignment."}</p>
+    </section>` : ""}
+    ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
+  `;
+}
+
 const AI_LOADING_MESSAGES = [
   "Reading activity history...",
   "Reviewing the latest PMR...",
@@ -3079,8 +3257,8 @@ async function runSalespersonAiAction(action, { showDialog = true } = {}) {
   }
   if (state.dailyAiLoading || Date.now() < state.aiCooldownUntil) return;
   state.dailyAiLoading = true;
-  state.aiAction = { scope: "salesperson", leadId: "", action, label: SALESPERSON_ACTION_LABELS[action] || "Daily AI", output: "", loading: true, error: "", provider: "", type: "markdown", metrics: null, insight: "" };
   if (showDialog) {
+    state.aiAction = { scope: "salesperson", leadId: "", action, label: SALESPERSON_ACTION_LABELS[action] || "Daily AI", output: "", loading: true, error: "", provider: "", type: "markdown", metrics: null, insight: "" };
     renderAiActionDialog();
     els.aiActionDialog?.showModal();
     startAiLoadingTicker();
@@ -3090,7 +3268,7 @@ async function runSalespersonAiAction(action, { showDialog = true } = {}) {
       method: "POST",
       body: JSON.stringify({ action })
     });
-    state.aiAction = {
+    const actionResult = {
       scope: "salesperson",
       leadId: "",
       action: result.action || action,
@@ -3103,15 +3281,21 @@ async function runSalespersonAiAction(action, { showDialog = true } = {}) {
       metrics: result.metrics || null,
       insight: result.insight || ""
     };
+    if (showDialog) state.aiAction = actionResult;
     if (action === "pipeline_health" && result.metrics) state.dailyPipelineSummary = { metrics: result.metrics, insight: result.insight || "" };
-    state.aiCooldownUntil = Date.now() + 3000;
+    if (showDialog) state.aiCooldownUntil = Date.now() + 3000;
   } catch {
-    state.aiAction = { ...state.aiAction, loading: false, error: "Couldn't generate this right now. Please try again.", output: "", metrics: null };
+    if (showDialog) state.aiAction = { ...state.aiAction, loading: false, error: "Couldn't generate this right now. Please try again.", output: "", metrics: null };
   } finally {
     state.dailyAiLoading = false;
-    clearInterval(startAiLoadingTicker.timer);
-    if (showDialog) renderAiActionDialog();
+    if (showDialog) {
+      clearInterval(startAiLoadingTicker.timer);
+      renderAiActionDialog();
+    }
     renderDailyAiPanel();
+    document.querySelectorAll("#aiWorkspaceView [data-workspace-portfolio-action]").forEach(button => {
+      button.disabled = Boolean(state.leadsLoading && !state.leadsLoaded);
+    });
   }
 }
 
@@ -4994,6 +5178,16 @@ function summaryCardDetailsConfig(type) {
     commonFilters.salesman
   ];
   Object.assign(configurations, {
+    salesmanScheduled: {
+      title: "Call Next",
+      description: "Your scheduled active follow-ups, earliest due date first.",
+      tone: "blue",
+      searchPlaceholder: "Search scheduled company or next action",
+      leads: actionableSalesmanLeads(),
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline" }
+    },
     salesmanMyLeads: {
       title: "My Leads",
       description: "All leads currently assigned to you.",
@@ -5086,10 +5280,10 @@ function summaryCardDetailsConfig(type) {
       fullList: { view: "pipeline", stageKey: "DORMANT" }
     },
     salesmanStageLost: {
-      title: "Blocked Leads",
-      description: "Your leads currently in the Blocked stage.",
+      title: "Lost Leads",
+      description: "Your leads currently in the Lost stage.",
       tone: "red",
-      searchPlaceholder: "Search Blocked-stage leads",
+      searchPlaceholder: "Search Lost-stage leads",
       leads: salesmanDatasets.stageLost,
       filters: salesmanFilters,
       columns: salesmanColumns,
@@ -5315,7 +5509,7 @@ function renderSummaryCardDetailsModal() {
 }
 
 function openSummaryCardDetails(type, trigger) {
-  if (currentView !== "dashboard" || !summaryCardDetailsConfig(type)) return;
+  if (!(currentView === "dashboard" || (currentView === "focus" && isSalesmanRole())) || !summaryCardDetailsConfig(type)) return;
   const allowed = isPrivilegedDashboardRole()
     ? ["openPipeline", "activeCustomers", "atRisk", "tasksDue"].includes(type)
     : isSalesmanRole() && type.startsWith("salesman");
@@ -5406,6 +5600,8 @@ function renderMetrics() {
   els.metricHot.textContent = datasets.atRisk.length;
   els.metricDue.textContent = datasets.tasksDue.length;
   if (els.metricDueSub) els.metricDueSub.textContent = `${overdue} overdue`;
+  const dueLabel = document.querySelector("#metricsPanel .metric-due > span");
+  if (dueLabel) dueLabel.textContent = currentView === "pipeline" && isSalesmanRole() ? "Follow-ups due" : "Tasks Due";
   if (els.quickTaskBadge) {
     els.quickTaskBadge.textContent = datasets.tasksDue.length;
     els.quickTaskBadge.classList.toggle("hidden", datasets.tasksDue.length === 0);
@@ -5504,7 +5700,7 @@ function pipelineFunnelStageRows(metrics) {
     },
     {
       key: "lost",
-      label: "Blocked Deals",
+      label: "Lost Deals",
       count: metrics.lostDeals,
       percentage: percentOf(metrics.lostDeals, total),
       dropoff: metrics.stageDropOffs.openPipelineToLost,
@@ -5651,7 +5847,7 @@ function pipelineFunnelComparisonTableRowsMarkup(rows) {
       <td data-label="Contacted">${escapeHtml(String(row.contactedLeads))}</td>
       <td data-label="Open Pipeline">${escapeHtml(String(row.openPipelineLeads))}</td>
       <td data-label="Won">${escapeHtml(String(row.wonDeals))}</td>
-      <td data-label="Blocked">${escapeHtml(String(row.lostDeals))}</td>
+      <td data-label="Lost">${escapeHtml(String(row.lostDeals))}</td>
       <td data-label="Conversion Rate"><span class="chip ${row.conversionRate >= 35 ? "green" : row.conversionRate >= 15 ? "warm" : ""}">${escapeHtml(String(row.conversionRate))}%</span></td>
     </tr>
   `).join("");
@@ -5702,7 +5898,7 @@ function dashboardPipelineFunnelCompactMarkup(leads, { dialogTitleId = "dashboar
               <th>Contacted</th>
               <th>Open Pipeline</th>
               <th>Won</th>
-              <th>Blocked</th>
+              <th>Lost</th>
               <th>Conversion Rate</th>
             </tr>
           </thead>
@@ -5777,7 +5973,7 @@ function pipelineFunnelMarkup(
               <article><span>Contacted</span><strong>${escapeHtml(String(metrics.contactedLeads))}</strong></article>
               <article><span>Open</span><strong>${escapeHtml(String(metrics.openPipelineLeads))}</strong></article>
               <article><span>Won</span><strong>${escapeHtml(String(metrics.wonDeals))}</strong></article>
-              <article><span>Blocked</span><strong>${escapeHtml(String(metrics.lostDeals))}</strong></article>
+              <article><span>Lost</span><strong>${escapeHtml(String(metrics.lostDeals))}</strong></article>
               <article><span>Conversion</span><strong>${escapeHtml(String(metrics.conversionRate))}%</strong></article>
             </div>
           </div>
@@ -5827,7 +6023,7 @@ function pipelineFunnelMarkup(
                     <th>Contacted</th>
                     <th>Open Pipeline</th>
                     <th>Won</th>
-                    <th>Blocked</th>
+                    <th>Lost</th>
                     <th>Conversion Rate</th>
                   </tr>
                 </thead>
@@ -6961,7 +7157,7 @@ function renderPortfolioAnalytics() {
 
 function renderSalesmanDashboard() {
   const salesman = isSalesmanRole() && currentView === "dashboard";
-  const priorityRow = document.querySelector(".salesman-dashboard-priority-row");
+  const priorityRow = els.sharedDashboardTopSlot;
   if (priorityRow && els.overdueBanner && els.metricsShell) {
     if (salesman && els.overdueBanner.parentElement !== priorityRow) {
       priorityRow.prepend(els.overdueBanner);
@@ -7176,7 +7372,7 @@ function renderSalesmanSimplifiedDashboard() {
         <span class="salesman-summary-card-copy">
           <span class="salesman-summary-card-label">${escapeHtml(card.label)}</span>
           <strong>${escapeHtml(String(card.value))}</strong>
-          <small>${escapeHtml(card.meta)}</small>
+          <small class="crm-visually-hidden-mobile">${escapeHtml(card.meta)}</small>
           <span class="salesman-summary-card-action">${escapeHtml(card.action)} <span aria-hidden="true">&rarr;</span></span>
         </span>
         <span class="salesman-summary-card-chevron" aria-hidden="true">&rsaquo;</span>
@@ -7267,7 +7463,7 @@ function renderSalesmanSimplifiedDashboard() {
       return `
         <article class="salesman-loss-card">
           <div class="salesman-loss-card-copy">
-            <span class="salesman-loss-kicker">Blocked lead follow-through</span>
+            <span class="salesman-loss-kicker">Lost lead follow-through</span>
             <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
             <p>${escapeHtml(lead.lost_reason_detail || "Capture the reason now while the context is still fresh.")}</p>
             <div class="chip-row">
@@ -7292,7 +7488,7 @@ function renderSalesmanSimplifiedDashboard() {
       { label: stageDisplayLabel("NEGOTIATION"), value: pipelineCounts.NEGOTIATION, type: "salesmanStageNegotiation", icon: "stageNegotiation", tone: "negotiation" },
       { label: stageDisplayLabel("WON"), value: pipelineCounts.WON, type: "salesmanStageWon", icon: "stageWon", tone: "won" },
       { label: stageDisplayLabel("DORMANT"), value: pipelineCounts.DORMANT, type: "salesmanStageDormant", icon: "dueToday", tone: "dormant" },
-      { label: "Blocked", value: pipelineCounts.LOST, type: "salesmanStageLost", icon: "stageLost", tone: "lost" }
+      { label: "Lost", value: pipelineCounts.LOST, type: "salesmanStageLost", icon: "stageLost", tone: "lost" }
     ].map(card => `
       <button class="salesman-simplified-stage tone-${escapeHtml(card.tone)} ${summaryLoading ? "is-loading" : ""}" type="button" data-summary-card="${escapeHtml(card.type)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" aria-label="${escapeHtml(`${card.label} leads, ${card.value}. View summary`)}" title="${escapeHtml(`View ${card.label} leads breakdown`)}" aria-busy="${summaryLoading}" ${summaryLoading ? "disabled" : ""}>
         <span class="salesman-stage-copy">
@@ -7647,7 +7843,7 @@ function renderSalesmanLossPromptPanel() {
     return `
       <article class="salesman-loss-card">
         <div class="salesman-loss-card-copy">
-          <span class="salesman-loss-kicker">Blocked lead follow-through</span>
+          <span class="salesman-loss-kicker">Lost lead follow-through</span>
           <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
           <p>${escapeHtml(lead.lost_reason_detail || lead.notes || "Capture the primary loss reason and any context for coaching.")}</p>
           <div class="chip-row">
@@ -8337,13 +8533,14 @@ function pipelineLeadRowMarkup(lead) {
         ${companyMeta ? `<small>${escapeHtml(companyMeta)}</small>` : ""}
       </td>
       <td class="lead-table-next-action" data-label="Next action">${escapeHtml(plan.action)}</td>
-      <td data-label="Days overdue"><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(overdueLabel)}</span></td>
+      <td data-label="Days overdue"><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(overdueLabel)}</span>${isSalesmanRole() ? `<small class="salesman-pipeline-due">${escapeHtml(dueDate ? `Due ${formatPlanDate(dueDate)}` : "No due date")}</small>` : ""}</td>
       <td data-label="Due date">${escapeHtml(dueDate ? formatPlanDate(dueDate) : "Not set")}</td>
       <td data-label="Salesman">${escapeHtml(lead.assigned_salesman || "Unassigned")}</td>
       <td data-label="Stage"><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
       <td data-label="Priority"><span class="lead-table-badge lead-table-priority-${priorityTone}">${escapeHtml(priorityLabel)}</span></td>
       <td class="lead-table-territory" data-label="Territory">${escapeHtml(lead.territory || inferEmirate(lead) || "Not set")}</td>
       <td class="pipeline-row-actions">
+        ${isSalesmanRole() ? `<button class="primary-button salesman-pipeline-log" type="button" data-pipeline-log="${escapeHtml(lead.id)}" style="--crm-button-icon:var(--crm-icon-${/email/i.test(plan.action) ? "mail" : "phone"})">${/email/i.test(plan.action) ? "Log email" : /visit/i.test(plan.action) ? "Log visit" : "Log call"}</button>` : ""}
         ${contact.phone ? `<a class="pipeline-mobile-call" href="tel:${escapeHtml(contact.phone)}" aria-label="Call ${escapeHtml(contact.name || lead.company_name || "contact")}">Call</a>` : ""}
         <button class="pipeline-row-action" type="button" data-pipeline-open="${escapeHtml(lead.id)}" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">Open</button>
       </td>
@@ -8396,9 +8593,63 @@ function pipelineFilterHeaderMarkup() {
   `;
 }
 
+let salesmanPipelineColumnsExpanded = false;
+let dismissedPipelineAlertFor = "";
+
+function salesmanPipelineFiltersMarkup() {
+  // Reuse the existing controls and values through a structured DOM fragment.
+  const template = document.createElement("template");
+  template.innerHTML = `<table><thead>${pipelineFilterHeaderMarkup()}</thead></table>`;
+  const fields = [...template.content.querySelectorAll(".pipeline-filter-row > th")];
+  const bar = document.createElement("div");
+  bar.className = "salesman-pipeline-filters";
+  for (const index of [0, 1, 5, 6, 7]) {
+    const group = document.createElement("div");
+    group.className = "salesman-pipeline-filter";
+    group.append(...fields[index].childNodes);
+    bar.append(group);
+  }
+  bar.querySelector('[data-pipeline-filter="stage"] option[value="all"]').textContent = "All statuses";
+  bar.querySelector('[data-pipeline-filter="search"]').placeholder = "Filter company or contact";
+  const more = document.createElement("details");
+  more.className = "salesman-pipeline-more";
+  more.open = state.pipelineTable.overdue !== "all" || Boolean(state.pipelineTable.dueDate) || salesmanPipelineColumnsExpanded;
+  more.innerHTML = `<summary>More filters</summary><div class="salesman-pipeline-more-fields"></div>`;
+  const extra = more.querySelector("div");
+  for (const [index, label] of [[2, "Days overdue"], [3, "Due date"]]) {
+    const field = fields[index].querySelector("label");
+    field.querySelector("span").className = "";
+    field.querySelector("span").textContent = label;
+    extra.append(field);
+  }
+  const columns = document.createElement("label");
+  columns.innerHTML = `<input type="checkbox" data-pipeline-columns ${salesmanPipelineColumnsExpanded ? "checked" : ""}> Show all columns`;
+  extra.append(columns);
+  bar.append(more);
+  const actions = document.createElement("div");
+  actions.className = "salesman-pipeline-filter-actions";
+  bar.append(actions);
+  return bar.outerHTML;
+}
+
+function renderSalesmanPipelineAlert() {
+  const banner = document.querySelector("#salesmanPipelineAlert");
+  if (!banner) return;
+  const owner = String(state.currentUser?.id || state.currentUser?.email || "");
+  const visible = currentView === "pipeline" && isSalesmanRole() && state.leadsLoaded && !state.leadsError && dismissedPipelineAlertFor !== owner;
+  const ids = new Set(salesmanDashboardLeads().map(lead => String(lead.id)));
+  const items = visible ? overdueItems().filter(item => ids.has(String(item.lead_id))) : [];
+  banner.classList.toggle("hidden", !items.length);
+  if (!items.length) { banner.innerHTML = ""; return; }
+  banner.innerHTML = `<p><strong>${items.length} overdue follow-ups across ${new Set(items.map(item => item.lead_id)).size} leads.</strong> Oldest: ${escapeHtml(items[0].company_name)}, ${escapeHtml(daysOverdueLabel(items[0].due_date))}.</p><button class="ghost-button" type="button" data-salesman-pipeline-overdue>Show overdue only</button><button class="ghost-button" type="button" data-salesman-pipeline-dismiss aria-label="Dismiss pipeline overdue notice">Close</button>`;
+  banner.querySelector('[data-salesman-pipeline-overdue]').addEventListener('click', openOverduePipeline);
+  banner.querySelector('[data-salesman-pipeline-dismiss]').addEventListener('click', () => { dismissedPipelineAlertFor = owner; renderSalesmanPipelineAlert(); });
+}
+
 function pipelineTableMarkup(leads) {
   const rows = leads.map(pipelineLeadRowMarkup).join("");
   return `
+    ${isSalesmanRole() ? salesmanPipelineFiltersMarkup() : ""}
     <table class="live-lead-table pipeline-lead-table" role="table" aria-label="Live leads">
       <thead>
         <tr class="pipeline-column-row">
@@ -8407,12 +8658,12 @@ function pipelineTableMarkup(leads) {
           ${pipelineSortableHeader("daysOverdue", "Days Overdue")}
           ${pipelineSortableHeader("dueDate", "Due Date")}
           ${pipelineSortableHeader("salesman", "Salesman")}
-          ${pipelineSortableHeader("stage", "Stage")}
+          ${pipelineSortableHeader("stage", isSalesmanRole() ? "Status" : "Stage")}
           ${pipelineSortableHeader("priority", "Priority")}
           ${pipelineSortableHeader("territory", "Territory")}
           <th scope="col">Actions</th>
         </tr>
-        ${pipelineFilterHeaderMarkup()}
+        ${isSalesmanRole() ? "" : pipelineFilterHeaderMarkup()}
       </thead>
       <tbody>${rows || `
         <tr class="lead-table-empty">
@@ -8493,6 +8744,9 @@ function restorePipelineFilterFocus(filter, selectionStart, selectionEnd) {
 
 function renderLeadList({ focusFilter = "", selectionStart, selectionEnd } = {}) {
   if (!els.leadList) return;
+  renderSalesmanPipelineAlert();
+  const toolbar = document.querySelector("#pipelineListPanel .pipeline-list-actions");
+  if (toolbar) toolbar.append(...[els.clearPipelineFilters, els.refreshPipelineLeads].filter(Boolean));
   const canExportPipeline = state.currentUser?.role === "admin";
   const activeFilters = pipelineFilterActiveCount();
   els.pipelineReportTools?.classList.toggle("hidden", !canExportPipeline);
@@ -8502,7 +8756,7 @@ function renderLeadList({ focusFilter = "", selectionStart, selectionEnd } = {})
   if (els.pipelineReportDateTo && document.activeElement !== els.pipelineReportDateTo) {
     els.pipelineReportDateTo.value = state.pipelineTable.dateTo;
   }
-  els.clearPipelineFilters?.classList.toggle("hidden", activeFilters === 0);
+  els.clearPipelineFilters?.classList.toggle("hidden", activeFilters === 0 && !isSalesmanRole());
   els.leadList.setAttribute("aria-busy", String(state.leadsLoading));
 
   if (state.leadsLoading && !state.leadsLoaded) {
@@ -8541,6 +8795,11 @@ function renderLeadList({ focusFilter = "", selectionStart, selectionEnd } = {})
     els.pipelineListStatus.textContent = `${filtered.length} lead${filtered.length === 1 ? "" : "s"} shown${activeFilters ? ` with ${activeFilters} active filter${activeFilters === 1 ? "" : "s"}` : ""}.`;
   }
   els.leadList.innerHTML = pipelineTableMarkup(leads);
+  if (isSalesmanRole()) {
+    els.leadList.classList.toggle("salesman-pipeline-all-columns", salesmanPipelineColumnsExpanded);
+    const actions = els.leadList.querySelector(".salesman-pipeline-filter-actions");
+    if (actions) actions.append(...[els.clearPipelineFilters, els.refreshPipelineLeads].filter(Boolean));
+  }
   if (els.pipelinePagination) {
     els.pipelinePagination.innerHTML = pipelinePaginationMarkup(filtered.length, state.pipelineTable.page, state.pipelineTable.pageSize);
   }
@@ -8566,6 +8825,14 @@ function updatePipelineFilter(filter, value) {
 
 function bindPipelineTableEvents() {
   if (!els.leadList) return;
+  els.leadList.querySelector('[data-pipeline-columns]')?.addEventListener('change', event => {
+    salesmanPipelineColumnsExpanded = event.currentTarget.checked;
+    els.leadList.classList.toggle('salesman-pipeline-all-columns', salesmanPipelineColumnsExpanded);
+  });
+  els.leadList.querySelectorAll('[data-pipeline-log]').forEach(button => button.addEventListener('click', () => {
+    const lead = salesmanDashboardLeads().find(item => String(item.id) === button.dataset.pipelineLog);
+    if (lead && isSalesmanRole()) openActivityModal(lead.id, button);
+  }));
   els.leadList.querySelectorAll("[data-pipeline-filter]").forEach(control => {
     const eventName = control.matches('input[type="search"]') ? "input" : "change";
     control.addEventListener(eventName, event => {
@@ -8693,10 +8960,10 @@ function renderTopbar() {
     : (state.currentUser.territory || "UAE");
   const config = {
     dashboard: {
-      title: "Dashboard",
+      title: state.currentUser.role === "admin" ? "Dashboard" : "What do I do next?",
       context: state.currentUser.role === "admin"
         ? `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} across ${territory}`
-        : "Start with the urgent queue and open coaching tools only when needed."
+        : "Start with the urgent queue, then open the wider CRM."
     },
     pipeline: {
       title: "Pipeline",
@@ -8720,12 +8987,27 @@ function renderTopbar() {
       title: selectedLead?.company_name || "Lead Detail",
       context: [selectedLead?.assigned_salesman, stageDisplayLabel(selectedLead?.stage), selectedLead?.territory].filter(Boolean).join(" · ") || "AI summary, CRM timeline, reminders, and PMRs"
     }
-  }[currentView] || {
+  }[currentView] || aiWorkspacePage(currentView) || {
     title: "CRM",
     context: `${state.leads.length} active records`
   };
   els.topbarPageTitle.innerHTML = pageTitleMarkup(config.title);
   els.topbarContext.textContent = config.context;
+  if (els.smartSearchInput) {
+    els.smartSearchInput.dataset.originalPlaceholder ||= els.smartSearchInput.placeholder;
+    els.smartSearchInput.placeholder = currentView === "pipeline" && isSalesmanRole()
+      ? "Search companies, tasks, notes" : els.smartSearchInput.dataset.originalPlaceholder;
+  }
+  if (currentView === "pipeline" && isSalesmanRole()) {
+    els.topbarPageTitle.innerHTML = 'My <em class="crm-title-accent">pipeline</em>';
+    els.topbarContext.textContent = state.leadsLoading && !state.leadsLoaded ? "Loading your leads..." : `${salesmanDashboardLeads().length} leads in your pipeline`;
+  }
+  if (currentView === "focus" && isSalesmanRole()) {
+    const datasets = salesmanDashboardSummaryDatasets();
+    const count = datasets.overdueCalls.length + datasets.dueToday.length;
+    els.topbarPageTitle.textContent = "Today";
+    els.topbarContext.textContent = state.leadsLoading && !state.leadsLoaded ? "Loading your follow-ups..." : state.leadsError && !state.leadsLoaded ? "Follow-ups unavailable. Retry loading." : `${count} follow-up${count === 1 ? "" : "s"} need you. Start at the top.`;
+  }
 }
 
 function leadInitial(lead) {
@@ -9180,7 +9462,7 @@ function renderLossDetails(lead) {
   `;
 }
 
-function companyAiActionsMarkup(lead) {
+function companyAiActionsMarkup(lead, { mobile = false } = {}) {
   const actions = [
     ["prepare", "Prepare Me For This Meeting"],
     ["next", "What Should I Do Next?"],
@@ -9188,10 +9470,96 @@ function companyAiActionsMarkup(lead) {
     ["summary", "Summarise Relationship"],
     ["flag", "Flag Needs Attention"]
   ];
+  if (mobile) {
+    const hints = {
+      prepare: "History, latest PMR, intel and talking points",
+      next: "Next action and reasoning",
+      email: "A draft for your review",
+      summary: "A concise relationship recap",
+      flag: "Review before notifying the director"
+    };
+    return `<section class="company-ai-actions record-mobile-ai" aria-label="One-tap AI actions">
+      <h3>One-tap <em>AI actions</em></h3>
+      <div class="record-mobile-ai-grid">${actions.map(([action, label]) => `<button class="record-ai-card${action === "prepare" ? " record-ai-card-primary" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
+    </section>`;
+  }
   return `<section class="drawer-section company-ai-actions" aria-label="Company AI actions">
     <h3>Company AI actions</h3>
     <div class="drawer-primary-actions">${actions.map(([action, label]) => `<button class="ghost-button${action === "flag" ? " danger" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}">${label}</button>`).join("")}</div>
   </section>`;
+}
+
+function desktopLeadOverviewMarkup(lead) {
+  const id = escapeHtml(lead.id);
+  const activities = [...(lead.activities || [])].sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))).slice(0, 3);
+  const reminders = remindersForLead(lead).slice(0, 3);
+  const overdueDays = lead.next_action_date ? Math.max(0, -daysUntil(lead.next_action_date)) : 0;
+  const contactRow = (label, value, href = "") => `<div class="record-contact-row"><div><span>${escapeHtml(label)}</span>${value ? href ? `<a href="${escapeHtml(href)}"${label === "Website" || label === "Location" ? ' target="_blank" rel="noopener"' : ""}>${escapeHtml(value)}</a>` : `<strong>${escapeHtml(value)}</strong>` : '<em>Not added yet</em>'}</div>${label === "Phone" && value ? `<button class="record-copy-phone ghost-button" type="button" data-record-copy-phone="${id}" aria-label="Copy phone number" title="Copy phone number"></button>` : !value ? `<button class="record-text-action" type="button" data-drawer-edit-lead="${id}">Add<span class="sr-only"> ${escapeHtml(label)}</span></button>` : ""}</div>`;
+  return `<div class="record-desktop-overview">
+    <div class="record-main-column">
+      <section class="drawer-section record-next-step">
+        <div class="record-next-content"><div><span class="record-eyebrow">Next step</span><h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3><p>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong> ` : ""}${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p></div>
+        <div class="record-action-row"><button class="ghost-button" type="button" data-drawer-edit-lead="${id}" title="Edit the lead's next action and due date">Reschedule</button><button class="primary-button" type="button" data-drawer-log-activity="${id}">Log outcome</button></div></div>
+      </section>
+      <section class="drawer-section record-recent-activity"><div class="drawer-tab-heading"><h3>Activity</h3><button class="ghost-button" type="button" data-drawer-log-activity="${id}">Add activity</button></div>
+        <div>${activities.map(activity => `<article class="record-activity-row"><span class="record-activity-icon ${escapeHtml(activityTypeClass(activity.type))}" aria-hidden="true"></span><div><strong>${escapeHtml(activity.type || "Activity")}</strong><p>${escapeHtml(activity.text || activity.note || "No note added.")}</p></div><time>${escapeHtml(activity.at ? formatDisplayDate(activity.at) : "Date not recorded")}</time></article>`).join("") || '<p class="empty-copy">No activity recorded yet.</p>'}</div>
+        <button class="record-text-action" type="button" data-drawer-tab="activities">View all activity</button>
+      </section>
+      <div class="record-overview-notes">${renderDrawerNotes(lead)}</div>
+    </div>
+    <div class="record-side-column">
+      <section class="drawer-section record-contact"><h3>Contact</h3>
+        ${primaryContactMarkup(lead)}
+        ${contactRow("Phone", lead.phone, lead.phone ? `tel:${lead.phone}` : "")}
+        ${contactRow("Email", lead.email, lead.email ? `mailto:${lead.email}` : "")}
+        ${contactRow("Website", lead.website, lead.website)}
+        ${contactRow("Location", [lead.location, lead.country_emirate].filter(Boolean).join(" - ") || (lead.google_maps_url ? "Open map" : ""), lead.google_maps_url)}
+      </section>
+      <section class="drawer-section record-details"><h3>Lead details</h3><dl>
+        ${[["Status", drawerStageLabel(lead.stage)], ["Priority", lead.priority || "Cold"], ["Tier", lead.tier ? `Tier ${lead.tier}` : ""], ["Territory", lead.territory], ["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "No activity yet"], ["Owner", lead.assigned_salesman]].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "Not added")}</dd></div>`).join("")}
+      </dl></section>
+      <section class="drawer-section record-reminders"><div class="drawer-tab-heading"><h3>Reminders</h3><button class="ghost-button" type="button" data-drawer-add-reminder="${id}">Add reminder</button></div>
+        ${reminders.map(reminder => `<div class="record-reminder-row"><strong>${escapeHtml(reminder.activity_required || reminder.text || reminder.reminder_type || "Follow up")}</strong><span>${escapeHtml(reminder.due_date ? formatDisplayDate(reminder.due_date) : "No due date")}</span></div>`).join("") || '<p class="empty-copy">No reminders set.</p>'}
+        ${reminders.length ? '<button class="record-text-action" type="button" data-drawer-tab="reminders">View all reminders</button>' : ""}
+      </section>
+    </div>
+  </div>`;
+}
+
+function primaryContactMarkup(lead) {
+  const contact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ");
+  return contact ? `<p class="record-primary-contact">${escapeHtml(contact)}</p>` : "";
+}
+
+function mobileLeadNextStepMarkup(lead) {
+  const overdueDays = lead.next_action_date ? Math.max(0, -daysUntil(lead.next_action_date)) : 0;
+  const summary = state.selectedId === lead.id ? state.leadAiSummary : null;
+  const guidance = !summary?.loading && !summary?.error ? summaryText(summary?.data?.recommended_next_action) : "";
+  const guidanceLabel = summary?.cached ? "Cached guidance" : summary?.provider === "fallback" ? "CRM guidance" : "AI guidance";
+  return `<section class="drawer-section record-mobile-next" aria-label="Next step">
+    <div class="record-mobile-next-heading"><span>Next step</span>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong>` : ""}</div>
+    <h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3>
+    <div class="record-mobile-guidance" aria-live="polite"><span>${escapeHtml(guidance ? guidanceLabel : "Guidance")}</span><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable."))}</p></div>
+    <div class="record-mobile-next-footer"><span>${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</span><button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Reschedule</button></div>
+  </section>`;
+}
+
+function mobileLeadOverviewExtras(lead) {
+  const signals = [
+    ["Since last activity", lead.last_activity ? daysAgoLabel(lead.last_activity) : "No activity recorded"],
+    ["Activity trend, 60 days", "Not scored"],
+    ["Engagement quality", "Not scored"],
+    ["Time in status", "Not scored"],
+    ["PMR heat scores", "Not scored"]
+  ];
+  return `<div class="record-mobile-overview">
+    ${companyAiActionsMarkup(lead, { mobile: true })}
+    <section class="drawer-section record-mobile-health" aria-label="Relationship health">
+      <div class="record-health-heading"><h3>Relationship <em>health</em></h3><span class="record-health-pending">Pending</span></div>
+      <p class="record-health-disclaimer">New scoring rules await approval.</p>
+      <dl>${signals.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd><strong>${escapeHtml(value)}</strong><span class="record-health-pending">Not rated</span></dd></div>`).join("")}</dl>
+    </section>
+  </div>`;
 }
 
 function renderDrawerOverview(lead) {
@@ -9225,6 +9593,8 @@ function renderDrawerOverview(lead) {
   `;
   return `
     ${autoEnrichmentBanner(lead)}
+    ${mobileLeadOverviewExtras(lead)}
+    ${desktopLeadOverviewMarkup(lead)}
     ${overviewSnapshot}
     ${companyAiActionsMarkup(lead)}
     <section class="drawer-section drawer-overview-panel drawer-overview-panel--contact">
@@ -9566,6 +9936,8 @@ function renderDrawerIntel(lead) {
 }
 
 function renderLeadDrawer() {
+  const assistantLauncher = document.querySelector("#aiAssistantLauncher");
+  if (assistantLauncher && els.leadDetailPageContent?.contains(assistantLauncher)) document.body.appendChild(assistantLauncher);
   const lead = state.leads.find(item => item.id === state.selectedId);
   const admin = ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
   const tabs = ["overview", "activities", "pmr", "reminders", "intel", "notes"];
@@ -9614,6 +9986,9 @@ function renderLeadDrawer() {
   els.leadDetailPageContent.innerHTML = `
     <div class="lead-detail-page-toolbar">
       <button class="ghost-button lead-detail-back-button" type="button" id="leadDetailBack">Back to ${escapeHtml(state.lastNonLeadView === "activity" ? "Activity" : state.lastNonLeadView === "salesmen" ? "Salesmen" : state.lastNonLeadView === "dashboard" ? "Dashboard" : "Pipeline")}</button>
+      <span class="record-breadcrumb-company" aria-hidden="true">/ ${escapeHtml(lead.company_name || "Lead")}</span>
+      <div class="record-assistant-host"></div>
+      <button class="ghost-button record-mobile-edit" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}" aria-label="Edit lead" title="Edit lead"></button>
     </div>
     <header class="drawer-header lead-page-header">
       <div class="drawer-title-row">
@@ -9628,16 +10003,44 @@ function renderLeadDrawer() {
         <span class="chip ${priorityClass(lead.priority)}">${escapeHtml(lead.priority || "Cold")}</span>
         <span class="chip">${escapeHtml(formatAED(lead.estimated_value))}</span>
       </div>
+      <div class="record-header-actions">
+        ${lead.phone ? `<a class="primary-button record-call" href="tel:${escapeHtml(lead.phone)}">Call</a>` : ""}
+        ${lead.email ? `<a class="ghost-button record-email" href="mailto:${escapeHtml(lead.email)}">Email</a>` : `<button class="ghost-button record-email" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Add email</button>`}
+        <button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit</button>
+      </div>
     </header>
     <nav class="drawer-tabs lead-detail-tabs" aria-label="Lead details sections">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}" aria-current="${state.leadDrawerTab === tab ? "page" : "false"}">${tabLabels[tab]}</button>`).join("")}</nav>
+    ${mobileLeadNextStepMarkup(lead)}
     <div class="drawer-body lead-detail-page-body">${body}</div>
+    <div class="record-mobile-actions" aria-label="Lead actions"><button class="primary-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log outcome</button><button class="ghost-button" type="button" data-record-note>Note</button></div>
   `;
+  if (assistantLauncher) els.leadDetailPageContent.querySelector(".record-assistant-host")?.appendChild(assistantLauncher);
   renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });
   bindLeadDrawerEvents();
   hydrateLeadIntelligencePdfPreviews();
 }
 
 function bindLeadDrawerEvents() {
+  els.leadDetailPageContent?.querySelector("[data-record-note]")?.addEventListener("click", () => {
+    state.leadDrawerTab = "notes";
+    syncBrowserRoute({ replace: true });
+    render();
+    document.querySelector("[data-drawer-edit-notes]")?.click();
+    document.querySelector("#drawerNotesForm textarea")?.focus();
+  });
+  els.leadDetailPageContent?.querySelectorAll("[data-record-copy-phone]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const lead = state.leads.find(item => item.id === button.dataset.recordCopyPhone);
+      if (!lead?.phone) return;
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable. Select the phone number to copy it.");
+        await navigator.clipboard.writeText(lead.phone);
+        setToast("Phone number copied.", "success");
+      } catch (error) {
+        setToast(error.message || "Could not copy the phone number.", "error");
+      }
+    });
+  });
   els.leadDetailPageContent?.querySelectorAll("[data-company-ai-action]").forEach(button => {
     button.addEventListener("click", () => {
       const lead = state.leads.find(item => item.id === button.dataset.companyAiLead);
@@ -13524,6 +13927,7 @@ function renderDetail() {
 }
 
 function render() {
+  if (state.currentUser && !isSalesmanRole() && ["focus", "neglected"].includes(currentView)) currentView = "ai-actions";
   document.querySelector("#aiAssistantLauncher")?.classList.toggle("hidden", !state.currentUser);
   renderMetrics();
   renderOverdueBanner();
@@ -13540,6 +13944,7 @@ function render() {
   renderSalesmanLeadsViewer();
   renderTasksView();
   renderActivityView();
+  renderAiWorkspace();
   renderPipelineFilterNotice();
   loadActivityAudioSources();
   applyView();
@@ -13547,15 +13952,25 @@ function render() {
   renderSyncStatus();
 }
 
+function arrangeAssistantLauncher(isTasks) {
+  const launcher = document.querySelector("#aiAssistantLauncher");
+  const host = currentView === "lead"
+    ? document.querySelector(".record-assistant-host") || document.body
+    : isTasks ? document.querySelector("#appShell .topbar-actions") : document.body;
+  if (launcher && host && launcher.parentElement !== host) host.appendChild(launcher);
+}
+
 function applyView() {
   if (isSalesmanRole() && ["salesmen", "activity"].includes(currentView)) {
     currentView = "dashboard";
   }
+  if (!isSalesmanRole() && ["focus", "neglected"].includes(currentView)) currentView = "ai-actions";
   const isDashboard = currentView === "dashboard";
   const isPipeline = currentView === "pipeline";
   const isActivity = currentView === "activity";
   const isTasks = currentView === "tasks";
   const isLead = currentView === "lead";
+  const isAiWorkspace = Boolean(aiWorkspacePage());
   const showMetricsShell = isPipeline || (isDashboard && !isSalesmanRole());
   els.metricsShell?.classList.toggle("hidden", !showMetricsShell);
   els.dashboardView.classList.toggle("hidden", !isDashboard);
@@ -13571,9 +13986,12 @@ function applyView() {
   els.leadDetailView?.classList.toggle("hidden", !isLead);
   els.salesmenView.classList.toggle("hidden", currentView !== "salesmen");
   els.tasksView?.classList.toggle("hidden", !isTasks);
+  document.querySelector("#aiWorkspaceView")?.classList.toggle("hidden", !isAiWorkspace);
+  document.querySelectorAll("[data-ai-portfolio-nav]").forEach(item => item.classList.toggle("hidden", !isSalesmanRole()));
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
-    item.classList.toggle("active", item.dataset.view === currentView && !item.dataset.mobileAction);
+    const navigationView = isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
+    item.classList.toggle("active", item.dataset.view === navigationView && !item.dataset.mobileAction);
   });
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
   document.body.classList.toggle("activity-mode", isActivity);
@@ -13587,6 +14005,11 @@ function applyView() {
   document.body.classList.toggle("tasks-mode", isTasks);
   document.body.classList.toggle("admin-tasks-mode", Boolean(isTasks && !isSalesmanRole()));
   document.body.classList.toggle("lead-detail-mode", isLead);
+  document.body.classList.toggle("ai-workspace-mode", isAiWorkspace);
+  document.body.classList.toggle("today-mode", currentView === "focus" && isSalesmanRole());
+  document.body.classList.toggle("neglected-mode", currentView === "neglected" && isSalesmanRole());
+  document.body.classList.toggle("neglected-tools-open", currentView === "neglected" && isSalesmanRole() && neglectedToolsOpen);
+  arrangeAssistantLauncher(isTasks || (["focus", "neglected", "pipeline"].includes(currentView) && isSalesmanRole()));
   arrangeAdminDashboardLayout();
 }
 
@@ -13605,6 +14028,7 @@ function toggleMobileMenu() {
 
 function setView(view) {
   if (isSalesmanRole() && ["salesmen", "activity"].includes(view)) view = "dashboard";
+  if (!isSalesmanRole() && ["focus", "neglected"].includes(view)) view = "ai-actions";
   if (view !== "lead") state.lastNonLeadView = view;
   currentView = view;
   state.leadDrawerOpen = view === "lead";
@@ -14297,6 +14721,7 @@ els.activityNextWeek?.addEventListener("click", () => {
 });
 els.leadDrawerBackdrop?.addEventListener("click", closeLeadDrawer);
 document.addEventListener("keydown", event => {
+  if (event.defaultPrevented || document.querySelector("dialog[open]")) return;
   if (event.key === "Escape" && state.leadDrawerOpen) closeLeadDrawer();
 });
 
@@ -14398,7 +14823,7 @@ els.lostReasonForm?.addEventListener("submit", event => {
   event.preventDefault();
   const payload = Object.fromEntries(new FormData(els.lostReasonForm).entries());
   if (!payload.lost_reason) {
-    setMessage(els.lostReasonMessage, "Select the primary reason before marking this lead as blocked.", "error");
+    setMessage(els.lostReasonMessage, "Select the primary reason before marking this lead as lost.", "error");
     return;
   }
   resolveLostReason({
@@ -14483,8 +14908,33 @@ els.activityEditForm?.addEventListener("submit", async event => {
   }
 });
 
+function hideLoginPassword() {
+  const password = document.querySelector("#loginPassword");
+  const toggle = document.querySelector("#loginPasswordToggle");
+  if (!password || !toggle) return;
+  password.type = "password";
+  toggle.setAttribute("aria-pressed", "false");
+  toggle.setAttribute("aria-label", "Show password");
+  toggle.title = "Show password";
+}
+
+document.querySelector("#loginPasswordToggle")?.addEventListener("click", event => {
+  const password = document.querySelector("#loginPassword");
+  if (!password) return;
+  const visible = password.type === "password";
+  password.type = visible ? "text" : "password";
+  event.currentTarget.setAttribute("aria-pressed", String(visible));
+  event.currentTarget.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+  event.currentTarget.title = visible ? "Hide password" : "Show password";
+});
+els.loginForm.addEventListener("reset", hideLoginPassword);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) hideLoginPassword();
+});
+
 els.loginForm.addEventListener("submit", async event => {
   event.preventDefault();
+  hideLoginPassword();
   els.loginMessage.textContent = "Signing in...";
 
   try {
@@ -14734,6 +15184,76 @@ els.aiActionResult?.addEventListener("click", event => {
   els.aiActionDialog?.close();
   openLeadDrawer(state.selectedId);
   render();
+});
+
+document.querySelector("#aiWorkspaceView")?.addEventListener("change", event => {
+  if (event.target.id !== "aiWorkspaceCompany") return;
+  const selected = state.leads.some(lead => String(lead.id) === event.target.value);
+  document.querySelectorAll("#aiWorkspaceView [data-workspace-company-action]").forEach(button => { button.disabled = !selected; });
+  const status = document.querySelector("#aiWorkspaceView .crm-ai-workspace-status");
+  if (status) status.textContent = selected ? "Company actions are ready." : "Choose a company to enable its actions.";
+});
+
+document.querySelector("#aiWorkspaceView")?.addEventListener("click", async event => {
+  const button = event.target.closest("button");
+  if (!button || button.disabled) return;
+  if (button.hasAttribute("data-neglected-tools")) {
+    neglectedToolsOpen = !neglectedToolsOpen;
+    document.body.classList.toggle("neglected-tools-open", neglectedToolsOpen);
+    button.setAttribute("aria-expanded", String(neglectedToolsOpen));
+    return;
+  }
+  if (button.hasAttribute("data-neglected-retry") && isSalesmanRole()) {
+    neglectedWorkspace = null;
+    if (!state.leadsLoaded) {
+      try { await loadLeads(); } catch { /* The page displays the existing load error. */ }
+    }
+    renderAiWorkspace();
+    return;
+  }
+  const neglectedLeadId = button.dataset.neglectedLead || button.dataset.neglectedLog || button.dataset.neglectedTask;
+  if (neglectedLeadId && isSalesmanRole()) {
+    const lead = salesmanDashboardLeads().find(item => String(item.id) === neglectedLeadId);
+    if (!lead) return;
+    if (button.dataset.neglectedLog) openActivityModal(lead.id, button);
+    else openLeadDrawer(lead.id, button.dataset.neglectedTask ? "reminders" : "overview");
+    return;
+  }
+  if (button.dataset.todayLead) {
+    openLeadDrawer(button.dataset.todayLead);
+    render();
+    return;
+  }
+  if (button.dataset.todaySummary) {
+    openSummaryCardDetails(button.dataset.todaySummary, button);
+    return;
+  }
+  if (button.dataset.todayAction) {
+    if (button.dataset.todayAction === "add") document.querySelector("#openLeadForm")?.click();
+    if (button.dataset.todayAction === "places") document.querySelector("#openPlacesSearch")?.click();
+    if (button.dataset.todayAction === "report") setView("tasks");
+    return;
+  }
+  if (button.dataset.workspaceView) {
+    setView(button.dataset.workspaceView);
+    return;
+  }
+  if (button.hasAttribute("data-workspace-retry")) {
+    try { await loadLeads(); } catch (error) { setToast(error.message, "error"); }
+    renderAiWorkspace();
+    return;
+  }
+  if (button.dataset.workspacePortfolioAction && isSalesmanRole()) {
+    await runSalespersonAiAction(button.dataset.workspacePortfolioAction);
+    return;
+  }
+  if (button.dataset.workspaceCompanyAction) {
+    const selected = document.querySelector("#aiWorkspaceCompany")?.value;
+    const lead = state.leads.find(item => String(item.id) === selected);
+    if (!lead) return;
+    if (button.dataset.workspaceCompanyAction === "flag") openFlagAttentionModal(lead);
+    else await runLeadAiAction(lead, button.dataset.workspaceCompanyAction);
+  }
 });
 
 els.dailyAiPanel?.addEventListener("click", event => {

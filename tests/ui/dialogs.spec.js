@@ -8,7 +8,7 @@ test("existing company AI actions are exposed on Lead Details", async ({page}, i
   test.setTimeout(90000);
   await login(page, info);
   await page.goto("/leads/ui-lead-1?tab=overview");
-  const actions = page.locator("#leadDetailView [data-company-ai-action]");
+  const actions = page.locator("#leadDetailView [data-company-ai-action]:visible");
   await expect(actions).toHaveCount(5);
   for (const button of await actions.all()) {
     await expect(button).toBeVisible();
@@ -18,7 +18,7 @@ test("existing company AI actions are exposed on Lead Details", async ({page}, i
   page.on("request", request => {
     if (request.method() !== "GET" && /attention-flags/.test(request.url())) mutations++;
   });
-  await page.locator('[data-company-ai-action="flag"]').click();
+  await page.locator('[data-company-ai-action="flag"]:visible').click();
   await expect(page.locator("#flagAttentionDialog")).toBeVisible();
   await checkDialog(page, "flagAttentionDialog", info.project.name.endsWith("mobile"));
   expect(await page.evaluate(inspectPresentation, {checkTouchTargets:true})).toEqual([]);
@@ -28,7 +28,7 @@ test("existing company AI actions are exposed on Lead Details", async ({page}, i
   for (const action of ["prepare", "next", "email", "summary"]) {
     await page.goto("/leads/ui-lead-1?tab=overview");
     const requestPromise = page.waitForRequest(request => request.url().endsWith("/api/leads/ui-lead-1/ai-actions") && request.method() === "POST");
-    await page.locator(`[data-company-ai-action="${action}"]`).click();
+    await page.locator(`[data-company-ai-action="${action}"]:visible`).click();
     expect((await requestPromise).postDataJSON()).toEqual({action});
     await expect(page.locator("#aiActionDialog")).toBeVisible();
     await expect(page.locator("#aiActionDialog")).toContainText("CRM-data fallback was used.");
@@ -39,7 +39,7 @@ test("existing company AI actions are exposed on Lead Details", async ({page}, i
   }
   await page.goto("/leads/ui-lead-1?tab=overview");
   await page.route("**/api/leads/ui-lead-1/ai-actions", route => route.fulfill({status:503, contentType:"application/json", body:JSON.stringify({error:"Synthetic provider unavailable"})}));
-  await page.locator('[data-company-ai-action="prepare"]').click();
+  await page.locator('[data-company-ai-action="prepare"]:visible').click();
   await expect(page.locator("#aiActionDialog")).toContainText("Couldn't generate this right now.");
   await checkDialog(page, "aiActionDialog", info.project.name.endsWith("mobile"));
   expect(await page.evaluate(inspectPresentation, {checkTouchTargets:true})).toEqual([]);
@@ -76,7 +76,7 @@ test("shared dialogs remain readable and existing forms preserve actions", async
   const role = await login(page, info);
   const mobile = info.project.name.endsWith("mobile");
   if (role === "salesman") {
-    await expect(page.locator('[data-summary-card="salesmanStageLost"]')).toContainText("Blocked");
+    await expect(page.locator('[data-summary-card="salesmanStageLost"] .salesman-stage-label')).toHaveText("Lost");
     const dormant = page.locator('[data-summary-card="salesmanStageDormant"]');
     await expect(dormant).toContainText("Dormant");
     await dormant.click();
@@ -88,7 +88,7 @@ test("shared dialogs remain readable and existing forms preserve actions", async
   }
   await page.locator("#openLeadForm").click();
   await checkDialog(page, "leadDialog", mobile);
-  await expect(page.locator('#formStage option[value="LOST"]')).toHaveText("Blocked");
+  await expect(page.locator('#formStage option[value="LOST"]')).toHaveText("Lost");
   await expect(page.locator('#formStage option[value="NEW"]')).toHaveText("Prospect");
   await expect(page.locator('#formStage option[value="DORMANT"]')).toHaveText("Dormant");
   if (mobile) {
@@ -107,7 +107,7 @@ test("shared dialogs remain readable and existing forms preserve actions", async
   await capture(page, info, "50-places");
   await page.locator("#closePlacesSearch").click();
   await page.goto("/leads/ui-lead-1");
-  await page.locator('[data-drawer-log-activity="ui-lead-1"]').click();
+  await page.locator('[data-drawer-log-activity="ui-lead-1"]:visible').first().click();
   await checkDialog(page, "activityDialog", mobile);
   await expect(page.locator("#activityRecordVoice")).toBeVisible();
   await expect(page.locator("#activityRecordVoice")).toHaveCSS("background-color", "rgb(254, 252, 253)");
@@ -146,9 +146,9 @@ test("shared dialogs remain readable and existing forms preserve actions", async
   expect(sourceLeads.find(lead => lead.id === "ui-lead-5").stage).toBe("LOST");
   expect(sourceLeads.find(lead => lead.id === "ui-lead-1").stage).toBe("NEW");
   const stage = page.locator('[data-pipeline-filter="stage"]');
-  await expect(stage.locator('option[value="LOST"]')).toHaveText("Blocked");
+  await expect(stage.locator('option[value="LOST"]')).toHaveText("Lost");
   await stage.selectOption("LOST");
-  await expect(page.locator("#leadList .lead-table-stage-lost").first()).toHaveText("Blocked");
+  await expect(page.locator("#leadList .lead-table-stage-lost").first()).toHaveText("Lost");
   await page.locator("#leadList [data-lead-id]").first().click();
   await expect(page.locator("#leadDetailView")).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);

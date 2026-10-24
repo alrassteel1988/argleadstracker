@@ -1,5 +1,567 @@
 # CRM Functionality Inventory and UI Migration Baseline
 
+## Mobile Overview Refresh: Health Rules Pending, 24 October
+
+The latest mobile reference is implemented as a layout-only revision. The owner
+confirmed keeping current status/tier cadence and interpreting PMR heat 5 as
+positive intent, but has not approved the proposed five-signal thresholds or
+overall rating rule. No new health scoring was implemented. The new card says
+Pending/Not rated, shows the actual recorded last-activity age, and explicitly
+states that new scoring awaits approval. Existing server-side health elsewhere
+in the CRM is unchanged. Sample scores, 14-day cadence and quote advice are not
+copied from the reference.
+
+Mobile now puts text-only pill section navigation before the next-step card,
+then a full-width meeting-preparation card and a two-by-two grid of the other
+four existing company AI actions, followed by the pending health card. All six
+sections remain in matching visual/keyboard order: Overview, Activity, PMR,
+Reminders, Intel, Notes. Contact/details/reminders and extra tools remain below.
+The fixed outcome/Note footer is preserved. Desktop content layout is unchanged.
+
+Next-step guidance reuses the existing selected-lead summary without an extra
+request. It distinguishes AI, CRM fallback and cached guidance, with loading and
+unavailable states. It does not assert a last-ten-activities source: the existing
+service context remains unchanged. Outputs are escaped and suppressed for a
+different selected lead. Flag opens its existing review dialog; no notification
+is sent merely by opening the card. Quote/Create quote remains unsupported.
+
+Fixed the existing document-level Escape handler so an open dialog or an already
+handled key event cannot also close the underlying lead. Removed an inherited
+mobile body height cap which let the longer Overview overlap the AI summary.
+The record regression now asserts that the summary follows the full record body.
+
+Text-only pills are recognized narrowly by the presentation audit as mobile
+section navigation inside the named Lead Details nav, requiring data-drawer-tab
+and aria-current. Ordinary command buttons still require icons. All navigation
+touch-size and text-contrast checks remain active, with dedicated audit tests.
+Small italic gold headings use the darker amber token for sufficient contrast.
+
+Verification for this refresh: `node tests/crm-record.test.js` passed;
+`CRM_UI_TEST_PORT=4850 npm run test:ui:record` passed 4 profiles;
+`CRM_UI_TEST_PORT=4820 npm run test:ui:baseline` passed 8 cases; the focused
+`CRM_UI_SUITE=audit` presentation-audit regression passed all 4 profiles on port
+4840. `npm run verify` passed again after the final CSS-only height repair.
+Initial browser failures were small gold-text
+contrast (3.53:1/3.61:1), then Escape leaving the lead page after an AI dialog;
+both were repaired without changing business permissions. No full all-page UI
+chain or production/provider UAT is claimed.
+
+Runtime files: `client.js`, `crm-record.css`, `index.html`, `sw.js`. Tests:
+`tests/crm-record.test.js`, `tests/ui/record.spec.js`,
+`tests/ui/presentation-audit.js`, `tests/ui/audit.spec.js`, plus the three cache
+pins in `tests/activity-dashboard-latest.test.js`,
+`tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`.
+Documentation: this inventory and `docs/open-questions.md`.
+
+Local only on `codex/crm-ui-proposal-inventory`, existing HEAD
+`ac3aa5e5b5f51cb9e3fe928e6e023060c81e7883`; no new commit, staging, push, PR or
+deployment. Cache revision: arg-pwa-v122-truthful-legacy-status. Owner WIP remains
+untouched. No server, API, schema, role, RLS, secret, provider configuration or
+production-data changes. New scoring and the newer desktop Overview remain
+pending rule approval; this refresh must not be described as their completion.
+
+## Lead Details Mobile Reference: 24 October
+
+The subsequent mobile reference replaces the previous mobile layout: compact
+back/edit header, a navy 24px company name, status/priority context, equal-width
+Call/Email actions, an actual next-step card, horizontally scrollable segmented
+section navigation and contact rows with phone copy. Overview/Activity/Notes
+come first visually; PMR/Reminders/Intel remain reachable in the same tab strip.
+A fixed white footer exposes Log outcome and Note, with safe-area padding and
+space reserved below the content. Note opens the existing notes editor; it does
+not create or save a new note automatically. All existing sections remain.
+
+The global mobile title/search/overdue/navigation shell is hidden only on the
+lead route. Back returns to the prior worklist, and the original Assistant
+launcher is moved to the record header on both screen sizes, never cloned.
+Its existing event listeners survive rerenders and route changes. No floating
+launcher covers the contact cards or fixed action bar. Dialogs remain native.
+
+No quote button or quote advice is invented. No cadence or automatic reminder
+claim is added. Runtime cache is arg-pwa-v120-lead-responsive. This is local UI
+work only; no commit, push, PR, migration, production-data change or deployment.
+
+### Lead Details Verification and Local Status
+
+- `npm run verify`: passed, including authentication/session guards, role and
+  assignment isolation, protected files, UI contracts, unit tests and build.
+- `node tests/crm-record.test.js`: passed; includes missing-contact/empty-state
+  markup, escaped activity/contact/ID values, and actual next-action overdue data.
+- `CRM_UI_TEST_PORT=4770 npm run test:ui:baseline`: 8 passed across Admin and
+  Salesman desktop/mobile, including all tabs, notes persistence and dialogs.
+- `CRM_UI_TEST_PORT=4790 npm run test:ui:record`: 4 passed, covering the two-column
+  desktop layout, mobile shell/footer, readable/touch-safe presentation, section
+  order, clipboard read-back, activity/edit forms, Notes focus and Assistant.
+- `git diff --check`: passed after normalizing only newly edited line endings.
+- Visually inspected 1440x1200 desktop and 390x844 mobile; browser tests also use
+  1440x900 and 375x812. Screenshots are synthetic local CRM records only.
+- Initial restricted verification failed with `connect EACCES 127.0.0.1:53163`;
+  the approved loopback-enabled rerun passed. Initial browser failures were an
+  ambiguous activity selector (three matching controls), then missing tab icons;
+  both were repaired. A combined enlarged baseline hit `report:user` count 31;
+  new record checks now run in their own fresh fixture suite. Runtime protections
+  and audit checks were not weakened. Final suites have no failing assertions.
+- Not performed: the entire all-page `npm run test:ui` chain, separate full
+  management/dialog suites, production UAT, live provider calls or release checks.
+  No separate lint/type-check command exists. No production readiness is claimed.
+- Continued branch `codex/crm-ui-proposal-inventory`, existing HEAD
+  `ac3aa5e5b5f51cb9e3fe928e6e023060c81e7883`; no new commit SHA. Changes remain
+  unstaged/local. Existing owner WIP was preserved, without replacing Git refs.
+  Remote freshness/authentication was not rechecked for a release.
+- Runtime files changed for Lead Details: `client.js`, `crm-record.css`,
+  `index.html`, `sw.js`. Test/config changes: `package.json`,
+  `playwright.ui.config.js`, `tests/crm-record.test.js`,
+  `tests/ui/record.spec.js`, `tests/ui/baseline.spec.js`,
+  `tests/ui/dialogs.spec.js`, `tests/ui/management.spec.js`, and the three cache
+  pins in `tests/activity-dashboard-latest.test.js`,
+  `tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`.
+  Documentation: this inventory and `docs/open-questions.md`.
+- Security/database impact: no server, RLS, authorization, schema, secrets,
+  production data or provider changes. Deployment impact: cache rotation only;
+  nothing deployed. Remaining limitations are the explicitly omitted unsupported
+  quote controls and sample-only cadence/advice, not incomplete UI handlers.
+
+## Lead Details Desktop Reference: 24 October
+
+Desktop Lead Details now prioritizes the working record in a 1.6:1 overview:
+Next step, recent activity and the existing Notes editor on the left; Contact,
+read-only lead metadata and a reminder preview on the right. The breadcrumb,
+company heading and Call/Email/Edit actions follow the supplied reference.
+All six tabs, commercial/company disclosures, enrichment, files and company AI
+actions remain available. The AI overall summary follows the record on desktop.
+The subsequent Mobile Reference above defines the new mobile presentation.
+
+Reschedule opens the existing lead editor, where the next action/date can be
+changed. Log outcome/Add activity open the existing activity dialog. Add reminder
+uses the existing reminder flow. Phone copy uses the browser clipboard with an
+explicit error if unavailable; no data is sent to a provider. Stage changes
+remain Admin/Manager-only through the existing header control. No new write
+permission, API, database, notification or quote workflow was introduced.
+
+Reference-only quote advice and fixed contact-cadence text are omitted because
+they must not be inferred from sample data. Shared search and Add lead remain
+available; the duplicate desktop page title and global overdue notice are hidden
+on this route, with this lead's actual next-action status shown in its card.
+Runtime cache: arg-pwa-v120-lead-responsive. Local only, no commit/push/deployment.
+
+## My Pipeline Reference: 24 October
+
+Salesman Pipeline now follows the latest reference: My pipeline title with one
+gold italic accent; a soft-red, scoped overdue notice; four compact white
+metrics with teal/navy/red/amber top edges; one primary filter row; a compact
+table with status pills, priority dots, due-date captions and activity actions.
+Admin Pipeline retains its existing presentation and export permissions.
+
+The primary filters reuse the existing generated controls through a structured
+DOM fragment (no changes to filter values/bindings). More filters retains the
+exact date and overdue-range controls, plus Show all columns to restore the
+full sortable table. Original Clear/Refresh DOM nodes and their handlers are
+moved into the filter row and restored before each re-render; they are not
+replaced with unbound clones. Mobile retains all nine card cells, phone links,
+44px actions, and accessible Status captions. Dates remain native inputs.
+
+The notice reuses existing overdue records and opens the existing overdue-only
+Pipeline filter; its dismissal is local UI state and independent of Dashboard
+banner dismissal. Log call/email/visit opens the existing activity form for a
+currently assigned lead. It never auto-saves or initiates a call/email. Row
+opening, keyboard navigation, sorting, pagination and error/retry remain native.
+The Assistant is docked in the toolbar to avoid covering rows or pagination.
+
+Removed legacy fixed-height framing that clipped pagination after reflow.
+Desktop scrolling stays inside the lead-list container; outer Pipeline wrappers
+now follow normal content height, without duplicated borders or nested frames.
+Mobile cards retain responsive layout and all existing metadata.
+
+Intentional reference differences: actual counts, names, amounts and priorities
+are retained, not the illustrative six records. At Risk keeps the existing
+health rules rather than inventing a 60-day definition. No Add quote workflow
+or sample-data badge is introduced. Display heading is Status (not Stage),
+while stored field names and status values are unchanged. Existing priority
+names and pending stored Block/legacy LOST work remain separate release items.
+
+Files for this refinement: `client.js`, `index.html`, `crm-data.css`, `sw.js`,
+`tests/crm-data.test.js`, `tests/ui/data.spec.js`,
+`tests/ui/presentation-audit.js`, the three service-worker cache-pin tests,
+this inventory and `docs/open-questions.md`. Sort-header controls with existing
+aria-sort/Sort labels are classified separately from command buttons in the
+icon audit; active direction remains visible and keyboard sorting is tested.
+No server, API contract, database, authorization or production-data changes.
+
+Verification for My Pipeline:
+- Pre-edit `node tests/pipeline-live-leads.test.js` passed; post-edit it passed
+  again. `node tests/crm-data.test.js` passed with Admin/Salesman row escaping
+  and preservation of all nine mobile cells.
+- `$env:CRM_UI_TEST_PORT='4640'; npm run test:ui:data` passed 8 cases across
+  both roles and widths, including loading/recovery, all filters, sorting,
+  pagination, Admin exports, Salesman restrictions, column expansion, activity
+  logging, the new notice, readable text/contrast and 44px mobile targets.
+- `$env:CRM_UI_TEST_PORT='4650'; npm run test:ui:baseline` passed 8 cases.
+- After final framing/labels, the data suite was rerun for both Salesman
+  projects at base port 4660 (4 passed). After compact mobile notice spacing,
+  the Salesman-mobile data suite was rerun at base port 4680 (2 passed).
+  Project selection used the versioned Playwright config/CLI with
+  `CRM_UI_SUITE=data`; no production test scripts or live provider were used.
+- Final `npm run verify` passed (syntax/auth guards, all Node tests, shared
+  presentation tests and build). `git diff --check` passed; existing Git
+  LF/CRLF conversion warnings are informational.
+- Actual synthetic preview screenshots captured at 1440 x 900 and 375 x 812.
+  The mobile card screenshot preserves every existing field and contact action.
+
+Intermediate test findings: the old metric color expectation was updated for
+the authorized Salesman palette while keeping Admin assertions; the standalone
+row VM needed an explicit role stub for the new presentation branch. Browser
+testing found pagination pointer interception from the legacy fixed-height
+wrapper, which was removed. New mobile controls were enlarged to 44px, including
+the notice Close button after its compact layout measured only 40px wide.
+These were fixed and rerun, not waived as baseline failures. Sort cues retain
+aria-sort and an active direction indicator instead of command-arrow icons.
+
+Status is local only on `codex/crm-ui-proposal-inventory`; no new commit SHA,
+staging, push, PR or deployment. All unrelated WIP and temporary/debug/archive
+paths remain unstaged. Full all-page/zoom UI coverage and live production/provider
+behavior were not re-tested for this page. Separate lint and TypeScript-check
+toolchains are not present.
+
+## Neglected Accounts Reference: 24 October
+
+The Salesman `?view=neglected` route now shows the supplied desktop/mobile
+worklist instead of an AI-launch button alone. Three summaries show overdue
+account count, largest known contact gap and Tier 1 count. The desktop table
+shows Company, Status, Tier, Last activity, Expected, Overdue and Actions;
+mobile rows combine these details beside a 44px call-log button.
+
+Existing `/api/salesperson-ai-actions` pipeline-health metrics supply contact
+thresholds and gap calculations. The page does not reimplement tier/status
+rules. Metrics are fetched once per owner/loaded-lead snapshot, with retry,
+loading/error/empty states and stale-response guards. Rows are intersected with
+the currently visible assigned leads. Unknown activity dates stay unknown and
+appear first; remaining rows sort by contact overdue days descending.
+
+Company buttons open Lead Details. Log call opens the existing activity form
+without saving anything automatically. Task opens the existing Reminders tab,
+as approved; no independent task-creation flow is added. AI answer uses the
+existing neglected-account action. Back returns to Today. Mobile Tools exposes
+the existing search, Search Places, Add Lead and Assistant controls, keeping
+them available without covering rows. All actions retain their existing
+authorization and save/confirmation requirements.
+
+Reference differences: Export is omitted to preserve Salesman export
+restrictions (owner approved); numbers/names are live scoped CRM data, not the
+reference's samples; no sample-data badge is shown in the actual page. The
+existing icon sidebar/mobile navigation remains. The Assistant is docked with
+page tools instead of overlapping the worklist. Legacy LOST displays Outreach
+here, without a data migration or stored Block change. Existing cadence rules
+can differ from the illustrative intervals in the screenshots.
+
+Files: `client.js`, `crm-dashboard.css`, `sw.js`,
+`tests/crm-ai-workspace.test.js`, `tests/ui/ai-workspace.spec.js`, the three
+service-worker pin tests, this inventory and `docs/open-questions.md`.
+No server/API contract, authorization, database or production data changes.
+`tests/ui/presentation-audit.js` recognizes company-name links as record
+controls, consistently with existing CRM record links; all command buttons
+still require icons and mobile touch-target checks remain unchanged.
+
+Verification for this refinement:
+- Before editing: `node tests/crm-ai-workspace.test.js` passed.
+- After editing: the same focused Node test passed, including scoped row
+  filtering, descending contact-gap order, unknown dates, escaping and
+  loading/error/empty presentation.
+- `$env:CRM_UI_TEST_PORT='4600'; npm run test:ui:ai-workspace` passed all
+  16 cases across both roles and desktop/mobile, including request failure,
+  retry, empty results, real metric counts, activity/reminder links, Tools,
+  overflow, contrast, readable text and mobile touch targets.
+- Final `npm run verify` passed (syntax/auth guards, Node tests, presentation
+  contracts and build). `git diff --check` passed.
+- Captured the actual synthetic app at 1440 x 900 and 375 x 812. The desktop
+  table is height-bounded with internal scrolling and the brand watermark is
+  visible below it. Five mobile rows fit before bottom navigation; no horizontal
+  overflow or floating Assistant overlap was observed.
+
+Earlier intermediate browser failures were in the new harness: a response-body
+read captured a prior page request during navigation (`Network.getResponseBody:
+No resource with given identifier found`), fixed by inspecting and forwarding
+the actual routed response; the icon audit then misclassified company-name
+record links as commands, fixed with the existing record-control classification.
+Neither failure is claimed as a baseline production defect.
+
+Local only on `codex/crm-ui-proposal-inventory`; no new commit SHA, staging,
+push, PR, deployment or production operation. Existing unrelated WIP and
+temporary/debug/archive paths remain unstaged. Full all-page/zoom browser
+coverage and live provider/production data were not re-tested for this scoped
+page change. Separate lint/TypeScript toolchains are not present.
+
+## Login Layout Reference: 24 October
+
+Login now uses the latest desktop split layout and compact mobile brand header.
+At phone widths the headline and statistics are hidden, the white form has
+24px top corners, and a flex footer fills the remaining screen without fixed
+positioning. Short screens scroll naturally. The existing logo artwork stays
+unchanged, with its embedded tagline omitted by the existing presentation mask.
+The separate mobile heritage line remains visible.
+
+Email/password names, validation, autocomplete, request payload, role routing
+and tab-scoped session persistence are unchanged. Owner confirmed omitting the
+reference's persistent-sign-in checkbox. The administrator footer links to
+the owner-approved `glory@alrassteel.com`. Password visibility is local only,
+has accessible state, and resets on submit, form reset and document hiding.
+No credentials are stored by this control. No server/API/database changes.
+
+Focused layout checks cover 1440px, 375px, 390px and 320px widths, footer
+visibility, overflow, preserved payload keys and the visibility toggle. Results
+are recorded after execution below. The existing Forgot password control has
+no reset handler/endpoint in the current client/server; this pre-existing gap
+is not represented as a working recovery flow by this layout revision.
+
+Verification for this login revision:
+- Before edit: `node tests/crm-shell.test.js` passed.
+- After edit: `node tests/crm-shell.test.js` passed.
+- `$env:CRM_UI_TEST_PORT='4540'; npm run test:ui:shell` passed 8 tests.
+- `$env:CRM_UI_TEST_PORT='4550'; npm run test:ui:baseline` passed 8 tests.
+- `npm run verify` passed (syntax, authentication guards, Node tests,
+  presentation contracts and build).
+- `git diff --check` passed after new-line normalization; Git's existing
+  LF/CRLF conversion warnings remain informational.
+- Live synthetic preview at 390 x 844: zero document horizontal overflow;
+  footer bottom at 820px, inside the viewport. Desktop capture: 1440 x 900.
+
+Login-specific files: `index.html`, `client.js`, `crm-shell.css`, `sw.js`,
+`tests/crm-shell.test.js`, `tests/ui/shell.spec.js`,
+`tests/ui/baseline.spec.js`, the three existing service-worker cache-pin tests,
+this inventory and `docs/open-questions.md`. Earlier unrelated WIP remains
+preserved and unstaged, including temporary/debug/archive paths.
+
+Status: local only on `codex/crm-ui-proposal-inventory`; no new commit SHA,
+push, PR, deployment, production data access or database operation. No separate
+lint/TypeScript check exists; the full all-page browser chain, live identity
+provider and production password recovery were not verified by this revision.
+
+## Today Screenshot Refinement: 24 October
+
+The Salesman `?view=focus` destination is now labelled Today and uses the
+owner's latest screenshot: four Call next rows at left, a two-by-two quick
+action grid and pipeline bars at right, stacked on mobile. The existing Home
+Dashboard is not replaced. The neutral Today background is route-local; the
+approved background/logo artwork files are unchanged.
+
+The list and View all drill-down share `actionableSalesmanLeads()`. Existing
+summary datasets drive pipeline counts; phone/email links use primary contacts,
+with missing contacts disabled. Quick actions reuse Add Lead, Search Places,
+Draft Email and Weekly Report. New Quote is not invented: that backend workflow
+does not exist. AI daily focus remains under More tools and on AI Actions.
+Sampling stays omitted. Block is explicitly unavailable until the separately
+planned stored status exists; legacy LOST is not relabelled as a new Block
+dataset. No historical data migration was performed.
+
+Files for this refinement: `client.js`, `index.html`, `crm-dashboard.css`,
+`crm-theme.css`, `sw.js`, `tests/crm-ai-workspace.test.js`,
+`tests/ui/ai-workspace.spec.js`, `tests/ui/presentation-audit.js` and the three
+existing service-worker cache-pin tests. No API, server authorization, schema,
+production record, commit, push or deployment is changed by this refinement.
+New tests cover Today desktop/mobile layout, scoped company records, contact
+links, missing contacts, summaries, existing quick actions, loading/unavailable/
+empty states and escaped values. Live provider and production data are not used.
+
+Final checks for this refinement: `npm run verify` PASS;
+`CRM_UI_TEST_PORT=4510 npm run test:ui:ai-workspace` PASS (8 cases across both
+roles and desktop/mobile). `git diff --check` PASS. The first browser failures
+identified missing contact-link icons/disabled-Call contrast, then existing
+modal route gating and incorrect quick-action element references; all were
+fixed without weakening assertions. Mobile review also moved the original
+Assistant button into the Today header with a 44px target so it cannot cover
+Call controls. The rest of the application's Assistant placement is unchanged.
+The complete all-page browser chain and native zoom suite were not rerun for
+this focused Today change. No lint or TypeScript pass is claimed.
+
+
+## Online AI Workspace Checkpoint: 24 October
+
+Local implementation adds `ai-actions`, `focus`, `neglected`, `meeting-prep`
+and `draft-email` views. Company choices come from the current caller's loaded
+records; existing API authorization remains authoritative. Portfolio actions
+remain Salesman-only. These pages reuse existing dialogs/actions and do not
+send email automatically or initiate AI requests merely on navigation.
+
+`npm run verify` PASS; `npm run test:ui:ai-workspace` PASS (four profiles:
+Admin/Salesman at desktop/mobile). Tests cover company selection, role-specific
+navigation, preparation, email draft, focus, neglected results, Escape/focus
+restoration and overflow. Providers use labelled synthetic fallback in browser
+tests; live provider configuration and production readiness are not verified.
+A regression test covers silent pipeline-health refresh preserving an open
+foreground AI result. Existing activity correction/deletion requests remain.
+
+Workspace files: `client.js`, `index.html`, `crm-dashboard.css`, `crm-shell.css`,
+`crm-theme.css`, `package.json`, `playwright.ui.config.js`, `sw.js`,
+`tests/crm-ai-workspace.test.js`, `tests/ui/ai-workspace.spec.js`. Shared cache
+pins changed in `tests/activity-dashboard-latest.test.js`,
+`tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`.
+Existing browser expectations changed in `tests/ui/baseline.spec.js` and the
+presentation audit now requires sidebar icons again. This is in addition to
+the uncommitted Home/report/style checkpoint documented below, not a claim that
+all dirty files originated with the workspace feature. Gap/status decisions are
+recorded in `crm-brief-v2-gap-plan.md`, `open-questions.md` and
+`ui-html-reference-map.md`. Temporary screenshots stay outside source control.
+
+### Verification Record: 24 October
+
+- Final `npm run verify`: PASS (syntax, authentication-loading checks, Node
+  unit/integration/security tests, presentation contracts and build command).
+  The build command reports that no asset compilation is required. No separate
+  lint or TypeScript check was run; linting remains a separate approved task.
+- Browser baseline 8 PASS; shell 4 PASS; data 4 PASS; team 4 PASS; reports 8
+  PASS; dashboard 4 PASS in the `npm run test:ui` chain. That chain then stopped
+  on the stale Home-tile expectation `Blocked` versus approved `Block`.
+  Earlier baseline heading expectations also changed from Playfair base text
+  to approved Inter base text plus Playfair accent; functional checks remained.
+- After that assertion correction, dialogs: 7 PASS, 1 timeout during concurrent
+  two-worker runs. The failing company-summary case passed in isolation using
+  the unchanged five-second result assertion. Root cause of the timing failure
+  is not proven; do not describe this as a clean single aggregate run.
+- Audit 8 PASS, management 4 PASS and AI workspace 4 PASS with the following
+  exact local runner: `node -e "const cp=require('child_process');for(const suite
+  of ['audit','management','ai-workspace'])cp.execFileSync(process.execPath,
+  ['node_modules/playwright/cli.js','test','--config=playwright.ui.config.js',
+  '--workers=2'],{stdio:'inherit',env:{...process.env,CRM_UI_SUITE:suite,
+  CRM_UI_TEST_PORT:'4390'}})"` (join wrapped lines when running).
+- Dialog rerun used the same runner with `CRM_UI_SUITE:'dialogs'`,
+  `CRM_UI_TEST_PORT:'4410'`, `--workers=2`. Isolated PASS used
+  `CRM_UI_TEST_PORT:'4430'`, normal one-worker configuration,
+  `--project=salesman-desktop --grep="existing company AI actions"`.
+- Overall: all 56 browser cases have passing evidence across runs, including
+  one isolated retry. The complete aggregate command was not rerun cleanly
+  after the final assertion correction. Native zoom and live-provider tests
+  were not rerun in this checkpoint. This is not production acceptance.
+- `git diff --check`: PASS. Changes remain unstaged/uncommitted on
+  `codex/crm-ui-proposal-inventory`; no new commit SHA, push, PR or deployment.
+  Existing HEAD is `ac3aa5e5b5f51cb9e3fe928e6e023060c81e7883`.
+
+The status replacement is NOT implemented: legacy LOST-to-Outreach and a new
+independent Block status need coordinated validation, filters/counts, AI text,
+tests and an approved historical-data migration. The current Block alias must
+not be released as that capability. Offline access remains separate. No push,
+PR, deployment, database migration or production-data operation was performed.
+
+
+### Owner Screenshot Correction: Compact Editorial Home
+
+The shared-style preview was rejected as an insufficient layout match. The
+Salesman Home now follows `SalesDesktop_V18.html`: one full-width pale overdue
+banner, three compact metrics, a slim pipeline strip, and a full-width call
+queue with four normal rows before its existing internal scroll. Duplicate
+greeting/add-lead, priority actions, Live Leads List, first-touch and closure
+tools remain inside a keyboard-operable native `More dashboard tools` section.
+The default closed state is explicitly enforced against older display rules.
+Opening the section restores the existing nodes, data and event handlers.
+The banner remains outside this expandable section, above the summary cards.
+
+The current owner calls this modern editorial corporate, not Bauhaus: Inter
+titles with one gold Playfair italic accent, quiet teal card frames, white
+lightly layered card surfaces, navy sidebar and softer shadows. The optional
+light card translucency is now explicitly approved; fields remain solid white
+and no backdrop blur was added. Desktop page padding includes bottom clearance
+for the silk-white image's existing logo. Mobile summary cards share one row;
+pipeline counters scroll horizontally with 44px targets. Secondary metric
+captions remain in accessible content; no numerical values were fabricated.
+
+The latest owner decision removes Sampling and names the existing dashboard
+indicator `Block`. Its current dataset/key is preserved; this is not a new
+stored status or a production LOST-record migration. The earlier instruction
+to migrate historical LOST records to Outreach remains a separate data task.
+Remaining Home differences: real counts, retained dismiss action/global-search
+coverage, expandable extra tools, mobile full search/actions, and minimum 12px
+labels/44px touch targets instead of tiny prototype controls. Full application
+reskin remains in progress.
+
+### Shared Revised-Design Checkpoint (23 October)
+
+The owner's latest instruction explicitly replaces the Bauhaus appearance with
+the supplied HTML design. Shared canonical tokens now use 14px panel/dialog
+radii, 10px controls, a softer panel shadow, and a white field surface. The
+desktop sidebar follows the reference's 232px width and 24px/14px insets; its
+existing route buttons are text-only with a rounded amber-tinted active pill.
+Legacy token aliases remain compatibility plumbing, not a second role theme.
+
+Required empty/complete fields retain the same computed classes, labels,
+markers and amber/green borders, but their fill is now white as requested.
+Error/disabled styling and focus outlines remain. No permissions, API calls,
+stored statuses or validation calculations were changed in this checkpoint.
+
+Verification: `npm run verify` passed after the shared theme changes;
+`npm run test:ui:reports` passed all eight Admin/Salesman desktop/mobile tests,
+including draft/submit/review/history and containment. The earlier four shell
+scenarios passed; the rerun including rounded-menu/hidden-icon assertions also
+passed all four profiles. The rendered presentation audit passed eight tests
+across both roles, route views, six lead tabs and secondary dialogs. Windows
+test teardown required stopping only verified completed-suite fixture servers;
+the user-facing synthetic preview on port 4189 was not stopped. The first report
+launch encountered occupied port 4179 and was rerun on 4193. The earlier verify
+failure was the superseded report grid ratio assertion, updated to the supplied
+1.6:1 design. No failures were hidden by weakening business/security tests.
+
+Actual report captures at 1440px and 375px show contained fields and the same
+Assistant launcher above, not over, the report. Remaining differences from the
+matching HTML screens: full global search/actions and existing mobile tab bar
+are preserved; report history and all existing fields remain; progress/sidebar
+ordering and compact mobile header still differ. Title accent consistency,
+generated status prose, Sampling/Blocked reconciliation, Dashboard-only alert,
+and full per-screen visual comparison remain pending. Separate linting is an
+approved follow-up; this JavaScript repo has no standalone TypeScript/lint gate.
+This is not final visual
+acceptance, release approval, or a production deployment.
+
+### HTML Reference and First Ordered Layout Fix (23 October)
+
+Primary visual source is now the owner's 96-screen HTML archive, not PDF-only
+approximation. `ui-html-reference-map.md` maps its files to existing routes,
+components and dialogs, retaining gaps instead of building proposed modules.
+Original files are untouched. Four Tasks references were rendered with scripts
+disabled at the requested 1440/375 widths; source hashes and dimensions are
+recorded in the private temporary capture manifest. Both mobile prototypes are
+390px wide at a 375px viewport, a source limitation not copied into the real app.
+
+Report containment reproduced with long synthetic company names: the 375px
+shell had 671px content and the banner 659px content. Shared banner text now
+wraps without hiding horizontal overflow. The real Assistant launcher is docked
+in the Tasks header only, with its original ID/listeners, then restored on SPA
+navigation to other pages. It no longer overlays report fields/sidebar text.
+Tasks omits the overdue banner, matching the supplied screen and owner request;
+Dashboard still exposes it. No counts or overdue rules change.
+
+Spacing/column proportions and checkbox alignment now follow
+`SalesWeekly_D_V18.html` and the mobile counterpart: 28/36 desktop page padding,
+16px phone gutters, 1.6:1 report columns, 16px section gap and 18px desktop card
+insets. All actual fields, voice tools, draft/submit/review/history remain.
+The regression checks nested and page overflow at 1440, 1280, 1010, 768 and
+375px, Assistant open/Escape/focus, and restore-on-SPA-navigation.
+
+Earlier entries below are historical checkpoints. Their omitted-Sampling and
+Blocked-as-stage implementation is no longer the target. New owner requirements
+and still-pending status/data reconciliation are recorded in open-questions.
+Final first-screen comparison/gate results are recorded after the final runs;
+full visual acceptance and production readiness are not implied by this fix.
+
+### Salesman Home Reference-Fidelity Checkpoint (23 October)
+
+Compared against proposal page 8, the Salesman display title now reads
+"What do I do next?" with the existing safe last-word accent formatter. The
+Admin title, route keys, navigation labels and handlers are unchanged. Pipeline
+and call-queue headings use the shared gold/Playfair italic accent; their 20px
+bold size supports the specified gold's large-text contrast requirement.
+
+Pipeline counts now display above labels in one unframed white strip. Existing
+six stage buttons, icons, View summary labels, values, ARIA names and popup
+types remain. Smaller inner/bottom padding reduces unused space; hover borders
+reserve their original width and focus styling remains visible. The original
+stored stage keys and counts are unchanged. Sampling stays omitted and LOST
+still displays as Blocked, per the owner's earlier explicit decisions.
+
+The focused browser check failed before the title change (expected the proposal
+title, received Dashboard). Dashboard suite PASS (4), shell suite PASS (4) and
+canonical verification PASS after the change. The current presentation sweep
+and screenshot capture results are recorded when complete; this is not a claim
+that every proposal page or native-zoom case was reverified in this checkpoint.
+No backend, auth, role guard, database, API, report workflow or integration was
+modified. No lint/typechecking or live-provider/device UAT pass is claimed.
+
 ### Action-Card Alignment and AI Dialog Capture Checkpoint (23 October)
 
 The revised 57-page PDF remains authoritative, including Salesman Home page 8.

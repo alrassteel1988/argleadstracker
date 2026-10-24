@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { capture, login, blockExternalTraffic } = require("./helpers");
+const {inspectPresentation} = require('./presentation-audit');
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
@@ -35,7 +36,7 @@ test("shared Pipeline filters, sorting, pagination, reports and recovery", async
     color: getComputedStyle(element.querySelector("strong")).color,
     top: getComputedStyle(element).borderTopColor
   }));
-  expect(colors).toEqual({ background: "rgb(254, 252, 253)", color: "rgb(8, 61, 119)", top: "rgb(255, 177, 0)" });
+  expect(colors).toEqual({ background: role === 'salesman' ? "rgb(255, 255, 255)" : "rgb(254, 252, 253)", color: "rgb(8, 61, 119)", top: role === 'salesman' ? "rgb(91, 192, 190)" : "rgb(255, 177, 0)" });
   const captionsFit = await page.locator("#metricsPanel article small").evaluateAll(elements => elements.every(element => {
     const caption = element.getBoundingClientRect();
     const card = element.closest("article").getBoundingClientRect();
@@ -68,7 +69,9 @@ test("shared Pipeline filters, sorting, pagination, reports and recovery", async
     await rows.first().locator("[data-pipeline-open]").scrollIntoViewIfNeeded();
     const action = await rows.first().locator("[data-pipeline-open]").boundingBox();
     const ai = await page.locator("#aiAssistantLauncher").boundingBox();
-    expect(action.x + action.width).toBeLessThanOrEqual(ai.x);
+    if (role === 'salesman') {
+      expect(action.x < ai.x + ai.width && action.x + action.width > ai.x && action.y < ai.y + ai.height && action.y + action.height > ai.y).toBe(false);
+    } else expect(action.x + action.width).toBeLessThanOrEqual(ai.x);
   } else {
     await expect(call).toBeHidden();
     await expect(rows.first()).toHaveCSS("display", "table-row");
@@ -85,9 +88,11 @@ test("shared Pipeline filters, sorting, pagination, reports and recovery", async
   }
   const overdue = parseInt(await rows.first().locator(".lead-table-badge").first().innerText(), 10);
   const range = overdue > 30 ? "31-plus" : overdue >= 15 ? "15-30" : overdue >= 8 ? "8-14" : overdue > 0 ? "1-7" : "not-overdue";
+  if (role === 'salesman') await page.locator('.salesman-pipeline-more summary').click();
   await filter("overdue").selectOption(range);
   await expect(rows).toHaveCount(10);
   await clear();
+  if (role === 'salesman') await page.locator('.salesman-pipeline-more summary').click();
   await filter("dueDate").fill("2026-10-20");
   await expect(rows).toHaveCount(10);
   await clear();
@@ -144,4 +149,42 @@ test("shared Pipeline filters, sorting, pagination, reports and recovery", async
   if (mobile) await rows.first().press("Enter");
   else await rows.first().locator("[data-pipeline-open]").click();
   await expect(page.locator("#leadDetailView")).toBeVisible();
+});
+
+test('My Pipeline matches compact Salesman layout without changing Admin workflows', async ({page}, info) => {
+  const role = await login(page, info);
+  await page.goto('/?view=pipeline');
+  const rows = page.locator('#leadList tbody tr[data-lead-id]');
+  await expect(rows).toHaveCount(10);
+  if (role !== 'salesman') {
+    await expect(page.locator('.salesman-pipeline-filters')).toHaveCount(0);
+    await expect(page.locator('#salesmanPipelineAlert')).toBeHidden();
+    return;
+  }
+  await expect(page.locator('#topbarPageTitle')).toHaveText('My pipeline');
+  await expect(page.locator('#topbarPageTitle em')).toHaveText('pipeline');
+  await expect(page.locator('#metricsPanel article')).toHaveCount(4);
+  await expect(page.locator('#pipelineReportTools')).toBeHidden();
+  await expect(page.locator('#salesmanPipelineAlert')).toBeVisible();
+  await expect(page.locator('#overdueBanner')).toBeHidden();
+  await expect(page.locator('.salesman-pipeline-filters [data-pipeline-filter]')).toHaveCount(7);
+  await expect(page.locator('.pipeline-sort-button.active .pipeline-sort-indicator')).toHaveCSS('visibility','visible');
+  expect(await page.evaluate(inspectPresentation,{checkTouchTargets:true})).toEqual([]);
+  await capture(page,info,'16-my-pipeline-reference',{fullPage:false});
+  await page.locator('[data-pipeline-log]').first().click();
+  await expect(page.locator('#activityDialog')).toBeVisible();
+  await expect(page.locator('#activityLeadName')).toContainText('Synthetic Steel Company');
+  await page.locator('#closeActivityDialog').click();
+  await page.locator('.salesman-pipeline-more summary').click();
+  await page.locator('[data-pipeline-columns]').check();
+  if (!info.project.name.endsWith('mobile')) await expect(page.locator('[data-pipeline-sort="dueDate"]')).toBeVisible();
+  await page.locator('[data-pipeline-columns]').uncheck();
+  await page.locator('.salesman-pipeline-more summary').click();
+  await page.locator('[data-salesman-pipeline-overdue]').click();
+  await expect(page.locator('#overduePipelineFilter')).toBeVisible();
+  await page.locator('#clearPipelineFilters').click();
+  await expect(rows).toHaveCount(10);
+  await page.locator('[data-salesman-pipeline-dismiss]').click();
+  await expect(page.locator('#salesmanPipelineAlert')).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
 });

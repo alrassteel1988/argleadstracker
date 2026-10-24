@@ -9,7 +9,13 @@
   --crm-sidebar-end: #07192B;
   --crm-sidebar-background: linear-gradient(135deg, var(--crm-sidebar-start) 0%, var(--crm-sidebar-end) 100%);
   --crm-surface: var(--crm-white);
+  --crm-field-surface: #FFFFFF;
+  --crm-card-surface: #FFFFFFED;
+  --crm-card-border: #5BC0BE99;
+  --crm-sidebar-active: #354039;
+  --app-sidebar-width: 232px;
   --crm-surface-muted: #EFF5F6;
+  --crm-page-muted: #F6F7F9;
   --crm-text: #172B4D;
   --crm-text-secondary: #475569;
   --crm-control-border: #66788A;
@@ -37,10 +43,10 @@
   --crm-space-4: 16px;
   --crm-space-5: 20px;
   --crm-space-6: 24px;
-  --crm-radius-control: 6px;
-  --crm-radius-panel: 10px;
-  --crm-radius-dialog: 12px;
-  --crm-shadow-panel: 0 2px 8px #DCE6EA;
+  --crm-radius-control: 10px;
+  --crm-radius-panel: 14px;
+  --crm-radius-dialog: 14px;
+  --crm-shadow-panel: 0 8px 24px #083D771F;
   --crm-background-desktop: url("/assets/brand/crm-silk-white-desktop.png");
   --crm-background-mobile: url("/assets/brand/crm-silk-white-mobile.png");
   --crm-background: var(--crm-background-desktop);
@@ -80,7 +86,7 @@ body .app-shell > .main {
 }
 
 body .app-shell .topbar-copy h1 {
-  font-family: var(--crm-font-title) !important;
+  font-family: var(--crm-font-ui) !important;
 }
 
 /* The specified gold only passes AA for large text on the white surface. */

@@ -37,7 +37,7 @@
   <link rel="stylesheet" href="/crm-shell.css?v=1">
   <link rel="stylesheet" href="/crm-dashboard.css?v=2-admin">
   <link rel="stylesheet" href="/crm-data.css?v=1">
-  <link rel="stylesheet" href="/crm-record.css?v=1">
+  <link rel="stylesheet" href="/crm-record.css?v=3">
   <link rel="stylesheet" href="/crm-activity.css?v=1">
   <link rel="stylesheet" href="/crm-team.css?v=1">
   <link rel="stylesheet" href="/crm-reports.css?v=1">
@@ -49,12 +49,12 @@
       <section class="auth-shell" aria-label="Al Ras Steel sign in">
         <div class="auth-hero">
           <div class="auth-brand">
-            <img class="crm-brand-image" src="/assets/brand/al-ras-steel-white-logo.png" width="2400" height="1511" alt="Al Ras Steel, since 1988">
-            <span class="auth-brand-caption">UAE &amp; GCC CRM</span>
+            <img class="crm-brand-image" src="/assets/brand/al-ras-steel-white-logo.png" width="2400" height="1511" alt="Al Ras Steel">
+            <span class="auth-brand-caption">Structural steel supplier &middot; <strong>since 1988</strong></span>
           </div>
           <div class="auth-hero-copy">
             <h1>Where steel supply meets <em>relationship intelligence.</em></h1>
-            <p class="auth-hero-kicker">Structural steel supplier &middot; Since 1988</p>
+            <p class="auth-hero-kicker">Structural steel supplier</p>
             <p class="auth-hero-description">Manage leads, quotations, follow-ups, site visits and pipeline activity across the UAE and GCC &mdash; in one place.</p>
           </div>
           <div class="auth-stats" aria-label="Al Ras Steel CRM highlights">
@@ -66,28 +66,27 @@
               <strong>UAE + GCC</strong>
               <span>Regional coverage</span>
             </article>
-            <article>
-              <strong>Steel</strong>
-              <span>Structural supply</span>
-            </article>
           </div>
         </div>
         <form class="auth-card" id="loginForm">
-          <div>
+          <span class="auth-secure-badge">Secure access</span>
+          <div class="auth-form-body">
+          <div class="auth-form-intro">
             <span class="auth-form-kicker">CRM Access</span>
             <h2>Welcome <em>back.</em></h2>
             <p>Sign in to your pipeline, accounts and follow-ups.</p>
           </div>
-          <label>Work email<input name="email" type="email" autocomplete="username" placeholder="name@alrassteel.com" required></label>
-          <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required></label>
-          <button class="text-button reset-link" type="button">Forgot password?</button>
+          <label for="loginEmail">Work email</label>
+          <div class="auth-input-wrap auth-email-wrap"><input id="loginEmail" name="email" type="email" autocomplete="username" placeholder="name@alrassteel.com" required></div>
+          <div class="auth-password-label"><label for="loginPassword">Password</label><button class="text-button reset-link" type="button">Forgot password?</button></div>
+          <div class="auth-input-wrap auth-password-wrap">
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+            <button class="auth-password-toggle" id="loginPasswordToggle" type="button" aria-label="Show password" aria-controls="loginPassword" aria-pressed="false" title="Show password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </div>
           <button class="primary-button" type="submit">Sign in</button>
           <span class="form-message" id="loginMessage" aria-live="polite"></span>
-          <div class="auth-trust-row" aria-hidden="true">
-            <span>Secure access</span>
-            <span>Team pipeline</span>
-            <span>Activity</span>
           </div>
+          <footer class="auth-footer"><span>Need access? <a class="auth-admin-contact" href="mailto:glory@alrassteel.com">Contact your administrator</a></span><span>&copy; 2026 Al Ras Steel</span></footer>
         </form>
       </section>
     </main>
@@ -98,7 +97,7 @@
         <div class="sidebar-top">
           <div class="sidebar-brand-row">
             <div class="brand">
-              <img class="crm-brand-image" src="/assets/brand/al-ras-steel-white-logo.png" width="2400" height="1511" alt="Al Ras Steel, since 1988">
+              <img class="crm-brand-image" src="/assets/brand/al-ras-steel-white-logo.png" width="2400" height="1511" alt="Al Ras Steel">
               <span class="sr-only">CRM Intelligence</span>
             </div>
             <button class="sidebar-close-button" id="closeMobileSidebar" type="button" aria-label="Close navigation menu">&times;</button>
@@ -110,6 +109,9 @@
               <button class="nav-item" data-view="pipeline"><span class="nav-item-icon" aria-hidden="true">PL</span><span>Pipeline</span></button>
               <button class="nav-item hidden" data-view="salesmen"><span class="nav-item-icon" aria-hidden="true">TM</span><span>Salesmen</span></button>
               <button class="nav-item" data-view="activity"><span class="nav-item-icon" aria-hidden="true">AC</span><span>Activity</span></button>
+              <button class="nav-item hidden" data-view="focus" data-ai-portfolio-nav type="button"><span class="nav-item-icon" aria-hidden="true">TD</span><span>Today</span></button>
+              <button class="nav-item hidden" data-view="neglected" data-ai-portfolio-nav type="button"><span class="nav-item-icon" aria-hidden="true">NG</span><span>Neglected accounts</span></button>
+              <button class="nav-item" data-view="ai-actions" type="button"><span class="nav-item-icon" aria-hidden="true">AI</span><span>AI actions</span></button>
             </nav>
           </div>
           <div class="nav-group">
@@ -171,22 +173,9 @@
         </header>
 
         <div class="shared-dashboard-top-slot" id="sharedDashboardTopSlot">
+          <section class="hidden salesman-pipeline-alert" id="salesmanPipelineAlert" aria-live="polite"></section>
           <section class="overdue-banner hidden" id="overdueBanner" aria-live="polite"></section>
 
-        <div class="salesman-dashboard-priority-row">
-          <div class="salesman-simplified-hero">
-            <div class="panel-header salesman-simplified-hero-header">
-              <span id="salesmanSimplifiedGreeting">Good morning</span>
-            </div>
-            <div class="salesman-simplified-hero-body">
-              <div class="salesman-simplified-copy">
-                <h2>What do I do next?</h2>
-                <p>Start with the leads that need your next move right now, then expand the wider CRM only when you need it.</p>
-              </div>
-              <button class="primary-button" id="salesmanSimplifiedAddLead" type="button">Add lead</button>
-            </div>
-          </div>
-        </div>
 
           <section class="panel metrics-shell" id="metricsShell">
           <div class="panel-header">
@@ -220,6 +209,7 @@
           </section>
         </div>
 
+        <section class="hidden crm-ai-workspace" id="aiWorkspaceView" aria-labelledby="aiWorkspaceHeading"></section>
         <section class="dashboard-view" id="dashboardView">
           <div class="admin-dashboard-overview-slot" id="adminDashboardOverviewSlot" aria-label="Dashboard overview"></div>
           <div class="admin-dashboard-work-row hidden" id="adminDashboardWorkRow" aria-label="Lead plans and intelligence">
@@ -231,12 +221,41 @@
             <section class="salesman-simplified-block salesman-dashboard-pipeline">
               <div class="panel-header">
                 <div>
-                  <h2>My pipeline</h2>
-                  <span>New, contacted, negotiation, and won counts for your own book.</span>
+                  <h2>My <em class="crm-title-accent">pipeline</em></h2>
+                  <span>Current status counts for your assigned leads.</span>
                 </div>
               </div>
               <div class="salesman-simplified-pipeline-strip" id="salesmanSimplifiedPipeline"></div>
             </section>
+            <section class="salesman-simplified-block salesman-dashboard-call-queue">
+                <div class="panel-header">
+                  <div>
+                    <h2>Call these <em class="crm-title-accent">next</em></h2>
+                    <span id="salesmanSimplifiedQueueMeta">Upcoming follow-ups for your book only.</span>
+                  </div>
+                  <div class="panel-header-actions">
+                    <button class="ghost-button" id="salesmanSimplifiedViewAll" type="button">View all</button>
+                  </div>
+                </div>
+                <div class="salesman-simplified-queue" id="salesmanSimplifiedQueue"></div>
+            </section>
+            <details class="salesman-dashboard-more-tools">
+              <summary>More dashboard tools</summary>
+              <div class="salesman-dashboard-more-content">
+                <div class="salesman-dashboard-priority-row">
+                  <div class="salesman-simplified-hero">
+                    <div class="panel-header salesman-simplified-hero-header">
+                      <span id="salesmanSimplifiedGreeting">Good morning</span>
+                    </div>
+                    <div class="salesman-simplified-hero-body">
+                      <div class="salesman-simplified-copy">
+                        <h2>What do I do next?</h2>
+                        <p>Start with the leads that need your next move right now, then expand the wider CRM only when you need it.</p>
+                      </div>
+                      <button class="primary-button" id="salesmanSimplifiedAddLead" type="button">Add lead</button>
+                    </div>
+                  </div>
+                </div>
             <section class="salesman-simplified-block salesman-dashboard-top-actions">
                 <div class="panel-header">
                   <div>
@@ -245,18 +264,6 @@
                   </div>
                 </div>
                 <div class="salesman-simplified-actions" id="salesmanSimplifiedActions"></div>
-            </section>
-            <section class="salesman-simplified-block salesman-dashboard-call-queue">
-                <div class="panel-header">
-                  <div>
-                    <h2>Call these next</h2>
-                    <span id="salesmanSimplifiedQueueMeta">Upcoming follow-ups for your book only.</span>
-                  </div>
-                  <div class="panel-header-actions">
-                    <button class="ghost-button" id="salesmanSimplifiedViewAll" type="button">View all</button>
-                  </div>
-                </div>
-                <div class="salesman-simplified-queue" id="salesmanSimplifiedQueue"></div>
             </section>
             <section class="salesman-simplified-block salesman-dashboard-live-leads">
               <div class="panel-header">
@@ -286,6 +293,8 @@
                 </div>
                 <div class="salesman-loss-prompts-list" id="salesmanSimplifiedLossPrompts"></div>
             </section>
+              </div>
+            </details>
           </div>
           <div class="panel dashboard-quick-actions" id="dashboardQuickActions">
             <div class="panel-header">
@@ -499,7 +508,7 @@
             <div class="panel-header">
               <div>
                 <h2>Loss Reasons</h2>
-                <span>Why deals were marked blocked</span>
+                <span>Why deals were marked lost</span>
               </div>
             </div>
             <div class="loss-reasons-chart" id="lossReasonsChart"></div>
@@ -619,8 +628,8 @@
                       <button class="ghost-button pipeline-export-button is-excel" id="exportPipelineExcel" type="button">Export Excel</button>
                       <button class="ghost-button pipeline-export-button is-pdf" id="exportPipelinePdf" type="button">Export PDF</button>
                     </div>
-                    <button class="ghost-button hidden" id="clearPipelineFilters" type="button">Clear all filters</button>
-                    <button class="ghost-button" id="refreshPipelineLeads" type="button" aria-label="Refresh live leads">Refresh</button>
+                    <button class="ghost-button hidden" id="clearPipelineFilters" type="button" aria-label="Clear all pipeline filters">Clear all filters</button>
+                    <button class="ghost-button" id="refreshPipelineLeads" type="button" aria-label="Refresh live leads" title="Refresh live leads">Refresh</button>
                   </div>
                 </div>
                 <div class="pipeline-list-status sr-only" id="pipelineListStatus" aria-live="polite"></div>
@@ -1290,7 +1299,7 @@
       <form method="dialog" class="lead-form lost-reason-form" id="lostReasonForm">
         <div class="dialog-header">
           <div>
-            <h2>Why was this deal <em class="crm-title-accent">blocked?</em></h2>
+            <h2>Why was this deal <em class="crm-title-accent">lost?</em></h2>
             <p id="lostReasonLeadName">Lead</p>
           </div>
           <button type="button" class="ghost-button" id="closeLostReasonForm">Close</button>
@@ -1322,7 +1331,7 @@
         <span class="form-message" id="lostReasonMessage" aria-live="polite"></span>
         <div class="lost-reason-actions">
           <button class="text-button" id="skipLostReason" type="button">Skip for now</button>
-          <button class="danger-button" type="submit">Mark as Blocked</button>
+          <button class="danger-button" type="submit">Mark as Lost</button>
         </div>
       </form>
     </dialog>
@@ -1666,7 +1675,7 @@
       </div>
     </dialog>
 
-    <button class="ai-assistant-launcher hidden" id="aiAssistantLauncher" type="button" aria-haspopup="dialog" aria-controls="aiAssistantDialog">
+    <button class="ai-assistant-launcher hidden" id="aiAssistantLauncher" type="button" aria-label="Open AI Sales Assistant" aria-haspopup="dialog" aria-controls="aiAssistantDialog">
       <span class="ai-assistant-launcher__wave" aria-hidden="true">|||</span>
       <span>AI Assistant</span>
     </button>

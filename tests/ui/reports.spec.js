@@ -11,11 +11,13 @@ async function submitReport(page, info, screenshots = true) {
   const summary = page.locator('[data-weekly-field="summary"]');
   await expect(summary).toBeVisible();
   await expect(summary).toHaveClass(/field--required-empty/);
-  await expect(summary).toHaveCSS("background-color", "rgb(248, 237, 206)");
+  await expect(summary).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(summary).toHaveCSS("border-top-color", "rgb(138, 82, 0)");
   const before = Number((await page.locator("[data-weekly-progress-copy]").innerText()).split("/")[0]);
   await summary.fill(summaryText);
   await expect(summary).toHaveClass(/field--filled/);
-  await expect(summary).toHaveCSS("background-color", "rgb(230, 240, 216)");
+  await expect(summary).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(summary).toHaveCSS("border-top-color", "rgb(63, 116, 38)");
   await summary.focus();
   await expect(summary).toHaveCSS("outline-width", "2px");
   expect(Number((await page.locator("[data-weekly-progress-copy]").innerText()).split("/")[0])).toBe(before + 1);
@@ -60,6 +62,57 @@ async function submitReport(page, info, screenshots = true) {
   await expect(page.locator("#weeklySubmitReport")).toBeDisabled();
   if (screenshots) await capture(page, info, "30-report-submitted");
 }
+
+test("weekly report layout contains content and keeps the assistant clear of the form", async ({page}, info) => {
+  await page.route(/\/api\/(?:leads|weekly-reports\/current)(?:\?.*)?$/, async route => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({response});
+    const data = await response.json();
+    const expandCompanyNames = value => {
+      if (!value || typeof value !== "object") return;
+      for (const [key, item] of Object.entries(value)) {
+        if (key === "company_name" && typeof item === "string") value[key] = `${item} Regional Structural Steel Procurement and Fabrication Division ${"S".repeat(80)}`;
+        else expandCompanyNames(item);
+      }
+    };
+    expandCompanyNames(data);
+    await route.fulfill({response, json:data});
+  });
+  const role = await login(page, info);
+  if (role === "salesman") await expect(page.locator("#overdueBanner")).toContainText("Regional Structural Steel");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  if (await page.locator("#mobileMenuToggle").isVisible()) await page.locator("#mobileMenuToggle").click();
+  await page.locator('#mobileSidebar [data-view="tasks"]').click();
+  await expect(page.locator("#tasksPrimary")).not.toBeEmpty();
+  if (role === "salesman") await expect(page.locator('[data-weekly-field="summary"]')).toBeVisible();
+  else await expect(page.locator(".tasks-review-empty")).toBeVisible();
+  await expect(page.locator("#overdueBanner")).toBeHidden();
+  for (const [width, height] of [[1440,900], [1280,800], [1010,884], [768,1024], [375,812]]) {
+    await page.setViewportSize({width, height});
+    const overflow = await page.locator("#appShell, #appShell > .main, .topbar, #overdueBanner, #tasksView, #tasksView .tasks-header, #tasksView .tasks-header-meta, #tasksView .tasks-layout, #tasksView .tasks-primary, #tasksView .tasks-sidebar, #tasksView .tasks-inline-grid, #tasksView .tasks-context-grid, #tasksView .tasks-row-head, #tasksView .tasks-actions-card, #tasksView .tasks-section-body, #tasksView .tasks-row-card").evaluateAll(elements => elements.filter(element => {
+      const box = element.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && element.scrollWidth > element.clientWidth + 1;
+    }).map(element => ({element:element.id || element.className, width:element.clientWidth, contentWidth:element.scrollWidth})));
+    expect(overflow, `Nested report overflow at ${width}px`).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `Page overflow at ${width}px`).toBeLessThanOrEqual(1);
+  }
+  await page.setViewportSize(info.project.use.viewport);
+  const launcher = page.locator("#aiAssistantLauncher");
+  const assistantBox = await launcher.boundingBox();
+  const reportBox = await page.locator("#tasksView").boundingBox();
+  expect(assistantBox.y + assistantBox.height).toBeLessThanOrEqual(reportBox.y);
+  await launcher.click();
+  await expect(page.locator("#aiAssistantDialog")).toBeVisible();
+  await page.locator("#aiAssistantDialog").press("Escape");
+  await expect(launcher).toBeFocused();
+  await capture(page, info, "31-report-contained", {fullPage:false});
+  if (await page.locator("#mobileMenuToggle").isVisible()) await page.locator("#mobileMenuToggle").click();
+  await page.locator('#mobileSidebar [data-view="pipeline"]').click();
+  await expect(page.locator("#leadList table")).toBeVisible();
+  await expect(launcher).toHaveCSS("position", "fixed");
+  expect(await launcher.evaluate(element => element.parentElement === document.body)).toBe(true);
+});
 
 test("weekly report field feedback, draft, submit, immutable review and revision", async ({ page, browser }, info) => {
   test.setTimeout(120000);

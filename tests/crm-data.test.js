@@ -27,8 +27,10 @@ assert.match(css, /\.pipeline-lead-table \.lead-table-row\s*\{[^}]*display:\s*gr
 assert.match(css, /td\[data-label\]::before\s*\{[^}]*content:\s*attr\(data-label\)/s);
 const client = read("client.js");
 const functionSource = name => client.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`))[0];
+let salesmanRole = false;
 const rowMarkup = vm.runInNewContext(`${functionSource("escapeHtml")}\n${functionSource("pipelineLeadRowMarkup")}\npipelineLeadRowMarkup`, {
   state: {selectedId:""},
+  isSalesmanRole: () => salesmanRole,
   primaryLeadContact: () => ({phone:'+12025550101" onclick="bad',name:'<unsafe>'}),
   leadTablePresentation: () => ({plan:{action:"To Call"},dueDate:"",overdueTone:"red",overdueLabel:"3 days",
     priorityLabel:"Hot",priorityTone:"red",stageKey:"new",companyMeta:"Demo location"}),
@@ -39,4 +41,10 @@ assert.equal((rendered.match(/<td[ >]/g)||[]).length, 9, "Mobile cards retain ev
 assert.equal((rendered.match(/data-label=/g)||[]).length, 7, "Metadata stays labeled on mobile");
 assert.match(rendered, /href="tel:\+12025550101&quot; onclick=&quot;bad"/);
 assert.doesNotMatch(rendered, /<img|onclick="bad/);
+salesmanRole = true;
+const salesmanRow = rowMarkup({id:'lead"unsafe',company_name:'<img src=x>',stage:'NEW'});
+assert.match(salesmanRow,/data-pipeline-log="lead&quot;unsafe"/);
+assert.match(salesmanRow,/salesman-pipeline-due/);
+assert.equal((salesmanRow.match(/<td[ >]/g)||[]).length,9);
+assert.doesNotMatch(salesmanRow,/<img|onclick="bad/);
 console.log("PASS shared CRM metric, table, badge, state and static asset presentation contracts");

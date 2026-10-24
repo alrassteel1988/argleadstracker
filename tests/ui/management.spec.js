@@ -87,7 +87,7 @@ test("existing administrative dialogs preserve presentation and role restriction
   await expect(page.locator('#salesmanForm input[name="password"]')).toHaveAttribute("minlength", "8");
   await activate(page.locator("#closeSalesmanForm"));
   await page.goto("/leads/ui-lead-1?tab=overview");
-  await activate(page.locator('#leadDetailView [data-drawer-edit-lead="ui-lead-1"]'));
+  await activate(page.locator('#leadDetailView [data-drawer-edit-lead="ui-lead-1"]:visible').first());
   await page.locator("#formSalesman").selectOption({label:"Other Demo Salesman"});
   await activate(page.locator("#leadStepNext"));
   await activate(page.locator("#leadStepNext"));

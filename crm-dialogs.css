@@ -63,7 +63,7 @@ body dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidd
   min-height: 40px !important;
   border: 1px solid var(--crm-control-border) !important;
   border-radius: var(--crm-radius-control) !important;
-  background: var(--crm-surface) !important;
+  background: var(--crm-field-surface) !important;
   color: var(--crm-text) !important;
   -webkit-text-fill-color: currentColor !important;
   font: 400 14px/1.5 var(--crm-font-ui) !important;
@@ -79,6 +79,7 @@ body dialog .lead-step-copy small { color: var(--crm-text-secondary) !important;
 body dialog :is(.activity-entry-actions, .ai-action-footer, .import-actions, .lead-step-actions, .summary-card-details-pagination) { padding: var(--crm-space-4); background: var(--crm-surface) !important; border-color: var(--crm-divider) !important; gap: var(--crm-space-2); }
 body dialog :is(button, .activity-file-button) { min-height: 38px; font: 600 13px/1.4 var(--crm-font-ui); white-space: normal; }
 body dialog[open] :is(.primary-button, .ai-assistant-primary, .ai-assistant-warning) { border-color: var(--crm-amber) !important; background: var(--crm-amber) !important; color: var(--crm-navy) !important; border-radius: var(--crm-radius-control) !important; }
+body dialog[open] :is(.primary-button, .ai-assistant-primary, .ai-assistant-warning):hover:not(:disabled) { background: var(--crm-amber) !important; color: var(--crm-navy) !important; }
 body dialog .activity-record-button[data-state="ready"] { border: 1px solid var(--crm-control-border) !important; background: var(--crm-surface) !important; color: var(--crm-navy) !important; border-radius: var(--crm-radius-control) !important; }
 body dialog :is(.ai-assistant-secondary, .ai-assistant-mic, .activity-file-button, .summary-card-details-reset) { border: 1px solid var(--crm-control-border) !important; background: var(--crm-surface) !important; color: var(--crm-navy) !important; border-radius: var(--crm-radius-control) !important; }
 body dialog :is(.activity-record-button, .ai-assistant-mic) { --crm-button-icon: var(--crm-icon-mic); }

@@ -3,6 +3,60 @@ const { phase, capture, login, blockExternalTraffic } = require("./helpers");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("login displays the approved Al Ras Steel logo on desktop and mobile", async ({ page }, info) => {
+  await page.goto("/");
+  await expect(page.locator("#loginForm")).toBeVisible();
+  const logo = page.locator("#authScreen .auth-brand .crm-brand-image");
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveAttribute("src", "/assets/brand/al-ras-steel-white-logo.png");
+  await expect(logo).toHaveAttribute("alt", "Al Ras Steel");
+  await expect.poll(() => logo.evaluate(image => image.complete && image.naturalWidth === 2400 && image.naturalHeight === 1511)).toBe(true);
+  const bounds = await logo.boundingBox();
+  const mobile = info.project.name.endsWith("mobile");
+  expect(bounds.width).toBe(mobile ? 128 : 264);
+  await expect(logo).toHaveCSS("clip-path", "polygon(0px 0px, 100% 0px, 100% 58%, 20% 58%, 20% 100%, 0px 100%)");
+  expect(bounds.height).toBeGreaterThanOrEqual(64);
+  expect(bounds.width / bounds.height).toBeCloseTo(2400 / 1511, 1);
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize().width);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(page.viewportSize().height);
+  await expect(page.locator("#authScreen .auth-hero")).toHaveCSS("background-color", "rgb(7, 25, 43)");
+  await expect(page.locator('.auth-footer a')).toHaveAttribute("href", "mailto:glory@alrassteel.com");
+  await expect(page.locator('.auth-footer')).toBeInViewport();
+  await expect(page.locator('#loginForm input[type="checkbox"]')).toHaveCount(0);
+  const password = page.locator('#loginPassword');
+  await password.fill("SyntheticUiOnly123!");
+  await page.getByRole("button", {name:"Show password", exact:true}).click();
+  await expect(password).toHaveAttribute("type", "text");
+  await expect(password).toHaveValue("SyntheticUiOnly123!");
+  await page.getByRole("button", {name:"Hide password", exact:true}).click();
+  await expect(password).toHaveAttribute("type", "password");
+  await password.fill("");
+  expect(await page.locator('#loginForm').evaluate(form => [...new FormData(form).keys()])).toEqual(["email", "password"]);
+  if (mobile) {
+    await expect(page.locator('.auth-hero-copy')).toBeHidden();
+    await expect(page.locator('.auth-stats')).toBeHidden();
+    await expect(page.locator('#loginForm')).toHaveCSS("border-top-left-radius", "24px");
+    await page.setViewportSize({width:390,height:844});
+    await expect(page.locator('.auth-footer')).toBeInViewport();
+    await capture(page, info, "00-login-reference-390", {fullPage:false});
+    await page.setViewportSize({width:320,height:568});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await page.locator('.auth-footer').scrollIntoViewIfNeeded();
+    await expect(page.locator('.auth-footer')).toBeInViewport();
+    await page.setViewportSize({width:375,height:812});
+    await page.evaluate(() => scrollTo(0, 0));
+  } else {
+    const hero = await page.locator('.auth-hero').boundingBox();
+    const form = await page.locator('#loginForm').boundingBox();
+    expect(hero.width).toBeCloseTo(form.width, 0);
+    expect(form.x).toBeCloseTo(hero.width, 0);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  await capture(page, info, "00-login-logo", {fullPage:false});
+});
+
 test("shared shell branding, navigation and existing management actions", async ({ page }, info) => {
   const role = await login(page, info);
   const mobile = info.project.name.endsWith("mobile");
@@ -12,7 +66,10 @@ test("shared shell branding, navigation and existing management actions", async 
   }));
   expect(brand.loaded).toBe(true);
   expect(brand.source).toBe("/assets/brand/al-ras-steel-white-logo.png");
-  await expect(page.locator('#topbarPageTitle em')).toHaveText("Dashboard");
+  await expect(page.locator('#mobileSidebar .nav-item.active')).toHaveCSS("border-radius", "10px");
+  await expect(page.locator('#mobileSidebar .nav-item.active .nav-item-icon')).toBeVisible();
+  await expect(page.locator('#openLeadForm')).toHaveCSS("border-radius", "10px");
+  await expect(page.locator('#topbarPageTitle em')).toHaveText(role === "admin" ? "Dashboard" : "next?");
   const placesColors = await page.locator("#openPlacesSearch").evaluate(button => ({
     background: getComputedStyle(button).backgroundColor,
     foreground: getComputedStyle(button).color
@@ -36,8 +93,15 @@ test("shared shell branding, navigation and existing management actions", async 
     for (const target of navigationTargets) expect(target.height, target.name).toBeGreaterThanOrEqual(44);
   } else {
     const width = await page.locator("#mobileSidebar").evaluate(element => element.getBoundingClientRect().width);
-    expect(width).toBe(188);
+    expect(width).toBe(232);
   }
+  const menuLogo = page.locator("#mobileSidebar .crm-brand-image");
+  await expect(menuLogo).toHaveAttribute("alt", "Al Ras Steel");
+  await expect(menuLogo).toHaveCSS("clip-path", "polygon(0px 0px, 100% 0px, 100% 58%, 20% 58%, 20% 100%, 0px 100%)");
+  const menuLogoBounds = await menuLogo.boundingBox();
+  expect(menuLogoBounds.width).toBeGreaterThan(128);
+  const sidebarBounds = await page.locator("#mobileSidebar").boundingBox();
+  expect(menuLogoBounds.x + menuLogoBounds.width).toBeLessThanOrEqual(sidebarBounds.x + sidebarBounds.width);
   if (role === "admin") {
     await expect(page.locator("#configAgentExamples")).not.toContainText(/whats\s*app/i);
     await expect(page.locator("#configAgentExamples")).toContainText("Add Qatar to territories");

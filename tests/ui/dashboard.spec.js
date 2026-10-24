@@ -46,6 +46,49 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     await expect(page.locator(".market-snapshot-bar-track > i").first()).toHaveCSS("background-color", "rgb(91, 192, 190)");
   } else {
     await expect(page.locator("#adminDashboardWorkRow")).toBeHidden();
+    await expect(page.locator("#topbarPageTitle")).toHaveText("What do I do next?");
+    await expect(page.locator("#topbarPageTitle em")).toHaveText("next?");
+    await expect(page.locator('[data-summary-card="salesmanStageLost"] .salesman-stage-label')).toHaveText("Lost");
+    await expect(page.locator("#overdueBanner")).toBeVisible();
+    expect(await page.locator("#overdueBanner").evaluate(e => e.parentElement.id)).toBe("sharedDashboardTopSlot");
+    for (const selector of [".salesman-dashboard-pipeline", ".salesman-dashboard-call-queue"]) {
+      const accent = page.locator(`${selector} h2 .crm-title-accent`);
+      await expect(accent).toHaveCSS("color", "rgb(184, 122, 0)");
+      await expect(accent).toHaveCSS("font-size", "20px");
+      await expect(accent).toHaveCSS("font-style", "italic");
+    }
+    const stages = await page.locator("#salesmanSimplifiedPipeline [data-summary-card]").evaluateAll(elements => elements.map(element => ({
+      labelTop: element.querySelector(".salesman-stage-label").getBoundingClientRect().top,
+      countBottom: element.querySelector("strong").getBoundingClientRect().bottom,
+      border: getComputedStyle(element).borderTopColor,
+      background: getComputedStyle(element).backgroundColor
+    })));
+    expect(stages).toHaveLength(6);
+    for (const stage of stages) {
+      if (!info.project.name.endsWith("mobile")) expect(stage.labelTop).toBeGreaterThanOrEqual(stage.countBottom);
+      expect(stage.border).toBe(stage.background);
+    }
+    const moreTools = page.locator(".salesman-dashboard-more-tools");
+    await expect(moreTools).not.toHaveAttribute("open", "");
+    await expect(page.locator(".salesman-dashboard-more-content")).toBeHidden();
+    for (const id of ["dailyAiPanel", "dashboardQuickActions", "salesmanLossPromptPanel"]) await expect(page.locator(`#${id}`)).toBeHidden();
+    if (info.project.name.endsWith("mobile")) {
+      const positions = await page.locator("#salesmanSimplifiedMetrics > button").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().top));
+      expect(Math.max(...positions) - Math.min(...positions)).toBeLessThanOrEqual(1);
+    }
+    await capture(page, info, "43-home-reference-layout", {fullPage:false});
+    const summaryBox = await page.locator("#salesmanSimplifiedMetrics").boundingBox();
+    const pipelineBox = await page.locator(".salesman-dashboard-pipeline").boundingBox();
+    const queueBox = await page.locator(".salesman-dashboard-call-queue").boundingBox();
+    expect(queueBox.y).toBeGreaterThanOrEqual(pipelineBox.y + pipelineBox.height);
+    expect(pipelineBox.y).toBeGreaterThanOrEqual(summaryBox.y + summaryBox.height);
+    if (!info.project.name.endsWith("mobile")) {
+      expect(queueBox.width).toBeCloseTo(summaryBox.width, 0);
+      expect(summaryBox.height).toBeLessThanOrEqual(130);
+      expect(pipelineBox.height).toBeLessThanOrEqual(150);
+    }
+    await moreTools.locator("summary").click();
+    await expect(page.locator("#salesmanSimplifiedActions")).toBeVisible();
     const actionCards = page.locator("#salesmanSimplifiedActions .salesman-triage-card");
     await expect(actionCards).toHaveCount(3);
     const iconLayouts = await actionCards.evaluateAll(elements => elements.map(element => {
@@ -100,6 +143,7 @@ test("dashboard layout, existing drill-down counts and management controls", asy
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await capture(page, info, "40-dashboard");
+  await capture(page, info, "42-home-summary", {fullPage:false});
   if (role === "admin") {
     await page.goto("/?view=pipeline");
     await expect(page.locator("#leadList table")).toBeVisible();

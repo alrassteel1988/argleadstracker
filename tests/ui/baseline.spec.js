@@ -3,6 +3,7 @@ const { phase, capture, login, blockExternalTraffic } = require("./helpers");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+
 test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({ page }, info) => {
   // This case captures many route states; individual expectation limits stay unchanged.
   test.setTimeout(120000);
@@ -16,8 +17,9 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     expect(signInPresentation.icon).toContain("data:image/svg+xml");
     expect(signInPresentation.foreground).toBe("rgb(8, 61, 119)");
     expect(signInPresentation.background).toBe("rgb(255, 177, 0)");
-    await expect(page.locator("#loginForm")).toHaveCSS("background-color", "rgb(254, 252, 253)");
-    await expect(page.locator(".auth-brand-caption")).toBeVisible();
+    await expect(page.locator("#loginForm")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    if (info.project.name.endsWith("mobile")) await expect(page.locator(".auth-brand-caption")).toBeVisible();
+    else await expect(page.locator(".auth-hero-kicker")).toBeVisible();
     await expect(page.locator(".auth-hero h1 em")).toHaveCSS("color", "rgb(255, 177, 0)");
     await expect(page.locator(".auth-card h2 em")).toHaveCSS("color", "rgb(184, 122, 0)");
     await expect(page.locator('#loginForm input[name="password"]')).toHaveAttribute("autocomplete", "current-password");
@@ -45,7 +47,8 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     }));
     expect(presentation.image).toContain(info.project.name.endsWith("mobile") ? "crm-silk-white-mobile.png" : "crm-silk-white-desktop.png");
     expect(presentation.font).toContain("Inter");
-    expect(presentation.headingFont).toContain("Playfair Display");
+    expect(presentation.headingFont).toContain("Inter");
+    await expect(page.locator("#topbarPageTitle .crm-title-accent")).toHaveCSS("font-family", /Playfair Display/);
   }
   await capture(page, info, "02-dashboard");
   if (phase === "after" && role === "salesman") {
@@ -55,9 +58,11 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
       headingColor: getComputedStyle(element.querySelector("h2")).color
     }));
     expect(surface.color).toBe("rgb(254, 252, 253)");
-    expect(surface.border).toBe("rgb(91, 192, 190)");
+    expect(surface.border).toBe("rgba(91, 192, 190, 0.6)");
     expect(surface.headingColor).toBe("rgb(8, 61, 119)");
     await expect(page.locator("#salesmanSimplifiedPipeline [data-summary-card]")).toHaveCount(6);
+    await expect(page.locator(".salesman-dashboard-more-content")).toBeHidden();
+    await page.locator(".salesman-dashboard-more-tools > summary").click();
     const actions = await page.locator(".salesman-dashboard-top-actions").boundingBox();
     const calls = await page.locator(".salesman-dashboard-call-queue").boundingBox();
     const list = await page.locator(".salesman-dashboard-live-leads").boundingBox();
@@ -108,7 +113,7 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     }
     if (phase === "after") {
       await expect(page.locator(`[data-drawer-tab="${tab}"]`)).toHaveAttribute("aria-current", "page");
-      await expect(page.locator(".lead-page-header")).toHaveCSS("background-color", "rgb(254, 252, 253)");
+      await expect(page.locator(".lead-page-header")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       await expect(page.locator(".lead-page-header h2")).toHaveCSS("color", "rgb(8, 61, 119)");
       const columns = await page.locator("#leadDetailView").evaluate(element => {
         const info = element.querySelector("#leadDetailPagePanel").getBoundingClientRect();
@@ -116,7 +121,7 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
         return { infoX: info.x, infoY: info.y, aiX: ai.x, aiY: ai.y };
       });
       if (info.project.name.endsWith("mobile")) expect(columns.infoY).toBeLessThan(columns.aiY);
-      else expect(columns.aiX).toBeLessThan(columns.infoX);
+      else expect(columns.infoY).toBeLessThan(columns.aiY);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     }
     await capture(page, info, `04-lead-${tab}`);
@@ -166,7 +171,7 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
         if (!await page.locator("#activityCompanySearch").isVisible()) await page.locator("#activityFilterToggle").click();
         await expect(page.locator(".activity-table tbody tr")).toHaveCount(10);
         await expect(page.locator('.activity-table tbody tr [data-label="Status"]')).toHaveText([
-          "Prospect", "Outreach", "Engaged", "Active", "Blocked", "Dormant",
+          "Prospect", "Outreach", "Engaged", "Active", "Lost", "Dormant",
           "Prospect", "Outreach", "Engaged", "Active"
         ]);
         if (info.project.name.endsWith("mobile")) {
@@ -254,7 +259,7 @@ test("existing add-lead steps, activity dialog, AI confirmation shell and report
   await expect(page.locator("#leadDialog")).toBeHidden();
 
   await page.goto("/leads/ui-lead-1");
-  await page.locator('[data-drawer-log-activity="ui-lead-1"]').click();
+  await page.locator('[data-drawer-log-activity="ui-lead-1"]:visible').first().click();
   await expect(page.locator("#activityDialog")).toBeVisible();
   await capture(page, info, "07-add-activity");
   await page.locator("#cancelActivityDialog").click();
