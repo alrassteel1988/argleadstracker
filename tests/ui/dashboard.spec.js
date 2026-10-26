@@ -220,6 +220,26 @@ test("Salesperson dashboard reference actions and responsive bounds", async ({ p
     expect(clipped).toBe(0);
   }
   await page.setViewportSize(info.project.use.viewport);
+  await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).toHaveClass(/hidden/);
+  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveCount(0);
+  await page.locator('[data-dashboard-portfolio="neglected"]').click();
+  await expect(page).toHaveURL(/\?view=dashboard\/neglected$/);
+  await expect(page.locator('.crm-neglected-table tbody tr').first()).toBeVisible();
+  await expect(page.locator('#aiActionDialog')).not.toBeVisible();
+  await expect(page.locator('#mobileSidebar [data-view="dashboard"]')).toHaveClass(/active/);
+  await page.reload();
+  await expect(page.locator('.crm-neglected-panel')).toBeVisible();
+  await expect(page).toHaveURL(/\?view=dashboard\/neglected$/);
+  await page.goBack();
+  await expect(page.locator('#dashboardView')).toBeVisible();
+  await page.goForward();
+  await expect(page.locator('.crm-neglected-panel')).toBeVisible();
+  await page.locator('[aria-label="Back to Dashboard"]').click();
+  await expect(page.locator('#dashboardView')).toBeVisible();
+  await page.goto('/?view=neglected');
+  await expect(page.locator('.crm-neglected-panel')).toBeVisible();
+  await page.locator('[aria-label="Back to Dashboard"]').click();
+  await expect(page.locator('#dashboardView')).toBeVisible();
   await page.locator("[data-dashboard-focus-open]").first().click();
   await expect(page.locator("#leadDetailView")).toBeVisible();
   await expect(page.locator("#leadDrawerTitle")).toHaveText("Synthetic Steel Company 01");

@@ -28,6 +28,27 @@ assert.match(client, /if \(!isSalesmanRole\(\) && \["focus", "neglected"\]\.incl
 console.log("PASS AI workspace routes, existing action reuse and escaped caller-scoped company selection");
 
 {
+  const context = { URLSearchParams, isLeadRoutePath: pathname => /^\/leads\/[^/]+\/?$/.test(pathname) };
+  vm.createContext(context);
+  vm.runInContext(`${client.match(/function parseAppRoute\([^]*?\n\}/)[0]}; parse = parseAppRoute;`, context);
+  for (const search of ["?view=dashboard/neglected", "?view=dashboard%2Fneglected", "?view=neglected"]) {
+    assert.equal(context.parse({ pathname: "/", search }).view, "neglected");
+  }
+  assert.equal(context.parse({ pathname: "/", search: "?view=dashboard/unknown" }).view, "dashboard");
+  assert.equal(context.parse({ pathname: "/leads/a", search: "?view=dashboard/neglected&tab=reminders" }).view, "lead");
+  let pushed;
+  context.currentRouteState = () => ({view:"neglected"});
+  context.window = { location:{pathname:"/",search:""}, history:{pushState:(state, unused, url) => { pushed = url; }} };
+  vm.runInContext(`${client.match(/function syncBrowserRoute\([^]*?\n\}/)[0]}; syncBrowserRoute();`, context);
+  assert.equal(pushed, "/?view=dashboard/neglected");
+  assert.doesNotMatch(html, /data-view="neglected"/);
+  assert.match(client, /querySelector\('#mobileSidebar \[data-view="ai-actions"\]'\)\?\.classList\.toggle\("hidden", isSalesmanRole\(\)\)/);
+  assert.match(client, /button\.dataset\.dashboardPortfolio === "neglected"\) \{ setView\("neglected"\); return; \}/);
+  assert.match(client, /data-workspace-view="dashboard" aria-label="Back to Dashboard"/);
+  console.log("PASS Dashboard neglected subpage route, legacy links, navigation entry and sidebar scope");
+}
+
+{
   const context = { TextEncoder, crypto: require("node:crypto").webcrypto,
     btoa: value => Buffer.from(value, "binary").toString("base64") };
   vm.createContext(context);

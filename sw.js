@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v133-mobile-salesperson-dashboard";
+const CACHE_VERSION = "arg-pwa-v134-dashboard-neglected-navigation";
 const APP_SHELL = [
   "/",
   "/index.html",
