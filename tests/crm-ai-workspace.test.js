@@ -13,6 +13,35 @@ assert.equal(page("neglected").portfolioAction, "neglected");
 assert.equal(page("meeting-prep").companyAction, "prepare");
 assert.equal(page("draft-email").companyAction, "email");
 assert.equal(page("focus").title, "Today");
+{
+  const context = { URLSearchParams, state:{currentUser:{id:"owner"},leads:[],leadsLoaded:true,emailRouteLeadId:"a"},
+    emailDraftState:null, arrangeEmailDraftLayout:()=>{}, arrangeAssistantLauncher:()=>{}, isLeadRoutePath:()=>false };
+  vm.createContext(context);
+  for (const name of ["parseAppRoute", "leadRouteUrl", "currentRouteState", "syncBrowserRoute", "applyRouteState", "escapeHtml", "newEmailDraft", "renderEmailDraftWorkspace"]) {
+    vm.runInContext(client.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0], context);
+  }
+  const parsed = context.parseAppRoute({pathname:"/leads/a/draft-email/",search:""});
+  assert.equal(parsed.view,"draft-email");
+  assert.equal(parsed.leadId,"a");
+  context.applyRouteState(parsed);
+  let url;
+  context.window={location:{pathname:"/",search:""},history:{pushState:(state, unused, next)=>{url=next;}}};
+  context.syncBrowserRoute();
+  assert.equal(url,"/leads/a/draft-email");
+  const workspace={innerHTML:"",setAttribute:()=>{}};
+  context.state.leads=[{id:"a",company_name:"<untrusted>",email:"a@example.test"}];
+  context.renderEmailDraftWorkspace(workspace);
+  assert.equal(context.emailDraftState.to,"a@example.test");
+  assert.match(workspace.innerHTML,/&lt;untrusted&gt;/);
+  assert.match(workspace.innerHTML,/data-email-parent/);
+  assert.doesNotMatch(workspace.innerHTML,/data-email-change/);
+  context.state.emailRouteLeadId="not-visible";
+  context.renderEmailDraftWorkspace(workspace);
+  assert.equal(context.emailDraftState,null);
+  assert.match(workspace.innerHTML,/unavailable or you do not have access/);
+  assert.doesNotMatch(workspace.innerHTML,/value="a@example.test"/);
+  console.log("PASS lead email nested routes, scoped preselection and unavailable-lead isolation");
+}
 assert.match(client, /if \(currentView === "focus" && isSalesmanRole\(\)\) return renderTodayWorkspace\(workspace\)/);
 assert.match(client, /function renderTodayWorkspace\(workspace\) \{[^]*?salesmanDashboardSummaryDatasets\(\)[^]*?actionableSalesmanLeads\(\)/);
 assert.match(client, /salesmanScheduled: \{[^]*?leads: actionableSalesmanLeads\(\)/);

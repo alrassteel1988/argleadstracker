@@ -646,6 +646,8 @@ function parseAppRoute(locationLike = window.location) {
   const search = new URLSearchParams(locationLike.search || "");
   const requestedView = search.get("view") === "dashboard/neglected" ? "neglected" : search.get("view");
   const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
+  const emailRoute = pathname.match(/^\/leads\/([^/]+)\/draft-email\/?$/);
+  if (emailRoute) return { view: "draft-email", leadId: decodeURIComponent(emailRoute[1]), tab: "overview" };
   if (isLeadRoutePath(pathname)) {
     return {
       view: "lead",
@@ -668,6 +670,9 @@ function leadRouteUrl(leadId, tab = "overview") {
 }
 
 function currentRouteState() {
+  if (currentView === "draft-email" && state.emailRouteLeadId) {
+    return { view: "draft-email", leadId: state.emailRouteLeadId, returnView: state.lastNonLeadView || "pipeline" };
+  }
   if (currentView === "lead" && state.selectedId) {
     return {
       view: "lead",
@@ -687,6 +692,7 @@ function syncBrowserRoute(options = {}) {
   const routeState = currentRouteState();
   const nextUrl = routeState.view === "lead" && routeState.leadId
     ? leadRouteUrl(routeState.leadId, routeState.tab)
+    : routeState.view === "draft-email" && routeState.leadId ? `${leadRouteUrl(routeState.leadId)}/draft-email`
     : routeState.view === "neglected" ? "/?view=dashboard/neglected"
       : (routeState.view && routeState.view !== "dashboard" ? `/?view=${encodeURIComponent(routeState.view)}` : "/");
   const currentUrl = `${window.location.pathname}${window.location.search}`;
@@ -697,10 +703,13 @@ function syncBrowserRoute(options = {}) {
 function applyRouteState(route, options = {}) {
   const parsed = route?.view ? route : parseAppRoute();
   const nextView = parsed.view === "lead" ? "lead" : (parsed.view || "dashboard");
+  state.emailRouteLeadId = nextView === "draft-email" ? parsed.leadId || "" : "";
   if (nextView !== "lead") {
     state.leadDrawerOpen = false;
     currentView = nextView;
-    if (currentView !== "lead") state.lastNonLeadView = currentView;
+    if (state.emailRouteLeadId) {
+      if (parsed.returnView && !["lead", "draft-email"].includes(parsed.returnView)) state.lastNonLeadView = parsed.returnView;
+    } else state.lastNonLeadView = currentView;
     return;
   }
   currentView = "lead";
@@ -3281,16 +3290,22 @@ function renderEmailDraftWorkspace(workspace) {
   const owner = String(state.currentUser.id);
   const leads = [...state.leads].sort((a, b) => String(a.company_name || "").localeCompare(String(b.company_name || "")));
   if (emailDraftState?.owner !== owner || state.leadsLoaded && !leads.some(item => String(item.id) === emailDraftState?.leadId)) emailDraftState = null;
+  const parentId = state.emailRouteLeadId;
+  if (parentId && emailDraftState?.leadId !== parentId) {
+    const parentLead = leads.find(item => String(item.id) === parentId);
+    emailDraftState = parentLead ? newEmailDraft(parentLead) : null;
+  }
   const draft = emailDraftState;
   const lead = leads.find(item => String(item.id) === draft?.leadId);
   const busy = Boolean(draft?.loading || draft?.downloading);
   const disabled = !lead || busy ? "disabled" : "";
   workspace.setAttribute("aria-busy", String(busy));
   workspace.innerHTML = `<div class="email-page">
-    <nav class="email-breadcrumb" aria-label="Breadcrumb"><button type="button" data-workspace-view="ai-actions">AI actions</button><span>/</span><span>Follow-up email</span></nav>
-    <header class="email-heading"><button class="ghost-button email-mobile-back" type="button" data-workspace-view="ai-actions" aria-label="Back to AI actions" title="Back to AI actions"></button><div class="email-heading-copy"><span class="email-mobile-company">${escapeHtml(lead?.company_name || "Choose a company")}</span><h2 id="aiWorkspaceHeading"><span class="email-desktop-title">Draft follow-up</span><span class="email-mobile-title">Follow-up</span> <em>email</em></h2><div class="email-company"><strong>${escapeHtml(lead?.company_name || "Choose a company")}</strong><span class="email-mobile-source">${draft?.provider === "fallback" ? "CRM draft" : draft?.provider ? "AI draft" : "Draft"} · review first</span><button type="button" data-email-change aria-expanded="${!draft?.body}"><span class="email-desktop-title">Change company</span><span class="email-mobile-title">Change</span></button><button type="button" data-email-open ${disabled}>Open lead</button></div></div>
+    <nav class="email-breadcrumb" aria-label="Breadcrumb">${parentId ? '<button type="button" data-email-parent>Lead details</button>' : '<button type="button" data-workspace-view="ai-actions">AI actions</button>'}<span>/</span><span>Follow-up email</span></nav>
+    <header class="email-heading"><button class="ghost-button email-mobile-back" type="button" ${parentId ? 'data-email-parent aria-label="Back to Lead Details" title="Back to Lead Details"' : 'data-workspace-view="ai-actions" aria-label="Back to AI actions" title="Back to AI actions"'}></button><div class="email-heading-copy"><span class="email-mobile-company">${escapeHtml(lead?.company_name || "Choose a company")}</span><h2 id="aiWorkspaceHeading"><span class="email-desktop-title">Draft follow-up</span><span class="email-mobile-title">Follow-up</span> <em>email</em></h2><div class="email-company"><strong>${escapeHtml(lead?.company_name || "Choose a company")}</strong><span class="email-mobile-source">${draft?.provider === "fallback" ? "CRM draft" : draft?.provider ? "AI draft" : "Draft"} · review first</span>${parentId ? "" : `<button type="button" data-email-change aria-expanded="${!draft?.body}"><span class="email-desktop-title">Change company</span><span class="email-mobile-title">Change</span></button>`}<button type="button" data-email-open ${disabled}>Open lead</button></div></div>
     <div class="email-toolbar"><button class="ghost-button" type="button" data-email-generate aria-label="${draft?.body ? "Regenerate draft" : "Generate draft"}" title="${draft?.body ? "Regenerate draft" : "Generate draft"}" ${disabled}><span>${draft?.loading ? "Generating..." : draft?.body ? "Regenerate" : "Generate draft"}</span></button><button class="ghost-button" type="button" data-email-copy ${!draft?.body || busy ? "disabled" : ""}>Copy</button></div></header>
-    <div id="emailCompanyPicker" class="email-picker${draft?.body ? " hidden" : ""}"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${busy || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${String(item.id) === draft?.leadId ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>
+    <div id="emailCompanyPicker" class="email-picker${parentId || draft?.body ? " hidden" : ""}"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${parentId || busy || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${String(item.id) === draft?.leadId ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>
+    ${parentId && !lead ? `<p role="status">${state.leadsLoading && !state.leadsLoaded ? "Loading lead..." : "This lead is unavailable or you do not have access."}</p>` : ""}
     ${state.leadsError ? `<p role="alert">${escapeHtml(state.leadsError)}</p><button type="button" class="ghost-button" data-workspace-retry>Retry loading companies</button>` : ""}
     <p class="email-status" role="status">${escapeHtml(draft?.error || (draft?.downloading ? "Preparing email with the company profile..." : draft?.loading ? "Reading CRM records and drafting your email..." : !lead ? "Choose a company to start a draft." : !draft.body ? "Generate a draft from CRM records, or write your own below." : ""))}</p>
     <div class="email-mobile-tone-host"></div><div class="email-layout"><section class="email-editor" aria-label="Email draft"><div class="email-provenance"><span>${draft?.provider === "fallback" ? "CRM draft" : draft?.provider ? "AI draft" : "Draft"}</span><small>${draft?.provider === "fallback" ? "CRM-data fallback was used. Review before sending." : draft?.provider ? "Built from CRM records. Review before sending." : "Editable email. Nothing is sent from this page."}</small></div>
@@ -3534,6 +3549,7 @@ async function runLeadAiAction(lead, action) {
       if (emailDraftState?.owner === String(state.currentUser?.id) && emailDraftState.dirty && !window.confirm("Discard your edited draft and change company?")) return;
       emailDraftState = newEmailDraft(lead);
     }
+    state.emailRouteLeadId = currentView === "lead" ? String(lead.id) : "";
     setView("draft-email");
     return;
   }
@@ -9619,7 +9635,7 @@ function loadLeadDetailData(leadId) {
 function openLeadDrawer(leadId, tab = "overview", options = {}) {
   const lead = state.leads.find(item => item.id === leadId);
   if (!lead) return;
-  if (currentView !== "lead") {
+  if (currentView !== "lead" && !(currentView === "draft-email" && state.emailRouteLeadId)) {
     state.lastNonLeadView = currentView === "lead" ? (state.lastNonLeadView || "pipeline") : currentView;
   }
   state.selectedId = leadId;
@@ -10420,7 +10436,7 @@ function renderLeadDrawer() {
       </div>
       <div class="record-header-actions">
         ${lead.phone ? `<a class="primary-button record-call" href="tel:${escapeHtml(lead.phone)}">Call</a>` : ""}
-        ${lead.email ? `<a class="ghost-button record-email" href="mailto:${escapeHtml(lead.email)}">Email</a>` : `<button class="ghost-button record-email" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Add email</button>`}
+        <button class="ghost-button record-email" type="button" data-record-send-email="${escapeHtml(lead.id)}" title="Prepare an email draft">Send Email</button>
         <button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit</button>
       </div>
     </header>
@@ -10436,6 +10452,10 @@ function renderLeadDrawer() {
 }
 
 function bindLeadDrawerEvents() {
+  els.leadDetailPageContent?.querySelector("[data-record-send-email]")?.addEventListener("click", event => {
+    const lead = state.leads.find(item => String(item.id) === event.currentTarget.dataset.recordSendEmail);
+    if (lead) runLeadAiAction(lead, "email");
+  });
   els.leadDetailPageContent?.querySelector("[data-record-note]")?.addEventListener("click", () => {
     state.leadDrawerTab = "notes";
     syncBrowserRoute({ replace: true });
@@ -14451,9 +14471,10 @@ function toggleMobileMenu() {
 }
 
 function setView(view) {
+  if (view !== "draft-email") state.emailRouteLeadId = "";
   if (isSalesmanRole() && ["salesmen", "activity"].includes(view)) view = "dashboard";
   if (!isSalesmanRole() && ["focus", "neglected"].includes(view)) view = "ai-actions";
-  if (view !== "lead") state.lastNonLeadView = view;
+  if (view !== "lead" && !(view === "draft-email" && state.emailRouteLeadId)) state.lastNonLeadView = view;
   currentView = view;
   state.leadDrawerOpen = view === "lead";
   syncBrowserRoute({ replace: false });
@@ -15683,6 +15704,7 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("change", event => 
       return;
     }
     if (event.target.id === "aiWorkspaceCompany") {
+      if (state.emailRouteLeadId) return;
       if (emailDraftState?.dirty && !window.confirm("Discard your edited draft and change company?")) {
         event.target.value = emailDraftState.leadId;
         return;
@@ -15723,6 +15745,10 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
   if (currentView === "draft-email" && Object.keys(button.dataset).some(key => key.startsWith("email"))) {
+    if (button.hasAttribute("data-email-parent") && state.emailRouteLeadId) {
+      openLeadDrawer(state.emailRouteLeadId);
+      return;
+    }
     if (button.hasAttribute("data-email-change")) {
       const picker = document.querySelector("#emailCompanyPicker");
       const expanded = picker.classList.contains("hidden");

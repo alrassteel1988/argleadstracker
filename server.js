@@ -293,6 +293,7 @@ const PUBLIC_STATIC_FILES = new Map([
 function publicStaticFileForPath(pathname) {
   if (pathname === "/") return PUBLIC_STATIC_FILES.get("/index.html");
   if (/^\/leads\/[^/]+\/?$/.test(pathname)) return PUBLIC_STATIC_FILES.get("/index.html");
+  if (/^\/leads\/[^/]+\/draft-email\/?$/.test(pathname)) return PUBLIC_STATIC_FILES.get("/index.html");
   return PUBLIC_STATIC_FILES.get(pathname) || "";
 }
 
