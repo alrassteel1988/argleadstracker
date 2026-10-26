@@ -1079,7 +1079,8 @@ body.neglected-mode .crm-neglected-state { padding: 32px 8px; color: var(--crm-t
   body.neglected-mode #appShell .topbar { margin-bottom: 12px; padding: 0 !important; background: transparent !important; }
   body.neglected-mode .crm-neglected-tools { display: inline-flex; --crm-button-icon: var(--crm-icon-sliders-horizontal); }
   body.neglected-mode .crm-neglected-toolbar button { display: inline-flex !important; flex: 0 0 auto; white-space: nowrap; width: auto !important; min-height: 44px; padding: 8px 10px; gap: 6px; }
-  body.neglected-mode .crm-neglected-toolbar { margin-bottom: 16px; }
+  body.neglected-mode .crm-neglected-toolbar { flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  body.neglected-mode .crm-neglected-toolbar > span { flex: 1 1 100%; }
   body.neglected-mode .crm-neglected-stats { gap: 8px; margin-bottom: 16px; }
   body.neglected-mode .crm-neglected-stats article { padding: 12px 10px; gap: 6px; }
   body.neglected-mode .crm-neglected-stats article > span { font-size: 12px; letter-spacing: 0; }

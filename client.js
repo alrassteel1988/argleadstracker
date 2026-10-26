@@ -644,6 +644,7 @@ function isLeadRoutePath(pathname = window.location.pathname) {
 function parseAppRoute(locationLike = window.location) {
   const pathname = locationLike.pathname || "/";
   const search = new URLSearchParams(locationLike.search || "");
+  const requestedView = search.get("view") === "dashboard/neglected" ? "neglected" : search.get("view");
   const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
   if (isLeadRoutePath(pathname)) {
     return {
@@ -653,7 +654,7 @@ function parseAppRoute(locationLike = window.location) {
     };
   }
   return {
-    view: allowedViews.has(search.get("view")) ? search.get("view") : "dashboard",
+    view: allowedViews.has(requestedView) ? requestedView : "dashboard",
     leadId: "",
     tab: "overview"
   };
@@ -686,7 +687,8 @@ function syncBrowserRoute(options = {}) {
   const routeState = currentRouteState();
   const nextUrl = routeState.view === "lead" && routeState.leadId
     ? leadRouteUrl(routeState.leadId, routeState.tab)
-    : (routeState.view && routeState.view !== "dashboard" ? `/?view=${encodeURIComponent(routeState.view)}` : "/");
+    : routeState.view === "neglected" ? "/?view=dashboard/neglected"
+      : (routeState.view && routeState.view !== "dashboard" ? `/?view=${encodeURIComponent(routeState.view)}` : "/");
   const currentUrl = `${window.location.pathname}${window.location.search}`;
   if (currentUrl === nextUrl && !options.forceState) return;
   window.history[replace ? "replaceState" : "pushState"](routeState, "", nextUrl);
@@ -2974,7 +2976,7 @@ function renderNeglectedWorkspace(workspace) {
   const tierOne = rows.filter(row => String(row.lead.tier || "2") === "1").length;
   workspace.setAttribute("aria-busy", String(busy));
   workspace.innerHTML = `
-    <div class="crm-neglected-toolbar"><span>Territory ${escapeHtml(state.currentUser.territory || "Not set")}</span><button type="button" class="ghost-button crm-neglected-tools" data-neglected-tools aria-expanded="${neglectedToolsOpen}" aria-controls="smartSearchShell">Tools</button><button type="button" class="ghost-button" data-workspace-view="focus">Back</button></div>
+    <div class="crm-neglected-toolbar"><span>Territory ${escapeHtml(state.currentUser.territory || "Not set")}</span><button type="button" class="ghost-button crm-neglected-tools" data-neglected-tools aria-expanded="${neglectedToolsOpen}" aria-controls="smartSearchShell">Tools</button><button type="button" class="ghost-button" data-workspace-view="dashboard" aria-label="Back to Dashboard">Back to Dashboard</button></div>
     <div class="crm-neglected-stats" aria-label="Neglected account summary">
       <article><span>Accounts overdue</span><strong class="is-overdue">${busy || error ? "—" : rows.length}</strong><small>Past their expected contact date</small></article>
       <article><span>Most overdue</span><strong>${busy || error || !worst ? "—" : `${Number(worst.contact_overdue_by)} d`}</strong><small>${escapeHtml(busy ? "Loading contact history" : worst?.lead.company_name || (rows.length ? "No activity date recorded" : "No overdue accounts"))}</small></article>
@@ -14405,9 +14407,11 @@ function applyView() {
   els.tasksView?.classList.toggle("hidden", !isTasks);
   document.querySelector("#aiWorkspaceView")?.classList.toggle("hidden", !isAiWorkspace);
   document.querySelectorAll("[data-ai-portfolio-nav]").forEach(item => item.classList.toggle("hidden", !isSalesmanRole()));
+  document.querySelector('#mobileSidebar [data-view="ai-actions"]')?.classList.toggle("hidden", isSalesmanRole());
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
-    const navigationView = isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
+    const navigationView = isSalesmanRole() && isAiWorkspace && currentView !== "focus" ? "dashboard"
+      : isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
     item.classList.toggle("active", item.dataset.view === navigationView && !item.dataset.mobileAction);
   });
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
@@ -15027,6 +15031,7 @@ els.salesmanSimplifiedDashboard?.addEventListener("click", async event => {
     catch { setToast("Could not refresh your accounts. Try again.", "error"); }
     finally { button.disabled = false; button.textContent = label; }
   } else if (button.hasAttribute("data-dashboard-portfolio")) {
+    if (button.dataset.dashboardPortfolio === "neglected") { setView("neglected"); return; }
     await runSalespersonAiAction(button.dataset.dashboardPortfolio);
     renderSalesmanSimplifiedDashboard();
   } else if (button.hasAttribute("data-dashboard-ai-all")) setView("ai-actions");

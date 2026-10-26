@@ -126,8 +126,12 @@ test("AI workspace routes reuse authorized company and portfolio actions", async
     if (request.method() === 'POST' && request.url().includes('/api/ai-assistant/')) assistantRequests.push(request.url());
     if (request.method() === "POST" && /\/api\/(?:salesperson-ai-actions|leads\/[^/]+\/ai-actions)$/.test(new URL(request.url()).pathname)) actionRequests.push(request.postDataJSON());
   });
-  if (await page.locator("#mobileMenuToggle").isVisible()) await page.locator("#mobileMenuToggle").click();
-  await page.locator('#mobileSidebar [data-view="ai-actions"]').click();
+  if (role === "salesman") {
+    await page.locator(info.project.name.endsWith("mobile") ? '#mobileTabs [data-view="ai-actions"]' : '[data-dashboard-ai-all]').click();
+  } else {
+    if (await page.locator("#mobileMenuToggle").isVisible()) await page.locator("#mobileMenuToggle").click();
+    await page.locator('#mobileSidebar [data-view="ai-actions"]').click();
+  }
   await expect(page).toHaveURL(/view=ai-actions/);
   await expect(page.locator("#aiWorkspaceView")).toBeVisible();
   await expect(page.locator("#overdueBanner")).toBeHidden();
@@ -200,7 +204,7 @@ test("AI workspace routes reuse authorized company and portfolio actions", async
   expect(actionRequests.filter(item => item.action !== "pipeline_health").at(-1)).toEqual({action:"email"});
   await page.goto("/?view=meeting-prep");
   await expect(page.locator('[data-meeting-generate]')).toBeVisible();
-  await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).toHaveClass(/active/);
+  await expect(page.locator(`#mobileSidebar [data-view="${role === "salesman" ? "dashboard" : "ai-actions"}"]`)).toHaveClass(/active/);
   if (role === "salesman") {
     for (const [view, action] of [["focus", "focus_today"], ["neglected", "neglected"]]) {
       await page.goto(`/?view=${view}`);
@@ -284,7 +288,7 @@ test("Neglected accounts uses scoped cadence data and responsive existing action
     metrics = (await response.json()).metrics;
     await route.fulfill({response});
   });
-  await page.goto("/?view=neglected");
+  await page.goto("/?view=dashboard/neglected");
   if (role === "admin") {
     await expect(page.locator('.crm-neglected-panel')).toHaveCount(0);
     return;
@@ -301,6 +305,9 @@ test("Neglected accounts uses scoped cadence data and responsive existing action
     expect(panel.y + panel.height).toBeLessThan(page.viewportSize().height - 80);
   }
   if (info.project.name.endsWith('mobile')) {
+    await page.setViewportSize({width:320,height:812});
+    expect(await page.evaluate(inspectPresentation, {checkTouchTargets:true})).toEqual([]);
+    await page.setViewportSize(info.project.use.viewport);
     await expect(page.locator('#appShell .topbar-actions')).toBeHidden();
     await page.locator('[data-neglected-tools]').click();
     await expect(page.locator('#openPlacesSearch')).toBeVisible();
@@ -322,8 +329,8 @@ test("Neglected accounts uses scoped cadence data and responsive existing action
     await expect(page.locator('[data-drawer-tab="reminders"]')).toHaveClass(/active/);
     await page.goto('/?view=neglected');
   }
-  await page.locator('.crm-neglected-toolbar [data-workspace-view="focus"]').click();
-  await expect(page.locator('.crm-today-layout')).toBeVisible();
+  await page.locator('.crm-neglected-toolbar [data-workspace-view="dashboard"]').click();
+  await expect(page.locator('#dashboardView')).toBeVisible();
 });
 
 test('Neglected accounts reports request errors, retries and honest empty results', async ({page}, info) => {
