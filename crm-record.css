@@ -23,6 +23,14 @@ body #appShell #leadDetailView .company-ai-actions button {
   white-space: normal;
   text-align: left;
 }
+body #appShell #leadDetailView .company-ai-actions .drawer-primary-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+body #appShell #leadDetailView .company-ai-actions h3 .crm-title-accent { color: #8A5200; }
+body #appShell #leadDetailView .company-ai-actions .drawer-primary-actions button { justify-content: flex-start; }
+body #appShell #leadDetailView .company-ai-actions .drawer-primary-actions button > span { display: grid; gap: 3px; min-width: 0; }
+body #appShell #leadDetailView .company-ai-actions .drawer-primary-actions strong { font-size: 14px; font-weight: 600; }
+body #appShell #leadDetailView .company-ai-actions .drawer-primary-actions small { font-size: 12px; line-height: 1.4; color: var(--crm-text-secondary); }
+body #appShell #leadDetailView .company-ai-actions .drawer-primary-actions .record-ai-card-primary { min-height: 64px; background: var(--crm-amber) !important; border-color: var(--crm-amber) !important; color: var(--crm-navy) !important; }
+body #appShell #leadDetailView .company-ai-actions .drawer-primary-actions .record-ai-card-primary small { color: var(--crm-navy); }
 
 body #appShell #leadDetailView {
   grid-template-areas: "ai info";
@@ -511,9 +519,9 @@ body #appShell #leadDetailView :is(.meta-label, .activity-type-label, .handoff-e
   body #appShell #leadDetailView .record-ai-card strong { font: 600 14px/1.35 var(--crm-font-ui); overflow-wrap: anywhere; }
   body #appShell #leadDetailView .record-ai-card small { font: 400 12px/1.4 var(--crm-font-ui); color: var(--crm-text-secondary); }
   body #appShell #leadDetailView .record-ai-card::before { width: 30px; height: 30px; flex-basis: 30px; margin: 0; mask-size: 18px; }
-  body #appShell #leadDetailView .record-ai-card-primary { grid-column: 1 / -1; flex-direction: row; align-items: center; min-height: 80px; background: var(--crm-navy) !important; color: white !important; }
-  body #appShell #leadDetailView .record-ai-card-primary small { color: white; }
-  body #appShell #leadDetailView .record-ai-card-primary::before { color: var(--crm-amber); }
+  body #appShell #leadDetailView .record-ai-card-primary { grid-column: 1 / -1; flex-direction: row; align-items: center; min-height: 80px; background: var(--crm-amber) !important; color: var(--crm-navy) !important; }
+  body #appShell #leadDetailView .record-ai-card-primary small { color: var(--crm-navy); }
+  body #appShell #leadDetailView .record-ai-card-primary::before { color: var(--crm-navy); }
   body #appShell #leadDetailView .record-ai-card[data-company-ai-action="next"] { --crm-button-icon: var(--crm-icon-arrow-right); }
   body #appShell #leadDetailView .record-ai-card[data-company-ai-action="email"] { --crm-button-icon: var(--crm-icon-mail); }
   body #appShell #leadDetailView .record-ai-card[data-company-ai-action="summary"] { --crm-button-icon: var(--crm-icon-file-text); }

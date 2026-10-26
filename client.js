@@ -3011,7 +3011,7 @@ function openMeetingBriefPage(lead) {
     && ["prepare", "prepare_meeting"].includes(state.aiAction.action) ? state.aiAction : null;
   meetingBriefState = { owner: String(state.currentUser.id), leadId: lead.id,
     output: existing?.output || "", provider: existing?.provider || "", loading: false,
-    error: "", generatedAt: "", checked: new Set() };
+    error: "", generatedAt: existing?.generatedAt || "", checked: new Set() };
   els.aiActionDialog?.close();
   setView("meeting-prep");
 }
@@ -3054,6 +3054,7 @@ function renderMeetingBriefWorkspace(workspace) {
   const section = title => sections[title]?.trim() ? simpleMarkdown(sections[title]) : "<p>No data returned in this brief.</p>";
   const known = ["Recommended ask", "Talking points", "Relationship snapshot", "What happened last time", "Open items", "Recent intelligence"];
   const additional = Object.entries(sections).filter(([title, text]) => !known.includes(title) && text.trim());
+  const contextSections = ["Relationship snapshot", "Open items"].filter(title => sections[title]?.trim());
   const list = value => (Array.isArray(value) ? value.filter(item => typeof item === "string").join(", ") : typeof value === "string" ? value : "") || "Not recorded";
   const facts = lead ? [
     ["Status", stageDisplayLabel(lead.stage)], ["Current CRM health", lead.health?.label || "Not available"],
@@ -3062,13 +3063,23 @@ function renderMeetingBriefWorkspace(workspace) {
     ["Competitors", list(lead.competitors_likely_using)],
     ["Recorded certifications", list(lead.certifications)]
   ] : [];
+  const healthTone = { RED: "is-risk", AMBER: "is-watch", GREEN: "is-healthy" }[lead?.health?.label] || "";
+  const factValue = (label, value) => {
+    if (label === "Status") return `<span class="meeting-status-badge">${escapeHtml(value)}</span>`;
+    if (label === "Current CRM health" && healthTone) return `<span class="meeting-health-badge ${healthTone}">${escapeHtml(value)}</span>`;
+    if (label === "Last activity" && lead?.last_activity && !Number.isNaN(new Date(lead.last_activity).getTime())) {
+      const age = daysSince(lead.last_activity);
+      return `${escapeHtml(value)}${age >= 0 ? ` <span class="meeting-activity-age">· ${age === 0 ? "today" : `${age} days ago`}</span>` : ""}`;
+    }
+    return value === "Not recorded" || value === "Not available" ? `<em class="meeting-missing">${value}</em>` : escapeHtml(value);
+  };
   const checklist = ["Confirm procurement contact and number", "Confirm a live project and steel requirements", "Confirm required compliance documents", "Confirm the current supplier"];
   workspace.setAttribute("aria-busy", String(busy));
   workspace.innerHTML = `
-    <nav class="meeting-breadcrumb" aria-label="Meeting brief breadcrumb"><button type="button" class="ghost-button meeting-menu" data-meeting-menu aria-label="Open navigation menu">Menu</button><a href="/?view=pipeline">Pipeline</a>${lead ? `<span>/</span><a href="${escapeHtml(leadRouteUrl(lead.id))}">${escapeHtml(lead.company_name)}</a>` : ""}<span>/</span><span>Meeting brief</span></nav>
+    <nav class="meeting-breadcrumb" aria-label="Meeting brief breadcrumb"><button type="button" class="ghost-button meeting-menu" data-meeting-menu aria-label="Open navigation menu">Menu</button><a href="/?view=pipeline">Pipeline</a>${lead ? `<span>/</span><a href="${escapeHtml(leadRouteUrl(lead.id))}">${escapeHtml(lead.company_name)}</a>` : ""}<span>/</span><span>Meeting brief</span>${brief?.output ? `<button class="ghost-button meeting-company-change" type="button" data-meeting-change aria-controls="meetingCompanyPicker" aria-expanded="false">Change company</button>` : ""}</nav>
     <header class="meeting-heading"><div><h2 id="aiWorkspaceHeading">Prepare me for this <em>meeting</em></h2><p>${lead ? escapeHtml(lead.company_name) : "Choose a company"}${brief?.generatedAt ? ` · Generated ${escapeHtml(new Date(brief.generatedAt).toLocaleString("en-GB", { timeZone: "Asia/Dubai" }))}` : ""}</p></div>
-      <div class="meeting-toolbar"><button class="ghost-button" type="button" data-meeting-generate ${!lead || busy ? "disabled" : ""}>${brief?.output ? "Regenerate" : "Generate brief"}</button><button class="ghost-button" type="button" data-meeting-copy ${!brief?.output || busy ? "disabled" : ""}>Copy brief</button><button class="primary-button" type="button" data-meeting-log ${!lead || busy ? "disabled" : ""}>Log meeting</button><span class="meeting-assistant-host"></span></div></header>
-    <div class="meeting-company"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${state.leadsLoading && !state.leadsLoaded || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${item.id === lead?.id ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>
+      <div class="meeting-toolbar"><button class="ghost-button" type="button" data-meeting-generate ${!lead || busy ? "disabled" : ""}>${brief?.output ? "Regenerate" : "Generate brief"}</button><button class="ghost-button" type="button" data-meeting-copy ${!brief?.output || busy ? "disabled" : ""}>Copy brief</button><button class="primary-button" type="button" data-meeting-log ${!lead || busy ? "disabled" : ""}>Log meeting</button></div></header>
+    <div id="meetingCompanyPicker" class="meeting-company${brief?.output ? " hidden" : ""}"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${state.leadsLoading && !state.leadsLoaded || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${item.id === lead?.id ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>
     ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
     ${busy ? `<p class="meeting-state" role="status">Preparing your brief from CRM records...</p>` : brief?.error ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(brief.error)}</p>` : ""}
     ${!lead ? `<p class="meeting-state" role="status">${leads.length ? "Choose a company to prepare its meeting brief." : "No visible companies are available."}</p>` : `
@@ -3077,15 +3088,16 @@ function renderMeetingBriefWorkspace(workspace) {
       <section class="meeting-panel meeting-talking"><h3>Talking points</h3>${brief?.output ? section("Talking points") : `<p>No brief generated yet.</p>`}</section>
       <section class="meeting-panel meeting-evidence"><header><span class="meeting-ai-badge">${brief?.provider === "fallback" ? "CRM fallback" : brief?.output ? "AI answer" : "Brief sources"}</span><span>Company record, activity history, PMRs and matched intelligence</span></header>
         ${brief?.provider === "fallback" ? `<p class="meeting-provenance">CRM-data fallback was used. Review before acting.</p>` : ""}
-        ${brief?.output ? [["Relationship", "Relationship snapshot"], ["History", "What happened last time"], ["Open items", "Open items"], ["Recent intel", "Recent intelligence"]].map(([label, title]) => `<div class="meeting-evidence-row"><h4>${label}</h4><div>${section(title)}</div></div>`).join("") : `<p>Generate a brief to review its supporting context.</p>`}
+        ${brief?.output ? `<div class="meeting-evidence-row"><h4>History</h4><div>${section("What happened last time")}</div></div>` : `<p>Generate a brief to review its supporting context.</p>`}
         <div class="meeting-evidence-row"><h4>Last PMR</h4><div><a href="${escapeHtml(leadRouteUrl(lead.id, "pmr"))}">Review PMRs in the company record</a></div></div>
+        ${brief?.output ? `<div class="meeting-evidence-row"><h4>Recent intel</h4><div>${section("Recent intelligence")}</div></div>` : ""}
         <div class="meeting-evidence-row"><h4>Quote reference</h4><p>${escapeHtml(lead.quotation_ref || "Not recorded")}</p></div>
-        ${additional.map(([title, text]) => `<div class="meeting-evidence-row"><h4>${escapeHtml(title)}</h4><div>${simpleMarkdown(text)}</div></div>`).join("")}
+        ${contextSections.length || additional.length ? `<details class="meeting-extra-context"><summary>More brief context</summary>${contextSections.map(title => `<div class="meeting-evidence-row"><h4>${escapeHtml(title)}</h4><div>${section(title)}</div></div>`).join("")}${additional.map(([title, text]) => `<div class="meeting-evidence-row"><h4>${escapeHtml(title)}</h4><div>${simpleMarkdown(text)}</div></div>`).join("")}</details>` : ""}
       </section></div><aside class="meeting-side">
-      <section class="meeting-panel meeting-facts"><h3>Key <em>facts</em></h3><dl>${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl></section>
+      <section class="meeting-panel meeting-facts"><h3>Key <em>facts</em></h3><dl>${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${factValue(label, value)}</dd></div>`).join("")}</dl></section>
       <section class="meeting-panel meeting-checklist"><h3>Find out in this meeting</h3><p>Working checklist · not saved</p>${checklist.map((text, index) => `<label><input type="checkbox" data-meeting-check="${index}" ${brief?.checked.has(String(index)) ? "checked" : ""}><span>${text}</span></label>`).join("")}</section>
       <section class="meeting-panel meeting-after"><h3>After the meeting</h3><button class="ghost-button" type="button" data-meeting-log>Log the meeting outcome</button><button class="ghost-button" type="button" data-meeting-pmr>File a PMR with heat score</button></section>
-    </aside></div>`}
+    </aside></div><div class="meeting-footer"><span class="meeting-assistant-host"></span></div>`}
   `;
   if (launcher) workspace.querySelector(".meeting-assistant-host")?.appendChild(launcher);
 }
@@ -3334,6 +3346,7 @@ async function runLeadAiAction(lead, action) {
       action: result.action || action,
       label: result.label || AI_ACTION_LABELS[action] || "AI Action",
       output: result.output || "",
+      generatedAt: new Date().toISOString(),
       loading: false,
       error: "",
       provider: result.provider || "",
@@ -9570,22 +9583,22 @@ function companyAiActionsMarkup(lead, { mobile = false } = {}) {
     ["summary", "Summarise Relationship"],
     ["flag", "Flag Needs Attention"]
   ];
-  if (mobile) {
-    const hints = {
+  const hints = {
       prepare: "History, latest PMR, intel and talking points",
       next: "Next action and reasoning",
       email: "A draft for your review",
       summary: "A concise relationship recap",
       flag: "Review before notifying the director"
-    };
+  };
+  if (mobile) {
     return `<section class="company-ai-actions record-mobile-ai" aria-label="One-tap AI actions">
       <h3>One-tap <em>AI actions</em></h3>
       <div class="record-mobile-ai-grid">${actions.map(([action, label]) => `<button class="record-ai-card${action === "prepare" ? " record-ai-card-primary" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
     </section>`;
   }
   return `<section class="drawer-section company-ai-actions" aria-label="Company AI actions">
-    <h3>Company AI actions</h3>
-    <div class="drawer-primary-actions">${actions.map(([action, label]) => `<button class="ghost-button${action === "flag" ? " danger" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}">${label}</button>`).join("")}</div>
+    <h3>One-tap <em class="crm-title-accent">AI actions</em></h3>
+    <div class="drawer-primary-actions">${actions.map(([action, label]) => `<button class="ghost-button${action === "prepare" ? " record-ai-card-primary" : ""}${action === "flag" ? " danger" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
   </section>`;
 }
 
@@ -15315,6 +15328,14 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
   if (button.hasAttribute("data-meeting-menu")) { toggleMobileMenu(); return; }
+  if (button.hasAttribute("data-meeting-change")) {
+    const picker = document.querySelector("#meetingCompanyPicker");
+    const expanded = picker.classList.contains("hidden");
+    picker.classList.toggle("hidden", !expanded);
+    button.setAttribute("aria-expanded", String(expanded));
+    if (expanded) picker.querySelector("select")?.focus();
+    return;
+  }
   if (button.matches("[data-meeting-generate], [data-meeting-copy], [data-meeting-log], [data-meeting-pmr]")) {
     const lead = meetingBriefState?.owner === String(state.currentUser?.id)
       ? state.leads.find(item => String(item.id) === meetingBriefState.leadId) : null;

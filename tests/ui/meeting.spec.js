@@ -17,6 +17,9 @@ test("existing preparation dialog opens the full meeting brief without regenerat
   await expect(page).toHaveURL(/view=meeting-prep/);
   await expect(page.locator("#aiActionDialog")).toBeHidden();
   await expect(page.locator(".meeting-ai-badge")).toHaveText("CRM fallback");
+  await expect(page.locator(".meeting-toolbar > button")).toHaveCount(3);
+  await expect(page.locator("#meetingCompanyPicker")).toBeHidden();
+  await expect(page.locator(".meeting-evidence > .meeting-evidence-row > h4")).toHaveText(["History", "Last PMR", "Recent intel", "Quote reference"]);
   await expect(page.locator(".meeting-assistant-host #aiAssistantLauncher")).toHaveCSS("position", "static");
   await expect(page.locator(".meeting-talking li")).toHaveCount(3);
   await expect(page.locator(".meeting-ask")).not.toContainText("Generate a brief");
@@ -53,6 +56,10 @@ test("meeting brief reference layout preserves selected-company actions", async 
   await expect(page.locator(".meeting-talking li")).toHaveCount(2);
   await expect(page.locator(".meeting-evidence")).toContainText("<script>not executable</script>");
   await expect(page.locator(".meeting-evidence script")).toHaveCount(0);
+  await page.locator(".meeting-extra-context > summary").click();
+  await expect(page.locator(".meeting-extra-context")).toContainText("Synthetic account context.");
+  await expect(page.locator(".meeting-extra-context")).toContainText("Confirm requirements.");
+  await page.locator(".meeting-extra-context > summary").click();
   await expect(page.locator("#aiWorkspaceView")).not.toContainText("Create quote");
   expect(requests).toHaveLength(1);
   expect(requests[0].url).toContain("/api/leads/ui-lead-1/ai-actions");
@@ -78,6 +85,8 @@ test("meeting brief reference layout preserves selected-company actions", async 
   await expect(page.locator("#pmrDialog")).toBeVisible();
   await expect(page.locator("#pmrForm input[name='company_id']")).toHaveValue("ui-lead-1");
   await page.locator("#closePmrForm").click();
+  await page.locator("[data-meeting-change]").click();
+  await expect(page.locator("#aiWorkspaceCompany")).toBeFocused();
   await page.locator("#aiWorkspaceCompany").selectOption("ui-lead-2");
   await expect(page.locator(".meeting-heading")).toContainText("Synthetic Steel Company 02");
   await expect(page.locator("[data-meeting-copy]")).toBeDisabled();

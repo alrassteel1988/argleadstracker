@@ -1,5 +1,19 @@
 # UI Proposal: Open Questions, Mismatches and Hold Points
 
+## Meeting Reference Refinement: 26 October
+
+- Latest screenshots refine presentation, not health calculations, quotation
+  workflow, permissions or the AI prompt/output contract. No sample facts copied.
+- Completed briefs use the three-action header, 1.6:1 columns, compact four-row
+  evidence panel and status/health badges. Extra generated context is retained
+  under More brief context and remains in Copy brief; it is not discarded.
+- Company switching remains available through Change company after generation;
+  the explicit selector is still shown before a company brief exists. The
+  Assistant sits after the content so it cannot overlap meeting actions.
+- The existing preparation entry is amber on desktop and mobile. Activity/PMR
+  actions, review-before-save, provider fallback notices and the unsaved checklist
+  keep their existing behavior. No scoring or quotation feature is introduced.
+
 ## Meeting Brief Reference: 24 October
 
 - Dedicated meeting-prep workspace now uses the supplied two-column reference:
