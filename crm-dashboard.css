@@ -1,0 +1,960 @@
+/* Proposal dashboard presentation. Existing datasets and actions remain. */
+body.salesman-dashboard-mode #appShell #dailyAiGreeting { color: var(--crm-navy) !important; }
+body.salesman-dashboard-mode #appShell #dailyAiSummary { background: var(--crm-surface-muted) !important; }
+body.admin-dashboard-mode #appShell :is(#actionPlanSummary, #needsAttentionCount, .ghost-button, .agent-chip, .meta-label, .chip, .stage-badge, .dashboard-funnel-note, .market-snapshot-total, .panel-icon) {
+  font-size: 13px !important;
+  line-height: 1.5;
+}
+body.admin-dashboard-mode #appShell :is(.pipeline-funnel-stage-stats, #marketSnapshotPanel .market-snapshot-bar-meta) small {
+  font-size: 12px !important;
+}
+body.admin-dashboard-mode #appShell #marketSnapshotPanel .market-snapshot-total strong { font-size: 14px !important; }
+body.admin-dashboard-mode #appShell #marketSnapshotPanel .market-snapshot-bar-meta span { font-size: 13px !important; }
+body.salesman-dashboard-mode #appShell :is(#salesmanSimplifiedAddLead, #salesmanSimplifiedViewAll, .small-action, .empty-copy, .salesman-loss-kicker, .salesman-loss-card .chip) {
+  font-size: 13px !important;
+  line-height: 1.5;
+}
+body.salesman-dashboard-mode #appShell .salesman-loss-kicker { color: var(--crm-text-secondary) !important; }
+body #appShell .salesman-queue-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+  background: currentColor;
+  mask: var(--crm-icon-arrow-up-right) center / contain no-repeat;
+}
+body #appShell #salesmanSimplifiedDashboard :is(.salesman-simplified-block, .salesman-simplified-metric, .salesman-simplified-stage) {
+  background: var(--crm-surface) !important;
+}
+body #appShell #salesmanSimplifiedDashboard :is(.salesman-summary-card-label, .salesman-summary-card-action, .salesman-summary-card-copy small, .salesman-stage-label, .salesman-stage-action) {
+  font-size: 12px !important;
+}
+body #appShell .salesman-triage-card {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: var(--crm-space-2);
+}
+body #appShell .salesman-triage-card > * { grid-column: 1 / -1; }
+body #appShell .salesman-triage-card > .salesman-triage-kicker {
+  grid-column: 2;
+  grid-row: 1;
+}
+body #appShell .salesman-triage-card::before {
+  content: "";
+  position: static;
+  inset: auto;
+  display: inline-block;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  mask: var(--crm-icon-clipboard-list) center / contain no-repeat;
+}
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none !important;
+  grid-auto-rows: auto;
+  gap: var(--crm-space-4);
+  padding: 0;
+  overflow: visible !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard > * {
+  grid-row: auto !important;
+  min-width: 0;
+}
+
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard > :is(.salesman-simplified-metrics, .salesman-dashboard-pipeline, .salesman-dashboard-live-leads) {
+  grid-column: 1 / -1;
+}
+
+body.salesman-dashboard-mode #salesmanSimplifiedDashboard > :is(.salesman-dashboard-top-actions, .salesman-dashboard-call-queue, .salesman-dashboard-first-touch, .salesman-dashboard-loss-reasons) {
+  grid-column: auto;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block {
+  align-self: stretch;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--crm-card-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-card-surface) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+  color: var(--crm-text);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header {
+  min-height: 0;
+  padding: var(--crm-space-4);
+  gap: var(--crm-space-3);
+  border: 0 !important;
+  border-bottom: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) var(--crm-radius-panel) 0 0;
+  background: var(--crm-surface) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header h2 {
+  margin: 0;
+  color: var(--crm-navy) !important;
+  font-size: 18px !important;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header h2:has(.crm-title-accent) {
+  font-size: 20px !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header h2 .crm-title-accent {
+  color: var(--crm-gold-heading) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header :is(span, small):not(button *) {
+  color: var(--crm-text-secondary) !important;
+  font-size: var(--crm-type-caption) !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-metrics {
+  gap: var(--crm-space-3);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-metric {
+  display: block;
+  gap: var(--crm-space-3);
+  min-height: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--crm-card-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-card-surface) !important;
+  box-shadow: var(--crm-shadow-panel);
+  transform: none;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-metric:hover:not(:disabled) {
+  border-color: var(--crm-navy) !important;
+  background: var(--crm-surface-muted) !important;
+  transform: none;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-icon {
+  display: none;
+  align-self: start;
+  width: 24px;
+  height: 24px;
+  border-radius: 0;
+  background: none !important;
+  color: var(--crm-navy) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+body.salesman-dashboard-mode #appShell .tone-danger .salesman-summary-card-icon {
+  color: var(--crm-health-red) !important;
+}
+
+body.salesman-dashboard-mode #appShell .tone-warm .salesman-summary-card-icon {
+  color: var(--crm-health-amber) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-copy {
+  gap: var(--crm-space-1);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-copy :is(.salesman-summary-card-label, .salesman-summary-card-action) {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-copy strong {
+  color: var(--crm-navy) !important;
+  font-size: 34px !important;
+  line-height: 1.15;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-summary-card-copy small {
+  overflow: visible;
+  white-space: normal;
+  color: var(--crm-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-dashboard-pipeline > .panel-header {
+  padding-bottom: var(--crm-space-2);
+  border-bottom: 0 !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-pipeline-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--crm-space-2);
+  padding: 0 var(--crm-space-4) var(--crm-space-3);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-stage {
+  justify-content: center;
+  min-height: 0;
+  padding: var(--crm-space-1) var(--crm-space-2);
+  border: 1px solid var(--crm-surface) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  text-align: center;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-copy {
+  gap: var(--crm-space-1);
+  justify-items: center;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-copy strong { grid-row: 1; }
+body.salesman-dashboard-mode #appShell .salesman-stage-copy .salesman-stage-label { grid-row: 2; }
+body.salesman-dashboard-mode #appShell .salesman-stage-copy .salesman-stage-action { grid-row: 3; }
+
+body.salesman-dashboard-mode #appShell .salesman-stage-copy :is(.salesman-stage-label, .salesman-stage-action) {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-copy strong {
+  color: var(--crm-navy) !important;
+  font-size: 32px !important;
+  line-height: 1.15;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-icon {
+  display: none;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  color: var(--crm-navy) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-stage-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-stage:hover:not(:disabled) {
+  background: var(--crm-surface-muted) !important;
+  border-color: var(--crm-navy) !important;
+}
+
+body.salesman-dashboard-mode #appShell :is(.salesman-simplified-actions, .salesman-simplified-queue, .salesman-first-touch-list, .salesman-loss-prompts-list) {
+  min-height: 0;
+  padding: var(--crm-space-4);
+  gap: var(--crm-space-3);
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  height: auto;
+  overflow: visible;
+}
+
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedAddLead {
+  border: 1px solid var(--crm-control-border) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-hero {
+  border-color: var(--crm-border) !important;
+  background: var(--crm-surface) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-hero-header,
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedGreeting {
+  color: var(--crm-navy) !important;
+  background: var(--crm-surface) !important;
+  font-size: 13px !important;
+  font-weight: 600;
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-actions > .salesman-triage-card {
+  height: auto;
+  min-height: 0;
+  padding: var(--crm-space-3);
+  gap: var(--crm-space-1);
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-triage-card :is(strong, p, span, small) {
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-triage-card .salesman-triage-kicker {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 700;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-triage-card.tone-danger .salesman-triage-kicker { color: var(--crm-health-red) !important; }
+body.salesman-dashboard-mode #appShell .salesman-triage-card.tone-warm .salesman-triage-kicker { color: var(--crm-health-amber) !important; }
+body.salesman-dashboard-mode #appShell .salesman-triage-card small { color: var(--crm-navy) !important; }
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue {
+  flex: 0 1 auto;
+  max-height: 204px;
+  padding: 0 18px 12px;
+  gap: 0;
+  overflow-y: auto;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item {
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 0;
+  gap: var(--crm-space-3);
+  border: 0 !important;
+  border-bottom: 1px solid var(--crm-divider) !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item :is(strong, p) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item p {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item .chip {
+  min-width: 0;
+  max-width: 130px;
+  padding: 4px 8px;
+  border-radius: var(--crm-radius-control);
+  white-space: normal;
+  font-size: 12px !important;
+  line-height: 1.4;
+  background: var(--crm-surface-muted) !important;
+  color: var(--crm-text) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item .chip.hot {
+  background: var(--crm-health-red-soft) !important;
+  color: var(--crm-health-red) !important;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-dashboard-live-leads {
+  height: 56dvh;
+  min-height: 360px;
+  max-height: none;
+  margin: 0;
+}
+
+body.salesman-dashboard-mode #appShell .salesman-dashboard-lead-table {
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  padding: 0 var(--crm-space-4) var(--crm-space-4);
+  overflow: auto;
+}
+
+/* Home follows SalesDesktop_V18; additional working tools stay expandable. */
+body.salesman-dashboard-mode #appShell :is(#dailyAiPanel, #dashboardQuickActions, #salesmanLossPromptPanel) { display: none !important; }
+body.salesman-dashboard-mode { height: auto !important; overflow-y: auto !important; }
+body.salesman-dashboard-mode #appShell > .main {
+  height: auto !important;
+  min-height: 100dvh;
+  overflow: visible !important;
+  padding: 28px 36px 100px !important;
+}
+body.salesman-dashboard-mode #appShell #dashboardView { height: auto !important; max-height: none !important; overflow: visible !important; flex: 0 0 auto; }
+body.salesman-dashboard-mode #appShell .topbar {
+  padding: 0 !important;
+  margin-bottom: 18px !important;
+}
+body.salesman-dashboard-mode #appShell .topbar-copy h1 {
+  font-family: var(--crm-font-ui) !important;
+  font-size: 34px !important;
+}
+body.salesman-dashboard-mode #appShell .topbar-copy h1 .crm-title-accent {
+  font-weight: 400;
+}
+body.salesman-dashboard-mode #appShell #sharedDashboardTopSlot {
+  display: block !important;
+  margin-bottom: 18px;
+}
+body.salesman-dashboard-mode #appShell #overdueBanner:not(.hidden) {
+  width: 100%;
+  margin: 0;
+  padding: 14px 18px !important;
+  border: 1px solid #F0C9C3 !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: #FFF6F4 !important;
+  box-shadow: var(--crm-shadow-panel);
+}
+body.salesman-dashboard-mode #appShell :is(.salesman-summary-card-action, .salesman-summary-card-chevron, .salesman-stage-action) {
+  display: none;
+}
+body.salesman-dashboard-mode #appShell .salesman-summary-card-label::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 8px;
+  border-radius: 50%;
+  background: var(--crm-teal);
+}
+body.salesman-dashboard-mode #appShell .tone-danger .salesman-summary-card-label::before { background: var(--crm-health-red); }
+body.salesman-dashboard-mode #appShell .tone-warm .salesman-summary-card-label::before { background: var(--crm-health-amber); }
+body.salesman-dashboard-mode #appShell .salesman-stage-label { text-transform: uppercase !important; }
+body.salesman-dashboard-mode #appShell .salesman-simplified-stage { display: grid; }
+body.salesman-dashboard-mode #appShell .salesman-dashboard-call-queue > .panel-header {
+  padding: 14px 18px 0;
+  border-bottom: 0 !important;
+}
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedQueueMeta { display: none; }
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item strong {
+  color: var(--crm-navy) !important;
+  font-weight: 700;
+}
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item p { margin: 0; }
+body.salesman-dashboard-mode #appShell .salesman-queue-icon { display: none; }
+body.salesman-dashboard-mode #appShell .salesman-simplified-queue-item .chip { border-radius: 99px; }
+body.salesman-dashboard-mode #appShell .salesman-dashboard-more-tools {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: var(--crm-navy);
+}
+body.salesman-dashboard-mode #appShell .salesman-dashboard-more-tools > summary {
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: var(--crm-radius-control);
+  font: 600 13px/1.5 var(--crm-font-ui);
+  cursor: pointer;
+}
+body.salesman-dashboard-mode #appShell .salesman-dashboard-more-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding-top: 12px;
+}
+body.salesman-dashboard-mode #appShell .salesman-dashboard-more-tools:not([open]) > .salesman-dashboard-more-content {
+  display: none !important;
+}
+
+@media (max-width: 1024px) {
+  body.salesman-dashboard-mode #salesmanSimplifiedDashboard {
+    grid-template-columns: 1fr;
+  }
+
+  body.salesman-dashboard-mode #appShell .salesman-simplified-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  body.salesman-dashboard-mode #appShell > .main { padding: 16px 16px 180px !important; }
+  body.salesman-dashboard-mode #appShell .topbar-copy h1 { font-size: 26px !important; }
+  body.salesman-dashboard-mode #appShell .salesman-dashboard-more-tools > summary { min-height: 44px; }
+  body.salesman-dashboard-mode #appShell .salesman-simplified-queue { max-height: 340px; }
+  body.salesman-dashboard-mode #appShell #overdueBanner .overdue-banner-actions { display: flex !important; flex-wrap: nowrap !important; width: 100%; }
+  body.salesman-dashboard-mode #appShell #overdueBanner .overdue-action { flex: 1 1 auto; width: auto !important; }
+  body.salesman-dashboard-mode #appShell #overdueBanner .overdue-dismiss { flex: 0 0 44px; width: 44px !important; }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header {
+    flex-flow: column nowrap !important;
+    align-items: stretch !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+  body.salesman-dashboard-mode #appShell .salesman-simplified-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px;
+  }
+  body.salesman-dashboard-mode #appShell .salesman-simplified-metric { padding: 12px 10px; }
+  body.salesman-dashboard-mode #appShell .salesman-summary-card-copy strong { font-size: 26px !important; }
+  body.salesman-dashboard-mode #appShell .salesman-summary-card-copy small {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  body.salesman-dashboard-mode #appShell .salesman-simplified-pipeline-strip {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+  }
+  body.salesman-dashboard-mode #appShell .salesman-simplified-stage { flex: 0 0 auto; min-height: 44px; padding: 6px 10px; }
+  body.salesman-dashboard-mode #appShell .salesman-stage-copy { display: flex; flex-direction: row-reverse; gap: 6px; align-items: center; }
+  body.salesman-dashboard-mode #appShell .salesman-stage-copy strong { font-size: 16px !important; }
+
+  body.salesman-dashboard-mode #appShell .salesman-simplified-block > .panel-header {
+    flex-wrap: wrap;
+  }
+
+  body.salesman-dashboard-mode #appShell .salesman-dashboard-live-leads {
+    height: 65dvh;
+    min-height: 400px;
+  }
+}
+
+body.ai-workspace-mode { height: auto !important; overflow-y: auto !important; }
+body.meeting-brief-mode #appShell .topbar:not(.hidden):not([hidden]) { display: none !important; }
+body .meeting-menu { display: none !important; }
+body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-panel { border-color: var(--crm-divider) !important; background: white !important; }
+body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-evidence { border-color: #8EC5C5 !important; }
+body.meeting-brief-mode #appShell > .main { padding: 32px 48px 48px !important; }
+body.meeting-brief-mode #appShell #aiWorkspaceView:not(.hidden) { display: grid; gap: 22px; max-width: 1104px; width: 100%; margin-inline: auto; padding-bottom: 0; }
+body.meeting-brief-mode #aiWorkspaceView :is(h2, h3, h4, p) { margin: 0; }
+body.meeting-brief-mode #aiWorkspaceView { color: var(--crm-navy); font: 400 14px/1.55 var(--crm-font-ui); }
+body.meeting-brief-mode #aiWorkspaceView a { color: var(--crm-navy); text-underline-offset: 3px; }
+body .meeting-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+body .meeting-breadcrumb a { display: inline-flex; align-items: center; min-height: 32px; }
+body .meeting-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; flex-wrap: wrap; }
+body #appShell #aiWorkspaceView .meeting-heading h2 { font: 800 32px/1.2 var(--crm-font-ui); color: var(--crm-navy); }
+body .meeting-heading em, body .meeting-facts em { font-family: var(--crm-font-title); font-weight: 400; color: #8A5200; }
+body .meeting-heading p { padding-top: 6px; color: var(--crm-text-secondary); font-size: 14px; }
+body .meeting-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+body .meeting-assistant-host { display: inline-flex; }
+body .meeting-footer { display: flex; justify-content: flex-end; }
+body.meeting-brief-mode #appShell .meeting-company-change { margin-left: auto; min-height: 36px; font-size: 12px; --crm-button-icon: var(--crm-icon-pencil); }
+body.meeting-brief-mode #appShell #aiWorkspaceView #aiAssistantLauncher { position: static !important; inset: auto !important; transform: none !important; width: auto !important; min-height: 44px; }
+body.meeting-brief-mode #appShell .meeting-toolbar [data-meeting-log] { background: var(--crm-amber) !important; border-color: var(--crm-amber) !important; color: var(--crm-navy) !important; }
+body #appShell .meeting-toolbar button { min-height: 44px; }
+body .meeting-company { display: flex; align-items: center; gap: 12px; }
+body .meeting-company label { font-weight: 600; }
+body.meeting-brief-mode #appShell .meeting-company #aiWorkspaceCompany { width: min(100%, 420px); min-width: 0; margin: 0; }
+body .meeting-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+body :is(.meeting-main, .meeting-side) { display: grid; gap: 20px; min-width: 0; }
+body :is(.meeting-panel, .meeting-ask) { padding: 20px; min-width: 0; background: white; border: 1px solid var(--crm-divider); border-radius: 14px; overflow-wrap: anywhere; }
+body #aiWorkspaceView .meeting-panel h3 { margin-bottom: 12px; font-size: 16px; line-height: 1.4; }
+body #aiWorkspaceView .meeting-facts h3 { font-size: 18px; margin-bottom: 10px; }
+body .meeting-panel :is(ul, ol) { padding-left: 20px; margin: 8px 0; }
+body .meeting-panel li + li { margin-top: 8px; }
+body .meeting-ask { display: flex; align-items: start; gap: 14px; background: #FFF7E8; border-color: #E7B96C; }
+body #aiWorkspaceView .meeting-ask h3 { font-size: 12px; text-transform: uppercase; color: #7A5410; margin-bottom: 6px; }
+body .meeting-ask p { font-size: 19px; line-height: 1.4; font-weight: 700; }
+body .meeting-target { flex: 0 0 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; background: var(--crm-amber); }
+body .meeting-target::before { content: ""; width: 20px; height: 20px; background: var(--crm-navy); mask: var(--crm-icon-sparkles) center / contain no-repeat; }
+body .meeting-talking ul { list-style: none; counter-reset: talking-point; padding: 0; }
+body .meeting-talking li { counter-increment: talking-point; position: relative; padding-left: 34px; min-height: 24px; }
+body .meeting-talking li::before { content: counter(talking-point); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--crm-surface-muted); color: var(--crm-navy); font-size: 12px; font-weight: 700; }
+body .meeting-evidence { border-color: #8EC5C5; }
+body .meeting-evidence > header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-bottom: 12px; font-size: 12px; }
+body .meeting-ai-badge { padding: 3px 10px; border-radius: 20px; background: var(--crm-navy); color: white; font-weight: 600; }
+body .meeting-provenance { padding-bottom: 12px; color: var(--crm-text-secondary); font-size: 12px; }
+body .meeting-evidence-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; border-top: 1px solid var(--crm-divider); padding-block: 12px; }
+body .meeting-evidence-row:last-child { padding-bottom: 0; }
+body .meeting-evidence-row h4 { font-size: 12px; text-transform: uppercase; font-weight: 600; }
+body .meeting-extra-context { border-top: 1px solid var(--crm-divider); margin-top: 12px; }
+body .meeting-extra-context summary { min-height: 44px; display: flex; gap: 8px; align-items: center; cursor: pointer; font-size: 13px; font-weight: 600; }
+body .meeting-extra-context summary::after { content: ""; width: 16px; height: 16px; background: currentColor; mask: var(--crm-icon-chevron-down) center / contain no-repeat; }
+body .meeting-extra-context[open] summary::after { transform: rotate(180deg); }
+body .meeting-status-badge, body .meeting-health-badge { display: inline-block; border-radius: 5px; padding: 2px 8px; font-size: 12px; line-height: 1.4; background: #E6EFF6; color: var(--crm-navy); }
+body .meeting-health-badge { border-radius: 20px; }
+body .meeting-health-badge.is-risk { background: var(--crm-health-red-soft); color: var(--crm-health-red); }
+body .meeting-health-badge.is-watch { background: var(--crm-health-amber-soft); color: var(--crm-health-amber); }
+body .meeting-health-badge.is-healthy { background: var(--crm-health-green-soft); color: var(--crm-health-green); }
+body .meeting-facts .meeting-missing { color: var(--crm-text-secondary); font-weight: 400; }
+body .meeting-activity-age { white-space: normal; }
+body .meeting-facts dl { display: grid; gap: 10px; margin: 0; }
+body .meeting-facts dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; }
+body .meeting-facts dt { color: var(--crm-text-secondary); font-size: 13px; }
+body .meeting-facts dd { margin: 0; text-align: right; font-size: 13px; font-weight: 600; }
+body .meeting-checklist > p { color: var(--crm-text-secondary); font-size: 12px; }
+body .meeting-checklist label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+body .meeting-checklist input { flex: 0 0 16px; width: 16px; height: 16px; min-height: 16px; accent-color: var(--crm-navy); }
+body .meeting-after { display: grid; gap: 10px; }
+body #appShell .meeting-after button { min-height: 44px; justify-content: flex-start; text-align: left; }
+body :is([data-meeting-generate]) { --crm-button-icon: var(--crm-icon-refresh-cw); }
+body :is([data-meeting-copy]) { --crm-button-icon: var(--crm-icon-clipboard-list); }
+body :is([data-meeting-log]) { --crm-button-icon: var(--crm-icon-plus); }
+body :is([data-meeting-pmr], [data-ai-open-brief]) { --crm-button-icon: var(--crm-icon-file-text); }
+body .meeting-state { padding-block: 16px; color: var(--crm-text-secondary); }
+@media (max-width: 900px) {
+  body .meeting-layout { grid-template-columns: minmax(0, 1fr); }
+  body .meeting-heading { align-items: start; }
+  body .meeting-toolbar { width: 100%; }
+  body .meeting-toolbar button { flex: 1 1 120px; }
+}
+@media (max-width: 1024px) {
+  body #aiWorkspaceView .meeting-menu { display: inline-flex !important; min-width: 44px; min-height: 44px; --crm-button-icon: var(--crm-icon-menu); }
+  body.meeting-brief-mode #appShell > .main { padding: 24px !important; }
+  body.meeting-brief-mode #appShell .meeting-company-change { min-height: 44px; }
+}
+@media (max-width: 720px) {
+  body.meeting-brief-mode #appShell > .main { padding: 16px 16px 96px !important; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-heading h2 { font-size: 26px; }
+  body .meeting-breadcrumb a { min-height: 44px; }
+  body .meeting-company { align-items: stretch; flex-direction: column; gap: 6px; }
+  body.meeting-brief-mode #appShell .meeting-company #aiWorkspaceCompany { width: 100%; font-size: 16px; }
+  body :is(.meeting-panel, .meeting-ask) { padding: 16px; }
+  body .meeting-evidence-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}
+body.ai-workspace-mode #appShell > .main { height: auto !important; min-height: 100dvh; overflow: visible !important; }
+body #appShell #aiWorkspaceView:not(.hidden) { display: grid; gap: 20px; min-width: 0; padding-bottom: 100px; }
+body #appShell .crm-ai-workspace-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+body #appShell .crm-ai-workspace-heading h2 { margin: 0; color: var(--crm-navy); font: 700 24px/1.4 var(--crm-font-ui); }
+body #appShell .crm-ai-workspace-links { display: flex; flex-wrap: wrap; gap: 8px; }
+body.ai-workspace-mode #appShell #overdueBanner { display: none !important; }
+body #appShell .crm-ai-workspace-panel { min-width: 0; padding: 20px; border: 1px solid var(--crm-card-border); border-radius: var(--crm-radius-panel); background: var(--crm-card-surface); box-shadow: var(--crm-shadow-panel); }
+body #appShell .crm-ai-workspace-panel h3 { margin: 0 0 16px; font: 700 20px/1.4 var(--crm-font-ui); color: var(--crm-navy); }
+body #appShell .crm-ai-workspace-panel label { display: block; margin-bottom: 6px; font: 600 14px/1.5 var(--crm-font-ui); }
+body #appShell #aiWorkspaceCompany { width: min(100%, 640px); max-width: 100%; margin-bottom: 16px; }
+body #appShell .crm-ai-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+body #appShell .crm-ai-action-card { min-width: 0; min-height: 60px; padding: 14px; justify-content: flex-start; text-align: left; }
+body #appShell .crm-ai-workspace-status { margin: 14px 0 0; color: var(--crm-text-secondary); font: 400 14px/1.5 var(--crm-font-ui); }
+body #appShell .crm-ai-workspace-error { color: var(--crm-health-red); font: 600 14px/1.5 var(--crm-font-ui); }
+body.today-mode #appShell > .main { background-image: none !important; background-color: var(--crm-page-muted) !important; }
+body.today-mode #appShell .topbar { background: none !important; }
+body.today-mode #appShell #openPlacesSearch { display: none !important; }
+body.today-mode #appShell .topbar #aiAssistantLauncher { position: static; inset: auto; flex: 0 1 auto; align-self: center; min-width: 0; max-width: 100%; min-height: 44px; border-radius: var(--crm-radius-control); box-shadow: none; }
+body.today-mode #appShell .topbar #aiAssistantLauncher span:last-child { display: inline; }
+body #appShell .crm-today-layout { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
+body #appShell .crm-today-panel { min-width: 0; border: 1px solid var(--crm-divider) !important; border-radius: var(--crm-radius-panel); background: var(--crm-field-surface); overflow: hidden; }
+body #appShell .crm-today-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; }
+body #appShell .crm-today-panel-heading h2 { margin: 0; color: var(--crm-text); font: 700 17px/1.4 var(--crm-font-ui); }
+body #appShell .crm-today-panel-heading .ghost-button { min-height: 36px; padding: 6px 12px; width: auto !important; flex: 0 0 auto; }
+body #appShell .crm-today-call-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--crm-divider); }
+body #appShell .crm-today-company { min-width: 0; }
+body #appShell .crm-today-company-link { display: block; min-height: 0; padding: 0; border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; color: var(--crm-text); font: 700 15px/1.5 var(--crm-font-ui); text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+body #appShell .crm-today-company-link::before, body #appShell .crm-today-stage::before { display: none !important; }
+body #appShell .crm-today-company-link:hover { text-decoration: underline; }
+body #appShell .crm-today-company p { margin: 2px 0 0; color: var(--crm-text-secondary); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+body #appShell .crm-today-due { padding: 3px 8px; border-radius: 8px; background: var(--crm-health-amber-soft); color: var(--crm-health-amber); font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; }
+body #appShell .crm-today-due.is-overdue { background: var(--crm-health-red-soft); color: var(--crm-health-red); }
+body #appShell .crm-today-contact-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+body #appShell .crm-today-contact-actions :is(a, button) { display: inline-flex; justify-content: center; align-items: center; gap: 6px; padding: 8px 12px; text-decoration: none; width: auto !important; min-width: 0; }
+body #appShell .crm-today-contact-actions a::before { content: ""; display: inline-block; flex: 0 0 16px; width: 16px; height: 16px; background: currentColor; mask: var(--crm-button-icon) center / contain no-repeat; }
+body #appShell .crm-today-call { background: var(--crm-amber) !important; border-color: var(--crm-amber) !important; color: var(--crm-text) !important; --crm-button-icon: var(--crm-icon-phone); }
+body #appShell .crm-today-contact-actions .crm-today-call:disabled { background: var(--crm-page-muted) !important; border-color: var(--crm-divider) !important; color: var(--crm-text) !important; opacity: 1 !important; cursor: not-allowed; }
+body #appShell .crm-today-email { --crm-button-icon: var(--crm-icon-mail); }
+body #appShell .crm-today-side { display: grid; min-width: 0; gap: 20px; }
+body #appShell .crm-today-quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 16px 16px; }
+body #appShell .crm-today-quick-grid button { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; min-height: 88px; padding: 14px 8px; border-color: var(--crm-divider) !important; font-size: 13px; }
+body #appShell .crm-today-quick-grid button::before { margin: 0; }
+body [data-today-action="add"] { --crm-button-icon: var(--crm-icon-plus); }
+body [data-today-action="places"] { --crm-button-icon: var(--crm-icon-map-pin); }
+body [data-today-action="report"] { --crm-button-icon: var(--crm-icon-file-text); }
+body #appShell .crm-today-pipeline { display: grid; gap: 4px; padding: 0 20px 12px; }
+body #appShell .crm-today-stage { display: grid; grid-template-columns: 80px minmax(0, 1fr) 24px; align-items: center; gap: 12px; min-width: 0; min-height: 28px; padding: 2px 0; border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; color: var(--crm-text); font: 400 13px/1.5 var(--crm-font-ui); text-align: left; cursor: pointer; }
+body #appShell .crm-today-stage strong { text-align: right; font-size: 14px; }
+body #appShell .crm-today-stage.is-unavailable { cursor: default; }
+body #appShell .crm-today-track { display: block; height: 7px; border-radius: 8px; background: var(--crm-page-muted); overflow: hidden; }
+body #appShell .crm-today-track i { display: block; height: 100%; border-radius: inherit; background: var(--crm-navy); }
+body #appShell .crm-today-stage.is-engaged .crm-today-track i { background: var(--crm-amber); }
+body #appShell :is(.crm-today-note, .crm-today-state) { margin: 0; padding: 12px 20px 18px; color: var(--crm-text-secondary); font-size: 13px; line-height: 1.5; }
+body #appShell .crm-today-more { color: var(--crm-text-secondary); font-size: 13px; }
+body #appShell .crm-today-more summary { cursor: pointer; padding: 8px 0; }
+@media (max-width: 1180px) {
+  body #appShell .crm-today-layout { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 16px; }
+  body #appShell .crm-today-call-row { grid-template-columns: minmax(0, 1fr) auto; }
+  body #appShell .crm-today-contact-actions { grid-column: 1 / -1; justify-content: flex-end; }
+}
+@media (max-width: 760px) {
+  body #appShell .crm-today-layout { grid-template-columns: minmax(0, 1fr); }
+  body #appShell .crm-today-call-row { padding: 14px 16px; }
+  body #appShell .crm-today-company-link { min-height: 44px; display: flex; align-items: center; }
+  body #appShell .crm-today-stage { min-height: 44px; }
+  body #appShell .crm-today-contact-actions :is(a, button) { min-height: 44px; }
+  body #appShell .crm-today-contact-actions { flex-wrap: nowrap; }
+  body #appShell .crm-today-contact-actions :is(a, button) { flex: 1 1 0; }
+  body #appShell .crm-today-more summary { min-height: 44px; }
+}
+body :is([data-workspace-view], [data-workspace-portfolio-action], [data-workspace-company-action]) { --crm-button-icon: var(--crm-icon-sparkles); }
+body [data-workspace-company-action="email"], body [data-workspace-view="draft-email"] { --crm-button-icon: var(--crm-icon-file-text); }
+body [data-workspace-company-action="flag"] { --crm-button-icon: var(--crm-icon-circle-alert); }
+body [data-workspace-portfolio-action="neglected"] { --crm-button-icon: var(--crm-icon-users); }
+body [data-workspace-retry] { --crm-button-icon: var(--crm-icon-refresh-cw); }
+@media (max-width: 720px) {
+  body #appShell .crm-ai-action-grid { grid-template-columns: minmax(0, 1fr); }
+  body #appShell .crm-ai-workspace-panel { padding: 16px; }
+  body #appShell #aiWorkspaceView button { min-height: 44px; }
+}
+
+/* Management layout uses the same panels and controls, not a second theme. */
+body.admin-dashboard-mode #appShell #dashboardView {
+  gap: var(--crm-space-4);
+  align-items: start;
+}
+body.admin-dashboard-mode #appShell #adminDashboardWorkRow {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  align-items: start;
+  gap: var(--crm-space-4);
+  min-width: 0;
+}
+body.admin-dashboard-mode #appShell #adminDashboardWorkRow > * { grid-column: auto; min-width: 0; }
+body.admin-dashboard-mode #appShell #adminDashboardTriageRow {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--crm-space-4);
+}
+body.admin-dashboard-mode #appShell #dashboardView > #overdueBanner {
+  grid-column: 1 / -1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--crm-space-3);
+  border: 1px solid var(--crm-health-red) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-health-red-soft) !important;
+  color: var(--crm-text) !important;
+}
+body.admin-dashboard-mode #appShell #overdueBanner :is(.overdue-banner-copy, .overdue-banner-kpis, .overdue-banner-kpis span) {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--crm-space-2);
+}
+body.admin-dashboard-mode #appShell #overdueBanner :is(strong, b, span) { font-size: 13px !important; line-height: 1.5; }
+body.admin-dashboard-mode #appShell #dashboardView .panel {
+  min-width: 0;
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-surface) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+}
+body.admin-dashboard-mode #appShell :is(#adminTaskSummary, #needsAttentionCount) {
+  background: var(--crm-surface-muted) !important;
+}
+
+body.admin-dashboard-mode #appShell .admin-task-table-wrap {
+  background: var(--crm-surface) !important;
+}
+
+body.admin-dashboard-mode #appShell #dashboardView .panel-header {
+  flex-wrap: wrap;
+  gap: var(--crm-space-3);
+  padding: var(--crm-space-4);
+  background: var(--crm-surface) !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView .panel-header h2 {
+  color: var(--crm-navy) !important;
+  font: 700 20px/1.35 var(--crm-font-ui) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView :is(.panel-header span, .empty-copy, .salesman-plan-head p, .salesman-plan-row-meta) {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+body.admin-dashboard-mode #appShell #dashboardView :is(.panel-header button, .action-plan-toolbar-button) {
+  border-color: var(--crm-control-border) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  font-size: 13px !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView :is(.salesman-plan-head, .salesman-plan-head-meta, .action-plan-bulk-actions) { flex-wrap: wrap; gap: var(--crm-space-2); }
+body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-head h3 { font-size: 15px; line-height: 1.5; color: var(--crm-navy); overflow-wrap: anywhere; }
+body.admin-dashboard-mode #appShell #dashboardView :is(.salesman-plan-card, .status-card) { border-color: var(--crm-divider) !important; background: var(--crm-surface) !important; }
+body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-table-wrap { overflow: auto; }
+body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-table { min-width: 740px; }
+body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-table :is(td, th) { padding: 10px; font-size: 13px; line-height: 1.5; color: var(--crm-text); }
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow { height: auto !important; grid-auto-rows: auto !important; align-items: start; }
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow :is(#dashboardFocus, #dashboardActivityFeed, #dashboardStatus) { height: auto !important; max-height: none !important; overflow: visible !important; }
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow > .panel:not(.is-collapsed),
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow > .panel:not(.is-collapsed) > .dashboard-collapsible-body,
+body.admin-dashboard-mode #appShell #adminDashboardBottomRow > .panel:not(.is-collapsed) > .dashboard-collapsible-body > .dashboard-collapsible-body-inner {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView :is(#marketIntelFeed, #needsAttentionList, #configAgentPanel .dashboard-collapsible-body-inner) { padding: var(--crm-space-4); }
+body.admin-dashboard-mode #appShell #dashboardView .admin-dashboard-bottom-row .dashboard-activity-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--crm-space-2);
+  height: auto !important;
+  min-height: 72px;
+  padding: var(--crm-space-3) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--crm-divider) !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+  text-align: left !important;
+}
+body.admin-dashboard-mode #appShell #dashboardView .dashboard-focus-item .stage-badge { grid-column: 2; justify-self: start; }
+body.admin-dashboard-mode #appShell #dashboardView .dashboard-activity-item :is(strong, p) { display: block; text-align: left; white-space: normal; overflow-wrap: anywhere; font-size: 14px !important; line-height: 1.5; color: var(--crm-text) !important; }
+body.admin-dashboard-mode #appShell #dashboardView #dashboardStatus { gap: var(--crm-space-3); }
+body.admin-dashboard-mode #appShell #dashboardView .market-snapshot-bar-track { background: var(--crm-surface-muted) !important; }
+body.admin-dashboard-mode #appShell #dashboardView .market-snapshot-bar-track > i { background: var(--crm-teal) !important; }
+body.admin-dashboard-mode #appShell #dashboardView #dashboardStatus .meta-label { font-size: 12px !important; line-height: 1.5; color: var(--crm-text-secondary) !important; }
+body.admin-dashboard-mode #appShell #dashboardView .agent-collapsed { flex-wrap: wrap; gap: var(--crm-space-2); padding: var(--crm-space-3); }
+
+@media (max-width: 1100px) {
+  body.admin-dashboard-mode #appShell #adminDashboardWorkRow { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header h2 {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header-actions {
+    flex-flow: row wrap !important;
+    flex: 0 0 auto !important;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header-actions > label {
+    flex: 1 1 160px;
+    width: auto;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header select {
+    width: 100%;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header { padding: var(--crm-space-3); }
+  body.admin-dashboard-mode #appShell #dashboardView .panel-header-actions { flex: 1 1 100%; justify-content: flex-start; }
+  body.admin-dashboard-mode #appShell #dashboardView button { min-height: 44px; }
+  body.admin-dashboard-mode #appShell #dashboardView .salesman-plan-head-meta { justify-content: flex-start; }
+  body.admin-dashboard-mode #appShell #dashboardView #overdueBanner .overdue-banner-copy { flex-direction: row; }
+  body.admin-dashboard-mode #appShell #dashboardView #overdueBanner .overdue-banner-actions { width: 100%; flex-wrap: nowrap !important; }
+  body.admin-dashboard-mode #appShell #dashboardView #overdueBanner .overdue-action { flex: 1 1 auto; width: auto !important; min-width: 0 !important; }
+  body.admin-dashboard-mode #appShell #dashboardView #overdueBanner .overdue-dismiss { flex: 0 0 44px; width: 44px !important; min-width: 44px !important; }
+}
+/* Neglected accounts: one worklist, responsive rows, existing CRM cadence data. */
+body.neglected-mode #appShell #aiWorkspaceView:not(.hidden) { display: block; min-width: 0; padding-bottom: 100px; }
+body.neglected-mode .crm-neglected-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
+body.neglected-mode .crm-neglected-toolbar > span { color: var(--crm-navy); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
+body.neglected-mode .crm-neglected-toolbar button { --crm-button-icon: var(--crm-icon-arrow-left); }
+body.neglected-mode .crm-neglected-tools { display: none; }
+body.neglected-mode .crm-neglected-source button { width: auto !important; }
+body.neglected-mode #aiAssistantLauncher { position: static !important; inset: auto !important; transform: none !important; min-height: 44px; margin: 0; }
+body.neglected-mode .crm-neglected-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+body.neglected-mode .crm-neglected-stats article { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 20px; border: 1px solid var(--crm-divider) !important; border-radius: 14px !important; background: #FFFFFF !important; }
+body.neglected-mode .crm-neglected-stats article > span { color: var(--crm-navy); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+body.neglected-mode .crm-neglected-stats strong { color: var(--crm-navy); font: 700 28px/1.2 var(--crm-font-ui); }
+body.neglected-mode .crm-neglected-stats small { color: var(--crm-text-secondary); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+body.neglected-mode .crm-neglected-panel { min-width: 0; padding: 20px; border: 1px solid var(--crm-card-border) !important; border-radius: 14px !important; background: #FFFFFF !important; box-shadow: var(--crm-shadow-panel); }
+body.neglected-mode .crm-neglected-source { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; color: var(--crm-text-secondary); font-size: 12px; line-height: 1.5; }
+body.neglected-mode .crm-neglected-source button { --crm-button-icon: var(--crm-icon-sparkles); border-radius: 999px !important; background: var(--crm-navy) !important; color: var(--crm-amber) !important; }
+body.neglected-mode .crm-neglected-table-wrap { width: 100%; overflow-x: auto; }
+body.neglected-mode .crm-neglected-table { width: 100%; min-width: 800px; table-layout: auto; border-collapse: collapse; }
+body.neglected-mode .crm-neglected-table :is(th, td) { padding: 16px 10px; border: 0 !important; border-bottom: 1px solid var(--crm-divider) !important; background: #FFFFFF !important; color: var(--crm-navy); font-size: 13px; text-align: left; vertical-align: middle; }
+body.neglected-mode .crm-neglected-table th { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+body.neglected-mode .crm-neglected-table td:first-child { width: 32%; }
+body.neglected-mode .crm-neglected-table tbody tr:last-child td { border-bottom: 0 !important; }
+body.neglected-mode .crm-neglected-company { display: inline; min-height: 44px; margin: 0; padding: 0 0 0 18px; position: relative; border: 0 !important; background: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--crm-navy) !important; font: 600 14px/1.5 var(--crm-font-ui); text-align: left; overflow-wrap: anywhere; }
+body.neglected-mode #aiWorkspaceView .crm-neglected-company::before { content: ""; display: block; position: absolute; left: 0; top: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--crm-health-red); transform: translateY(-50%); mask: none; }
+body.neglected-mode .crm-neglected-status { display: inline-block; border-radius: 5px; background: var(--crm-surface-muted); padding: 3px 7px; color: var(--crm-navy); font-size: 12px; font-weight: 600; }
+body.neglected-mode .crm-neglected-tier { display: inline-block; border: 1px solid var(--crm-teal); border-radius: 999px; padding: 2px 8px; white-space: nowrap; font-size: 12px; }
+body.neglected-mode .is-overdue { background: transparent !important; color: var(--crm-health-red) !important; font-weight: 700; }
+body.neglected-mode .crm-neglected-actions { display: flex; gap: 8px; }
+body.neglected-mode .crm-neglected-actions button { white-space: nowrap; }
+body.neglected-mode #aiWorkspaceView [data-neglected-log] { background: var(--crm-amber) !important; border-color: var(--crm-amber) !important; color: var(--crm-navy) !important; }
+body.neglected-mode [data-neglected-log] { --crm-button-icon: var(--crm-icon-phone); }
+body.neglected-mode [data-neglected-task] { --crm-button-icon: var(--crm-icon-plus); }
+body.neglected-mode .crm-neglected-mobile-meta,
+body.neglected-mode .crm-neglected-mobile-gap { display: none; }
+body.neglected-mode .crm-neglected-state { padding: 32px 8px; color: var(--crm-text-secondary); font-size: 14px; }
+@media (min-width: 761px) {
+  body.neglected-mode .crm-neglected-table :is(th, td) { padding: 8px 10px; }
+  body.neglected-mode .crm-neglected-company { min-height: 36px; }
+  body.neglected-mode .crm-neglected-actions button { min-height: 36px; padding: 8px 10px; }
+  body.neglected-mode .crm-neglected-table-wrap { max-height: max(240px, calc(100dvh - 560px)); overflow: auto; }
+  body.neglected-mode .crm-neglected-table th { position: sticky; top: 0; z-index: 1; }
+}
+@media (max-width: 760px) {
+  body.neglected-mode #appShell > .main { padding: 16px !important; }
+  body.neglected-mode #appShell .topbar-title { flex-wrap: nowrap; align-items: center; gap: 10px; }
+  body.neglected-mode #appShell #topbarPageTitle { font: 700 22px/1.3 var(--crm-font-ui); }
+  body.neglected-mode #appShell #topbarContext { display: none; }
+  body.neglected-mode #appShell #mobileMenuToggle { flex: 0 0 44px; width: 44px; min-width: 44px; font-size: 0 !important; }
+  body.neglected-mode #appShell #mobileMenuToggle::before { margin: 0; }
+  body.neglected-mode:not(.neglected-tools-open) #appShell .topbar-actions { display: none !important; }
+  body.neglected-mode #appShell .topbar { margin-bottom: 12px; padding: 0 !important; background: transparent !important; }
+  body.neglected-mode .crm-neglected-tools { display: inline-flex; --crm-button-icon: var(--crm-icon-sliders-horizontal); }
+  body.neglected-mode .crm-neglected-toolbar button { display: inline-flex !important; flex: 0 0 auto; white-space: nowrap; width: auto !important; min-height: 44px; padding: 8px 10px; gap: 6px; }
+  body.neglected-mode .crm-neglected-toolbar { margin-bottom: 16px; }
+  body.neglected-mode .crm-neglected-stats { gap: 8px; margin-bottom: 16px; }
+  body.neglected-mode .crm-neglected-stats article { padding: 12px 10px; gap: 6px; }
+  body.neglected-mode .crm-neglected-stats article > span { font-size: 12px; letter-spacing: 0; }
+  body.neglected-mode .crm-neglected-stats strong { font-size: 24px; }
+  body.neglected-mode .crm-neglected-stats small { display: none; }
+  body.neglected-mode .crm-neglected-panel { padding: 12px; }
+  body.neglected-mode .crm-neglected-source { gap: 8px; }
+  body.neglected-mode .crm-neglected-source button { flex: 0 0 auto; min-height: 44px; }
+  body.neglected-mode .crm-neglected-source > span { flex: 1 1 140px; }
+  body.neglected-mode .crm-neglected-table-wrap { overflow: visible; }
+  body.neglected-mode .crm-neglected-table { min-width: 0; }
+  body.neglected-mode .crm-neglected-table thead { display: none; }
+  body.neglected-mode .crm-neglected-table :is(tbody, tr) { display: block; width: 100%; }
+  body.neglected-mode .crm-neglected-table tr { position: relative; padding: 8px 52px 8px 0; border-bottom: 1px solid var(--crm-divider); }
+  body.neglected-mode .crm-neglected-table tr:last-child { border-bottom: 0; }
+  body.neglected-mode .crm-neglected-table td { display: none; border: 0 !important; padding: 0; }
+  body.neglected-mode .crm-neglected-table td:first-child { display: block; width: 100%; }
+  body.neglected-mode .crm-neglected-table td:last-child { display: block; position: absolute; right: 0; top: 16px; }
+  body.neglected-mode .crm-neglected-company { display: block; min-height: 44px; }
+  body.neglected-mode .crm-neglected-mobile-meta,
+  body.neglected-mode .crm-neglected-mobile-gap { display: block; padding-left: 18px; font-size: 12px; line-height: 1.5; color: var(--crm-text-secondary); }
+  body.neglected-mode .crm-neglected-mobile-gap { color: var(--crm-health-red); }
+  body.neglected-mode .crm-neglected-company .crm-neglected-mobile-meta { padding-left: 0; font-weight: 400; }
+  body.neglected-mode [data-neglected-task] { display: none; }
+  body.neglected-mode [data-neglected-log] { width: 44px !important; min-width: 44px; min-height: 44px; padding: 10px !important; }
+  body.neglected-mode [data-neglected-log]::before { margin: 0; }
+  body.neglected-mode [data-neglected-log] span { display: none; }
+}

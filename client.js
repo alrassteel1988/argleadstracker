@@ -273,6 +273,7 @@ const els = {
   metricsShell: document.querySelector("#metricsShell"),
   sharedDashboardTopSlot: document.querySelector("#sharedDashboardTopSlot"),
   adminDashboardOverviewSlot: document.querySelector("#adminDashboardOverviewSlot"),
+  adminDashboardWorkRow: document.querySelector("#adminDashboardWorkRow"),
   adminDashboardTriageRow: document.querySelector("#adminDashboardTriageRow"),
   adminDashboardAnalyticsRow: document.querySelector("#adminDashboardAnalyticsRow"),
   adminDashboardBottomRow: document.querySelector("#adminDashboardBottomRow"),
@@ -643,7 +644,7 @@ function isLeadRoutePath(pathname = window.location.pathname) {
 function parseAppRoute(locationLike = window.location) {
   const pathname = locationLike.pathname || "/";
   const search = new URLSearchParams(locationLike.search || "");
-  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks"]);
+  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
   if (isLeadRoutePath(pathname)) {
     return {
       view: "lead",
@@ -769,6 +770,8 @@ const KANBAN_STAGES = [
   { key: "LOST", label: "Lost", color: "stage-lost", aliases: ["LOST", "AT RISK"] }
 ];
 const CANONICAL_STAGE_KEYS = KANBAN_STAGES.map(stage => stage.key);
+// Display labels never replace stored stage keys or workflow rules.
+const STAGE_DISPLAY_LABELS = Object.freeze({ NEW: "Prospect", CONTACTED: "Outreach", NEGOTIATION: "Engaged", WON: "Active", DORMANT: "Dormant", LOST: "Lost" });
 const CANONICAL_STAGE_SET = new Set(CANONICAL_STAGE_KEYS);
 const CLOSED_STAGE_KEYS = new Set(["WON", "DORMANT", "LOST"]);
 
@@ -2092,7 +2095,7 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
     && item.request_status === "pending"
   ));
   activityDetailsSelection = { leadId, activityIndex, activity, pendingRequest };
-  els.activityDetailsTitle.textContent = `${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`;
+  els.activityDetailsTitle.innerHTML = pageTitleMarkup(`${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`);
   const attachments = (activity.attachments || []).filter(item => !item.removed_at);
   const history = activity.audit_history || [];
   els.activityDetailsBody.innerHTML = `
@@ -2852,6 +2855,296 @@ const SALESPERSON_ACTION_LABELS = {
   new_intel: "Any new intel on my prospects?"
 };
 
+function aiWorkspacePage(view = currentView) {
+  return {
+    "ai-actions": { title: "One-tap AI actions", context: "Relationship intelligence grounded in your visible CRM records." },
+    focus: { title: "Today", context: "Your follow-ups, starting with the most urgent.", portfolioAction: "focus_today" },
+    neglected: { title: "Who have I neglected?", context: "Review contact gaps using the CRM's existing tier and status rules.", portfolioAction: "neglected" },
+    "meeting-prep": { title: "Prepare for this meeting", context: "Review relationship history, PMRs and relevant intelligence.", companyAction: "prepare" },
+    "draft-email": { title: "Draft follow-up email", context: "Review a grounded draft, then edit it in your mail app before sending.", companyAction: "email" }
+  }[view] || null;
+}
+
+function renderTodayWorkspace(workspace) {
+  const datasets = salesmanDashboardSummaryDatasets();
+  const queue = actionableSalesmanLeads();
+  const busy = Boolean(state.leadsLoading && !state.leadsLoaded);
+  const unavailable = Boolean(state.leadsError && !state.leadsLoaded);
+  const stages = [
+    ["Prospect", datasets.stageNew, "salesmanStageNew"],
+    ["Outreach", datasets.stageContacted, "salesmanStageContacted"],
+    ["Engaged", datasets.stageNegotiation, "salesmanStageNegotiation"],
+    ["Active", datasets.stageWon, "salesmanStageWon"],
+    ["Dormant", datasets.stageDormant, "salesmanStageDormant"]
+  ];
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `
+    <div class="crm-today-layout">
+      <section class="crm-today-panel crm-today-calls" aria-labelledby="aiWorkspaceHeading">
+        <header class="crm-today-panel-heading"><h2 id="aiWorkspaceHeading">Call next</h2>
+          <button class="ghost-button" type="button" data-today-summary="salesmanScheduled" ${busy || unavailable ? "disabled" : ""}>View all</button>
+        </header>
+        <div class="crm-today-call-list">${busy ? `<p class="crm-today-state" role="status">Loading your follow-ups...</p>` : unavailable ? `<p class="crm-today-state">Follow-ups could not be loaded. Retry below.</p>` : queue.slice(0, 4).map(lead => {
+          const contact = primaryLeadContact(lead);
+          const due = daysUntil(lead.next_action_date);
+          const dueLabel = due < 0 ? `${Math.abs(due)} days overdue` : due === 0 ? "Due today" : formatDisplayDate(lead.next_action_date);
+          return `<article class="crm-today-call-row">
+            <div class="crm-today-company"><button type="button" class="crm-today-company-link" data-today-lead="${escapeHtml(lead.id)}">${escapeHtml(lead.company_name || "Unnamed company")}</button>
+              <p>${escapeHtml([lead.next_action || "Follow up", contact.name, lead.location || lead.territory].filter(Boolean).join(" · "))}</p>
+            </div>
+            <span class="crm-today-due ${due < 0 ? "is-overdue" : ""}">${escapeHtml(dueLabel)}</span>
+            <div class="crm-today-contact-actions">
+              ${contact.email ? `<a class="ghost-button crm-today-email" href="mailto:${escapeHtml(encodeURIComponent(contact.email))}" aria-label="Email ${escapeHtml(lead.company_name || "company")}">Email</a>` : `<button type="button" class="ghost-button crm-today-email" disabled title="No email address saved">Email</button>`}
+              ${contact.phone ? `<a class="primary-button crm-today-call" href="tel:${escapeHtml(contact.phone.replace(/[^+\d*#,;]/g, ""))}" aria-label="Call ${escapeHtml(lead.company_name || "company")}">Call</a>` : `<button type="button" class="primary-button crm-today-call" disabled title="No phone number saved">Call</button>`}
+            </div>
+          </article>`;
+        }).join("") || `<p class="crm-today-state">No scheduled follow-ups. Your assigned leads are available in Pipeline.</p>`}</div>
+      </section>
+      <div class="crm-today-side">
+        <section class="crm-today-panel" aria-labelledby="todayQuickActionsTitle">
+          <header class="crm-today-panel-heading"><h2 id="todayQuickActionsTitle">Quick actions</h2></header>
+          <div class="crm-today-quick-grid">
+            <button class="ghost-button" type="button" data-today-action="add">Add lead</button>
+            <button class="ghost-button" type="button" data-today-action="places">Search places</button>
+            <button class="ghost-button" type="button" data-workspace-view="draft-email">Draft email</button>
+            <button class="ghost-button" type="button" data-today-action="report">Weekly report</button>
+          </div>
+        </section>
+        <section class="crm-today-panel" aria-labelledby="todayPipelineTitle">
+          <header class="crm-today-panel-heading"><h2 id="todayPipelineTitle">My pipeline</h2></header>
+          <div class="crm-today-pipeline">${stages.map(([label, records, type]) => `<button type="button" class="crm-today-stage ${label === "Engaged" ? "is-engaged" : ""}" data-today-summary="${type}" ${busy || unavailable ? "disabled" : ""} aria-label="${label}: ${busy || unavailable ? "unavailable" : `${records.length} leads`}. View summary">
+            <span>${label}</span><span class="crm-today-track" aria-hidden="true"><i style="width:${Math.round(records.length / Math.max(1, datasets.myLeads.length) * 100)}%"></i></span><strong>${busy || unavailable ? "—" : records.length}</strong>
+          </button>`).join("")}
+          <div class="crm-today-stage is-unavailable"><span>Block</span><span class="crm-today-track" aria-hidden="true"></span><span aria-label="Not available">—</span></div>
+          </div>
+          <p class="crm-today-note">Block status setup is pending.${datasets.stageLost.length ? ` ${datasets.stageLost.length} legacy Lost records await Outreach reclassification.` : ""}</p>
+        </section>
+      </div>
+    </div>
+    <details class="crm-today-more"><summary>More tools</summary><button class="ghost-button" type="button" data-workspace-portfolio-action="focus_today" ${busy || state.dailyAiLoading ? "disabled" : ""}>Generate AI daily focus</button></details>
+    ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
+  `;
+}
+
+let neglectedWorkspace = null;
+let neglectedToolsOpen = false;
+
+async function loadNeglectedWorkspace(request) {
+  try {
+    const result = await api("/api/salesperson-ai-actions", {
+      method: "POST", body: JSON.stringify({ action: "pipeline_health" })
+    });
+    if (!Array.isArray(result.metrics?.contact_overdue_companies) && request.leads.length) {
+      throw new Error("Contact-frequency details are unavailable. Please retry.");
+    }
+    request.metrics = result.metrics || { contact_overdue_companies: [] };
+  } catch (error) {
+    request.error = error.message || "Neglected accounts could not be loaded.";
+  } finally {
+    request.loading = false;
+    if (neglectedWorkspace === request && isSalesmanRole()
+      && String(state.currentUser?.id || state.currentUser?.email) === request.owner
+      && currentView === "neglected") renderAiWorkspace();
+  }
+}
+
+function neglectedAccountRows(metrics) {
+  const visible = new Map(salesmanDashboardLeads().map(lead => [String(lead.id), lead]));
+  return (metrics?.contact_overdue_companies || []).filter(company => visible.has(String(company.id)))
+    .map(company => ({ ...company, lead: visible.get(String(company.id)) }))
+    .sort((a, b) => Number(b.contact_overdue_by == null) - Number(a.contact_overdue_by == null)
+      || Number(b.contact_overdue_by || 0) - Number(a.contact_overdue_by || 0)
+      || String(a.lead.company_name || "").localeCompare(String(b.lead.company_name || "")));
+}
+
+function renderNeglectedWorkspace(workspace) {
+  const owner = String(state.currentUser.id || state.currentUser.email);
+  const leadsBusy = !state.leadsLoaded && !state.leadsError;
+  const leadsFailed = state.leadsError && !state.leadsLoaded;
+  if (!leadsBusy && !leadsFailed && (!neglectedWorkspace || neglectedWorkspace.owner !== owner || neglectedWorkspace.leads !== state.leads)) {
+    neglectedWorkspace = { owner, leads: state.leads, loading: true, error: "", metrics: null };
+    loadNeglectedWorkspace(neglectedWorkspace);
+  }
+  const result = neglectedWorkspace?.owner === owner ? neglectedWorkspace : null;
+  const busy = Boolean(leadsBusy || result?.loading);
+  const error = leadsFailed ? state.leadsError : result?.error;
+  const rows = !busy && !error ? neglectedAccountRows(result?.metrics) : [];
+  const known = rows.filter(row => row.contact_overdue_by != null);
+  const worst = known[0];
+  const tierOne = rows.filter(row => String(row.lead.tier || "2") === "1").length;
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `
+    <div class="crm-neglected-toolbar"><span>Territory ${escapeHtml(state.currentUser.territory || "Not set")}</span><button type="button" class="ghost-button crm-neglected-tools" data-neglected-tools aria-expanded="${neglectedToolsOpen}" aria-controls="smartSearchShell">Tools</button><button type="button" class="ghost-button" data-workspace-view="focus">Back</button></div>
+    <div class="crm-neglected-stats" aria-label="Neglected account summary">
+      <article><span>Accounts overdue</span><strong class="is-overdue">${busy || error ? "—" : rows.length}</strong><small>Past their expected contact date</small></article>
+      <article><span>Most overdue</span><strong>${busy || error || !worst ? "—" : `${Number(worst.contact_overdue_by)} d`}</strong><small>${escapeHtml(busy ? "Loading contact history" : worst?.lead.company_name || (rows.length ? "No activity date recorded" : "No overdue accounts"))}</small></article>
+      <article><span>Tier 1 overdue</span><strong>${busy || error ? "—" : tierOne}</strong><small>High-value accounts needing contact</small></article>
+    </div>
+    <section class="crm-neglected-panel" aria-labelledby="aiWorkspaceHeading">
+      <div class="crm-neglected-source"><button class="ghost-button" type="button" data-workspace-portfolio-action="neglected" ${busy || error || state.dailyAiLoading ? "disabled" : ""}>AI answer</button><span>Built from: activity log, tier and status rules · sorted by days overdue</span></div>
+      <h2 id="aiWorkspaceHeading" class="sr-only">Neglected accounts</h2>
+      ${busy ? `<p class="crm-neglected-state" role="status">Loading contact-frequency details...</p>` : error ? `<div class="crm-neglected-state" role="alert"><p>${escapeHtml(error)}</p><button class="ghost-button" type="button" data-neglected-retry>Retry</button></div>` : !rows.length ? `<p class="crm-neglected-state">No accounts are past their expected contact frequency.</p>` : `<div class="crm-neglected-table-wrap"><table class="crm-neglected-table"><thead><tr><th>Company</th><th>Status</th><th>Tier</th><th>Last activity</th><th>Expected</th><th>Overdue</th><th>Actions</th></tr></thead><tbody>${rows.map(row => {
+        const lead = row.lead;
+        const status = stageDisplayLabel(lead.stage || "NEW");
+        const last = row.days_since_activity == null ? "No activity recorded" : `${Number(row.days_since_activity)} days ago`;
+        const overdue = row.contact_overdue_by == null ? "Unknown" : `${Number(row.contact_overdue_by)} d`;
+        return `<tr><td><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(lead.id)}">${escapeHtml(lead.company_name || "Unnamed company")}<span class="crm-neglected-mobile-meta">${escapeHtml(status)} · Tier ${escapeHtml(lead.tier || "2")} · ${escapeHtml(last)}</span></button><span class="crm-neglected-mobile-gap">${row.contact_overdue_by == null ? "No recorded contact" : `${escapeHtml(overdue)} overdue`} · every ${Number(row.expected_contact_days)} d</span></td><td><span class="crm-neglected-status">${escapeHtml(status)}</span></td><td><span class="crm-neglected-tier">Tier ${escapeHtml(lead.tier || "2")}</span></td><td>${escapeHtml(last)}</td><td>every ${Number(row.expected_contact_days)} days</td><td class="is-overdue">${escapeHtml(overdue)}</td><td><div class="crm-neglected-actions"><button class="primary-button" type="button" data-neglected-log="${escapeHtml(lead.id)}" aria-label="Log call for ${escapeHtml(lead.company_name || "company")}"><span>Log call</span></button><button class="ghost-button" type="button" data-neglected-task="${escapeHtml(lead.id)}">Task</button></div></td></tr>`;
+      }).join("")}</tbody></table></div>`}
+    </section>`;
+}
+
+let meetingBriefState = null;
+
+function meetingBriefSections(output) {
+  const sections = Object.create(null);
+  let heading = "Brief";
+  for (const line of String(output || "").split(/\r?\n/)) {
+    if (/^##\s+/.test(line)) heading = line.replace(/^##\s+/, "").trim();
+    else sections[heading] = `${sections[heading] || ""}${line}\n`;
+  }
+  return sections;
+}
+
+function openMeetingBriefPage(lead) {
+  if (!lead || !state.leads.some(item => item.id === lead.id)) return;
+  const existing = state.aiAction.scope === "company" && state.aiAction.leadId === lead.id
+    && ["prepare", "prepare_meeting"].includes(state.aiAction.action) ? state.aiAction : null;
+  meetingBriefState = { owner: String(state.currentUser.id), leadId: lead.id,
+    output: existing?.output || "", provider: existing?.provider || "", loading: false,
+    error: "", generatedAt: existing?.generatedAt || "", checked: new Set() };
+  els.aiActionDialog?.close();
+  setView("meeting-prep");
+}
+
+async function generateMeetingBrief(lead) {
+  if (!lead || meetingBriefState?.loading) return;
+  if (!navigator.onLine) return setToast("AI briefings need a connection.", "error");
+  if (Date.now() < state.aiCooldownUntil) return setToast("Please wait a few seconds before running another AI action.", "error");
+  const request = { owner: String(state.currentUser.id), leadId: lead.id, loading: true,
+    output: "", provider: "", error: "", generatedAt: "", checked: meetingBriefState?.checked || new Set() };
+  meetingBriefState = request;
+  renderAiWorkspace();
+  try {
+    const result = await api(`/api/leads/${encodeURIComponent(lead.id)}/ai-actions`, {
+      method: "POST", body: JSON.stringify({ action: "prepare" })
+    });
+    request.output = result.output || "";
+    request.provider = result.provider || "";
+    request.generatedAt = new Date().toISOString();
+    if (!request.output) request.error = "No brief was returned. Please try again.";
+    state.aiCooldownUntil = Date.now() + 3000;
+  } catch {
+    request.error = "Couldn't generate this right now. Please try again.";
+  } finally {
+    request.loading = false;
+    if (meetingBriefState === request && String(state.currentUser?.id) === request.owner && currentView === "meeting-prep") renderAiWorkspace();
+  }
+}
+
+function renderMeetingBriefWorkspace(workspace) {
+  const launcher = document.querySelector("#aiAssistantLauncher");
+  const owner = String(state.currentUser.id);
+  const leads = [...state.leads].sort((a, b) => String(a.company_name || "").localeCompare(String(b.company_name || "")));
+  if (meetingBriefState?.owner !== owner) meetingBriefState = null;
+  const lead = leads.find(item => String(item.id) === meetingBriefState?.leadId);
+  if (meetingBriefState && !lead && state.leadsLoaded) meetingBriefState = null;
+  const brief = lead ? meetingBriefState : null;
+  const busy = Boolean(brief?.loading || state.leadsLoading && !state.leadsLoaded);
+  const sections = meetingBriefSections(brief?.output);
+  const section = title => sections[title]?.trim() ? simpleMarkdown(sections[title]) : "<p>No data returned in this brief.</p>";
+  const known = ["Recommended ask", "Talking points", "Relationship snapshot", "What happened last time", "Open items", "Recent intelligence"];
+  const additional = Object.entries(sections).filter(([title, text]) => !known.includes(title) && text.trim());
+  const contextSections = ["Relationship snapshot", "Open items"].filter(title => sections[title]?.trim());
+  const list = value => (Array.isArray(value) ? value.filter(item => typeof item === "string").join(", ") : typeof value === "string" ? value : "") || "Not recorded";
+  const facts = lead ? [
+    ["Status", stageDisplayLabel(lead.stage)], ["Current CRM health", lead.health?.label || "Not available"],
+    ["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "Not recorded"],
+    ["Named contact", lead.contact_person || lead.contact_name || "Not recorded"],
+    ["Competitors", list(lead.competitors_likely_using)],
+    ["Recorded certifications", list(lead.certifications)]
+  ] : [];
+  const healthTone = { RED: "is-risk", AMBER: "is-watch", GREEN: "is-healthy" }[lead?.health?.label] || "";
+  const factValue = (label, value) => {
+    if (label === "Status") return `<span class="meeting-status-badge">${escapeHtml(value)}</span>`;
+    if (label === "Current CRM health" && healthTone) return `<span class="meeting-health-badge ${healthTone}">${escapeHtml(value)}</span>`;
+    if (label === "Last activity" && lead?.last_activity && !Number.isNaN(new Date(lead.last_activity).getTime())) {
+      const age = daysSince(lead.last_activity);
+      return `${escapeHtml(value)}${age >= 0 ? ` <span class="meeting-activity-age">· ${age === 0 ? "today" : `${age} days ago`}</span>` : ""}`;
+    }
+    return value === "Not recorded" || value === "Not available" ? `<em class="meeting-missing">${value}</em>` : escapeHtml(value);
+  };
+  const checklist = ["Confirm procurement contact and number", "Confirm a live project and steel requirements", "Confirm required compliance documents", "Confirm the current supplier"];
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `
+    <nav class="meeting-breadcrumb" aria-label="Meeting brief breadcrumb"><button type="button" class="ghost-button meeting-menu" data-meeting-menu aria-label="Open navigation menu">Menu</button><a href="/?view=pipeline">Pipeline</a>${lead ? `<span>/</span><a href="${escapeHtml(leadRouteUrl(lead.id))}">${escapeHtml(lead.company_name)}</a>` : ""}<span>/</span><span>Meeting brief</span>${brief?.output ? `<button class="ghost-button meeting-company-change" type="button" data-meeting-change aria-controls="meetingCompanyPicker" aria-expanded="false">Change company</button>` : ""}</nav>
+    <header class="meeting-heading"><div><h2 id="aiWorkspaceHeading">Prepare me for this <em>meeting</em></h2><p>${lead ? escapeHtml(lead.company_name) : "Choose a company"}${brief?.generatedAt ? ` · Generated ${escapeHtml(new Date(brief.generatedAt).toLocaleString("en-GB", { timeZone: "Asia/Dubai" }))}` : ""}</p></div>
+      <div class="meeting-toolbar"><button class="ghost-button" type="button" data-meeting-generate ${!lead || busy ? "disabled" : ""}>${brief?.output ? "Regenerate" : "Generate brief"}</button><button class="ghost-button" type="button" data-meeting-copy ${!brief?.output || busy ? "disabled" : ""}>Copy brief</button><button class="primary-button" type="button" data-meeting-log ${!lead || busy ? "disabled" : ""}>Log meeting</button></div></header>
+    <div id="meetingCompanyPicker" class="meeting-company${brief?.output ? " hidden" : ""}"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${state.leadsLoading && !state.leadsLoaded || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${item.id === lead?.id ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>
+    ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
+    ${busy ? `<p class="meeting-state" role="status">Preparing your brief from CRM records...</p>` : brief?.error ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(brief.error)}</p>` : ""}
+    ${!lead ? `<p class="meeting-state" role="status">${leads.length ? "Choose a company to prepare its meeting brief." : "No visible companies are available."}</p>` : `
+    <div class="meeting-layout"><div class="meeting-main">
+      <section class="meeting-ask"><span class="meeting-target" aria-hidden="true"></span><div><h3>Your one ask</h3>${brief?.output ? section("Recommended ask") : `<p>Generate a brief to see the recommended ask.</p>`}</div></section>
+      <section class="meeting-panel meeting-talking"><h3>Talking points</h3>${brief?.output ? section("Talking points") : `<p>No brief generated yet.</p>`}</section>
+      <section class="meeting-panel meeting-evidence"><header><span class="meeting-ai-badge">${brief?.provider === "fallback" ? "CRM fallback" : brief?.output ? "AI answer" : "Brief sources"}</span><span>Company record, activity history, PMRs and matched intelligence</span></header>
+        ${brief?.provider === "fallback" ? `<p class="meeting-provenance">CRM-data fallback was used. Review before acting.</p>` : ""}
+        ${brief?.output ? `<div class="meeting-evidence-row"><h4>History</h4><div>${section("What happened last time")}</div></div>` : `<p>Generate a brief to review its supporting context.</p>`}
+        <div class="meeting-evidence-row"><h4>Last PMR</h4><div><a href="${escapeHtml(leadRouteUrl(lead.id, "pmr"))}">Review PMRs in the company record</a></div></div>
+        ${brief?.output ? `<div class="meeting-evidence-row"><h4>Recent intel</h4><div>${section("Recent intelligence")}</div></div>` : ""}
+        <div class="meeting-evidence-row"><h4>Quote reference</h4><p>${escapeHtml(lead.quotation_ref || "Not recorded")}</p></div>
+        ${contextSections.length || additional.length ? `<details class="meeting-extra-context"><summary>More brief context</summary>${contextSections.map(title => `<div class="meeting-evidence-row"><h4>${escapeHtml(title)}</h4><div>${section(title)}</div></div>`).join("")}${additional.map(([title, text]) => `<div class="meeting-evidence-row"><h4>${escapeHtml(title)}</h4><div>${simpleMarkdown(text)}</div></div>`).join("")}</details>` : ""}
+      </section></div><aside class="meeting-side">
+      <section class="meeting-panel meeting-facts"><h3>Key <em>facts</em></h3><dl>${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${factValue(label, value)}</dd></div>`).join("")}</dl></section>
+      <section class="meeting-panel meeting-checklist"><h3>Find out in this meeting</h3><p>Working checklist · not saved</p>${checklist.map((text, index) => `<label><input type="checkbox" data-meeting-check="${index}" ${brief?.checked.has(String(index)) ? "checked" : ""}><span>${text}</span></label>`).join("")}</section>
+      <section class="meeting-panel meeting-after"><h3>After the meeting</h3><button class="ghost-button" type="button" data-meeting-log>Log the meeting outcome</button><button class="ghost-button" type="button" data-meeting-pmr>File a PMR with heat score</button></section>
+    </aside></div><div class="meeting-footer"><span class="meeting-assistant-host"></span></div>`}
+  `;
+  if (launcher) workspace.querySelector(".meeting-assistant-host")?.appendChild(launcher);
+}
+
+function renderAiWorkspace() {
+  const workspace = document.querySelector("#aiWorkspaceView");
+  const config = aiWorkspacePage();
+  if (!workspace || !config || !state.currentUser) return;
+  const launcher = workspace.querySelector("#aiAssistantLauncher");
+  if (launcher) document.body.appendChild(launcher);
+  if (currentView === "focus" && isSalesmanRole()) return renderTodayWorkspace(workspace);
+  if (currentView === "neglected" && isSalesmanRole()) return renderNeglectedWorkspace(workspace);
+  if (currentView === "meeting-prep") return renderMeetingBriefWorkspace(workspace);
+  const previousCompany = workspace.querySelector("#aiWorkspaceCompany")?.value || "";
+  const leads = [...state.leads].sort((a, b) => String(a.company_name || "").localeCompare(String(b.company_name || "")));
+  const selectedCompany = leads.some(lead => String(lead.id) === previousCompany) ? previousCompany : "";
+  const busy = Boolean(state.leadsLoading && !state.leadsLoaded);
+  const portfolioActions = config.portfolioAction ? [config.portfolioAction] : Object.keys(SALESPERSON_ACTION_LABELS);
+  const companyActions = config.companyAction ? [config.companyAction] : ["prepare", "next", "email", "summary", "flag"];
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `
+    <div class="crm-ai-workspace-heading"><h2 id="aiWorkspaceHeading">${pageTitleMarkup(config.title)}</h2>
+      <div class="crm-ai-workspace-links">
+        <button class="ghost-button" type="button" data-workspace-view="ai-actions">All AI actions</button>
+        <button class="ghost-button" type="button" data-workspace-view="meeting-prep">Meeting preparation</button>
+        <button class="ghost-button" type="button" data-workspace-view="draft-email">Draft email</button>
+      </div>
+    </div>
+    ${isSalesmanRole() && !config.companyAction ? `<section class="crm-ai-workspace-panel" aria-label="Portfolio intelligence">
+      <h3>Your daily <em class="crm-title-accent">intelligence</em></h3><div class="crm-ai-action-grid">${portfolioActions.map(action => `
+        <button class="ghost-button crm-ai-action-card" type="button" data-workspace-portfolio-action="${action}" ${busy || state.dailyAiLoading ? "disabled" : ""}>${escapeHtml(SALESPERSON_ACTION_LABELS[action])}</button>
+      `).join("")}</div></section>` : ""}
+    ${!config.portfolioAction ? `<section class="crm-ai-workspace-panel" aria-label="Company intelligence">
+      <h3>Company <em class="crm-title-accent">intelligence</em></h3>
+      <label for="aiWorkspaceCompany">Company</label>
+      <select id="aiWorkspaceCompany" ${busy || !leads.length ? "disabled" : ""}>
+        <option value="">Choose a company</option>${leads.map(lead => `<option value="${escapeHtml(String(lead.id))}" ${String(lead.id) === selectedCompany ? "selected" : ""}>${escapeHtml(lead.company_name || "Unnamed company")}</option>`).join("")}
+      </select>
+      <div class="crm-ai-action-grid">${companyActions.map(action => `
+        <button class="ghost-button crm-ai-action-card" type="button" data-workspace-company-action="${action}" ${!selectedCompany || busy ? "disabled" : ""}>${escapeHtml(action === "flag" ? "Flag needs attention" : AI_ACTION_LABELS[action])}</button>
+      `).join("")}</div>
+      <p class="crm-ai-workspace-status" aria-live="polite">${busy ? "Loading your visible companies..." : selectedCompany ? "Company actions are ready." : leads.length ? "Choose a company to enable its actions." : "No visible companies are available. Add a lead or check your current assignment."}</p>
+    </section>` : ""}
+    ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
+  `;
+}
+
 const AI_LOADING_MESSAGES = [
   "Reading activity history...",
   "Reviewing the latest PMR...",
@@ -2975,7 +3268,7 @@ function aiFooterMarkup(action) {
     return `${base}<button class="primary-button" type="button" data-ai-copy>${state.aiAction.type === "metrics" ? "Copy summary" : "Copy"}</button>`;
   }
   if (action === "prepare" || action === "prepare_meeting") {
-    return `${base}<button class="primary-button" type="button" data-ai-copy>Copy brief</button><button class="ghost-button" type="button" data-ai-save-activity>Save to activity log</button>`;
+    return `${base}<button class="primary-button" type="button" data-ai-copy>Copy brief</button><button class="ghost-button" type="button" data-ai-open-brief>Open meeting brief</button><button class="ghost-button" type="button" data-ai-save-activity>Save to activity log</button>`;
   }
   if (action === "next" || action === "next_action") {
     return `${base}<button class="primary-button" type="button" data-ai-copy>Copy</button><button class="ghost-button" type="button" data-ai-set-next>Set as next action</button>`;
@@ -2990,7 +3283,7 @@ function renderAiActionDialog() {
   if (!els.aiActionDialog) return;
   const lead = aiLead();
   const action = state.aiAction.action;
-  els.aiActionTitle.textContent = state.aiAction.label || AI_ACTION_LABELS[action] || "AI Action";
+  els.aiActionTitle.innerHTML = pageTitleMarkup(state.aiAction.label || AI_ACTION_LABELS[action] || "AI Action");
   els.aiActionSubtitle.textContent = state.aiAction.scope === "salesperson"
     ? "Generated from your visible portfolio only"
     : lead.company_name ? `${lead.company_name} - grounded in CRM records` : "Generated from CRM records";
@@ -3053,6 +3346,7 @@ async function runLeadAiAction(lead, action) {
       action: result.action || action,
       label: result.label || AI_ACTION_LABELS[action] || "AI Action",
       output: result.output || "",
+      generatedAt: new Date().toISOString(),
       loading: false,
       error: "",
       provider: result.provider || "",
@@ -3076,8 +3370,8 @@ async function runSalespersonAiAction(action, { showDialog = true } = {}) {
   }
   if (state.dailyAiLoading || Date.now() < state.aiCooldownUntil) return;
   state.dailyAiLoading = true;
-  state.aiAction = { scope: "salesperson", leadId: "", action, label: SALESPERSON_ACTION_LABELS[action] || "Daily AI", output: "", loading: true, error: "", provider: "", type: "markdown", metrics: null, insight: "" };
   if (showDialog) {
+    state.aiAction = { scope: "salesperson", leadId: "", action, label: SALESPERSON_ACTION_LABELS[action] || "Daily AI", output: "", loading: true, error: "", provider: "", type: "markdown", metrics: null, insight: "" };
     renderAiActionDialog();
     els.aiActionDialog?.showModal();
     startAiLoadingTicker();
@@ -3087,7 +3381,7 @@ async function runSalespersonAiAction(action, { showDialog = true } = {}) {
       method: "POST",
       body: JSON.stringify({ action })
     });
-    state.aiAction = {
+    const actionResult = {
       scope: "salesperson",
       leadId: "",
       action: result.action || action,
@@ -3100,15 +3394,21 @@ async function runSalespersonAiAction(action, { showDialog = true } = {}) {
       metrics: result.metrics || null,
       insight: result.insight || ""
     };
+    if (showDialog) state.aiAction = actionResult;
     if (action === "pipeline_health" && result.metrics) state.dailyPipelineSummary = { metrics: result.metrics, insight: result.insight || "" };
-    state.aiCooldownUntil = Date.now() + 3000;
+    if (showDialog) state.aiCooldownUntil = Date.now() + 3000;
   } catch {
-    state.aiAction = { ...state.aiAction, loading: false, error: "Couldn't generate this right now. Please try again.", output: "", metrics: null };
+    if (showDialog) state.aiAction = { ...state.aiAction, loading: false, error: "Couldn't generate this right now. Please try again.", output: "", metrics: null };
   } finally {
     state.dailyAiLoading = false;
-    clearInterval(startAiLoadingTicker.timer);
-    if (showDialog) renderAiActionDialog();
+    if (showDialog) {
+      clearInterval(startAiLoadingTicker.timer);
+      renderAiActionDialog();
+    }
     renderDailyAiPanel();
+    document.querySelectorAll("#aiWorkspaceView [data-workspace-portfolio-action]").forEach(button => {
+      button.disabled = Boolean(state.leadsLoading && !state.leadsLoaded);
+    });
   }
 }
 
@@ -3162,7 +3462,7 @@ function openFlagAttentionModal(lead) {
   if (!lead || !els.flagAttentionDialog) return;
   els.flagAttentionForm.reset();
   els.flagAttentionForm.elements.company_id.value = lead.id;
-  els.flagAttentionTitle.textContent = `Flag ${lead.company_name} for director attention`;
+  els.flagAttentionTitle.innerHTML = pageTitleMarkup(`Flag ${lead.company_name} for director attention`);
   setMessage(els.flagAttentionMessage, "");
   els.flagAttentionDialog.showModal();
 }
@@ -3267,7 +3567,7 @@ function setLeadFormMode(mode = "create") {
   const title = document.querySelector("#leadFormTitle");
   const subtitle = document.querySelector("#leadFormSubtitle");
   if (title) {
-    title.textContent = mode === "edit" ? "Edit Lead" : "Add New Lead";
+    title.innerHTML = pageTitleMarkup(mode === "edit" ? "Edit Lead" : "Add New Lead");
   }
   if (subtitle) {
     subtitle.textContent = mode === "edit"
@@ -4076,7 +4376,9 @@ function renderImportLeadsModal() {
     4: ["Importing Leads", "The server is saving rows in controlled batches."],
     5: ["Import Complete", "Review the result and download any error report if needed."]
   };
-  [els.importLeadsTitle.textContent, els.importLeadsSubtitle.textContent] = titles[importState.step] || titles[1];
+  const [dialogTitle, dialogSubtitle] = titles[importState.step] || titles[1];
+  els.importLeadsTitle.innerHTML = pageTitleMarkup(dialogTitle);
+  els.importLeadsSubtitle.textContent = dialogSubtitle;
 
   if (importState.step === 1) renderImportUploadStep();
   if (importState.step === 2) renderImportMappingStep();
@@ -4989,6 +5291,16 @@ function summaryCardDetailsConfig(type) {
     commonFilters.salesman
   ];
   Object.assign(configurations, {
+    salesmanScheduled: {
+      title: "Call Next",
+      description: "Your scheduled active follow-ups, earliest due date first.",
+      tone: "blue",
+      searchPlaceholder: "Search scheduled company or next action",
+      leads: actionableSalesmanLeads(),
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline" }
+    },
     salesmanMyLeads: {
       title: "My Leads",
       description: "All leads currently assigned to you.",
@@ -5031,44 +5343,54 @@ function summaryCardDetailsConfig(type) {
       fullList: { view: "pipeline", dueTodayOnly: true }
     },
     salesmanStageNew: {
-      title: "New Leads",
-      description: "Your leads currently in the New stage.",
+      title: "Prospect Leads",
+      description: "Your leads currently in the Prospect stage.",
       tone: "green",
-      searchPlaceholder: "Search New-stage leads",
+      searchPlaceholder: "Search Prospect-stage leads",
       leads: salesmanDatasets.stageNew,
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "NEW" }
     },
     salesmanStageContacted: {
-      title: "Contacted Leads",
-      description: "Your leads currently in the Contacted stage.",
+      title: "Outreach Leads",
+      description: "Your leads currently in the Outreach stage.",
       tone: "blue",
-      searchPlaceholder: "Search Contacted-stage leads",
+      searchPlaceholder: "Search Outreach-stage leads",
       leads: salesmanDatasets.stageContacted,
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "CONTACTED" }
     },
     salesmanStageNegotiation: {
-      title: "Negotiation Leads",
-      description: "Your leads currently in the Negotiation stage.",
+      title: "Engaged Leads",
+      description: "Your leads currently in the Engaged stage.",
       tone: "amber",
-      searchPlaceholder: "Search Negotiation-stage leads",
+      searchPlaceholder: "Search Engaged-stage leads",
       leads: salesmanDatasets.stageNegotiation,
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "NEGOTIATION" }
     },
     salesmanStageWon: {
-      title: "Won Leads",
-      description: "Your leads currently in the Won stage.",
+      title: "Active Leads",
+      description: "Your leads currently in the Active stage.",
       tone: "navy",
-      searchPlaceholder: "Search Won-stage leads",
+      searchPlaceholder: "Search Active-stage leads",
       leads: salesmanDatasets.stageWon,
       filters: salesmanFilters,
       columns: salesmanColumns,
       fullList: { view: "pipeline", stageKey: "WON" }
+    },
+    salesmanStageDormant: {
+      title: "Dormant Leads",
+      description: "Previously active leads that have gone quiet.",
+      tone: "navy",
+      searchPlaceholder: "Search Dormant-stage leads",
+      leads: salesmanDatasets.stageDormant,
+      filters: salesmanFilters,
+      columns: salesmanColumns,
+      fullList: { view: "pipeline", stageKey: "DORMANT" }
     },
     salesmanStageLost: {
       title: "Lost Leads",
@@ -5289,7 +5611,7 @@ function renderSummaryCardDetailsModal() {
   const config = summaryCardDetailsConfig(state.summaryCardDetails.type);
   if (!config || !els.summaryCardDetailsShell) return;
   els.summaryCardDetailsShell.className = `summary-card-details-shell tone-${config.tone}`;
-  els.summaryCardDetailsTitle.textContent = `${config.title} Summary (${config.records.length})`;
+  els.summaryCardDetailsTitle.innerHTML = `${pageTitleMarkup(`${config.title} Summary`)} (${config.records.length})`;
   els.summaryCardDetailsDescription.textContent = config.description;
   const overdueCount = config.records.filter(record => record.taskStatus === "Overdue").length;
   els.summaryCardDetailsCount.textContent = state.summaryCardDetails.type === "tasksDue"
@@ -5300,7 +5622,7 @@ function renderSummaryCardDetailsModal() {
 }
 
 function openSummaryCardDetails(type, trigger) {
-  if (currentView !== "dashboard" || !summaryCardDetailsConfig(type)) return;
+  if (!(currentView === "dashboard" || (currentView === "focus" && isSalesmanRole())) || !summaryCardDetailsConfig(type)) return;
   const allowed = isPrivilegedDashboardRole()
     ? ["openPipeline", "activeCustomers", "atRisk", "tasksDue"].includes(type)
     : isSalesmanRole() && type.startsWith("salesman");
@@ -5391,6 +5713,8 @@ function renderMetrics() {
   els.metricHot.textContent = datasets.atRisk.length;
   els.metricDue.textContent = datasets.tasksDue.length;
   if (els.metricDueSub) els.metricDueSub.textContent = `${overdue} overdue`;
+  const dueLabel = document.querySelector("#metricsPanel .metric-due > span");
+  if (dueLabel) dueLabel.textContent = currentView === "pipeline" && isSalesmanRole() ? "Follow-ups due" : "Tasks Due";
   if (els.quickTaskBadge) {
     els.quickTaskBadge.textContent = datasets.tasksDue.length;
     els.quickTaskBadge.classList.toggle("hidden", datasets.tasksDue.length === 0);
@@ -6355,6 +6679,16 @@ function applyPerformanceChartWidth(rows) {
   frame.style.setProperty("--performance-chart-min-width", `${chartMinWidth}px`);
 }
 
+function crmChartColors() {
+  const styles = getComputedStyle(document.documentElement);
+  const token = name => styles.getPropertyValue(`--crm-${name}`).trim();
+  return {
+    navy: token("navy"), surface: token("surface"), divider: token("divider"),
+    text: token("text"), secondary: token("text-secondary"),
+    success: token("health-green"), risk: token("health-red"), warning: token("health-amber")
+  };
+}
+
 function renderPerformanceChart(rows) {
   if (!els.performanceChart) return;
   if (typeof Chart === "undefined") {
@@ -6362,6 +6696,7 @@ function renderPerformanceChart(rows) {
     return;
   }
   if (performanceChartInstance) performanceChartInstance.destroy();
+  const colors = crmChartColors();
   performanceChartInstance = new Chart(els.performanceChart, {
     type: "bar",
     data: {
@@ -6370,8 +6705,8 @@ function renderPerformanceChart(rows) {
         {
           label: "Assigned leads",
           data: rows.map(row => row.totalAssigned),
-          backgroundColor: "#1f6aa5",
-          borderColor: "#06283d",
+          backgroundColor: colors.navy,
+          borderColor: colors.navy,
           borderWidth: 1,
           borderRadius: 2,
           borderSkipped: false,
@@ -6387,14 +6722,14 @@ function renderPerformanceChart(rows) {
       plugins: { legend: { display: false } },
       scales: {
         x: {
-          grid: { color: "#d8e0e8" },
+          grid: { color: colors.divider },
           beginAtZero: true,
-          ticks: { font: { size: 12, weight: "600" }, color: "#475569", precision: 0 },
-          title: { display: true, text: "Assigned leads", color: "#475569", font: { size: 12, weight: "600" } }
+          ticks: { font: { family: "Inter", size: 12, weight: "600" }, color: colors.secondary, precision: 0 },
+          title: { display: true, text: "Assigned leads", color: colors.secondary, font: { family: "Inter", size: 12, weight: "600" } }
         },
         y: {
           grid: { display: false },
-          ticks: { font: { size: 12, weight: "600" }, color: "#172b4d", autoSkip: false }
+          ticks: { font: { family: "Inter", size: 12, weight: "600" }, color: colors.text, autoSkip: false }
         }
       }
     }
@@ -6409,11 +6744,12 @@ function renderSalesmenSummaryChart(rows) {
   const overdue = rows.reduce((sum, row) => sum + row.overdueFollowups, 0);
   const tasksDue = rows.reduce((sum, row) => sum + row.tasksDue, 0);
   const conversionRate = percentOf(converted, totalAssigned);
+  const colors = crmChartColors();
   const metrics = [
-    { label: "Converted leads", value: converted, color: "#6d9f3d" },
-    { label: "Open leads", value: open, color: "#1f6aa5" },
-    { label: "Overdue follow-ups", value: overdue, color: "#de8b20" },
-    { label: "Tasks due", value: tasksDue, color: "#d94a48" }
+    { label: "Converted leads", value: converted, color: colors.success },
+    { label: "Open leads", value: open, color: colors.navy },
+    { label: "Overdue follow-ups", value: overdue, color: colors.risk },
+    { label: "Tasks due", value: tasksDue, color: colors.warning }
   ];
   els.salesmenConversionRate.textContent = `${conversionRate}%`;
   els.salesmenSummaryLegend.innerHTML = metrics.map(metric => `
@@ -6435,7 +6771,7 @@ function renderSalesmenSummaryChart(rows) {
       datasets: [{
         data: metrics.map(metric => metric.value),
         backgroundColor: metrics.map(metric => metric.color),
-        borderColor: "#ffffff",
+        borderColor: colors.surface,
         borderWidth: 2,
         hoverOffset: 3
       }]
@@ -6934,7 +7270,7 @@ function renderPortfolioAnalytics() {
 
 function renderSalesmanDashboard() {
   const salesman = isSalesmanRole() && currentView === "dashboard";
-  const priorityRow = document.querySelector(".salesman-dashboard-priority-row");
+  const priorityRow = els.sharedDashboardTopSlot;
   if (priorityRow && els.overdueBanner && els.metricsShell) {
     if (salesman && els.overdueBanner.parentElement !== priorityRow) {
       priorityRow.prepend(els.overdueBanner);
@@ -6966,14 +7302,17 @@ function renderSalesmanDashboard() {
 function arrangeAdminDashboardLayout() {
   if (!els.dashboardView || !els.metricsShell || !els.overdueBanner) return;
   const isAdminDashboard = currentView === "dashboard" && !isSalesmanRole();
+  els.adminDashboardWorkRow?.classList.toggle("hidden", !isAdminDashboard);
 
   if (isAdminDashboard) {
     els.adminDashboardOverviewSlot?.appendChild(els.metricsShell);
-    [els.overdueBanner, els.marketIntelPanel, els.needsAttentionPanel].forEach(panel => {
+    els.adminDashboardOverviewSlot?.before(els.overdueBanner);
+    [els.marketIntelPanel, els.needsAttentionPanel].forEach(panel => {
       if (panel) els.adminDashboardTriageRow?.appendChild(panel);
     });
-    els.adminDashboardTriageRow?.after(els.actionPlanPanel);
-    els.actionPlanPanel?.after(els.adminTaskPanel, els.lossReasonsPanel, els.adminDashboardBottomRow);
+    els.adminDashboardWorkRow?.prepend(els.actionPlanPanel);
+    els.adminDashboardOverviewSlot?.after(els.adminDashboardWorkRow);
+    els.adminDashboardWorkRow?.after(els.adminTaskPanel, els.lossReasonsPanel, els.adminDashboardBottomRow);
     [els.marketSnapshotPanel, els.dashboardPipelineFunnelPanel].forEach(panel => {
       if (panel) els.adminDashboardAnalyticsRow?.appendChild(panel);
     });
@@ -6981,6 +7320,8 @@ function arrangeAdminDashboardLayout() {
     ADMIN_DASHBOARD_COLLAPSIBLES.forEach(definition => {
       const section = document.getElementById(definition.id);
       if (!section) return;
+      const heading = section.querySelector(".panel-header h2");
+      if (heading) heading.innerHTML = pageTitleMarkup(heading.textContent);
       section.classList.add("collapsible-enabled");
       section.querySelector(".panel-collapse-toggle")?.classList.remove("hidden");
       updateDashboardCollapsibleButton(section);
@@ -6999,6 +7340,9 @@ function arrangeAdminDashboardLayout() {
     els.sharedDashboardTopSlot?.insertBefore(els.overdueBanner, els.sharedDashboardTopSlot.firstChild);
   }
 
+  if (els.actionPlanPanel?.parentElement === els.adminDashboardWorkRow) {
+    els.adminDashboardWorkRow.before(els.actionPlanPanel);
+  }
   const dashboardAnchor = els.actionPlanPanel || els.dashboardView.firstElementChild;
   [
     els.marketIntelPanel,
@@ -7072,6 +7416,7 @@ function salesmanDashboardSummaryDatasets() {
     stageContacted: byStage("CONTACTED"),
     stageNegotiation: byStage("NEGOTIATION"),
     stageWon: byStage("WON"),
+    stageDormant: byStage("DORMANT"),
     stageLost: byStage("LOST")
   };
 }
@@ -7120,6 +7465,7 @@ function renderSalesmanSimplifiedDashboard() {
     CONTACTED: datasets.stageContacted.length,
     NEGOTIATION: datasets.stageNegotiation.length,
     WON: datasets.stageWon.length,
+    DORMANT: datasets.stageDormant.length,
     LOST: datasets.stageLost.length
   };
 
@@ -7139,7 +7485,7 @@ function renderSalesmanSimplifiedDashboard() {
         <span class="salesman-summary-card-copy">
           <span class="salesman-summary-card-label">${escapeHtml(card.label)}</span>
           <strong>${escapeHtml(String(card.value))}</strong>
-          <small>${escapeHtml(card.meta)}</small>
+          <small class="crm-visually-hidden-mobile">${escapeHtml(card.meta)}</small>
           <span class="salesman-summary-card-action">${escapeHtml(card.action)} <span aria-hidden="true">&rarr;</span></span>
         </span>
         <span class="salesman-summary-card-chevron" aria-hidden="true">&rsaquo;</span>
@@ -7190,7 +7536,7 @@ function renderSalesmanSimplifiedDashboard() {
       return `
         <button class="salesman-simplified-queue-item" type="button" data-salesman-queue-open="${escapeHtml(lead.id)}">
           <div>
-            <strong>${escapeHtml(lead.company_name || "Unnamed lead")}</strong>
+            <strong>${escapeHtml(lead.company_name || "Unnamed lead")}<span class="salesman-queue-icon" aria-hidden="true"></span></strong>
             <p>${escapeHtml(lead.next_action || "Next step")} - ${escapeHtml(lead.activity_purpose || "Follow-up")}</p>
           </div>
           <span class="chip ${leadHasOverdueNextAction(lead) ? "hot" : ""}">${escapeHtml(overdueLabel)}</span>
@@ -7250,10 +7596,11 @@ function renderSalesmanSimplifiedDashboard() {
   if (els.salesmanSimplifiedPipeline) {
     const summaryLoading = state.leadsLoading && !state.leadsLoaded;
     els.salesmanSimplifiedPipeline.innerHTML = [
-      { label: "New", value: pipelineCounts.NEW, type: "salesmanStageNew", icon: "stageNew", tone: "new" },
-      { label: "Contacted", value: pipelineCounts.CONTACTED, type: "salesmanStageContacted", icon: "stageContacted", tone: "contacted" },
-      { label: "Negotiation", value: pipelineCounts.NEGOTIATION, type: "salesmanStageNegotiation", icon: "stageNegotiation", tone: "negotiation" },
-      { label: "Won", value: pipelineCounts.WON, type: "salesmanStageWon", icon: "stageWon", tone: "won" },
+      { label: stageDisplayLabel("NEW"), value: pipelineCounts.NEW, type: "salesmanStageNew", icon: "stageNew", tone: "new" },
+      { label: stageDisplayLabel("CONTACTED"), value: pipelineCounts.CONTACTED, type: "salesmanStageContacted", icon: "stageContacted", tone: "contacted" },
+      { label: stageDisplayLabel("NEGOTIATION"), value: pipelineCounts.NEGOTIATION, type: "salesmanStageNegotiation", icon: "stageNegotiation", tone: "negotiation" },
+      { label: stageDisplayLabel("WON"), value: pipelineCounts.WON, type: "salesmanStageWon", icon: "stageWon", tone: "won" },
+      { label: stageDisplayLabel("DORMANT"), value: pipelineCounts.DORMANT, type: "salesmanStageDormant", icon: "dueToday", tone: "dormant" },
       { label: "Lost", value: pipelineCounts.LOST, type: "salesmanStageLost", icon: "stageLost", tone: "lost" }
     ].map(card => `
       <button class="salesman-simplified-stage tone-${escapeHtml(card.tone)} ${summaryLoading ? "is-loading" : ""}" type="button" data-summary-card="${escapeHtml(card.type)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" aria-label="${escapeHtml(`${card.label} leads, ${card.value}. View summary`)}" title="${escapeHtml(`View ${card.label} leads breakdown`)}" aria-busy="${summaryLoading}" ${summaryLoading ? "disabled" : ""}>
@@ -7402,8 +7749,8 @@ function salesmanPriorityActions() {
       key: "loss-reasons",
       tone: "danger",
       kicker: "3-day deadline",
-      title: `${lossReasonPrompts.length} lost lead${lossReasonPrompts.length === 1 ? "" : "s"} still need a reason`,
-      bodyEntity: lossReasonPrompts[0].company_name || "A lost lead",
+      title: `${lossReasonPrompts.length} blocked lead${lossReasonPrompts.length === 1 ? "" : "s"} still need a reason`,
+      bodyEntity: lossReasonPrompts[0].company_name || "A blocked lead",
       bodySuffix: "has crossed the reason-capture deadline.",
       detail: "Capture the decision context while the customer conversation is still fresh.",
       cta: "Capture reason"
@@ -7778,7 +8125,7 @@ function renderConfigAgentPanel() {
     const examples = state.configAgent.examples?.length
       ? state.configAgent.examples
       : state.integrations.configuration_agent_examples || [];
-    els.configAgentExamples.innerHTML = examples.map(prompt => `
+    els.configAgentExamples.innerHTML = examples.filter(prompt => !/whats\s*app/i.test(String(prompt))).map(prompt => `
       <button class="agent-chip" type="button" data-config-agent-example="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>
     `).join("");
   }
@@ -7924,7 +8271,7 @@ function renderDashboardView() {
     const count = state.leads.filter(lead => lead.stage === stage).length;
     return `
       <article class="status-card">
-        <span class="meta-label">${escapeHtml(stage)}</span>
+        <span class="meta-label">${escapeHtml(stageDisplayLabel(stage))}</span>
         <strong>${count}</strong>
       </article>
     `;
@@ -7957,7 +8304,7 @@ function renderMarketIntelPanel() {
   if (!visible) return;
   els.refreshMarketIntel?.classList.toggle("hidden", !admin);
   if (els.marketIntelKicker) els.marketIntelKicker.textContent = admin ? "Intel Overview" : "Market Intel";
-  if (els.marketIntelTitle) els.marketIntelTitle.textContent = admin ? "Last 7 days across territories" : "Signals matched to your prospects";
+  if (els.marketIntelTitle) els.marketIntelTitle.innerHTML = pageTitleMarkup(admin ? "Last 7 days across territories" : "Signals matched to your prospects");
   const items = (state.marketIntel.items || []).slice(0, admin ? 8 : 5);
   if (state.marketIntel.disabled) {
     els.marketIntelFeed.innerHTML = `<p class="empty-copy">Market intelligence feed is disabled until ZAWYA_API_KEY and feed URL are configured.</p>`;
@@ -8169,14 +8516,14 @@ function pipelineDaysOverdue(lead) {
   return dueDate ? Math.max(0, -daysUntil(dueDate)) : null;
 }
 
-function pipelineFilterOptions(values, selected, allLabel) {
+function pipelineFilterOptions(values, selected, allLabel, displayLabel = value => value) {
   const normalizedValues = [...new Set(values
     .map(value => String(value || "").trim())
     .filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
   return [
     `<option value="all" ${selected === "all" ? "selected" : ""}>${escapeHtml(allLabel)}</option>`,
-    ...normalizedValues.map(value => `<option value="${escapeHtml(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(value)}</option>`)
+    ...normalizedValues.map(value => `<option value="${escapeHtml(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(displayLabel(value))}</option>`)
   ].join("");
 }
 
@@ -8231,7 +8578,7 @@ function pipelineSortValue(lead, key) {
     daysOverdue: pipelineDaysOverdue(lead) ?? -1,
     dueDate: String(lead.next_action_date || "").slice(0, 10),
     salesman: lead.assigned_salesman || "",
-    stage: stageDisplayLabel(lead.stage),
+    stage: KANBAN_STAGE_BY_KEY[kanbanStageForLead(lead)]?.label || "New",
     priority: presentation.priorityLabel || "",
     territory: lead.territory || inferEmirate(lead) || ""
   };
@@ -8291,20 +8638,23 @@ function pipelineSortableHeader(key, label) {
 
 function pipelineLeadRowMarkup(lead) {
   const { plan, dueDate, overdueTone, overdueLabel, priorityLabel, priorityTone, stageKey, companyMeta } = leadTablePresentation(lead);
+  const contact = primaryLeadContact(lead);
   return `
     <tr class="lead-table-row ${lead.id === state.selectedId ? "active" : ""}" data-lead-id="${escapeHtml(lead.id)}" tabindex="0" role="link" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">
       <td class="lead-table-company">
         <strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong>
         ${companyMeta ? `<small>${escapeHtml(companyMeta)}</small>` : ""}
       </td>
-      <td class="lead-table-next-action">${escapeHtml(plan.action)}</td>
-      <td><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(overdueLabel)}</span></td>
-      <td>${escapeHtml(dueDate ? formatPlanDate(dueDate) : "Not set")}</td>
-      <td>${escapeHtml(lead.assigned_salesman || "Unassigned")}</td>
-      <td><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
-      <td><span class="lead-table-badge lead-table-priority-${priorityTone}">${escapeHtml(priorityLabel)}</span></td>
-      <td class="lead-table-territory">${escapeHtml(lead.territory || inferEmirate(lead) || "Not set")}</td>
+      <td class="lead-table-next-action" data-label="Next action">${escapeHtml(plan.action)}</td>
+      <td data-label="Days overdue"><span class="lead-table-badge lead-table-overdue-${overdueTone}">${escapeHtml(overdueLabel)}</span>${isSalesmanRole() ? `<small class="salesman-pipeline-due">${escapeHtml(dueDate ? `Due ${formatPlanDate(dueDate)}` : "No due date")}</small>` : ""}</td>
+      <td data-label="Due date">${escapeHtml(dueDate ? formatPlanDate(dueDate) : "Not set")}</td>
+      <td data-label="Salesman">${escapeHtml(lead.assigned_salesman || "Unassigned")}</td>
+      <td data-label="Stage"><span class="lead-table-badge lead-table-stage-${escapeHtml(stageKey)}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td>
+      <td data-label="Priority"><span class="lead-table-badge lead-table-priority-${priorityTone}">${escapeHtml(priorityLabel)}</span></td>
+      <td class="lead-table-territory" data-label="Territory">${escapeHtml(lead.territory || inferEmirate(lead) || "Not set")}</td>
       <td class="pipeline-row-actions">
+        ${isSalesmanRole() ? `<button class="primary-button salesman-pipeline-log" type="button" data-pipeline-log="${escapeHtml(lead.id)}" style="--crm-button-icon:var(--crm-icon-${/email/i.test(plan.action) ? "mail" : "phone"})">${/email/i.test(plan.action) ? "Log email" : /visit/i.test(plan.action) ? "Log visit" : "Log call"}</button>` : ""}
+        ${contact.phone ? `<a class="pipeline-mobile-call" href="tel:${escapeHtml(contact.phone)}" aria-label="Call ${escapeHtml(contact.name || lead.company_name || "contact")}">Call</a>` : ""}
         <button class="pipeline-row-action" type="button" data-pipeline-open="${escapeHtml(lead.id)}" aria-label="Open ${escapeHtml(lead.company_name || "lead")}">Open</button>
       </td>
     </tr>
@@ -8343,7 +8693,7 @@ function pipelineFilterHeaderMarkup() {
       </th>
       <th>${salesmanControl}</th>
       <th>
-        <label><span class="sr-only">Filter by stage</span><select class="${state.filters.stage !== "all" ? "is-active" : ""}" data-pipeline-filter="stage">${pipelineFilterOptions(stages, state.filters.stage, "All stages")}</select></label>
+        <label><span class="sr-only">Filter by stage</span><select class="${state.filters.stage !== "all" ? "is-active" : ""}" data-pipeline-filter="stage">${pipelineFilterOptions(stages, state.filters.stage, "All stages", value => STAGE_DISPLAY_LABELS[normalizeStageKey(value, "")] || value)}</select></label>
       </th>
       <th>
         <label><span class="sr-only">Filter by priority</span><select class="${state.filters.priority !== "all" ? "is-active" : ""}" data-pipeline-filter="priority">${pipelineFilterOptions(priorities, state.filters.priority, "All priorities")}</select></label>
@@ -8356,10 +8706,64 @@ function pipelineFilterHeaderMarkup() {
   `;
 }
 
+let salesmanPipelineColumnsExpanded = false;
+let dismissedPipelineAlertFor = "";
+
+function salesmanPipelineFiltersMarkup() {
+  // Reuse the existing controls and values through a structured DOM fragment.
+  const template = document.createElement("template");
+  template.innerHTML = `<table><thead>${pipelineFilterHeaderMarkup()}</thead></table>`;
+  const fields = [...template.content.querySelectorAll(".pipeline-filter-row > th")];
+  const bar = document.createElement("div");
+  bar.className = "salesman-pipeline-filters";
+  for (const index of [0, 1, 5, 6, 7]) {
+    const group = document.createElement("div");
+    group.className = "salesman-pipeline-filter";
+    group.append(...fields[index].childNodes);
+    bar.append(group);
+  }
+  bar.querySelector('[data-pipeline-filter="stage"] option[value="all"]').textContent = "All statuses";
+  bar.querySelector('[data-pipeline-filter="search"]').placeholder = "Filter company or contact";
+  const more = document.createElement("details");
+  more.className = "salesman-pipeline-more";
+  more.open = state.pipelineTable.overdue !== "all" || Boolean(state.pipelineTable.dueDate) || salesmanPipelineColumnsExpanded;
+  more.innerHTML = `<summary>More filters</summary><div class="salesman-pipeline-more-fields"></div>`;
+  const extra = more.querySelector("div");
+  for (const [index, label] of [[2, "Days overdue"], [3, "Due date"]]) {
+    const field = fields[index].querySelector("label");
+    field.querySelector("span").className = "";
+    field.querySelector("span").textContent = label;
+    extra.append(field);
+  }
+  const columns = document.createElement("label");
+  columns.innerHTML = `<input type="checkbox" data-pipeline-columns ${salesmanPipelineColumnsExpanded ? "checked" : ""}> Show all columns`;
+  extra.append(columns);
+  bar.append(more);
+  const actions = document.createElement("div");
+  actions.className = "salesman-pipeline-filter-actions";
+  bar.append(actions);
+  return bar.outerHTML;
+}
+
+function renderSalesmanPipelineAlert() {
+  const banner = document.querySelector("#salesmanPipelineAlert");
+  if (!banner) return;
+  const owner = String(state.currentUser?.id || state.currentUser?.email || "");
+  const visible = currentView === "pipeline" && isSalesmanRole() && state.leadsLoaded && !state.leadsError && dismissedPipelineAlertFor !== owner;
+  const ids = new Set(salesmanDashboardLeads().map(lead => String(lead.id)));
+  const items = visible ? overdueItems().filter(item => ids.has(String(item.lead_id))) : [];
+  banner.classList.toggle("hidden", !items.length);
+  if (!items.length) { banner.innerHTML = ""; return; }
+  banner.innerHTML = `<p><strong>${items.length} overdue follow-ups across ${new Set(items.map(item => item.lead_id)).size} leads.</strong> Oldest: ${escapeHtml(items[0].company_name)}, ${escapeHtml(daysOverdueLabel(items[0].due_date))}.</p><button class="ghost-button" type="button" data-salesman-pipeline-overdue>Show overdue only</button><button class="ghost-button" type="button" data-salesman-pipeline-dismiss aria-label="Dismiss pipeline overdue notice">Close</button>`;
+  banner.querySelector('[data-salesman-pipeline-overdue]').addEventListener('click', openOverduePipeline);
+  banner.querySelector('[data-salesman-pipeline-dismiss]').addEventListener('click', () => { dismissedPipelineAlertFor = owner; renderSalesmanPipelineAlert(); });
+}
+
 function pipelineTableMarkup(leads) {
   const rows = leads.map(pipelineLeadRowMarkup).join("");
   return `
-    <table class="live-lead-table pipeline-lead-table">
+    ${isSalesmanRole() ? salesmanPipelineFiltersMarkup() : ""}
+    <table class="live-lead-table pipeline-lead-table" role="table" aria-label="Live leads">
       <thead>
         <tr class="pipeline-column-row">
           ${pipelineSortableHeader("company", "Company / Contact")}
@@ -8367,12 +8771,12 @@ function pipelineTableMarkup(leads) {
           ${pipelineSortableHeader("daysOverdue", "Days Overdue")}
           ${pipelineSortableHeader("dueDate", "Due Date")}
           ${pipelineSortableHeader("salesman", "Salesman")}
-          ${pipelineSortableHeader("stage", "Stage")}
+          ${pipelineSortableHeader("stage", isSalesmanRole() ? "Status" : "Stage")}
           ${pipelineSortableHeader("priority", "Priority")}
           ${pipelineSortableHeader("territory", "Territory")}
           <th scope="col">Actions</th>
         </tr>
-        ${pipelineFilterHeaderMarkup()}
+        ${isSalesmanRole() ? "" : pipelineFilterHeaderMarkup()}
       </thead>
       <tbody>${rows || `
         <tr class="lead-table-empty">
@@ -8453,6 +8857,9 @@ function restorePipelineFilterFocus(filter, selectionStart, selectionEnd) {
 
 function renderLeadList({ focusFilter = "", selectionStart, selectionEnd } = {}) {
   if (!els.leadList) return;
+  renderSalesmanPipelineAlert();
+  const toolbar = document.querySelector("#pipelineListPanel .pipeline-list-actions");
+  if (toolbar) toolbar.append(...[els.clearPipelineFilters, els.refreshPipelineLeads].filter(Boolean));
   const canExportPipeline = state.currentUser?.role === "admin";
   const activeFilters = pipelineFilterActiveCount();
   els.pipelineReportTools?.classList.toggle("hidden", !canExportPipeline);
@@ -8462,7 +8869,7 @@ function renderLeadList({ focusFilter = "", selectionStart, selectionEnd } = {})
   if (els.pipelineReportDateTo && document.activeElement !== els.pipelineReportDateTo) {
     els.pipelineReportDateTo.value = state.pipelineTable.dateTo;
   }
-  els.clearPipelineFilters?.classList.toggle("hidden", activeFilters === 0);
+  els.clearPipelineFilters?.classList.toggle("hidden", activeFilters === 0 && !isSalesmanRole());
   els.leadList.setAttribute("aria-busy", String(state.leadsLoading));
 
   if (state.leadsLoading && !state.leadsLoaded) {
@@ -8501,6 +8908,11 @@ function renderLeadList({ focusFilter = "", selectionStart, selectionEnd } = {})
     els.pipelineListStatus.textContent = `${filtered.length} lead${filtered.length === 1 ? "" : "s"} shown${activeFilters ? ` with ${activeFilters} active filter${activeFilters === 1 ? "" : "s"}` : ""}.`;
   }
   els.leadList.innerHTML = pipelineTableMarkup(leads);
+  if (isSalesmanRole()) {
+    els.leadList.classList.toggle("salesman-pipeline-all-columns", salesmanPipelineColumnsExpanded);
+    const actions = els.leadList.querySelector(".salesman-pipeline-filter-actions");
+    if (actions) actions.append(...[els.clearPipelineFilters, els.refreshPipelineLeads].filter(Boolean));
+  }
   if (els.pipelinePagination) {
     els.pipelinePagination.innerHTML = pipelinePaginationMarkup(filtered.length, state.pipelineTable.page, state.pipelineTable.pageSize);
   }
@@ -8526,6 +8938,14 @@ function updatePipelineFilter(filter, value) {
 
 function bindPipelineTableEvents() {
   if (!els.leadList) return;
+  els.leadList.querySelector('[data-pipeline-columns]')?.addEventListener('change', event => {
+    salesmanPipelineColumnsExpanded = event.currentTarget.checked;
+    els.leadList.classList.toggle('salesman-pipeline-all-columns', salesmanPipelineColumnsExpanded);
+  });
+  els.leadList.querySelectorAll('[data-pipeline-log]').forEach(button => button.addEventListener('click', () => {
+    const lead = salesmanDashboardLeads().find(item => String(item.id) === button.dataset.pipelineLog);
+    if (lead && isSalesmanRole()) openActivityModal(lead.id, button);
+  }));
   els.leadList.querySelectorAll("[data-pipeline-filter]").forEach(control => {
     const eventName = control.matches('input[type="search"]') ? "input" : "change";
     control.addEventListener(eventName, event => {
@@ -8587,6 +9007,7 @@ function firstName(value) {
 
 function stageDisplayLabel(stage) {
   const key = kanbanStageForLead({ stage });
+  if (STAGE_DISPLAY_LABELS[key]) return STAGE_DISPLAY_LABELS[key];
   return KANBAN_STAGE_BY_KEY[key]?.label || "New";
 }
 
@@ -8636,6 +9057,13 @@ function weekRangeLabel(anchorDate = state.activityWeekAnchor) {
   return `${start} - ${end}`;
 }
 
+function pageTitleMarkup(value) {
+  const title = String(value ?? "");
+  const parts = /^(.*?)(\S+)(\s*)$/s.exec(title);
+  if (!parts) return escapeHtml(title);
+  return `${escapeHtml(parts[1])}<em class="crm-title-accent">${escapeHtml(parts[2])}</em>${escapeHtml(parts[3])}`;
+}
+
 function renderTopbar() {
   if (!els.topbarPageTitle || !els.topbarContext || !state.currentUser) return;
   const currentWeekItems = activityWeeklyItems(state.activities || [], state.activityWeekAnchor);
@@ -8645,10 +9073,10 @@ function renderTopbar() {
     : (state.currentUser.territory || "UAE");
   const config = {
     dashboard: {
-      title: "Dashboard",
+      title: state.currentUser.role === "admin" ? "Dashboard" : "What do I do next?",
       context: state.currentUser.role === "admin"
         ? `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} across ${territory}`
-        : "Start with the urgent queue and open coaching tools only when needed."
+        : "Start with the urgent queue, then open the wider CRM."
     },
     pipeline: {
       title: "Pipeline",
@@ -8672,12 +9100,27 @@ function renderTopbar() {
       title: selectedLead?.company_name || "Lead Detail",
       context: [selectedLead?.assigned_salesman, stageDisplayLabel(selectedLead?.stage), selectedLead?.territory].filter(Boolean).join(" · ") || "AI summary, CRM timeline, reminders, and PMRs"
     }
-  }[currentView] || {
+  }[currentView] || aiWorkspacePage(currentView) || {
     title: "CRM",
     context: `${state.leads.length} active records`
   };
-  els.topbarPageTitle.textContent = config.title;
+  els.topbarPageTitle.innerHTML = pageTitleMarkup(config.title);
   els.topbarContext.textContent = config.context;
+  if (els.smartSearchInput) {
+    els.smartSearchInput.dataset.originalPlaceholder ||= els.smartSearchInput.placeholder;
+    els.smartSearchInput.placeholder = currentView === "pipeline" && isSalesmanRole()
+      ? "Search companies, tasks, notes" : els.smartSearchInput.dataset.originalPlaceholder;
+  }
+  if (currentView === "pipeline" && isSalesmanRole()) {
+    els.topbarPageTitle.innerHTML = 'My <em class="crm-title-accent">pipeline</em>';
+    els.topbarContext.textContent = state.leadsLoading && !state.leadsLoaded ? "Loading your leads..." : `${salesmanDashboardLeads().length} leads in your pipeline`;
+  }
+  if (currentView === "focus" && isSalesmanRole()) {
+    const datasets = salesmanDashboardSummaryDatasets();
+    const count = datasets.overdueCalls.length + datasets.dueToday.length;
+    els.topbarPageTitle.textContent = "Today";
+    els.topbarContext.textContent = state.leadsLoading && !state.leadsLoaded ? "Loading your follow-ups..." : state.leadsError && !state.leadsLoaded ? "Follow-ups unavailable. Retry loading." : `${count} follow-up${count === 1 ? "" : "s"} need you. Start at the top.`;
+  }
 }
 
 function leadInitial(lead) {
@@ -8685,6 +9128,7 @@ function leadInitial(lead) {
 }
 
 function drawerStageLabel(stage) {
+  if (STAGE_DISPLAY_LABELS[normalizeStageKey(stage)]) return STAGE_DISPLAY_LABELS[normalizeStageKey(stage)];
   const match = KANBAN_STAGE_BY_KEY[normalizeStageKey(stage)];
   return match?.label || stage || "New";
 }
@@ -8750,7 +9194,7 @@ function promptHandoff(existingLead, newSalesmanName) {
   const oldTerritory = existingLead.territory || "Not set";
   const newTerritory = newProfile?.territory || oldTerritory;
   els.handoffForm.reset();
-  if (els.handoffTitle) els.handoffTitle.textContent = `Reassign ${existingLead.company_name || "lead"}`;
+  if (els.handoffTitle) els.handoffTitle.innerHTML = pageTitleMarkup(`Reassign ${existingLead.company_name || "lead"}`);
   if (els.handoffSubtitle) els.handoffSubtitle.textContent = "Add a handoff note so the ownership change is auditable.";
   if (els.handoffSummary) {
     els.handoffSummary.innerHTML = `
@@ -9131,6 +9575,106 @@ function renderLossDetails(lead) {
   `;
 }
 
+function companyAiActionsMarkup(lead, { mobile = false } = {}) {
+  const actions = [
+    ["prepare", "Prepare Me For This Meeting"],
+    ["next", "What Should I Do Next?"],
+    ["email", "Draft Follow-Up Email"],
+    ["summary", "Summarise Relationship"],
+    ["flag", "Flag Needs Attention"]
+  ];
+  const hints = {
+      prepare: "History, latest PMR, intel and talking points",
+      next: "Next action and reasoning",
+      email: "A draft for your review",
+      summary: "A concise relationship recap",
+      flag: "Review before notifying the director"
+  };
+  if (mobile) {
+    return `<section class="company-ai-actions record-mobile-ai" aria-label="One-tap AI actions">
+      <h3>One-tap <em>AI actions</em></h3>
+      <div class="record-mobile-ai-grid">${actions.map(([action, label]) => `<button class="record-ai-card${action === "prepare" ? " record-ai-card-primary" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
+    </section>`;
+  }
+  return `<section class="drawer-section company-ai-actions" aria-label="Company AI actions">
+    <h3>One-tap <em class="crm-title-accent">AI actions</em></h3>
+    <div class="drawer-primary-actions">${actions.map(([action, label]) => `<button class="ghost-button${action === "prepare" ? " record-ai-card-primary" : ""}${action === "flag" ? " danger" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
+  </section>`;
+}
+
+function desktopLeadOverviewMarkup(lead) {
+  const id = escapeHtml(lead.id);
+  const activities = [...(lead.activities || [])].sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))).slice(0, 3);
+  const reminders = remindersForLead(lead).slice(0, 3);
+  const overdueDays = lead.next_action_date ? Math.max(0, -daysUntil(lead.next_action_date)) : 0;
+  const contactRow = (label, value, href = "") => `<div class="record-contact-row"><div><span>${escapeHtml(label)}</span>${value ? href ? `<a href="${escapeHtml(href)}"${label === "Website" || label === "Location" ? ' target="_blank" rel="noopener"' : ""}>${escapeHtml(value)}</a>` : `<strong>${escapeHtml(value)}</strong>` : '<em>Not added yet</em>'}</div>${label === "Phone" && value ? `<button class="record-copy-phone ghost-button" type="button" data-record-copy-phone="${id}" aria-label="Copy phone number" title="Copy phone number"></button>` : !value ? `<button class="record-text-action" type="button" data-drawer-edit-lead="${id}">Add<span class="sr-only"> ${escapeHtml(label)}</span></button>` : ""}</div>`;
+  return `<div class="record-desktop-overview">
+    <div class="record-main-column">
+      <section class="drawer-section record-next-step">
+        <div class="record-next-content"><div><span class="record-eyebrow">Next step</span><h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3><p>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong> ` : ""}${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p></div>
+        <div class="record-action-row"><button class="ghost-button" type="button" data-drawer-edit-lead="${id}" title="Edit the lead's next action and due date">Reschedule</button><button class="primary-button" type="button" data-drawer-log-activity="${id}">Log outcome</button></div></div>
+      </section>
+      <section class="drawer-section record-recent-activity"><div class="drawer-tab-heading"><h3>Activity</h3><button class="ghost-button" type="button" data-drawer-log-activity="${id}">Add activity</button></div>
+        <div>${activities.map(activity => `<article class="record-activity-row"><span class="record-activity-icon ${escapeHtml(activityTypeClass(activity.type))}" aria-hidden="true"></span><div><strong>${escapeHtml(activity.type || "Activity")}</strong><p>${escapeHtml(activity.text || activity.note || "No note added.")}</p></div><time>${escapeHtml(activity.at ? formatDisplayDate(activity.at) : "Date not recorded")}</time></article>`).join("") || '<p class="empty-copy">No activity recorded yet.</p>'}</div>
+        <button class="record-text-action" type="button" data-drawer-tab="activities">View all activity</button>
+      </section>
+      <div class="record-overview-notes">${renderDrawerNotes(lead)}</div>
+    </div>
+    <div class="record-side-column">
+      <section class="drawer-section record-contact"><h3>Contact</h3>
+        ${primaryContactMarkup(lead)}
+        ${contactRow("Phone", lead.phone, lead.phone ? `tel:${lead.phone}` : "")}
+        ${contactRow("Email", lead.email, lead.email ? `mailto:${lead.email}` : "")}
+        ${contactRow("Website", lead.website, lead.website)}
+        ${contactRow("Location", [lead.location, lead.country_emirate].filter(Boolean).join(" - ") || (lead.google_maps_url ? "Open map" : ""), lead.google_maps_url)}
+      </section>
+      <section class="drawer-section record-details"><h3>Lead details</h3><dl>
+        ${[["Status", drawerStageLabel(lead.stage)], ["Priority", lead.priority || "Cold"], ["Tier", lead.tier ? `Tier ${lead.tier}` : ""], ["Territory", lead.territory], ["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "No activity yet"], ["Owner", lead.assigned_salesman]].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "Not added")}</dd></div>`).join("")}
+      </dl></section>
+      <section class="drawer-section record-reminders"><div class="drawer-tab-heading"><h3>Reminders</h3><button class="ghost-button" type="button" data-drawer-add-reminder="${id}">Add reminder</button></div>
+        ${reminders.map(reminder => `<div class="record-reminder-row"><strong>${escapeHtml(reminder.activity_required || reminder.text || reminder.reminder_type || "Follow up")}</strong><span>${escapeHtml(reminder.due_date ? formatDisplayDate(reminder.due_date) : "No due date")}</span></div>`).join("") || '<p class="empty-copy">No reminders set.</p>'}
+        ${reminders.length ? '<button class="record-text-action" type="button" data-drawer-tab="reminders">View all reminders</button>' : ""}
+      </section>
+    </div>
+  </div>`;
+}
+
+function primaryContactMarkup(lead) {
+  const contact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ");
+  return contact ? `<p class="record-primary-contact">${escapeHtml(contact)}</p>` : "";
+}
+
+function mobileLeadNextStepMarkup(lead) {
+  const overdueDays = lead.next_action_date ? Math.max(0, -daysUntil(lead.next_action_date)) : 0;
+  const summary = state.selectedId === lead.id ? state.leadAiSummary : null;
+  const guidance = !summary?.loading && !summary?.error ? summaryText(summary?.data?.recommended_next_action) : "";
+  const guidanceLabel = summary?.cached ? "Cached guidance" : summary?.provider === "fallback" ? "CRM guidance" : "AI guidance";
+  return `<section class="drawer-section record-mobile-next" aria-label="Next step">
+    <div class="record-mobile-next-heading"><span>Next step</span>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong>` : ""}</div>
+    <h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3>
+    <div class="record-mobile-guidance" aria-live="polite"><span>${escapeHtml(guidance ? guidanceLabel : "Guidance")}</span><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable."))}</p></div>
+    <div class="record-mobile-next-footer"><span>${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</span><button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Reschedule</button></div>
+  </section>`;
+}
+
+function mobileLeadOverviewExtras(lead) {
+  const signals = [
+    ["Since last activity", lead.last_activity ? daysAgoLabel(lead.last_activity) : "No activity recorded"],
+    ["Activity trend, 60 days", "Not scored"],
+    ["Engagement quality", "Not scored"],
+    ["Time in status", "Not scored"],
+    ["PMR heat scores", "Not scored"]
+  ];
+  return `<div class="record-mobile-overview">
+    ${companyAiActionsMarkup(lead, { mobile: true })}
+    <section class="drawer-section record-mobile-health" aria-label="Relationship health">
+      <div class="record-health-heading"><h3>Relationship <em>health</em></h3><span class="record-health-pending">Pending</span></div>
+      <p class="record-health-disclaimer">New scoring rules await approval.</p>
+      <dl>${signals.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd><strong>${escapeHtml(value)}</strong><span class="record-health-pending">Not rated</span></dd></div>`).join("")}</dl>
+    </section>
+  </div>`;
+}
+
 function renderDrawerOverview(lead) {
   const overdue = lead.next_action_date && lead.next_action_date < today();
   const primaryContact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ");
@@ -9162,7 +9706,10 @@ function renderDrawerOverview(lead) {
   `;
   return `
     ${autoEnrichmentBanner(lead)}
+    ${mobileLeadOverviewExtras(lead)}
+    ${desktopLeadOverviewMarkup(lead)}
     ${overviewSnapshot}
+    ${companyAiActionsMarkup(lead)}
     <section class="drawer-section drawer-overview-panel drawer-overview-panel--contact">
       <div class="drawer-tab-heading">
         <div>
@@ -9502,6 +10049,8 @@ function renderDrawerIntel(lead) {
 }
 
 function renderLeadDrawer() {
+  const assistantLauncher = document.querySelector("#aiAssistantLauncher");
+  if (assistantLauncher && els.leadDetailPageContent?.contains(assistantLauncher)) document.body.appendChild(assistantLauncher);
   const lead = state.leads.find(item => item.id === state.selectedId);
   const admin = ["admin", "manager"].includes(String(state.currentUser?.role || "").toLowerCase());
   const tabs = ["overview", "activities", "pmr", "reminders", "intel", "notes"];
@@ -9550,6 +10099,9 @@ function renderLeadDrawer() {
   els.leadDetailPageContent.innerHTML = `
     <div class="lead-detail-page-toolbar">
       <button class="ghost-button lead-detail-back-button" type="button" id="leadDetailBack">Back to ${escapeHtml(state.lastNonLeadView === "activity" ? "Activity" : state.lastNonLeadView === "salesmen" ? "Salesmen" : state.lastNonLeadView === "dashboard" ? "Dashboard" : "Pipeline")}</button>
+      <span class="record-breadcrumb-company" aria-hidden="true">/ ${escapeHtml(lead.company_name || "Lead")}</span>
+      <div class="record-assistant-host"></div>
+      <button class="ghost-button record-mobile-edit" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}" aria-label="Edit lead" title="Edit lead"></button>
     </div>
     <header class="drawer-header lead-page-header">
       <div class="drawer-title-row">
@@ -9564,16 +10116,55 @@ function renderLeadDrawer() {
         <span class="chip ${priorityClass(lead.priority)}">${escapeHtml(lead.priority || "Cold")}</span>
         <span class="chip">${escapeHtml(formatAED(lead.estimated_value))}</span>
       </div>
+      <div class="record-header-actions">
+        ${lead.phone ? `<a class="primary-button record-call" href="tel:${escapeHtml(lead.phone)}">Call</a>` : ""}
+        ${lead.email ? `<a class="ghost-button record-email" href="mailto:${escapeHtml(lead.email)}">Email</a>` : `<button class="ghost-button record-email" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Add email</button>`}
+        <button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit</button>
+      </div>
     </header>
-    <nav class="drawer-tabs lead-detail-tabs">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}">${tabLabels[tab]}</button>`).join("")}</nav>
+    <nav class="drawer-tabs lead-detail-tabs" aria-label="Lead details sections">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}" aria-current="${state.leadDrawerTab === tab ? "page" : "false"}">${tabLabels[tab]}</button>`).join("")}</nav>
+    ${mobileLeadNextStepMarkup(lead)}
     <div class="drawer-body lead-detail-page-body">${body}</div>
+    <div class="record-mobile-actions" aria-label="Lead actions"><button class="primary-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log outcome</button><button class="ghost-button" type="button" data-record-note>Note</button></div>
   `;
+  if (assistantLauncher) els.leadDetailPageContent.querySelector(".record-assistant-host")?.appendChild(assistantLauncher);
   renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });
   bindLeadDrawerEvents();
   hydrateLeadIntelligencePdfPreviews();
 }
 
 function bindLeadDrawerEvents() {
+  els.leadDetailPageContent?.querySelector("[data-record-note]")?.addEventListener("click", () => {
+    state.leadDrawerTab = "notes";
+    syncBrowserRoute({ replace: true });
+    render();
+    document.querySelector("[data-drawer-edit-notes]")?.click();
+    document.querySelector("#drawerNotesForm textarea")?.focus();
+  });
+  els.leadDetailPageContent?.querySelectorAll("[data-record-copy-phone]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const lead = state.leads.find(item => item.id === button.dataset.recordCopyPhone);
+      if (!lead?.phone) return;
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable. Select the phone number to copy it.");
+        await navigator.clipboard.writeText(lead.phone);
+        setToast("Phone number copied.", "success");
+      } catch (error) {
+        setToast(error.message || "Could not copy the phone number.", "error");
+      }
+    });
+  });
+  els.leadDetailPageContent?.querySelectorAll("[data-company-ai-action]").forEach(button => {
+    button.addEventListener("click", () => {
+      const lead = state.leads.find(item => item.id === button.dataset.companyAiLead);
+      if (!lead) return;
+      if (button.dataset.companyAiAction === "flag") {
+        openFlagAttentionModal(lead);
+        return;
+      }
+      runLeadAiAction(lead, button.dataset.companyAiAction);
+    });
+  });
   document.querySelectorAll("[data-lead-intelligence-pdf-download]").forEach(button => {
     button.addEventListener("click", async () => {
       try {
@@ -9959,7 +10550,7 @@ function openActivityModal(leadId = "", trigger = null, activity = null) {
   els.activityForm.elements.activity_id.value = activity?.id || "";
   els.activityForm.elements.activity_version.value = String(activity?.version || 1);
   els.activityForm.dataset.clientId = activity?.id || activityClientId();
-  els.activityDialogTitle.textContent = activity ? "Edit Activity" : "Add New Activity";
+  els.activityDialogTitle.innerHTML = pageTitleMarkup(activity ? "Edit Activity" : "Add New Activity");
   els.saveActivity.textContent = activity ? "Save Changes" : "Save Activity";
   els.closeActivityDialog.setAttribute("aria-label", `Close ${activity ? "Edit Activity" : "Add New Activity"} modal`);
   els.activityLeadName.textContent = lead.company_name || "Selected lead";
@@ -10191,7 +10782,7 @@ function renderKanbanView() {
     const count = leads.filter(lead => kanbanStageForLead(lead) === stage.key).length;
     return `
       <button class="kanban-stage-tab ${stage.key === activeStage ? "active" : ""}" type="button" data-kanban-tab="${stage.key}">
-        ${escapeHtml(stage.label)} <span>${count}</span>
+        ${escapeHtml(stageDisplayLabel(stage.key))} <span>${count}</span>
       </button>
     `;
   }).join("");
@@ -10237,7 +10828,7 @@ function renderKanbanView() {
       <section class="kanban-column ${stage.key === activeStage ? "active" : ""}" data-kanban-stage="${stage.key}">
         <div class="kanban-column-header ${stage.color}">
           <div>
-            <h3>${escapeHtml(stage.label)}</h3>
+            <h3>${escapeHtml(stageDisplayLabel(stage.key))}</h3>
             <span>${stageLeads.length} lead${stageLeads.length === 1 ? "" : "s"}</span>
           </div>
           <strong>${escapeHtml(formatAED(stageValue))}</strong>
@@ -10718,7 +11309,7 @@ function renderSalesmanLeadsViewer() {
   if (!els.salesmanLeadsList || !els.salesmanLeadsTitle || !els.salesmanLeadsSummary || !els.salesmanLeadsSubtitle) return;
   const viewer = state.salesmanLeadsViewer;
   if (!viewer) {
-    els.salesmanLeadsTitle.textContent = "Salesman leads";
+    els.salesmanLeadsTitle.innerHTML = pageTitleMarkup("Salesman leads");
     els.salesmanLeadsSubtitle.textContent = "Most recent leads";
     els.salesmanLeadsSummary.innerHTML = "";
     els.salesmanLeadsList.innerHTML = `<p class="empty-copy">No salesman selected.</p>`;
@@ -10729,7 +11320,7 @@ function renderSalesmanLeadsViewer() {
   const value = leads.reduce((sum, lead) => sum + Number(lead.estimated_value || 0), 0);
   const overdue = leads.filter(isOverdue).length;
   const hot = leads.filter(lead => lead.priority === "Hot").length;
-  els.salesmanLeadsTitle.textContent = viewer.name;
+  els.salesmanLeadsTitle.innerHTML = pageTitleMarkup(viewer.name);
   els.salesmanLeadsSubtitle.textContent = `${leads.length} ${leads.length === 1 ? "lead" : "leads"} - most recent first`;
   els.salesmanLeadsSummary.innerHTML = `
     <span><strong>${leads.length}</strong> companies</span>
@@ -11374,7 +11965,7 @@ function activityCardMarkup(activity) {
   const reminderOverdue = isReminder && dueDate && dueDate.slice(0, 10) < today() && activity.reminder_status !== "completed";
   const statusLabel = isReminder
     ? activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled")
-    : activity.stage || "Prospect";
+    : STAGE_DISPLAY_LABELS[normalizeStageKey(activity.stage, "")] || activity.stage || "Prospect";
   const statusClass = reminderOverdue ? "hot" : "activity-status-neutral";
   const actionLabel = isReminder ? `${statusLabel}${dueDate ? ` · ${formatDisplayDate(dueDate)}` : ""}` : formatDisplayDate(activityDisplayDate(activity));
   const timeLabel = activityDisplayTime(activity);
@@ -11542,7 +12133,7 @@ function activityTableStatus(activity) {
   if (status.toLowerCase() === "completed") return { label: "Completed", tone: "completed" };
   if (reminder) return { label: status || "Scheduled", tone: "scheduled" };
   if (dueDate && dueDate >= today()) return { label: "Upcoming", tone: "upcoming" };
-  return { label: activity.stage || status || "Logged", tone: "neutral" };
+  return { label: STAGE_DISPLAY_LABELS[normalizeStageKey(activity.stage, "")] || activity.stage || status || "Logged", tone: "neutral" };
 }
 
 function activityTableMarkup(activities) {
@@ -11992,7 +12583,7 @@ function weeklyReportCard(title, subtitle, body, tone = "", headerCap = "") {
     <section class="tasks-section-card ${tone}${headerCapClass}">
       <div class="tasks-section-head">
         <div>
-          <h3>${escapeHtml(title)}</h3>
+          <h3>${pageTitleMarkup(title)}</h3>
           ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
         </div>
       </div>
@@ -12787,7 +13378,7 @@ function renderWeeklyReviewView() {
 function renderTasksView() {
   if (!els.tasksPrimary || !els.tasksSidebar) return;
   const admin = isAdminOrManager();
-  els.tasksViewTitle.textContent = admin ? "Weekly Sales Report Review" : "Weekly Sales Report";
+  els.tasksViewTitle.innerHTML = pageTitleMarkup(admin ? "Weekly Sales Report Review" : "Weekly Sales Report");
   els.tasksViewSubtitle.textContent = admin
     ? "Review submitted reports, challenge contradictions, and chase missing weekly submissions."
     : "Capture the week once, at the source, then lock it with an honest digital sign-off.";
@@ -13170,7 +13761,7 @@ function renderDetail() {
   }
 
   const stageOptions = state.settings.stages.map(stage =>
-    `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(stage)}</option>`
+    `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(stageDisplayLabel(stage))}</option>`
   ).join("");
   const activities = (lead.activities || []).map((activity, index) => activityItemMarkup(activity, lead.id, index)).join("");
   const reminders = remindersForLead(lead);
@@ -13449,6 +14040,7 @@ function renderDetail() {
 }
 
 function render() {
+  if (state.currentUser && !isSalesmanRole() && ["focus", "neglected"].includes(currentView)) currentView = "ai-actions";
   document.querySelector("#aiAssistantLauncher")?.classList.toggle("hidden", !state.currentUser);
   renderMetrics();
   renderOverdueBanner();
@@ -13465,6 +14057,7 @@ function render() {
   renderSalesmanLeadsViewer();
   renderTasksView();
   renderActivityView();
+  renderAiWorkspace();
   renderPipelineFilterNotice();
   loadActivityAudioSources();
   applyView();
@@ -13472,15 +14065,26 @@ function render() {
   renderSyncStatus();
 }
 
+function arrangeAssistantLauncher(isTasks) {
+  const launcher = document.querySelector("#aiAssistantLauncher");
+  const host = currentView === "lead"
+    ? document.querySelector(".record-assistant-host") || document.body
+    : currentView === "meeting-prep" ? document.querySelector(".meeting-assistant-host") || document.body
+    : isTasks ? document.querySelector("#appShell .topbar-actions") : document.body;
+  if (launcher && host && launcher.parentElement !== host) host.appendChild(launcher);
+}
+
 function applyView() {
   if (isSalesmanRole() && ["salesmen", "activity"].includes(currentView)) {
     currentView = "dashboard";
   }
+  if (!isSalesmanRole() && ["focus", "neglected"].includes(currentView)) currentView = "ai-actions";
   const isDashboard = currentView === "dashboard";
   const isPipeline = currentView === "pipeline";
   const isActivity = currentView === "activity";
   const isTasks = currentView === "tasks";
   const isLead = currentView === "lead";
+  const isAiWorkspace = Boolean(aiWorkspacePage());
   const showMetricsShell = isPipeline || (isDashboard && !isSalesmanRole());
   els.metricsShell?.classList.toggle("hidden", !showMetricsShell);
   els.dashboardView.classList.toggle("hidden", !isDashboard);
@@ -13496,9 +14100,12 @@ function applyView() {
   els.leadDetailView?.classList.toggle("hidden", !isLead);
   els.salesmenView.classList.toggle("hidden", currentView !== "salesmen");
   els.tasksView?.classList.toggle("hidden", !isTasks);
+  document.querySelector("#aiWorkspaceView")?.classList.toggle("hidden", !isAiWorkspace);
+  document.querySelectorAll("[data-ai-portfolio-nav]").forEach(item => item.classList.toggle("hidden", !isSalesmanRole()));
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
-    item.classList.toggle("active", item.dataset.view === currentView && !item.dataset.mobileAction);
+    const navigationView = isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
+    item.classList.toggle("active", item.dataset.view === navigationView && !item.dataset.mobileAction);
   });
   els.syncStatusPill?.classList.toggle("activity-hidden", isActivity);
   document.body.classList.toggle("activity-mode", isActivity);
@@ -13512,6 +14119,12 @@ function applyView() {
   document.body.classList.toggle("tasks-mode", isTasks);
   document.body.classList.toggle("admin-tasks-mode", Boolean(isTasks && !isSalesmanRole()));
   document.body.classList.toggle("lead-detail-mode", isLead);
+  document.body.classList.toggle("ai-workspace-mode", isAiWorkspace);
+  document.body.classList.toggle("meeting-brief-mode", currentView === "meeting-prep");
+  document.body.classList.toggle("today-mode", currentView === "focus" && isSalesmanRole());
+  document.body.classList.toggle("neglected-mode", currentView === "neglected" && isSalesmanRole());
+  document.body.classList.toggle("neglected-tools-open", currentView === "neglected" && isSalesmanRole() && neglectedToolsOpen);
+  arrangeAssistantLauncher(isTasks || (["focus", "neglected", "pipeline"].includes(currentView) && isSalesmanRole()));
   arrangeAdminDashboardLayout();
 }
 
@@ -13530,6 +14143,7 @@ function toggleMobileMenu() {
 
 function setView(view) {
   if (isSalesmanRole() && ["salesmen", "activity"].includes(view)) view = "dashboard";
+  if (!isSalesmanRole() && ["focus", "neglected"].includes(view)) view = "ai-actions";
   if (view !== "lead") state.lastNonLeadView = view;
   currentView = view;
   state.leadDrawerOpen = view === "lead";
@@ -13791,6 +14405,13 @@ async function loadWorkspace() {
     els.formSalesman.value = state.currentUser.name;
   }
   fillSelect(els.formStage, state.settings.stages);
+  [els.formStage, els.performanceStageFilter, els.portfolioStageFilter].forEach(select => {
+    if (!select) return;
+    [...select.options].forEach(option => {
+      const label = STAGE_DISPLAY_LABELS[normalizeStageKey(option.value, "")];
+      if (label) option.textContent = label;
+    });
+  });
   fillSelect(els.formPriority, state.settings.priorities);
   fillSelect(els.formSector, state.settings.sectors || []);
   fillSelect(els.formTier, state.settings.tiers || []);
@@ -14215,6 +14836,7 @@ els.activityNextWeek?.addEventListener("click", () => {
 });
 els.leadDrawerBackdrop?.addEventListener("click", closeLeadDrawer);
 document.addEventListener("keydown", event => {
+  if (event.defaultPrevented || document.querySelector("dialog[open]")) return;
   if (event.key === "Escape" && state.leadDrawerOpen) closeLeadDrawer();
 });
 
@@ -14401,8 +15023,33 @@ els.activityEditForm?.addEventListener("submit", async event => {
   }
 });
 
+function hideLoginPassword() {
+  const password = document.querySelector("#loginPassword");
+  const toggle = document.querySelector("#loginPasswordToggle");
+  if (!password || !toggle) return;
+  password.type = "password";
+  toggle.setAttribute("aria-pressed", "false");
+  toggle.setAttribute("aria-label", "Show password");
+  toggle.title = "Show password";
+}
+
+document.querySelector("#loginPasswordToggle")?.addEventListener("click", event => {
+  const password = document.querySelector("#loginPassword");
+  if (!password) return;
+  const visible = password.type === "password";
+  password.type = visible ? "text" : "password";
+  event.currentTarget.setAttribute("aria-pressed", String(visible));
+  event.currentTarget.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+  event.currentTarget.title = visible ? "Hide password" : "Show password";
+});
+els.loginForm.addEventListener("reset", hideLoginPassword);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) hideLoginPassword();
+});
+
 els.loginForm.addEventListener("submit", async event => {
   event.preventDefault();
+  hideLoginPassword();
   els.loginMessage.textContent = "Signing in...";
 
   try {
@@ -14626,6 +15273,8 @@ els.aiActionFooter?.addEventListener("click", async event => {
       else await runLeadAiAction(aiLead(), state.aiAction.action);
     } else if (button.matches("[data-ai-copy]")) {
       await copyText(state.aiAction.output, "AI result copied.");
+    } else if (button.matches("[data-ai-open-brief]")) {
+      openMeetingBriefPage(aiLead());
     } else if (button.matches("[data-ai-save-activity]")) {
       await saveAiOutputToActivity();
     } else if (button.matches("[data-ai-set-next]")) {
@@ -14652,6 +15301,116 @@ els.aiActionResult?.addEventListener("click", event => {
   els.aiActionDialog?.close();
   openLeadDrawer(state.selectedId);
   render();
+});
+
+document.querySelector("#aiWorkspaceView")?.addEventListener("change", event => {
+  if (event.target.hasAttribute("data-meeting-check") && meetingBriefState) {
+    const key = event.target.dataset.meetingCheck;
+    if (event.target.checked) meetingBriefState.checked.add(key);
+    else meetingBriefState.checked.delete(key);
+    return;
+  }
+  if (event.target.id !== "aiWorkspaceCompany") return;
+  if (currentView === "meeting-prep") {
+    const lead = state.leads.find(item => String(item.id) === event.target.value);
+    meetingBriefState = lead ? { owner: String(state.currentUser.id), leadId: lead.id,
+      output: "", provider: "", loading: false, error: "", generatedAt: "", checked: new Set() } : null;
+    renderAiWorkspace();
+    return;
+  }
+  const selected = state.leads.some(lead => String(lead.id) === event.target.value);
+  document.querySelectorAll("#aiWorkspaceView [data-workspace-company-action]").forEach(button => { button.disabled = !selected; });
+  const status = document.querySelector("#aiWorkspaceView .crm-ai-workspace-status");
+  if (status) status.textContent = selected ? "Company actions are ready." : "Choose a company to enable its actions.";
+});
+
+document.querySelector("#aiWorkspaceView")?.addEventListener("click", async event => {
+  const button = event.target.closest("button");
+  if (!button || button.disabled) return;
+  if (button.hasAttribute("data-meeting-menu")) { toggleMobileMenu(); return; }
+  if (button.hasAttribute("data-meeting-change")) {
+    const picker = document.querySelector("#meetingCompanyPicker");
+    const expanded = picker.classList.contains("hidden");
+    picker.classList.toggle("hidden", !expanded);
+    button.setAttribute("aria-expanded", String(expanded));
+    if (expanded) picker.querySelector("select")?.focus();
+    return;
+  }
+  if (button.matches("[data-meeting-generate], [data-meeting-copy], [data-meeting-log], [data-meeting-pmr]")) {
+    const lead = meetingBriefState?.owner === String(state.currentUser?.id)
+      ? state.leads.find(item => String(item.id) === meetingBriefState.leadId) : null;
+    if (!lead) return;
+    if (button.hasAttribute("data-meeting-generate")) await generateMeetingBrief(lead);
+    else if (button.hasAttribute("data-meeting-log")) {
+      openActivityModal(lead.id, button);
+      els.activityPurpose.value = "Meeting";
+    } else if (button.hasAttribute("data-meeting-pmr")) openPmrForLead(lead.id);
+    else {
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable. Select the brief text to copy it.");
+        await navigator.clipboard.writeText(meetingBriefState.output);
+        setToast("Meeting brief copied.", "success");
+      } catch (error) { setToast(error.message || "Could not copy the brief.", "error"); }
+    }
+    return;
+  }
+  if (button.hasAttribute("data-neglected-tools")) {
+    neglectedToolsOpen = !neglectedToolsOpen;
+    document.body.classList.toggle("neglected-tools-open", neglectedToolsOpen);
+    button.setAttribute("aria-expanded", String(neglectedToolsOpen));
+    return;
+  }
+  if (button.hasAttribute("data-neglected-retry") && isSalesmanRole()) {
+    neglectedWorkspace = null;
+    if (!state.leadsLoaded) {
+      try { await loadLeads(); } catch { /* The page displays the existing load error. */ }
+    }
+    renderAiWorkspace();
+    return;
+  }
+  const neglectedLeadId = button.dataset.neglectedLead || button.dataset.neglectedLog || button.dataset.neglectedTask;
+  if (neglectedLeadId && isSalesmanRole()) {
+    const lead = salesmanDashboardLeads().find(item => String(item.id) === neglectedLeadId);
+    if (!lead) return;
+    if (button.dataset.neglectedLog) openActivityModal(lead.id, button);
+    else openLeadDrawer(lead.id, button.dataset.neglectedTask ? "reminders" : "overview");
+    return;
+  }
+  if (button.dataset.todayLead) {
+    openLeadDrawer(button.dataset.todayLead);
+    render();
+    return;
+  }
+  if (button.dataset.todaySummary) {
+    openSummaryCardDetails(button.dataset.todaySummary, button);
+    return;
+  }
+  if (button.dataset.todayAction) {
+    if (button.dataset.todayAction === "add") document.querySelector("#openLeadForm")?.click();
+    if (button.dataset.todayAction === "places") document.querySelector("#openPlacesSearch")?.click();
+    if (button.dataset.todayAction === "report") setView("tasks");
+    return;
+  }
+  if (button.dataset.workspaceView) {
+    setView(button.dataset.workspaceView);
+    return;
+  }
+  if (button.hasAttribute("data-workspace-retry")) {
+    try { await loadLeads(); } catch (error) { setToast(error.message, "error"); }
+    renderAiWorkspace();
+    return;
+  }
+  if (button.dataset.workspacePortfolioAction && isSalesmanRole()) {
+    await runSalespersonAiAction(button.dataset.workspacePortfolioAction);
+    return;
+  }
+  if (button.dataset.workspaceCompanyAction) {
+    const selected = document.querySelector("#aiWorkspaceCompany")?.value;
+    const lead = state.leads.find(item => String(item.id) === selected);
+    if (!lead) return;
+    if (button.dataset.workspaceCompanyAction === "flag") openFlagAttentionModal(lead);
+    else await runLeadAiAction(lead, button.dataset.workspaceCompanyAction);
+  }
 });
 
 els.dailyAiPanel?.addEventListener("click", event => {

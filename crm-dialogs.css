@@ -1,0 +1,129 @@
+/* Shared dialog presentation; native dialog and existing handlers own behavior. */
+body dialog {
+  min-width: 0;
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100dvh - 24px) !important;
+  padding: 0 !important;
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-dialog) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-text) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+}
+body dialog::backdrop { background: #07192BB3; backdrop-filter: none !important; }
+body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--crm-space-4);
+  padding: var(--crm-space-5) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--crm-border) !important;
+  border-radius: 0 !important;
+  background: var(--crm-navy) !important;
+  color: var(--crm-white) !important;
+  box-shadow: none !important;
+}
+body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) > div { min-width: 0; }
+body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) :is(h2, p, span, small, strong):not(button *) {
+  color: var(--crm-white) !important;
+  -webkit-text-fill-color: currentColor;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  letter-spacing: 0 !important;
+}
+body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) h2 { margin: 0; font: 700 24px/1.3 var(--crm-font-ui) !important; }
+body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) :is(p, span, small, strong):not(button *) { font-size: 13px !important; line-height: 1.5 !important; }
+body dialog .crm-title-accent { color: var(--crm-amber) !important; }
+body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) button {
+  flex-shrink: 0;
+  min-height: 40px;
+  border: 1px solid var(--crm-white) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+}
+body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) button:hover { background: var(--crm-surface-muted) !important; border-color: var(--crm-amber) !important; }
+body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) { padding: 0 !important; margin: 0; background: var(--crm-surface) !important; }
+body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) > :not(.dialog-header):not(input):not(button) { margin-inline: var(--crm-space-5); }
+body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) > button {
+  box-sizing: border-box;
+  max-width: calc(100% - 2 * var(--crm-space-5));
+  margin: var(--crm-space-4) var(--crm-space-5);
+}
+body dialog :is(.lead-wizard-shell, .form-grid, .places-search-row, .salesman-leads-summary, .ai-result) { padding-block: var(--crm-space-4); }
+body dialog :is(label, .form-message, .voice-status, .activity-voice-state, .activity-attachments p, .ai-assistant-transcript) { font-size: 13px !important; line-height: 1.5 !important; color: var(--crm-text-secondary) !important; letter-spacing: 0 !important; }
+body dialog .form-message.error { color: var(--crm-health-red) !important; }
+body dialog .form-message.success { color: var(--crm-health-green) !important; }
+body dialog :is(h3, .lead-step-copy strong) { font-size: 17px !important; line-height: 1.4; color: var(--crm-navy) !important; }
+body dialog :is(p, li, .ai-assistant-result, .ai-assistant-empty, .activity-workflow-notes) { font-size: 14px !important; line-height: 1.5 !important; overflow-wrap: anywhere; }
+body dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 40px !important;
+  border: 1px solid var(--crm-control-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-field-surface) !important;
+  color: var(--crm-text) !important;
+  -webkit-text-fill-color: currentColor !important;
+  font: 400 14px/1.5 var(--crm-font-ui) !important;
+}
+body dialog :is(.lead-step, .lead-step-panel, .lead-more-details, .activity-voice-recorder, .activity-attachments, .activity-drop-zone, .ai-assistant-intro, .ai-assistant-command, .ai-assistant-quick, .ai-assistant-preview, .ai-assistant-drafts) { border-color: var(--crm-border) !important; border-radius: var(--crm-radius-control) !important; background: var(--crm-surface) !important; box-shadow: none !important; }
+body dialog .lead-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: var(--crm-space-2); min-height: 0; padding: var(--crm-space-3); color: var(--crm-navy) !important; }
+body dialog .lead-step::before { content: none !important; }
+body dialog .lead-step-copy { min-width: 0; }
+body dialog .lead-step.active { border: 2px solid var(--crm-navy) !important; background: var(--crm-surface-muted) !important; }
+body dialog .lead-step-index { border-color: var(--crm-border) !important; background: var(--crm-surface-muted) !important; color: var(--crm-navy) !important; }
+body dialog .lead-step.active .lead-step-index { background: var(--crm-amber) !important; color: var(--crm-navy) !important; }
+body dialog .lead-step-copy small { color: var(--crm-text-secondary) !important; font-size: 12px !important; line-height: 1.5; }
+body dialog :is(.activity-entry-actions, .ai-action-footer, .import-actions, .lead-step-actions, .summary-card-details-pagination) { padding: var(--crm-space-4); background: var(--crm-surface) !important; border-color: var(--crm-divider) !important; gap: var(--crm-space-2); }
+body dialog :is(button, .activity-file-button) { min-height: 38px; font: 600 13px/1.4 var(--crm-font-ui); white-space: normal; }
+body dialog[open] :is(.primary-button, .ai-assistant-primary, .ai-assistant-warning) { border-color: var(--crm-amber) !important; background: var(--crm-amber) !important; color: var(--crm-navy) !important; border-radius: var(--crm-radius-control) !important; }
+body dialog[open] :is(.primary-button, .ai-assistant-primary, .ai-assistant-warning):hover:not(:disabled) { background: var(--crm-amber) !important; color: var(--crm-navy) !important; }
+body dialog .activity-record-button[data-state="ready"] { border: 1px solid var(--crm-control-border) !important; background: var(--crm-surface) !important; color: var(--crm-navy) !important; border-radius: var(--crm-radius-control) !important; }
+body dialog :is(.ai-assistant-secondary, .ai-assistant-mic, .activity-file-button, .summary-card-details-reset) { border: 1px solid var(--crm-control-border) !important; background: var(--crm-surface) !important; color: var(--crm-navy) !important; border-radius: var(--crm-radius-control) !important; }
+body dialog :is(.activity-record-button, .ai-assistant-mic) { --crm-button-icon: var(--crm-icon-mic); }
+body dialog .activity-file-button { display: inline-flex; align-items: center; padding: 8px 12px; cursor: pointer; }
+body dialog .activity-file-button::before { content: ""; width: 16px; height: 16px; margin-inline-end: 6px; background: currentColor; mask: var(--crm-icon-upload) center / contain no-repeat; }
+body dialog .summary-card-details-shell { background: var(--crm-surface) !important; }
+body dialog .summary-card-details-header-actions { flex-wrap: wrap; justify-content: flex-end; gap: var(--crm-space-2); }
+body dialog .summary-card-details-table-wrap { min-height: 0; overflow: auto; background: var(--crm-surface) !important; }
+body dialog .summary-card-details-table :is(th, td) { padding: 10px; color: var(--crm-text) !important; font-size: 13px !important; line-height: 1.5; border-color: var(--crm-divider) !important; background: var(--crm-surface) !important; }
+body dialog .summary-card-details-table thead th { background: var(--crm-surface-muted) !important; }
+body dialog .summary-card-details-table tbody tr:is(:hover, :focus) td { background: var(--crm-surface-muted) !important; }
+body dialog .summary-sort-button { color: var(--crm-navy) !important; font-size: 13px !important; }
+body dialog .summary-card-details-pagination { flex-wrap: wrap; font-size: 13px; line-height: 1.5; }
+body dialog :is(.import-step, .import-step b) { font-size: 13px !important; }
+body dialog #lostReasonCount { font-size: 13px !important; }
+body dialog .ai-assistant-header small { font-size: 12px !important; }
+body dialog .ai-assistant-state { background: var(--crm-surface-muted) !important; color: var(--crm-text) !important; border-color: var(--crm-divider) !important; }
+body dialog :is(.ai-assistant-kicker, .ai-assistant-section-heading span, .ai-assistant-badge) { font-size: 12px !important; line-height: 1.5; letter-spacing: 0; }
+body dialog :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--crm-focus) !important; outline-offset: 2px !important; }
+body dialog[open] :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) button:focus-visible { outline-color: var(--crm-amber) !important; }
+body dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)[aria-invalid="true"] { border: 2px solid var(--crm-health-red) !important; background: var(--crm-health-red-soft) !important; }
+body dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea, button):disabled { opacity: 1 !important; background: var(--crm-surface-muted) !important; color: var(--crm-text-secondary) !important; -webkit-text-fill-color: currentColor !important; border-color: var(--crm-control-border) !important; }
+
+@media (max-width: 720px) {
+  body dialog .activity-queue-toolbar > input {
+    flex: 0 0 auto;
+  }
+  body dialog :is(.lead-form, .salesman-leads-dialog, .ai-action-sheet) > button {
+    display: flex;
+    justify-content: center;
+  }
+  body dialog { width: calc(100vw - 16px) !important; max-width: calc(100vw - 16px) !important; max-height: calc(100dvh - 16px) !important; margin-inline: auto !important; }
+  body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) { padding: var(--crm-space-4) !important; }
+  body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .ai-assistant-header) { flex-direction: row !important; }
+  body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .ai-assistant-header) button { width: auto !important; min-width: 44px !important; min-height: 44px !important; }
+  body dialog :is(.dialog-header, .activity-entry-header, .activity-workflow-header, .summary-card-details-header, .ai-assistant-header) h2 { font-size: 22px !important; }
+  body dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea) { min-height: 44px !important; font-size: 16px !important; }
+  body dialog :is(button, .activity-file-button) { min-height: 44px; }
+  body dialog :is(.form-grid, .places-search-row, .activity-entry-fields) { grid-template-columns: minmax(0, 1fr) !important; }
+  body dialog .lead-stepper { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  body dialog .lead-step { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; }
+  body dialog .lead-step-copy strong { font-size: 13px !important; }
+  body dialog .summary-card-details-header { flex-wrap: wrap; }
+  body dialog .summary-card-details-header-actions { width: 100%; }
+  body dialog .summary-card-details-pagination > div { flex-wrap: wrap; }
+  body dialog :is(.quick-log-sheet, .mobile-map-sheet) { max-height: calc(100dvh - 24px); overflow-y: auto; padding-bottom: var(--crm-space-5); }
+}

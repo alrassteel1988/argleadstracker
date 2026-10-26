@@ -1,0 +1,293 @@
+const { test, expect } = require("@playwright/test");
+const { phase, capture, login, blockExternalTraffic } = require("./helpers");
+
+test.beforeEach(async ({ page }) => blockExternalTraffic(page));
+
+
+test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({ page }, info) => {
+  // This case captures many route states; individual expectation limits stay unchanged.
+  test.setTimeout(120000);
+  await page.goto("/");
+  if (phase === "after") {
+    const signInPresentation = await page.locator('#loginForm button[type="submit"]').evaluate(button => ({
+      icon: getComputedStyle(button, "::before").maskImage,
+      foreground: getComputedStyle(button).color,
+      background: getComputedStyle(button).backgroundColor
+    }));
+    expect(signInPresentation.icon).toContain("data:image/svg+xml");
+    expect(signInPresentation.foreground).toBe("rgb(8, 61, 119)");
+    expect(signInPresentation.background).toBe("rgb(255, 177, 0)");
+    await expect(page.locator("#loginForm")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    if (info.project.name.endsWith("mobile")) await expect(page.locator(".auth-brand-caption")).toBeVisible();
+    else await expect(page.locator(".auth-hero-kicker")).toBeVisible();
+    await expect(page.locator(".auth-hero h1 em")).toHaveCSS("color", "rgb(255, 177, 0)");
+    await expect(page.locator(".auth-card h2 em")).toHaveCSS("color", "rgb(184, 122, 0)");
+    await expect(page.locator('#loginForm input[name="password"]')).toHaveAttribute("autocomplete", "current-password");
+    const loginField = await page.locator('#loginForm input[name="email"]').evaluate(element => ({
+      font: parseFloat(getComputedStyle(element).fontSize),
+      height: element.getBoundingClientRect().height,
+      border: getComputedStyle(element).borderTopColor
+    }));
+    expect(loginField.font).toBeGreaterThanOrEqual(16);
+    expect(loginField.height).toBeGreaterThanOrEqual(44);
+    expect(loginField.border).toBe("rgb(102, 120, 138)");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await expect(page.locator("#mobileTabs")).toBeHidden();
+  }
+  await capture(page, info, "01-login");
+  await page.locator('#loginForm button[type="submit"]').click();
+  await expect(page.locator("#loginForm")).toBeVisible();
+  const role = await login(page, info);
+  await expect(page.locator("#dashboardView")).toBeVisible();
+  if (phase === "after") {
+    const presentation = await page.locator(".main").evaluate(element => ({
+      image: getComputedStyle(element).backgroundImage,
+      font: getComputedStyle(element).fontFamily,
+      headingFont: getComputedStyle(element.querySelector("h1")).fontFamily
+    }));
+    expect(presentation.image).toContain(info.project.name.endsWith("mobile") ? "crm-silk-white-mobile.png" : "crm-silk-white-desktop.png");
+    expect(presentation.font).toContain("Inter");
+    expect(presentation.headingFont).toContain("Inter");
+    await expect(page.locator("#topbarPageTitle .crm-title-accent")).toHaveCSS("font-family", /Playfair Display/);
+  }
+  await capture(page, info, "02-dashboard");
+  if (phase === "after" && role === "salesman") {
+    const surface = await page.locator(".salesman-dashboard-pipeline").evaluate(element => ({
+      color: getComputedStyle(element).backgroundColor,
+      border: getComputedStyle(element).borderTopColor,
+      headingColor: getComputedStyle(element.querySelector("h2")).color
+    }));
+    expect(surface.color).toBe("rgb(254, 252, 253)");
+    expect(surface.border).toBe("rgba(91, 192, 190, 0.6)");
+    expect(surface.headingColor).toBe("rgb(8, 61, 119)");
+    await expect(page.locator("#salesmanSimplifiedPipeline [data-summary-card]")).toHaveCount(6);
+    await expect(page.locator(".salesman-dashboard-more-content")).toBeHidden();
+    await page.locator(".salesman-dashboard-more-tools > summary").click();
+    const actions = await page.locator(".salesman-dashboard-top-actions").boundingBox();
+    const calls = await page.locator(".salesman-dashboard-call-queue").boundingBox();
+    const list = await page.locator(".salesman-dashboard-live-leads").boundingBox();
+    expect(list.y).toBeGreaterThanOrEqual(Math.max(actions.y + actions.height, calls.y + calls.height) + 15);
+    const companyText = await page.locator("#salesmanDashboardLeadList .lead-table-company strong").first().evaluate(element => parseFloat(getComputedStyle(element).fontSize));
+    expect(companyText).toBeGreaterThanOrEqual(14);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  }
+
+  await page.goto("/?view=pipeline");
+  await expect(page.locator("#leadList table")).toBeVisible();
+  if (phase === "after" && info.project.name.endsWith("mobile")) {
+    const field = await page.locator('[data-pipeline-filter="search"]').evaluate(element => ({
+      fontSize: parseFloat(getComputedStyle(element).fontSize),
+      height: element.getBoundingClientRect().height
+    }));
+    expect(field.fontSize).toBeGreaterThanOrEqual(16);
+    expect(field.height).toBeGreaterThanOrEqual(44);
+  }
+  await expect(page.locator("#leadList")).toContainText("Synthetic Steel Company 01");
+  if (role === "salesman") {
+    await expect(page.locator("#leadList")).not.toContainText("Synthetic Steel Company 13");
+    await expect(page.locator("#pipelineReportTools")).toBeHidden();
+  } else await expect(page.locator("#pipelineReportTools")).toBeVisible();
+  await capture(page, info, "03-pipeline");
+  const search = page.locator('[data-pipeline-filter="search"]');
+  await search.fill("Company 01");
+  await expect(page.locator("#leadList tbody tr")).toHaveCount(1);
+  await page.locator('[data-pipeline-filter="stage"]').selectOption("NEW");
+  await expect(page.locator("#leadList tbody tr")).toHaveCount(1);
+  await page.locator('[data-pipeline-sort="company"]').click();
+  await expect(search).toHaveValue("Company 01");
+  await page.locator("#clearPipelineFilters").click();
+  await expect(search).toHaveValue("");
+
+  for (const tab of ["overview", "activities", "pmr", "reminders", "intel", "notes"]) {
+    await page.goto(`/leads/ui-lead-1?tab=${tab}`);
+    await expect(page.locator("#leadDetailView")).toBeVisible();
+    await expect(page.locator(`[data-drawer-tab="${tab}"]`)).toBeVisible();
+    if (tab === "overview") {
+      await page.locator('[data-toggle-lead-ai-minimize="true"]').click();
+      await expect(page.locator("#leadAiSummaryPagePanel")).toHaveClass(/minimized/);
+      if (phase === "after") expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      await capture(page, info, "04-lead-summary-minimized");
+      await page.locator('[data-toggle-lead-ai-minimize="false"]').click();
+      await expect(page.locator("#leadAiSummaryPagePanel")).not.toHaveClass(/minimized/);
+    }
+    if (phase === "after") {
+      await expect(page.locator(`[data-drawer-tab="${tab}"]`)).toHaveAttribute("aria-current", "page");
+      await expect(page.locator(".lead-page-header")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(page.locator(".lead-page-header h2")).toHaveCSS("color", "rgb(8, 61, 119)");
+      const columns = await page.locator("#leadDetailView").evaluate(element => {
+        const info = element.querySelector("#leadDetailPagePanel").getBoundingClientRect();
+        const ai = element.querySelector("#leadAiSummaryPagePanel").getBoundingClientRect();
+        return { infoX: info.x, infoY: info.y, aiX: ai.x, aiY: ai.y };
+      });
+      if (info.project.name.endsWith("mobile")) expect(columns.infoY).toBeLessThan(columns.aiY);
+      else expect(columns.infoY).toBeLessThan(columns.aiY);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    }
+    await capture(page, info, `04-lead-${tab}`);
+  }
+
+  await page.locator("[data-drawer-edit-notes]").click();
+  await expect(page.locator("#drawerNotesForm")).toBeVisible();
+  await page.locator('#drawerNotesForm textarea[name="notes"]').fill("Synthetic UI verification: notes editing remains available.");
+  const noteSaved = page.waitForResponse(response => response.url().endsWith("/api/leads/ui-lead-1") && response.request().method() === "PATCH");
+  await page.locator('#drawerNotesForm button[type="submit"]').click();
+  expect((await noteSaved).ok()).toBe(true);
+  await expect(page.locator(".drawer-notes-view")).toContainText("Synthetic UI verification: notes editing remains available.");
+
+  for (const view of ["salesmen", "activity", "tasks"]) {
+    await page.goto(`/?view=${view}`);
+    if (role === "salesman" && view !== "tasks") {
+      await expect(page.locator("#dashboardView")).toBeVisible();
+      await expect(page.locator(`#${view}View`)).toBeHidden();
+    } else {
+      await expect(page.locator(`#${view}View`)).toBeVisible();
+      if (view === "tasks") await expect(page.locator("#tasksPrimary")).not.toBeEmpty();
+      if (view === "activity" && phase === "after") {
+        await expect(page.locator(".activity-weekly-card .activity-section-header")).toHaveCSS("background-color", "rgb(254, 252, 253)");
+        await expect(page.locator(".activity-weekly-card h2")).toHaveCSS("color", "rgb(8, 61, 119)");
+        await expect(page.locator(".activity-kpi-card").first()).toHaveCSS("background-color", "rgb(254, 252, 253)");
+        await expect(page.locator(".activity-weekly-day")).toHaveCount(7);
+        if (info.project.name.endsWith("mobile")) {
+          const chipHeights = await page.locator("#overdueBanner .overdue-owner-chip").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().height));
+          expect(chipHeights.length).toBeGreaterThan(0);
+          expect(chipHeights.every(height => height < 80)).toBe(true);
+        }
+        const dayListHeights = await page.locator(".activity-weekly-day-items").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().height));
+        expect(dayListHeights.every(height => height <= 181)).toBe(true);
+        const eventTextClipped = await page.locator(".activity-day-event strong").evaluateAll(elements => elements.some(e => e.scrollHeight > e.clientHeight + 1));
+        expect(eventTextClipped).toBe(false);
+        await page.locator("#activityCalendarToggle").click();
+        await expect(page.locator("#activityWeeklyLog")).toBeHidden();
+        await expect(page.locator("#activityCalendarToggle")).toHaveAttribute("aria-expanded", "false");
+        await capture(page, info, "05-activity-calendar-minimized");
+        await page.locator("#activityCalendarToggle").click();
+        await expect(page.locator("#activityWeeklyLog")).toBeVisible();
+        const range = await page.locator("#activityWeekRange").innerText();
+        await page.locator("#activityNextWeek").click();
+        await expect(page.locator("#activityWeekRange")).not.toHaveText(range);
+        await page.locator("#activityPrevWeek").click();
+        await expect(page.locator("#activityWeekRange")).toHaveText(range);
+        if (!await page.locator("#activityCompanySearch").isVisible()) await page.locator("#activityFilterToggle").click();
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(10);
+        await expect(page.locator('.activity-table tbody tr [data-label="Status"]')).toHaveText([
+          "Prospect", "Outreach", "Engaged", "Active", "Lost", "Dormant",
+          "Prospect", "Outreach", "Engaged", "Active"
+        ]);
+        if (info.project.name.endsWith("mobile")) {
+          const smallTargets = await page.locator('#activityView button, #activityView .activity-row-menu > summary, #activityView .calendar-link').evaluateAll(elements => elements.filter(element => {
+            const box = element.getBoundingClientRect();
+            return box.width > 0 && box.height > 0 && (box.width < 44 || box.height < 44);
+          }).map(element => ({name:element.getAttribute("aria-label") || element.textContent.trim(), width:element.getBoundingClientRect().width, height:element.getBoundingClientRect().height})));
+          expect(smallTargets).toEqual([]);
+          const nextPage = page.getByRole("button", {name:"Next activity page", exact:true});
+          await nextPage.focus();
+          await expect(nextPage).toBeFocused();
+          expect(await nextPage.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            return [[.5,.5],[.1,.1],[.9,.1],[.1,.9],[.9,.9]].every(([x,y]) => {
+              const hit = document.elementFromPoint(box.left + box.width * x, box.top + box.height * y);
+              return hit === element || element.contains(hit);
+            });
+          })).toBe(true);
+        }
+        await page.getByRole("button", { name: "Next activity page", exact: true }).click();
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(8);
+        await page.getByRole("button", { name: "Previous activity page", exact: true }).click();
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(10);
+        await page.locator("#activitySalesmanFilter").selectOption({ label: "Other Demo Salesman" });
+        await expect(page.locator(".activity-table tbody tr")).toHaveCount(6);
+        await page.locator("#activityResetFilters").click();
+        await page.locator("#activityTypeSelect").selectOption("Note");
+        await expect(page.locator("#activityFeed")).toContainText("No activities match");
+        await page.locator("#activityResetFilters").click();
+        await page.locator("#activityDateFrom").fill("2026-10-02");
+        await page.locator("#activityDateTo").fill("2026-10-03");
+        await expect(page.locator("#activityFeed")).toContainText("No activities match");
+        await page.locator("#activityResetFilters").click();
+        await page.locator("#activityCompanySearch").fill("Unmatched synthetic activity search");
+        await expect(page.locator("#activityFeed")).toContainText("No activities match");
+        await page.locator("#activityResetFilters").click();
+        await expect(page.locator("#activityCompanySearch")).toHaveValue("");
+        await page.locator('[data-activity-shortcut="Phone Call"]').click();
+        await expect(page.locator("#activityTypeSelect")).toHaveValue("Phone Call");
+        await page.locator("#activityResetFilters").click();
+        const activityAction = page.locator(".activity-table-actions .small-action").first();
+        await expect(activityAction).toBeVisible();
+        await expect(activityAction).toHaveCSS("white-space", "nowrap");
+        const activityBottom = await page.locator("#activityView").evaluate(e => e.getBoundingClientRect().bottom + scrollY);
+        expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThanOrEqual(Math.floor(activityBottom));
+        await page.locator("#openActivityCreate").click();
+        await expect(page.locator("#activityDialog")).toBeVisible();
+        await page.locator("#cancelActivityDialog").click();
+        const control = await page.locator("#activityDateFrom").evaluate(element => ({ height: element.getBoundingClientRect().height, size: parseFloat(getComputedStyle(element).fontSize) }));
+        expect(control.height).toBeGreaterThanOrEqual(info.project.name.endsWith("mobile") ? 44 : 40);
+        expect(control.size).toBeGreaterThanOrEqual(info.project.name.endsWith("mobile") ? 16 : 14);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      }
+      await capture(page, info, `05-${view}`);
+    }
+  }
+  if (info.project.name.endsWith("mobile") && await page.locator("#logoutButton").evaluate(button => Boolean(button.closest("#mobileSidebar")))) await page.locator("#mobileMenuToggle").click();
+  await page.locator("#logoutButton").click();
+  await expect(page.locator("#loginForm")).toBeVisible();
+});
+
+test("existing add-lead steps, activity dialog, AI confirmation shell and report draft", async ({ page }, info) => {
+  const role = await login(page, info);
+  await page.locator("#openLeadForm").click();
+  await expect(page.locator("#leadDialog")).toBeVisible();
+  const companyNames = {
+    "admin-desktop": "Alder Foundry",
+    "salesman-desktop": "Cypress Shipbuilders",
+    "admin-mobile": "Keystone Fabrication",
+    "salesman-mobile": "Zenith Contractors"
+  };
+  await page.locator("#leadCompanyName").fill(companyNames[info.project.name]);
+  await capture(page, info, "06-lead-step-1");
+  await page.locator("#leadStepNext").click();
+  await expect(page.locator('[data-lead-step-panel="1"]')).toBeVisible();
+  await capture(page, info, "06-lead-step-2");
+  await page.locator("#leadStepNext").click();
+  await expect(page.locator("#leadSubmitButton")).toBeVisible();
+  await page.locator('#leadForm textarea[name="notes"]').fill("Synthetic UI baseline: review requirements next week.");
+  await capture(page, info, "06-lead-step-3");
+  const save = page.waitForResponse(response => response.url().endsWith("/api/leads") && response.request().method() === "POST");
+  await page.locator("#leadSubmitButton").click();
+  const saved = await save;
+  expect(saved.status(), await saved.text()).toBe(201);
+  await expect(page.locator("#leadDialog")).toBeHidden();
+
+  await page.goto("/leads/ui-lead-1");
+  await page.locator('[data-drawer-log-activity="ui-lead-1"]:visible').first().click();
+  await expect(page.locator("#activityDialog")).toBeVisible();
+  await capture(page, info, "07-add-activity");
+  await page.locator("#cancelActivityDialog").click();
+  await expect(page.locator("#activityDialog")).toBeHidden();
+
+  await page.locator("#aiAssistantLauncher").click();
+  await expect(page.locator("#aiAssistantDialog")).toBeVisible();
+  await capture(page, info, "08-ai-assistant");
+  await page.locator("#closeAiAssistant").click();
+  await expect(page.locator("#aiAssistantDialog")).toBeHidden();
+
+  await page.goto("/?view=tasks");
+  await expect(page.locator("#tasksPrimary")).not.toBeEmpty();
+  if (role === "salesman") {
+    await page.locator('[data-weekly-field="summary"]').fill("Reviewed requirements with demo buyers; next week confirm volumes and delivery dates.");
+    const draft = page.waitForResponse(response => /\/api\/weekly-reports\//.test(response.url())
+      && ["POST", "PUT", "PATCH"].includes(response.request().method()));
+    await page.locator("#weeklySaveDraft").click();
+    expect((await draft).ok()).toBe(true);
+    await capture(page, info, "09-weekly-draft");
+  } else {
+    await page.goto("/?view=activity");
+    await expect(page.locator("#activityCalendarToggle")).toBeVisible();
+    await page.locator("#activityCalendarToggle").click();
+    await expect(page.locator("#activityWeeklyLog")).toBeHidden();
+    await expect(page.locator("#activityCalendarToggle")).toHaveAttribute("aria-expanded", "false");
+    await capture(page, info, "09-calendar-minimized");
+    await page.locator("#activityCalendarToggle").click();
+    await expect(page.locator("#activityWeeklyLog")).toBeVisible();
+  }
+});

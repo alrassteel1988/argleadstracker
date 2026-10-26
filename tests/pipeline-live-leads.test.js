@@ -51,8 +51,8 @@ assert.match(css, /outline:\s*2px solid var\(--bauhaus-blue\)/, "Pipeline contro
 assert.match(css, /\.pipeline-report-tools/, "Pipeline report controls must use shared responsive toolbar styling");
 assert.match(css, /\.pipeline-report-range label > span\s*\{[\s\S]*color:\s*var\(--bauhaus-text\)\s*!important/, "Pipeline report date labels must override white panel-header text");
 assert.match(css, /\.pipeline-report-range input\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--bauhaus-text\)[\s\S]*color-scheme:\s*light/, "Pipeline report date values must remain dark in native date controls");
-assert.match(css, /\.pipeline-export-button\.is-excel[\s\S]*var\(--bauhaus-green\)/, "Excel export must have a clear green action style");
-assert.match(css, /\.pipeline-export-button\.is-pdf[\s\S]*var\(--bauhaus-red\)/, "PDF export must have a clear red action style");
+assert.match(css, /\.pipeline-export-button\.is-excel[\s\S]*var\(--crm-surface\)/, "Excel export must use the shared opaque secondary action style");
+assert.match(css, /\.pipeline-export-button\.is-pdf[\s\S]*var\(--crm-surface\)/, "PDF export must not use the red health/error category");
 const mobilePipelineCss = css.slice(css.indexOf("@media (max-width: 640px)"));
 assert.match(mobilePipelineCss, /body\.pipeline-compact-mode \.topbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*?overflow:\s*visible/, "Mobile Pipeline page header must stay inside a single unclipped column");
 assert.match(mobilePipelineCss, /body\.pipeline-compact-mode \.topbar-copy :is\(h1,\s*p\)\s*\{[\s\S]*?overflow-wrap:\s*anywhere[\s\S]*?white-space:\s*normal/, "Mobile Pipeline title and subtitle must wrap instead of clipping");

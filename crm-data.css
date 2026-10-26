@@ -1,0 +1,576 @@
+/* Shared data surfaces. Filtering, sorting, datasets and row handlers stay native. */
+body #appShell #metricsPanel {
+  height: auto !important;
+  max-height: none;
+  gap: var(--crm-space-3);
+}
+
+body.pipeline-compact-mode #appShell #metricsShell,
+body.pipeline-compact-mode #appShell #metricsShell .dashboard-collapsible-body-inner {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+body #appShell #metricsPanel > article {
+  height: auto !important;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--crm-space-4);
+  border: 1px solid var(--crm-border) !important;
+  border-top: 3px solid var(--crm-amber) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+}
+
+body #appShell #metricsPanel > article::before,
+body #appShell #metricsPanel > article::after {
+  content: none !important;
+}
+
+body #appShell #metricsPanel > article > span {
+  color: var(--crm-navy) !important;
+  font-size: 13px !important;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body #appShell #metricsPanel > article > span::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: 7px;
+  border-radius: 50%;
+  background: var(--crm-teal);
+}
+
+body #appShell #metricsPanel > .metric-active > span::before { background: var(--crm-health-green); }
+body #appShell #metricsPanel > .metric-risk > span::before { background: var(--crm-health-red); }
+body #appShell #metricsPanel > .metric-due > span::before { background: var(--crm-health-amber); }
+
+body #appShell #metricsPanel > article strong {
+  color: var(--crm-navy) !important;
+  font-size: 30px !important;
+  line-height: 1.2;
+}
+
+body #appShell #metricsPanel > article small {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+body #appShell #metricsPanel > article:is(:hover, :focus-visible) {
+  border-color: var(--crm-navy) !important;
+  background: var(--crm-surface-muted) !important;
+}
+
+body #appShell .live-lead-table {
+  border: 0 !important;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--crm-text);
+  font-family: var(--crm-font-ui);
+}
+
+body #appShell .live-lead-table :is(th, td) {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--crm-divider) !important;
+  background: var(--crm-surface);
+  color: var(--crm-text) !important;
+  font-size: 14px !important;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+body #appShell .live-lead-table th {
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  letter-spacing: 0;
+  background: var(--crm-surface) !important;
+}
+
+body #appShell .live-lead-table :is(.lead-table-company strong, .lead-table-contact, .lead-table-contact-link) {
+  color: var(--crm-navy) !important;
+  font-size: 14px !important;
+}
+
+body #appShell .live-lead-table .lead-table-company small {
+  color: var(--crm-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+body #appShell .live-lead-table :is(.lead-table-next-action, a) {
+  color: var(--crm-navy) !important;
+}
+
+body #appShell .live-lead-table tbody tr:is(:hover, :focus-visible, .active) td {
+  background: var(--crm-surface-muted) !important;
+}
+
+body #appShell .live-lead-table .lead-table-badge {
+  display: inline-block;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-control) !important;
+  background: var(--crm-surface-muted) !important;
+  color: var(--crm-navy) !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body #appShell .live-lead-table :is(.lead-table-overdue-amber, .lead-table-priority-amber, .lead-table-stage-negotiation) {
+  border-color: var(--crm-health-amber) !important;
+  background: var(--crm-health-amber-soft) !important;
+  color: var(--crm-health-amber) !important;
+}
+
+body #appShell .live-lead-table :is(.lead-table-overdue-red, .lead-table-priority-red, .lead-table-stage-lost) {
+  border-color: var(--crm-health-red) !important;
+  background: var(--crm-health-red-soft) !important;
+  color: var(--crm-health-red) !important;
+}
+
+body #appShell .live-lead-table :is(.lead-table-priority-green, .lead-table-stage-won) {
+  border-color: var(--crm-health-green) !important;
+  background: var(--crm-health-green-soft) !important;
+  color: var(--crm-health-green) !important;
+}
+
+body.pipeline-compact-mode #appShell #pipelineWorkspace,
+body.pipeline-compact-mode #appShell #pipelineView,
+body.pipeline-compact-mode #appShell #pipelineListPanel {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+body.pipeline-compact-mode #appShell #pipelineWorkspace {
+  overflow: visible;
+}
+
+body.pipeline-compact-mode #appShell #pipelineListPanel {
+  border: 1px solid var(--crm-border) !important;
+  border-radius: var(--crm-radius-panel) !important;
+  box-shadow: var(--crm-shadow-panel) !important;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-list-header {
+  flex-wrap: wrap;
+  padding: var(--crm-space-4);
+  border-bottom: 1px solid var(--crm-divider) !important;
+  background: var(--crm-surface) !important;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-list-header h2 {
+  color: var(--crm-navy) !important;
+  font: 700 18px/1.35 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-list-header span,
+body.pipeline-compact-mode #appShell .pipeline-report-range :is(span, label) {
+  color: var(--crm-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-report-tools {
+  flex-wrap: wrap;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-report-range {
+  border-color: var(--crm-divider);
+  border-radius: var(--crm-radius-control);
+  background: var(--crm-surface-muted);
+}
+
+body.pipeline-compact-mode #appShell #leadList {
+  min-height: 240px;
+  max-height: min(62dvh, 680px);
+  overflow: auto;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+  scrollbar-gutter: stable;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-lead-table {
+  min-width: 1120px;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-lead-table th {
+  padding: 0;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-column-row th {
+  height: 44px;
+  top: 0;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-filter-row th {
+  height: auto;
+  top: 44px;
+  padding: 6px;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(1) { width: 16%; }
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(4) { width: 14%; }
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(7) { width: 9%; }
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(8) { width: 10%; }
+body.pipeline-compact-mode #appShell .pipeline-lead-table th:nth-child(9) { width: 8%; }
+
+body.pipeline-compact-mode #appShell .pipeline-sort-button {
+  min-height: 44px;
+  padding: 8px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--crm-surface) !important;
+  color: var(--crm-navy);
+  font: 600 12px/1.4 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-sort-button:is(:hover, .active) {
+  background: var(--crm-surface-muted) !important;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-sort-indicator {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  color: var(--crm-navy) !important;
+  font-size: 0 !important;
+  -webkit-mask: var(--crm-sort-icon, var(--crm-icon-sliders-horizontal)) center / contain no-repeat;
+  mask: var(--crm-sort-icon, var(--crm-icon-sliders-horizontal)) center / contain no-repeat;
+}
+
+body.pipeline-compact-mode #appShell th[aria-sort="ascending"] { --crm-sort-icon: var(--crm-icon-chevron-up); }
+body.pipeline-compact-mode #appShell th[aria-sort="descending"] { --crm-sort-icon: var(--crm-icon-chevron-down); }
+
+body.pipeline-compact-mode #appShell .pipeline-filter-row :is(input, select).is-active {
+  border: 2px solid var(--crm-navy) !important;
+  background: var(--crm-surface-muted) !important;
+  font-weight: 700;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-owner-scope {
+  height: auto;
+  min-height: 38px;
+  color: var(--crm-text-secondary);
+  background: var(--crm-surface-muted);
+  border-color: var(--crm-divider);
+  white-space: normal;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-row-action {
+  min-height: 36px;
+  padding: 6px;
+  border: 1px solid var(--crm-control-border);
+  border-radius: var(--crm-radius-control);
+  background: var(--crm-surface);
+  color: var(--crm-navy);
+  font: 600 13px/1.4 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-row-action:hover {
+  background: var(--crm-surface-muted);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-mobile-call {
+  display: none;
+}
+
+body.pipeline-compact-mode #appShell .pipeline-pagination {
+  flex-wrap: wrap;
+  padding: var(--crm-space-3) var(--crm-space-4);
+  padding-inline-end: 168px;
+  border-top: 1px solid var(--crm-divider);
+  background: var(--crm-surface);
+  color: var(--crm-text-secondary);
+  font: 400 13px/1.5 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-pagination-controls {
+  flex-wrap: wrap;
+}
+
+body.pipeline-compact-mode #appShell :is(.pipeline-empty-state, .pipeline-error-state, .pipeline-loading-state) {
+  padding: var(--crm-space-6);
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font: 400 14px/1.5 var(--crm-font-ui);
+}
+
+body.pipeline-compact-mode #appShell .pipeline-loading-state span {
+  background: var(--crm-surface-muted);
+  border-color: var(--crm-divider);
+  border-radius: var(--crm-radius-control);
+}
+
+@media (max-width: 720px) {
+  body #appShell #metricsPanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  body #appShell #metricsPanel > article {
+    padding: var(--crm-space-3);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-row-action {
+    min-height: 44px;
+  }
+
+  /* One dataset and table: only the phone presentation becomes lead cards. */
+  body.pipeline-compact-mode #appShell .pipeline-lead-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table thead {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    border-bottom: 1px solid var(--crm-divider);
+    background: var(--crm-surface-muted);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table :is(.pipeline-column-row, .pipeline-filter-row) {
+    display: grid;
+    grid-template-columns: 180px repeat(7, 130px) 90px;
+    width: 1180px;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table thead th {
+    position: static;
+    width: auto !important;
+    min-width: 0;
+    height: auto;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table tbody {
+    display: grid;
+    gap: var(--crm-space-3);
+    width: 100%;
+    padding: var(--crm-space-3);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--crm-space-3);
+    min-width: 0;
+    padding: var(--crm-space-3);
+    border: 1px solid var(--crm-border);
+    border-radius: var(--crm-radius-panel);
+    background: var(--crm-surface);
+    box-shadow: var(--crm-shadow-panel);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border-bottom: 0 !important;
+    background: none !important;
+    white-space: normal;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: var(--crm-space-1);
+    color: var(--crm-text-secondary);
+    font: 600 12px/1.4 var(--crm-font-ui);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-company {
+    grid-column: 1 / -1;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-company strong {
+    font-size: 16px !important;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .pipeline-row-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--crm-space-2);
+    align-items: end;
+    justify-content: start;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-row:is(:hover, :focus-visible, .active) {
+    background: var(--crm-surface-muted);
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-mobile-call {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--crm-space-1);
+    min-height: 44px;
+    padding: 8px;
+    border: 1px solid var(--crm-navy);
+    border-radius: var(--crm-radius-control);
+    background: var(--crm-amber);
+    color: var(--crm-navy) !important;
+    font: 600 13px/1.4 var(--crm-font-ui);
+    text-decoration: none;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-mobile-call::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    background: currentColor;
+    -webkit-mask: var(--crm-icon-phone) center / contain no-repeat;
+    mask: var(--crm-icon-phone) center / contain no-repeat;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-mobile-call:hover {
+    text-decoration: underline;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-lead-table .lead-table-empty {
+    display: block;
+  }
+
+  body.pipeline-compact-mode #appShell .pipeline-pagination {
+    padding-inline-end: 76px;
+  }
+}
+
+@media (max-width: 359px) {
+  body #appShell #metricsPanel {
+    grid-template-columns: 1fr !important;
+  }
+}
+/* Salesman Pipeline reference; Admin retains the shared full-width worklist. */
+body.pipeline-salesman-mode #appShell .topbar { background: transparent !important; }
+body.pipeline-salesman-mode #appShell #topbarPageTitle { font: 700 34px/1.2 var(--crm-font-ui); }
+body.pipeline-salesman-mode #appShell #metricsShell { margin: 0 0 20px; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+body.pipeline-salesman-mode #appShell #metricsShell > .panel-header { display: none; }
+body.pipeline-salesman-mode #appShell #metricsPanel { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; }
+body.pipeline-salesman-mode #appShell #metricsPanel > article { padding: 16px 20px; border: 1px solid var(--crm-divider) !important; border-top: 2px solid var(--crm-teal) !important; border-radius: 14px !important; background: #FFFFFF !important; box-shadow: none !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel > .metric-active { border-top-color: var(--crm-navy) !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel > .metric-risk { border-top-color: var(--crm-health-red) !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel > .metric-due { border-top-color: var(--crm-amber) !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel > article > span { font-size: 12px !important; letter-spacing: .08em; text-transform: uppercase; }
+body.pipeline-salesman-mode #appShell #metricsPanel > article > span::before { content: none; }
+body.pipeline-salesman-mode #appShell #metricsPanel strong { font-size: 28px !important; }
+body.pipeline-salesman-mode #appShell #metricsPanel .metric-risk strong { color: var(--crm-health-red) !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel { padding: 0 !important; border: 1px solid var(--crm-card-border) !important; border-radius: 14px !important; background: #FFFFFF !important; box-shadow: none !important; }
+body.pipeline-salesman-mode #appShell .pipeline-list-header { display: none; }
+body.pipeline-salesman-mode #appShell #leadList { min-height: 0; max-height: none; overflow: visible; }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--crm-divider); background: #FFFFFF; border-radius: 14px 14px 0 0; }
+body.pipeline-salesman-mode .salesman-pipeline-filter { flex: 1 1 120px; min-width: 120px; }
+body.pipeline-salesman-mode .salesman-pipeline-filter:first-child { flex: 1.6 1 190px; min-width: 190px; }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-filter :is(input,select) { width: 100%; min-width: 0; min-height: 44px; font-size: 14px; background: #FFFFFF !important; }
+body.pipeline-salesman-mode .salesman-pipeline-filter-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+body.pipeline-salesman-mode #appShell #clearPipelineFilters { font-size: 0 !important; white-space: nowrap; min-height: 44px; padding: 8px 10px; }
+body.pipeline-salesman-mode #appShell #clearPipelineFilters::after { content: "Clear"; font-size: 12px; }
+body.pipeline-salesman-mode #appShell #refreshPipelineLeads { font-size: 0 !important; width: 44px; min-height: 44px; padding: 8px; }
+body.pipeline-salesman-mode #refreshPipelineLeads::before { margin: 0; }
+body.pipeline-salesman-mode .salesman-pipeline-more { position: relative; flex: 0 0 auto; }
+body.pipeline-salesman-mode .salesman-pipeline-more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--crm-navy); font-size: 13px; }
+body.pipeline-salesman-mode .salesman-pipeline-more-fields { position: absolute; top: 100%; right: 0; z-index: 12; display: grid; gap: 14px; width: 280px; padding: 16px; border: 1px solid var(--crm-control-border); border-radius: 10px; background: #FFFFFF; box-shadow: var(--crm-shadow-panel); }
+body.pipeline-salesman-mode .salesman-pipeline-more-fields label { color: var(--crm-navy); font-size: 14px; }
+body.pipeline-salesman-mode .salesman-pipeline-more-fields input[type="checkbox"] { width: 18px; min-height: 18px; accent-color: var(--crm-navy); }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-due { display: block; margin-top: 4px; font-size: 12px; color: var(--crm-text-secondary); }
+body.pipeline-salesman-mode #appShell #pipelinePagination { margin: 0; padding: 12px 20px; border-top: 1px solid var(--crm-divider); border-radius: 0 0 14px 14px; background: #FFFFFF; }
+body.pipeline-salesman-mode #appShell #aiAssistantLauncher { position: static !important; inset: auto !important; transform: none !important; min-height: 44px; margin: 0; }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-log { background: var(--crm-amber) !important; border-color: var(--crm-amber) !important; color: var(--crm-navy) !important; white-space: nowrap; }
+body.pipeline-salesman-mode #appShell .salesman-pipeline-alert:not(.hidden) { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--crm-health-red); border-radius: 12px; background: var(--crm-health-red-soft); color: var(--crm-navy); }
+body.pipeline-salesman-mode .salesman-pipeline-alert p { flex: 1; margin: 0; font-size: 13px; line-height: 1.5; }
+body.pipeline-salesman-mode .salesman-pipeline-alert strong { color: var(--crm-health-red); }
+body.pipeline-salesman-mode .salesman-pipeline-alert button { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+body.pipeline-salesman-mode [data-salesman-pipeline-dismiss] { font-size: 0 !important; width: 44px; --crm-button-icon: var(--crm-icon-x); }
+body.pipeline-salesman-mode [data-salesman-pipeline-dismiss]::before { margin: 0; }
+@media (min-width: 721px) {
+  body.pipeline-salesman-mode #appShell .pipeline-lead-table { min-width: 0; width: 100%; table-layout: auto; }
+  body.pipeline-salesman-mode #leadList:not(.salesman-pipeline-all-columns) .pipeline-lead-table :is(th,td):is(:nth-child(4),:nth-child(5),:nth-child(8)) { display: none; }
+  body.pipeline-salesman-mode #appShell .pipeline-lead-table :is(th,td) { padding: 12px 16px; background: #FFFFFF; }
+  body.pipeline-salesman-mode #appShell .pipeline-lead-table th { position: static; font-size: 12px; }
+  body.pipeline-salesman-mode #appShell .lead-table-company { width: 33%; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions { display: table-cell; white-space: nowrap; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions button { display: inline-flex; vertical-align: middle; min-height: 36px; padding: 8px 10px; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions .pipeline-row-action { font-size: 0 !important; min-width: 36px; padding: 8px; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions .pipeline-row-action::before { margin: 0; }
+  body.pipeline-salesman-mode #appShell .lead-table-overdue-red,
+  body.pipeline-salesman-mode #appShell .lead-table-overdue-amber { padding: 0; border: 0; background: none; color: var(--crm-health-red); }
+  body.pipeline-salesman-mode #appShell #leadList.salesman-pipeline-all-columns { overflow-x: auto; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-all-columns .pipeline-lead-table { min-width: 1120px; }
+}
+@media (max-width: 720px) {
+  body.pipeline-salesman-mode #appShell #metricsPanel { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  body.pipeline-salesman-mode #appShell #metricsPanel > article { padding: 12px; }
+  body.pipeline-salesman-mode #appShell #topbarPageTitle { font-size: 28px; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-alert:not(.hidden) { flex-wrap: wrap; }
+  body.pipeline-salesman-mode .salesman-pipeline-alert p { flex-basis: 100%; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-filters { padding: 12px; }
+  body.pipeline-salesman-mode .salesman-pipeline-filter { flex-basis: calc(50% - 10px); min-width: 0; }
+  body.pipeline-salesman-mode .salesman-pipeline-filter:first-child { flex-basis: 100%; min-width: 0; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-filter :is(input,select) { font-size: 16px; }
+  body.pipeline-salesman-mode .salesman-pipeline-more-fields { right: auto; left: 0; max-width: calc(100vw - 64px); }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions { flex-wrap: wrap; gap: 8px; }
+  body.pipeline-salesman-mode #appShell .pipeline-row-actions button { min-height: 44px; }
+}
+body.pipeline-salesman-mode #appShell #overdueBanner { display: none !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-button { min-height: 32px; padding: 0 !important; background: none !important; font-size: 12px !important; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-button::before { content: none !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-indicator { display: inline; font-size: 12px; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-button:not(.active) .pipeline-sort-indicator { visibility: hidden; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .live-lead-table :is(th,td) { background: #FFFFFF !important; padding: 8px 16px; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .lead-table-badge { border: 0 !important; box-shadow: none !important; border-radius: 5px !important; color: var(--crm-navy) !important; background: var(--crm-surface-muted) !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel [class*="lead-table-overdue-"] { background: transparent !important; padding: 0; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel :is(.lead-table-overdue-red,.lead-table-overdue-amber) { color: var(--crm-health-red) !important; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel [class*="lead-table-priority-"] { background: transparent !important; padding: 0; }
+body.pipeline-salesman-mode #appShell #pipelineListPanel [class*="lead-table-priority-"]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--crm-text-secondary); }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .lead-table-priority-red::before { background: var(--crm-health-red); }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .lead-table-priority-amber::before { background: var(--crm-health-amber); }
+body.pipeline-salesman-mode #appShell #pipelineListPanel .lead-table-priority-green::before { background: var(--crm-health-green); }
+body.pipeline-salesman-mode #appShell :is(#pipelineWorkspace,#pipelineView,#pipelineListPanel,.pipeline-worklist-column) { height: auto !important; min-height: 0; max-height: none; overflow: visible; }
+@media (max-width: 720px) {
+  body.pipeline-salesman-mode #appShell .lead-table-row td[data-label="Stage"]::before { content: "Status"; }
+}
+@media (min-width: 721px) {
+  body.pipeline-salesman-mode #appShell #leadList { max-height: max(300px,calc(100dvh - 460px)); overflow: auto !important; }
+  body.pipeline-salesman-mode #appShell #pipelineListPanel .live-lead-table td { padding: 6px 16px !important; line-height: 1.35; }
+  body.pipeline-salesman-mode #appShell #pipelineListPanel .live-lead-table td small { line-height: 1.35; }
+}
+@media (max-width: 720px) {
+  body.pipeline-salesman-mode #appShell #pipelineListPanel .pipeline-sort-button { min-height: 44px !important; }
+  body.pipeline-salesman-mode #appShell #refreshPipelineLeads { min-width: 44px; flex: 0 0 44px; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-due { display: none; }
+  body.pipeline-salesman-mode .salesman-pipeline-more-fields label { min-height: 44px; }
+  body.pipeline-salesman-mode #appShell .salesman-pipeline-alert button { width: auto !important; min-width: 44px; }
+  body.pipeline-salesman-mode #appShell #metricsPanel > article { display: flex; flex-direction: column; gap: 6px; }
+  body.pipeline-salesman-mode #appShell #metricsPanel > article small { font-size: 12px !important; }
+}
+body.pipeline-salesman-mode #appShell #pipelineWorkspace { flex: 0 0 auto !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+body.pipeline-salesman-mode #appShell #pipelineView { flex: 0 0 auto; border: 0 !important; background: transparent !important; }

@@ -20,8 +20,9 @@ assert.match(client, /Boolean\(state\.currentUser\) && !isSalesmanRole\(\) && cu
 assert.match(client, /document\.addEventListener\("click", handleDashboardCollapseClick\)/, "collapse controls must use a rerender-safe delegated handler");
 assert.match(client, /event\.target\.closest\("\.panel-collapse-toggle"\)/, "the delegated handler must target collapse controls only");
 assert.match(client, /document\.body\.classList\.contains\("admin-dashboard-mode"\)/, "Admin Dashboard collapse controls must remain interactive after dashboard rerenders");
-assert.match(client, /els\.adminDashboardTriageRow\?\.after\(els\.actionPlanPanel\)/, "Lead Action Plans must follow the top summary and alert row");
-assert.match(client, /els\.actionPlanPanel\?\.after\(els\.adminTaskPanel, els\.lossReasonsPanel, els\.adminDashboardBottomRow\)/, "operational panels must follow Lead Action Plans");
+assert.match(client, /els\.adminDashboardWorkRow\?\.prepend\(els\.actionPlanPanel\)/, "Lead Action Plans must lead the proposal work row");
+assert.match(client, /els\.adminDashboardWorkRow\?\.after\(els\.adminTaskPanel, els\.lossReasonsPanel, els\.adminDashboardBottomRow\)/, "operational panels must follow the work row");
+assert.match(client, /els\.adminDashboardOverviewSlot\?\.before\(els\.overdueBanner\)/, "the overdue alert must precede KPI cards");
 assert.match(client, /els\.dashboardView\?\.appendChild\(els\.adminDashboardAnalyticsRow\)/, "pipeline panels must move together to the bottom dashboard section");
 assert.doesNotMatch(client, /actionPlanBody\.appendChild\(els\.adminDashboardBottomRow\)/, "Lead Action Plans must not nest lower dashboard panels");
 assert.match(client, /section\.classList\.add\("collapsible-enabled"\)/, "Admin Dashboard layout must enable its visible collapse controls");
@@ -67,7 +68,7 @@ assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*?#dashboardStatus\s*\{[^}
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v83-responsive-login-redesign/, "PWA cache must rotate for the latest login update");
+assert.match(sw, /arg-pwa-v124-meeting-reference-polish/, "PWA cache must rotate for the revised presentation assets");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
 assert.match(sw, /if \(url\.pathname\.startsWith\("\/api\/"\)\) return;/, "PWA must keep API responses out of the cache");
 assert.match(vercel, /"src": "admin-dashboard-clean\.css"/, "Vercel must build the dashboard stylesheet");

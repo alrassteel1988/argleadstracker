@@ -1,0 +1,190 @@
+const { test, expect } = require("@playwright/test");
+const { capture, login, blockExternalTraffic } = require("./helpers");
+const {inspectPresentation} = require('./presentation-audit');
+
+test.beforeEach(async ({ page }) => blockExternalTraffic(page));
+
+test("shared Pipeline filters, sorting, pagination, reports and recovery", async ({ page }, info) => {
+  const role = await login(page, info);
+  const mobile = info.project.name.endsWith("mobile");
+  let releaseLoading;
+  const loadingGate = new Promise(resolve => { releaseLoading = resolve; });
+  await page.route("**/api/leads", async route => {
+    await loadingGate;
+    await route.continue();
+  });
+  try {
+    await page.goto("/?view=pipeline");
+    await expect(page.locator("#appShell")).toBeVisible();
+    if (info.project.name.endsWith("mobile")) await page.locator("#mobileMenuToggle").click();
+    await page.locator('#mobileSidebar [data-view="pipeline"]').click();
+    await expect(page.locator(".pipeline-loading-state")).toBeVisible();
+    await capture(page, info, "13-pipeline-loading");
+  } finally {
+    releaseLoading();
+    await page.unroute("**/api/leads");
+  }
+  const rows = page.locator("#leadList tbody tr[data-lead-id]");
+  await expect(rows).toHaveCount(10);
+  const filter = key => page.locator(`[data-pipeline-filter="${key}"]`);
+  const clear = async () => {
+    await page.locator("#clearPipelineFilters").click();
+    await expect(rows).toHaveCount(10);
+  };
+  const colors = await page.locator("#metricsPanel article").first().evaluate(element => ({
+    background: getComputedStyle(element).backgroundColor,
+    color: getComputedStyle(element.querySelector("strong")).color,
+    top: getComputedStyle(element).borderTopColor
+  }));
+  expect(colors).toEqual({ background: role === 'salesman' ? "rgb(255, 255, 255)" : "rgb(254, 252, 253)", color: "rgb(8, 61, 119)", top: role === 'salesman' ? "rgb(91, 192, 190)" : "rgb(255, 177, 0)" });
+  const captionsFit = await page.locator("#metricsPanel article small").evaluateAll(elements => elements.every(element => {
+    const caption = element.getBoundingClientRect();
+    const card = element.closest("article").getBoundingClientRect();
+    const metrics = element.closest("#metricsPanel").getBoundingClientRect();
+    return caption.height > 0 && caption.bottom <= Math.min(card.bottom, metrics.bottom) + 1;
+  }));
+  expect(captionsFit).toBe(true);
+  const tableType = await page.locator("#leadList .lead-table-company strong").first().evaluate(element => ({
+    size: parseFloat(getComputedStyle(element).fontSize), color: getComputedStyle(element).color
+  }));
+  expect(tableType).toEqual({ size: mobile ? 16 : 14, color: "rgb(8, 61, 119)" });
+  await expect(page.getByRole("table", {name:"Live leads", exact:true})).toBeVisible();
+  await capture(page, info, "13-pipeline-data");
+  const call = page.locator('#leadList a[href="tel:+12025550101"]');
+  if (mobile) {
+    await expect(call).toBeVisible();
+    expect((await call.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    await expect(rows.first()).toHaveCSS("display", "grid");
+    const layout = await page.locator("#leadList .pipeline-lead-table").evaluate(table => {
+      const body = table.querySelector("tbody"), head = table.querySelector("thead");
+      return {bodyOverflow:body.scrollWidth-body.clientWidth, headOverflow:head.scrollWidth-head.clientWidth,
+        valuesFit:Array.from(body.querySelectorAll("td")).every(e=>e.scrollWidth<=e.clientWidth+1),
+        fields:body.querySelector("tr").querySelectorAll("td").length};
+    });
+    expect(layout.bodyOverflow).toBeLessThanOrEqual(1);
+    expect(layout.headOverflow).toBeGreaterThan(0);
+    expect(layout.valuesFit).toBe(true);
+    expect(layout.fields).toBe(9);
+    await expect(rows.first().locator('td[data-label="Stage"]')).toBeVisible();
+    await rows.first().locator("[data-pipeline-open]").scrollIntoViewIfNeeded();
+    const action = await rows.first().locator("[data-pipeline-open]").boundingBox();
+    const ai = await page.locator("#aiAssistantLauncher").boundingBox();
+    if (role === 'salesman') {
+      expect(action.x < ai.x + ai.width && action.x + action.width > ai.x && action.y < ai.y + ai.height && action.y + action.height > ai.y).toBe(false);
+    } else expect(action.x + action.width).toBeLessThanOrEqual(ai.x);
+  } else {
+    await expect(call).toBeHidden();
+    await expect(rows.first()).toHaveCSS("display", "table-row");
+  }
+  await filter("search").fill("Demo Contact 2");
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText("Synthetic Steel Company 02");
+  await clear();
+  for (const [key, value] of [["nextAction", "To Call"], ["priority", "New"], ["stage", "NEW"], ["territory", "UAE-North"]]) {
+    await filter(key).selectOption(value);
+    await expect(filter(key)).toHaveValue(value);
+    await expect(rows.first()).toBeVisible();
+    await clear();
+  }
+  const overdue = parseInt(await rows.first().locator(".lead-table-badge").first().innerText(), 10);
+  const range = overdue > 30 ? "31-plus" : overdue >= 15 ? "15-30" : overdue >= 8 ? "8-14" : overdue > 0 ? "1-7" : "not-overdue";
+  if (role === 'salesman') await page.locator('.salesman-pipeline-more summary').click();
+  await filter("overdue").selectOption(range);
+  await expect(rows).toHaveCount(10);
+  await clear();
+  if (role === 'salesman') await page.locator('.salesman-pipeline-more summary').click();
+  await filter("dueDate").fill("2026-10-20");
+  await expect(rows).toHaveCount(10);
+  await clear();
+
+  if (role === "admin") {
+    await filter("salesman").selectOption("Other Demo Salesman");
+    await expect(rows).toHaveCount(6);
+    await clear();
+    await page.locator("#pipelineReportDateFrom").fill("2026-10-20");
+    await page.locator("#pipelineReportDateTo").fill("2026-10-20");
+    await expect(rows).toHaveCount(10);
+    for (const [button, suffix] of [["#exportPipelineExcel", ".xls"], ["#exportPipelinePdf", ".pdf"]]) {
+      const download = page.waitForEvent("download");
+      await page.locator(button).click();
+      expect((await download).suggestedFilename()).toMatch(new RegExp(`${suffix.replace(".", "\\.")}$`));
+    }
+    await clear();
+  } else {
+    await expect(filter("salesman")).toHaveCount(0);
+    await expect(page.locator("#pipelineReportTools")).toBeHidden();
+  }
+
+  await filter("nextAction").selectOption("To Call");
+  await filter("territory").selectOption("UAE-North");
+  await page.locator('[data-pipeline-sort="company"]').click();
+  await expect(page.locator('th[aria-sort="ascending"]')).toContainText("Company");
+  await page.locator('#pipelinePagination [aria-label="Next page"]').click();
+  await expect(page.locator("#pipelinePagination")).toContainText("Page 2 of 2");
+  await expect(filter("nextAction")).toHaveValue("To Call");
+  await expect(filter("territory")).toHaveValue("UAE-North");
+  await expect(rows).toHaveCount(2);
+  const nextPage = await page.locator('#pipelinePagination [aria-label="Next page"]').boundingBox();
+  const launcher = await page.locator("#aiAssistantLauncher").boundingBox();
+  const intersects = nextPage.x < launcher.x + launcher.width && nextPage.x + nextPage.width > launcher.x
+    && nextPage.y < launcher.y + launcher.height && nextPage.y + nextPage.height > launcher.y;
+  expect(intersects).toBe(false);
+  await clear();
+  await filter("search").fill("No matching synthetic company");
+  await expect(page.locator(".pipeline-empty-state")).toBeVisible();
+  await capture(page, info, "14-pipeline-empty");
+  await page.locator("[data-pipeline-clear]").click();
+  await expect(rows).toHaveCount(10);
+
+  await page.route("**/api/leads", route => route.fulfill({
+    status: 503, contentType: "application/json", body: JSON.stringify({ error: "Synthetic test service unavailable" })
+  }));
+  await page.locator("#refreshPipelineLeads").click();
+  await expect(page.locator(".pipeline-error-state")).toBeVisible();
+  await capture(page, info, "15-pipeline-error");
+  await page.unroute("**/api/leads");
+  await page.locator("[data-pipeline-retry]").click();
+  await expect(rows).toHaveCount(10);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  if (mobile) await rows.first().press("Enter");
+  else await rows.first().locator("[data-pipeline-open]").click();
+  await expect(page.locator("#leadDetailView")).toBeVisible();
+});
+
+test('My Pipeline matches compact Salesman layout without changing Admin workflows', async ({page}, info) => {
+  const role = await login(page, info);
+  await page.goto('/?view=pipeline');
+  const rows = page.locator('#leadList tbody tr[data-lead-id]');
+  await expect(rows).toHaveCount(10);
+  if (role !== 'salesman') {
+    await expect(page.locator('.salesman-pipeline-filters')).toHaveCount(0);
+    await expect(page.locator('#salesmanPipelineAlert')).toBeHidden();
+    return;
+  }
+  await expect(page.locator('#topbarPageTitle')).toHaveText('My pipeline');
+  await expect(page.locator('#topbarPageTitle em')).toHaveText('pipeline');
+  await expect(page.locator('#metricsPanel article')).toHaveCount(4);
+  await expect(page.locator('#pipelineReportTools')).toBeHidden();
+  await expect(page.locator('#salesmanPipelineAlert')).toBeVisible();
+  await expect(page.locator('#overdueBanner')).toBeHidden();
+  await expect(page.locator('.salesman-pipeline-filters [data-pipeline-filter]')).toHaveCount(7);
+  await expect(page.locator('.pipeline-sort-button.active .pipeline-sort-indicator')).toHaveCSS('visibility','visible');
+  expect(await page.evaluate(inspectPresentation,{checkTouchTargets:true})).toEqual([]);
+  await capture(page,info,'16-my-pipeline-reference',{fullPage:false});
+  await page.locator('[data-pipeline-log]').first().click();
+  await expect(page.locator('#activityDialog')).toBeVisible();
+  await expect(page.locator('#activityLeadName')).toContainText('Synthetic Steel Company');
+  await page.locator('#closeActivityDialog').click();
+  await page.locator('.salesman-pipeline-more summary').click();
+  await page.locator('[data-pipeline-columns]').check();
+  if (!info.project.name.endsWith('mobile')) await expect(page.locator('[data-pipeline-sort="dueDate"]')).toBeVisible();
+  await page.locator('[data-pipeline-columns]').uncheck();
+  await page.locator('.salesman-pipeline-more summary').click();
+  await page.locator('[data-salesman-pipeline-overdue]').click();
+  await expect(page.locator('#overduePipelineFilter')).toBeVisible();
+  await page.locator('#clearPipelineFilters').click();
+  await expect(rows).toHaveCount(10);
+  await page.locator('[data-salesman-pipeline-dismiss]').click();
+  await expect(page.locator('#salesmanPipelineAlert')).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+});
