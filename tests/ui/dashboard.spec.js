@@ -45,16 +45,31 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     expect(Math.max(...clipped)).toBeLessThanOrEqual(1);
     await expect(page.locator(".market-snapshot-bar-track > i").first()).toHaveCSS("background-color", "rgb(91, 192, 190)");
   } else {
+    const mobile = info.project.name.endsWith("mobile");
     await expect(page.locator("#adminDashboardWorkRow")).toBeHidden();
-    await expect(page.locator("#topbarPageTitle")).toHaveText("What do I do next?");
-    await expect(page.locator("#topbarPageTitle em")).toHaveText("next?");
+    await expect(page.locator("#topbarPageTitle")).toHaveText("What should I do today?");
+    await expect(page.locator("#topbarPageTitle em")).toHaveText("today?");
+    await expect(page.locator("#salespersonDashboardDate")).not.toBeEmpty();
     await expect(page.locator('[data-summary-card="salesmanStageLost"] .salesman-stage-label')).toHaveText("Lost");
-    await expect(page.locator("#overdueBanner")).toBeVisible();
+    if (mobile) {
+      await expect(page.locator(".topbar")).toBeHidden();
+      await expect(page.locator("#salespersonMobileGreeting")).toContainText("Demo");
+      await expect(page.locator("#salespersonMobileDate")).not.toBeEmpty();
+      await expect(page.locator("#overdueBanner")).toBeHidden();
+      const nav = await page.locator("#mobileTabs .nav-item:visible").evaluateAll(elements => elements.map(e => e.getAttribute("aria-label") || e.textContent.trim()));
+      expect(nav).toEqual(["Home", "Leads", "Log activity", "AI actions", "Map"]);
+      await expect(page.locator('#mobileTabs [data-view="dashboard"]')).toHaveCSS("display", "grid");
+      expect(await page.locator('#mobileTabs [data-view="dashboard"]').evaluate(e => getComputedStyle(e, "::before").position)).toBe("static");
+      await expect(page.locator(".salesperson-contact-icon").first()).toBeVisible();
+      const origins = await page.locator("#salespersonOrigin .salesperson-origin-row:not(.origin-unknown)").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().top));
+      expect(Math.max(...origins) - Math.min(...origins)).toBeLessThanOrEqual(1);
+      await page.locator("[data-dashboard-stages]").click();
+    } else await expect(page.locator("#overdueBanner")).toBeVisible();
     expect(await page.locator("#overdueBanner").evaluate(e => e.parentElement.id)).toBe("sharedDashboardTopSlot");
     for (const selector of [".salesman-dashboard-pipeline", ".salesman-dashboard-call-queue"]) {
       const accent = page.locator(`${selector} h2 .crm-title-accent`);
       await expect(accent).toHaveCSS("color", "rgb(184, 122, 0)");
-      await expect(accent).toHaveCSS("font-size", "20px");
+      expect(await accent.evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(17);
       await expect(accent).toHaveCSS("font-style", "italic");
     }
     const stages = await page.locator("#salesmanSimplifiedPipeline [data-summary-card]").evaluateAll(elements => elements.map(element => ({
@@ -65,29 +80,58 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     })));
     expect(stages).toHaveLength(6);
     for (const stage of stages) {
-      if (!info.project.name.endsWith("mobile")) expect(stage.labelTop).toBeGreaterThanOrEqual(stage.countBottom);
-      expect(stage.border).toBe(stage.background);
+      expect(stage.countBottom).toBeGreaterThan(stage.labelTop);
+      expect(stage.background).toBe("rgb(255, 255, 255)");
     }
+    if (mobile) await page.locator("[data-dashboard-stages]").click();
     const moreTools = page.locator(".salesman-dashboard-more-tools");
     await expect(moreTools).not.toHaveAttribute("open", "");
     await expect(page.locator(".salesman-dashboard-more-content")).toBeHidden();
     for (const id of ["dailyAiPanel", "dashboardQuickActions", "salesmanLossPromptPanel"]) await expect(page.locator(`#${id}`)).toBeHidden();
-    if (info.project.name.endsWith("mobile")) {
-      const positions = await page.locator("#salesmanSimplifiedMetrics > button").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().top));
+    {
+      const positions = await page.locator('#salesmanSimplifiedMetrics > button:not([data-summary-card="salesmanMyLeads"])').evaluateAll(elements => elements.map(e => e.getBoundingClientRect().top));
       expect(Math.max(...positions) - Math.min(...positions)).toBeLessThanOrEqual(1);
+      const metricWidths = await page.locator('#salesmanSimplifiedMetrics > button:not([data-summary-card="salesmanMyLeads"])').evaluateAll(elements => elements.map(e => e.getBoundingClientRect().width));
+      expect(metricWidths.reduce((sum, width) => sum + width, mobile ? 8 : 10)).toBeCloseTo((await page.locator("#salesmanSimplifiedMetrics").boundingBox()).width, 0);
     }
     await capture(page, info, "43-home-reference-layout", {fullPage:false});
+    await capture(page, info, "44-salesperson-dashboard-complete");
     const summaryBox = await page.locator("#salesmanSimplifiedMetrics").boundingBox();
     const pipelineBox = await page.locator(".salesman-dashboard-pipeline").boundingBox();
-    const queueBox = await page.locator(".salesman-dashboard-call-queue").boundingBox();
-    expect(queueBox.y).toBeGreaterThanOrEqual(pipelineBox.y + pipelineBox.height);
     expect(pipelineBox.y).toBeGreaterThanOrEqual(summaryBox.y + summaryBox.height);
+    const focusBox = await page.locator(".salesperson-focus-card").boundingBox();
+    const followupBox = await page.locator(".salesperson-followup-card").boundingBox();
+    await expect(page.locator("#salespersonFocusList > li")).toHaveCount(3);
+    await expect(page.locator("#salespersonQuickGrid button")).toHaveCount(3);
+    const assistantBottom = await page.locator(".salesperson-dashboard-assistant").evaluate(e => e.getBoundingClientRect().bottom + scrollY);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThanOrEqual(assistantBottom);
+    await expect(page.locator("#salespersonOrigin")).toContainText("Accounts by origin");
+    await expect(page.locator("#salespersonFocusList")).not.toContainText("Synthetic Steel Company 13");
+    const mainBackground = await page.locator("#appShell > .main").evaluate(e => getComputedStyle(e).backgroundImage);
+    expect(mainBackground).toContain(info.project.name.endsWith("mobile") ? "crm-silk-white-mobile.png" : "crm-silk-white-desktop.png");
+    const pipelineMeters = await page.locator("#salesmanSimplifiedPipeline meter").evaluateAll(elements => elements.map(e => ({ value:e.value, max:e.max })));
+    expect(pipelineMeters.reduce((sum, item) => sum + item.value, 0)).toBe(12);
+    expect(pipelineMeters.every(item => item.max === 12)).toBeTruthy();
     if (!info.project.name.endsWith("mobile")) {
-      expect(queueBox.width).toBeCloseTo(summaryBox.width, 0);
-      expect(summaryBox.height).toBeLessThanOrEqual(130);
-      expect(pipelineBox.height).toBeLessThanOrEqual(150);
+      expect(followupBox.x).toBeGreaterThan(focusBox.x + focusBox.width);
+      expect(Math.abs(followupBox.y - focusBox.y)).toBeLessThanOrEqual(1);
+    } else {
+      expect(focusBox.y).toBeGreaterThanOrEqual(followupBox.y + followupBox.height);
+      const quickBox = await page.locator(".salesperson-quick-card").boundingBox();
+      expect(quickBox.y).toBeGreaterThanOrEqual(focusBox.y + focusBox.height);
+      expect(pipelineBox.y).toBeGreaterThanOrEqual(quickBox.y + quickBox.height);
+      await page.locator("[data-dashboard-stages]").click();
     }
+    let interpreted = 0;
+    page.on("request", request => { if (request.url().includes("/interpret") || request.url().includes("/confirm")) interpreted++; });
+    await page.locator("#salespersonDashboardQuestion").fill("Review my accounts");
+    await page.locator(".salesperson-dashboard-assistant button").click();
+    await expect(page.locator("#aiAssistantDialog")).toBeVisible();
+    await expect(page.locator("#aiAssistantCommand")).toHaveValue("Review my accounts");
+    expect(interpreted).toBe(0);
+    await page.keyboard.press("Escape");
     await moreTools.locator("summary").click();
+    expect((await page.locator(".salesperson-dashboard-assistant").boundingBox()).width).toBeCloseTo((await page.locator("#salesmanSimplifiedDashboard").boundingBox()).width, 0);
     await expect(page.locator("#salesmanSimplifiedActions")).toBeVisible();
     const actionCards = page.locator("#salesmanSimplifiedActions .salesman-triage-card");
     await expect(actionCards).toHaveCount(3);
@@ -117,7 +161,7 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     }
   }
 
-  const selector = role === "admin" ? "#metricsPanel [data-summary-card]" : "#salesmanSimplifiedMetrics [data-summary-card], #salesmanSimplifiedPipeline [data-summary-card]";
+  const selector = role === "admin" ? "#metricsPanel [data-summary-card]" : "#salesmanSimplifiedMetrics [data-summary-card], #salesmanSimplifiedPipeline [data-summary-card], #salespersonPipelineBreakdown > [data-summary-card]";
   const cards = await page.locator(selector).evaluateAll(elements => elements.map(e => ({
     type: e.dataset.summaryCard, count: Number(e.querySelector("strong").textContent)
   })));
@@ -151,4 +195,48 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     await expect(page.locator("#adminDashboardWorkRow > #actionPlanPanel")).toBeVisible();
     await expect(page.locator("#adminDashboardTriageRow > #marketIntelPanel")).toBeVisible();
   }
+});
+
+test("Salesperson dashboard reference actions and responsive bounds", async ({ page }, info) => {
+  test.skip(info.project.name.startsWith("admin"), "Salesperson-only reference layout");
+  await login(page, info);
+  const mobile = info.project.name.endsWith("mobile");
+  let requests = [];
+  page.on("request", request => {
+    if (request.url().endsWith("/api/salesperson-ai-actions") && request.postDataJSON()?.action === "pipeline_health") return;
+    if (request.method() !== "GET" && request.url().includes("/api/")) requests.push(request.url());
+  });
+  if (mobile) await page.locator(".salesman-dashboard-more-tools > summary").click();
+  await page.locator("[data-dashboard-refresh]:visible").click();
+  await expect(page.locator('[data-summary-card="salesmanMyLeads"] strong')).toHaveText("12");
+  expect(requests).toEqual([]);
+  for (const width of [320, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    const clipped = await page.locator(".salesperson-dashboard-layout button, .salesperson-dashboard-assistant").evaluateAll(elements => elements.filter(e => {
+      const box = e.getBoundingClientRect();
+      return box.width && (box.left < 0 || box.right > innerWidth + 1);
+    }).length);
+    expect(clipped).toBe(0);
+  }
+  await page.setViewportSize(info.project.use.viewport);
+  await page.locator("[data-dashboard-focus-open]").first().click();
+  await expect(page.locator("#leadDetailView")).toBeVisible();
+  await expect(page.locator("#leadDrawerTitle")).toHaveText("Synthetic Steel Company 01");
+  await page.goto("/?view=dashboard");
+  if (mobile) {
+    await page.locator("[data-dashboard-search]").click();
+    await expect(page.locator("#smartSearchInput")).toBeVisible();
+    await page.locator("#mobileMenuToggle").click();
+    await page.locator('#mobileSidebar [data-view="focus"]').click();
+  } else await page.locator("[data-dashboard-today]").click();
+  await expect(page.locator("#topbarPageTitle")).toHaveText("Today");
+  await page.goto("/?view=dashboard");
+  await page.locator(mobile ? '#mobileTabs [data-view="ai-actions"]' : "[data-dashboard-ai-all]").click();
+  await expect(page.locator(".crm-onetap-company-grid")).toBeVisible();
+  await page.goto("/?view=dashboard");
+  await page.locator('[data-dashboard-portfolio="pipeline_health"]').click();
+  await expect(page.locator("#aiActionDialog")).toBeVisible();
+  await expect(page.locator("#aiActionResult")).not.toBeEmpty();
+  await page.keyboard.press("Escape");
 });

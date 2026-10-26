@@ -93,7 +93,8 @@ test("shared shell branding, navigation and existing management actions", async 
   await expect(page.locator('#mobileSidebar .nav-item.active')).toHaveCSS("border-radius", "10px");
   await expect(page.locator('#mobileSidebar .nav-item.active .nav-item-icon')).toBeVisible();
   await expect(page.locator('#openLeadForm')).toHaveCSS("border-radius", "10px");
-  await expect(page.locator('#topbarPageTitle em')).toHaveText(role === "admin" ? "Dashboard" : "next?");
+  await expect(page.locator('#topbarPageTitle em')).toHaveText(role === "admin" ? "Dashboard" : "today?");
+  if (mobile && role === "salesman") await page.locator("[data-dashboard-search]").click();
   const placesColors = await page.locator("#openPlacesSearch").evaluate(button => ({
     background: getComputedStyle(button).backgroundColor,
     foreground: getComputedStyle(button).color
@@ -162,7 +163,10 @@ test("shared shell branding, navigation and existing management actions", async 
       ["map", "mobileMapDialog", "closeMobileMap"],
       ["alerts", "pendingChangesDialog", "closePendingChanges"]
     ]) {
-      await page.locator(`#mobileTabs [data-mobile-action="${action}"]`).click();
+      if (action === "alerts" && role === "salesman") {
+        await page.locator(".salesman-dashboard-more-tools > summary").click();
+        await page.locator("[data-dashboard-alerts]").click();
+      } else await page.locator(`#mobileTabs [data-mobile-action="${action}"]`).click();
       await expect(page.locator(`#${dialog}`)).toBeVisible();
       await capture(page, info, `11-mobile-${action}`);
       await page.locator(`#${close}`).click();
