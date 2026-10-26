@@ -28,6 +28,59 @@ assert.match(client, /if \(!isSalesmanRole\(\) && \["focus", "neglected"\]\.incl
 console.log("PASS AI workspace routes, existing action reuse and escaped caller-scoped company selection");
 
 {
+  const context = { TextEncoder, crypto: require("node:crypto").webcrypto,
+    btoa: value => Buffer.from(value, "binary").toString("base64") };
+  vm.createContext(context);
+  for (const name of ["emailBase64", "emailDraftMime", "emailToneBody"]) vm.runInContext(client.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0], context);
+  const draft = { to: "buyer@example.test", cc: "other@example.test", subject: "Steel enquiry \u00e9", body: "Dear Team,\n\nRHS enquiry.\n\nRegards,\nDemo", includeProfile: true };
+  const bytes = new Uint8Array(Buffer.from("%PDF-1.7 synthetic attachment\n"));
+  const mime = context.emailDraftMime(draft, bytes);
+  assert.match(mime, /^X-Unsent: 1\r\n/);
+  assert.match(mime, /To: buyer@example.test\r\nCc: other@example.test/);
+  assert.match(mime, /filename="Al Ras Group - Company Profile.pdf"/);
+  const attachment = mime.split('filename="Al Ras Group - Company Profile.pdf"')[1].split("\r\n\r\n")[1].split("\r\n--")[0];
+  assert.deepEqual(Buffer.from(attachment.replace(/\s/g, ""), "base64"), Buffer.from(bytes));
+  assert.doesNotMatch(context.emailDraftMime({ ...draft, includeProfile: false }), /application\/pdf/);
+  assert.throws(() => context.emailDraftMime({ ...draft, to: "buyer@example.test\r\nBcc: hidden@example.test" }, bytes));
+  assert.throws(() => context.emailDraftMime({ ...draft, subject: "Hello\nBcc: bad" }, bytes));
+  assert.throws(() => context.emailDraftMime(draft, null));
+  assert.equal(context.emailToneBody(draft.body, "friendly"), draft.body.replace("Dear Team", "Hello Team").replace("Regards,", "Best regards,"));
+  const service = require("../src/services/emailProfileService");
+  assert.equal(service.readProfilePart(-1), null);
+  assert.equal(service.readProfilePart("../server.js"), null);
+  assert.equal(service.readProfilePart(999), null);
+  const first = service.readProfilePart(0);
+  const assembled = Buffer.concat(Array.from({ length: first.parts }, (_, index) => service.readProfilePart(index).buffer));
+  const original = fs.readFileSync(path.join(__dirname, "../assets/email", service.PROFILE_FILENAME));
+  assert.deepEqual(assembled, original);
+  assert.equal(original.subarray(0, 5).toString(), "%PDF-");
+  assert.match(read("server.js"), /emailProfileMatch[^]*?getSupabaseLead\(user.token[^]*?leadBelongsToUser[^]*?private, no-store/);
+  console.log("PASS draft MIME round-trip, header injection rejection, tone scope and exact PDF assembly");
+}
+
+{
+  const context = { state:{currentUser:{territory:'<script>'},dailyAiLoading:false,leadsError:''},
+    daysUntil:()=>-1, isSalesmanRole:()=>true, SALESPERSON_ACTION_LABELS:{focus_today:'Focus',neglected:'Neglected',pipeline_health:'Health',new_intel:'Intel'} };
+  vm.createContext(context);
+  vm.runInContext(`${client.match(/function escapeHtml\([^]*?\n\}/)[0]}; ${client.match(/function renderOneTapWorkspace\([^]*?\n\}/)[0]}; run=renderOneTapWorkspace;`,context);
+  const workspace={innerHTML:'',setAttribute:()=>{}};
+  const leads=[{id:'a',company_name:'<img src=x>',next_action_date:'2026-01-01'}];
+  context.run(workspace,leads,'',false);
+  assert.match(workspace.innerHTML,/&lt;img src=x&gt;/);
+  assert.match(workspace.innerHTML,/&lt;script&gt;/);
+  assert.doesNotMatch(workspace.innerHTML,/<img|<script>|5 accounts|6 at risk|Since 14 Aug/);
+  assert.equal((workspace.innerHTML.match(/data-workspace-company-action=/g)||[]).length,5);
+  assert.match(workspace.innerHTML,/data-workspace-company-action="prepare" disabled/);
+  context.run(workspace,leads,'a',false);
+  assert.doesNotMatch(workspace.innerHTML,/data-workspace-company-action="prepare" disabled/);
+  context.isSalesmanRole=()=>false;
+  context.run(workspace,leads,'',true);
+  assert.doesNotMatch(workspace.innerHTML,/data-workspace-portfolio-action|data-workspace-pick/);
+  assert.match(workspace.innerHTML,/Loading your visible companies/);
+  console.log('PASS reference AI actions keep scoped selectors, escaped values, role restrictions and truthful states');
+}
+
+{
   const parse = vm.runInNewContext(`${client.match(/function meetingBriefSections\([^]*?\n\}/)[0]}; meetingBriefSections`);
   const sections = parse("## Recommended ask\r\nConfirm a contact.\r\n## Talking points\n- Recorded demand\n## Additional context\n<untrusted>");
   assert.equal(sections["Recommended ask"].trim(), "Confirm a contact.");
@@ -105,6 +158,27 @@ console.log("PASS AI workspace routes, existing action reuse and escaped caller-
 }
 
 (async () => {
+  const pending = {};
+  const draftState = { owner:"u", leadId:"one", to:"buyer@example.test", subject:"Edited", body:"Keep this", dirty:false, tone:"formal" };
+  const emailContext = { state:{currentUser:{id:"u"},leads:[{id:"one"}]}, currentView:"draft-email", emailDraftState:draftState,
+    window:{confirm:()=>true}, renderAiWorkspace:()=>{}, api:()=>new Promise((resolve,reject)=>Object.assign(pending,{resolve,reject})) };
+  vm.createContext(emailContext);
+  for (const name of ["parseEmailDraft", "emailToneBody"]) vm.runInContext(client.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0],emailContext);
+  vm.runInContext(client.match(/async function generateEmailDraft\([^]*?\n\}/)[0],emailContext);
+  const failed = emailContext.generateEmailDraft();
+  pending.reject(new Error("Unavailable"));
+  await failed;
+  assert.equal(draftState.body,"Keep this");
+  assert.equal(draftState.error,"Unavailable");
+  const stale = emailContext.generateEmailDraft();
+  const next = {owner:"u",leadId:"two",body:"New company"};
+  emailContext.emailDraftState = next;
+  pending.resolve({output:"Subject: Old company\n\nWrong company content",provider:"fallback"});
+  await stale;
+  assert.equal(next.body,"New company");
+  assert.equal(draftState.body,"Keep this");
+  console.log("PASS email generation preserves edits on error and ignores stale company responses");
+
   const runSource = client.match(/async function runSalespersonAiAction\([^]*?\n\}/)[0];
   for (const fail of [false, true]) {
     const foreground = {scope:"company", action:"prepare", loading:true, output:"Previous report"};

@@ -5195,6 +5195,21 @@ async function handleApi(req, res, url) {
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
   if (!await enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)) return;
 
+  const emailProfileMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/email-profile$/);
+  if (req.method === "GET" && emailProfileMatch) {
+    const lead = supabaseEnabled
+      ? await getSupabaseLead(user.token, emailProfileMatch[1], user)
+      : db.leads.find(item => item.id === emailProfileMatch[1] && leadBelongsToUser(item, user));
+    if (!lead) return leadNotFound(res);
+    let part;
+    try { part = require("./src/services/emailProfileService").readProfilePart(url.searchParams.get("part")); }
+    catch { return sendJson(res, 503, { error: "Company profile is temporarily unavailable." }); }
+    if (!part) return sendJson(res, 400, { error: "Invalid company profile part." });
+    res.writeHead(200, { "Content-Type": "application/octet-stream", "Cache-Control": "private, no-store",
+      "X-Profile-Parts": String(part.parts), "X-Profile-Size": String(part.size) });
+    return res.end(part.buffer);
+  }
+
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     return sendJson(res, 200, { user: publicUser(user) });
   }

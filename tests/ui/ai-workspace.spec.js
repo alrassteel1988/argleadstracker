@@ -4,11 +4,126 @@ const {inspectPresentation} = require("./presentation-audit");
 
 test.beforeEach(async ({page}) => blockExternalTraffic(page));
 
+test("Draft Email downloads an editable MIME draft with the exact protected profile", async ({page}, info) => {
+  test.setTimeout(120000);
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const role = await login(page, info);
+  const writes = [];
+  page.on("request", request => {
+    if (new URL(request.url()).pathname === "/api/salesperson-ai-actions" && request.postDataJSON()?.action === "pipeline_health") return;
+    if (["POST", "PATCH", "PUT", "DELETE"].includes(request.method()) && /\/api\//.test(request.url())) writes.push(new URL(request.url()).pathname);
+  });
+  await page.goto("/?view=draft-email");
+  await expect(page.locator("[data-email-download]")).toBeDisabled();
+  await page.locator("#aiWorkspaceCompany").selectOption("ui-lead-1");
+  expect(writes).toEqual([]);
+  await page.locator("[data-email-generate]").click();
+  await expect(page.locator("#emailDraftBody")).not.toHaveValue("");
+  await expect(page.locator(".email-provenance")).toContainText("CRM draft");
+  if (info.project.name.endsWith("mobile")) await capture(page, info, "75-email-mobile-reference", {fullPage:false});
+  await page.locator("[data-email-cc]").click();
+  await page.locator("#emailDraftCc").fill("copied@example.test");
+  await page.locator("#emailDraftSubject").fill("Edited steel enquiry");
+  await page.locator("#emailDraftBody").fill("Dear Procurement,\n\nEdited enquiry for RHS.\n\nRegards,\nDemo");
+  await page.locator('[data-email-tone="friendly"]').click();
+  await expect(page.locator("#emailDraftBody")).toHaveValue(/Hello Procurement,[\s\S]*Best regards,/);
+  page.once("dialog", dialog => dialog.dismiss());
+  await page.locator("[data-email-generate]").click();
+  await expect(page.locator("#emailDraftSubject")).toHaveValue("Edited steel enquiry");
+  if (info.project.name.endsWith("mobile")) {
+    await expect(page.locator(".email-mobile-back")).toBeVisible();
+    await expect(page.locator("#aiWorkspaceHeading")).toHaveCSS("font-size", "21px");
+    await expect(page.locator(".email-mobile-source")).toContainText("CRM draft");
+    await expect(page.locator(".email-editor footer")).toHaveCSS("position", "fixed");
+    await expect(page.locator("[data-email-copy]")).toHaveCSS("position", "fixed");
+    expect((await page.locator("[data-email-generate]").boundingBox()).width).toBe(44);
+    const tones = await page.locator(".email-tones").boundingBox();
+    const editor = await page.locator(".email-editor").boundingBox();
+    expect(tones.y + tones.height).toBeLessThan(editor.y);
+    await expect(page.locator(".email-attached [data-email-profile]")).toHaveCount(1);
+    await expect(page.locator(".email-delivery-details")).not.toHaveAttribute("open");
+    const copy = await page.locator("[data-email-copy]").boundingBox();
+    const download = await page.locator("[data-email-download]").boundingBox();
+    expect(copy.height).toBe(48);
+    expect(download.height).toBe(48);
+    expect(copy.x + copy.width).toBeLessThan(download.x);
+    expect(download.y + download.height).toBeLessThanOrEqual(page.viewportSize().height);
+    await expect(page.locator(".email-assistant-host")).toBeHidden();
+    await page.locator(".email-delivery-details summary").scrollIntoViewIfNeeded();
+    const lastControl = await page.locator(".email-delivery-details summary").boundingBox();
+    const footer = await page.locator(".email-editor footer").boundingBox();
+    expect(lastControl.y + lastControl.height).toBeLessThanOrEqual(footer.y);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    // Reparenting at breakpoints must preserve a single set of live form controls.
+    const originalSize = page.viewportSize();
+    await page.setViewportSize({width:1440, height:900});
+    await expect(page.locator(".email-adjust-fieldset .email-tones")).toHaveCount(1);
+    await expect(page.locator(".email-adjust-fieldset [data-email-profile]")).toHaveCount(1);
+    await expect(page.locator("#emailDraftSubject")).toHaveValue("Edited steel enquiry");
+    await page.setViewportSize(originalSize);
+    await expect(page.locator(".email-mobile-tone-host .email-tones")).toHaveCount(1);
+    await expect(page.locator(".email-attached [data-email-profile]")).toHaveCount(1);
+    await expect(page.locator(".email-editor footer")).toHaveCSS("position", "fixed");
+  } else {
+    await expect(page.locator(".email-mobile-back")).toBeHidden();
+    await expect(page.locator(".email-adjust-fieldset .email-tones")).toHaveCount(1);
+    await expect(page.locator(".email-editor footer")).toHaveCSS("position", "static");
+  }
+  await capture(page, info, "75-draft-email", {fullPage:true});
+  await page.route("**/api/leads/ui-lead-1/ai-actions", route => route.fulfill({status:503, contentType:"application/json", body:JSON.stringify({error:"Synthetic provider unavailable"})}));
+  page.once("dialog", dialog => dialog.accept());
+  await page.locator("[data-email-generate]").click();
+  await expect(page.locator(".email-status")).toContainText("Synthetic provider unavailable");
+  await expect(page.locator("#emailDraftSubject")).toHaveValue("Edited steel enquiry");
+  await page.unroute("**/api/leads/ui-lead-1/ai-actions");
+  await page.route("**/email-profile?part=0", route => route.fulfill({status:503, body:"unavailable"}));
+  await page.locator("[data-email-download]").click();
+  await expect(page.locator(".email-status")).toContainText("no draft was downloaded");
+  await expect(page.locator("#emailDraftBody")).toHaveValue(/Edited enquiry for RHS/);
+  await page.unroute("**/email-profile?part=0");
+  await expect(page.locator(".topbar")).toBeHidden();
+  expect((await page.locator("#emailDraftBody").boundingBox()).height).toBeGreaterThanOrEqual(info.project.name.endsWith("mobile") ? 300 : 350);
+  await expect(page.locator(".email-assistant-host #aiAssistantLauncher")).toHaveCSS("position", "static");
+  if (info.project.name.endsWith("mobile")) await expect(page.locator("#mobileTabs")).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  const downloadWait = page.waitForEvent("download");
+  await page.locator("[data-email-download]").click();
+  const download = await downloadWait;
+  expect(download.suggestedFilename()).toMatch(/\.eml$/);
+  const mime = fs.readFileSync(await download.path(), "utf8");
+  expect(mime).toContain("X-Unsent: 1\r\n");
+  expect(mime).toContain("Cc: copied@example.test\r\n");
+  const attachment = mime.split('filename="Al Ras Group - Company Profile.pdf"')[1].split("\r\n\r\n")[1].split("\r\n--")[0];
+  expect(Buffer.from(attachment.replace(/\s/g, ""), "base64")).toEqual(fs.readFileSync(path.join(__dirname, "../../assets/email/Al Ras Group - Company Profile.pdf")));
+  await expect(page.locator("[data-email-download]")).toBeEnabled();
+  expect(writes.filter(url => !url.endsWith("/ai-actions"))).toEqual([]);
+  const denied = await page.evaluate(async id => {
+    const response = await authenticatedFetch(`/api/leads/${id}/email-profile?part=0`);
+    return response.status;
+  }, role === "salesman" ? "ui-lead-13" : "not-a-visible-lead");
+  expect(denied).toBe(404);
+  // Anonymous requests cannot retrieve the profile even with a visible-looking lead ID.
+  expect((await page.request.get("/api/leads/ui-lead-1/email-profile?part=0")).status()).toBe(401);
+  await page.locator("[data-email-profile]").uncheck();
+  const plainWait = page.waitForEvent("download");
+  await page.locator("[data-email-download]").click();
+  const plain = await plainWait;
+  expect(fs.readFileSync(await plain.path(), "utf8")).not.toContain("application/pdf");
+  await page.locator("[data-email-change]").click();
+  page.once("dialog", dialog => dialog.accept());
+  await page.locator("#aiWorkspaceCompany").selectOption("ui-lead-2");
+  await expect(page.locator("#emailDraftBody")).toHaveValue("");
+  await expect(page.locator("#emailDraftTo")).toHaveValue("contact-2@example.test");
+});
+
 test("AI workspace routes reuse authorized company and portfolio actions", async ({page}, info) => {
   test.setTimeout(120000);
   const role = await login(page, info);
   const actionRequests = [];
+  const assistantRequests = [];
   page.on("request", request => {
+    if (request.method() === 'POST' && request.url().includes('/api/ai-assistant/')) assistantRequests.push(request.url());
     if (request.method() === "POST" && /\/api\/(?:salesperson-ai-actions|leads\/[^/]+\/ai-actions)$/.test(new URL(request.url()).pathname)) actionRequests.push(request.postDataJSON());
   });
   if (await page.locator("#mobileMenuToggle").isVisible()) await page.locator("#mobileMenuToggle").click();
@@ -21,6 +136,27 @@ test("AI workspace routes reuse authorized company and portfolio actions", async
   expect(actionRequests.filter(item => item.action !== "pipeline_health")).toEqual([]);
   const prepare = page.locator('[data-workspace-company-action="prepare"]');
   await expect(prepare).toBeDisabled();
+  await expect(page.locator('.crm-onetap-heading')).toContainText('One-tap AI actions');
+  if (!info.project.name.endsWith('mobile')) await expect(page.locator('.topbar')).toBeHidden();
+  await expect(page.locator('.crm-onetap-company-grid > button')).toHaveCount(5);
+  await expect(page.locator('.crm-onetap-assistant #aiAssistantLauncher')).toHaveCSS('position', 'static');
+  await expect(page.locator('[data-workspace-pick]')).toHaveCount(3);
+  if (info.project.name.endsWith('mobile')) {
+    await expect(page.locator('.crm-onetap-back')).toBeVisible();
+    await expect(page.locator('#mobileTabs')).toBeHidden();
+    await expect(page.locator('.crm-onetap-assistant')).toHaveCSS('position', 'fixed');
+    const footer = await page.locator('.crm-onetap-assistant').boundingBox();
+    expect(footer.y + footer.height).toBeLessThanOrEqual(page.viewportSize().height + 1);
+    if (role === 'salesman') {
+      const row = await page.locator('.crm-onetap-day-grid button').first().boundingBox();
+      expect(row.height).toBeLessThanOrEqual(80);
+    }
+  }
+  await capture(page, info, '70-ai-workspace-unselected', {fullPage:true});
+  await page.locator('[data-workspace-pick="ui-lead-1"]').click();
+  await expect(page.locator('#aiWorkspaceCompany')).toHaveValue('ui-lead-1');
+  await expect(page.locator('#aiWorkspaceCompany')).toBeFocused();
+  expect(actionRequests.filter(item => item.action !== "pipeline_health")).toEqual([]);
   await page.locator("#aiWorkspaceCompany").selectOption("ui-lead-1");
   await expect(prepare).toBeEnabled();
   await expect(page.locator(".crm-ai-workspace-status")).toHaveText("Company actions are ready.");
@@ -31,17 +167,37 @@ test("AI workspace routes reuse authorized company and portfolio actions", async
   expect(actionRequests.filter(item => item.action !== "pipeline_health").at(-1)).toEqual({action:"prepare"});
   await page.locator("#aiActionDialog").press("Escape");
   await expect(prepare).toBeFocused();
+  if (info.project.name.endsWith('mobile')) {
+    const lastAction = page.locator('[data-workspace-company-action="flag"]');
+    await lastAction.scrollIntoViewIfNeeded();
+    const lastBox = await lastAction.boundingBox();
+    const footer = await page.locator('.crm-onetap-assistant').boundingBox();
+    expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(footer.y);
+  }
+  await page.locator('#aiWorkspaceCompany').selectOption('');
+  await expect(prepare).toBeDisabled();
+  if (info.project.name.endsWith('mobile')) {
+    await page.locator('.crm-onetap-assistant-input').fill('Summarise my visible accounts');
+    await page.locator('.crm-onetap-assistant-input').press('Enter');
+  } else await page.locator('.crm-onetap-assistant #aiAssistantLauncher').click();
+  await expect(page.locator('#aiAssistantDialog')).toBeVisible();
+  if (info.project.name.endsWith('mobile')) await expect(page.locator('#aiAssistantCommand')).toHaveValue('Summarise my visible accounts');
+  expect(assistantRequests).toEqual([]);
+  await page.locator('#closeAiAssistant').click();
+  if (info.project.name.endsWith('mobile')) {
+    await page.locator('.crm-onetap-back').click();
+    await expect(page.locator('#dashboardView')).toBeVisible();
+    await expect(page.locator('#mobileTabs')).toBeVisible();
+  }
 
   await page.goto("/?view=draft-email");
   await expect(page.locator("#aiWorkspaceCompany option[value='ui-lead-1']")).toHaveCount(1);
-  await expect(page.locator("[data-workspace-company-action]")).toHaveCount(1);
+  await expect(page.locator("[data-email-generate]")).toBeDisabled();
   await page.locator("#aiWorkspaceCompany").selectOption("ui-lead-1");
-  await page.locator('[data-workspace-company-action="email"]').click();
-  await expect(page.locator("#aiActionDialog")).toContainText("CRM-data fallback was used.");
-  await expect(page.locator("[data-ai-mailto]")).toBeVisible();
+  await page.locator('[data-email-generate]').click();
+  await expect(page.locator(".email-provenance")).toContainText("CRM-data fallback was used.");
+  await expect(page.locator("[data-email-download]")).toBeEnabled();
   expect(actionRequests.filter(item => item.action !== "pipeline_health").at(-1)).toEqual({action:"email"});
-  await page.locator("#aiActionDialog").press("Escape");
-
   await page.goto("/?view=meeting-prep");
   await expect(page.locator('[data-meeting-generate]')).toBeVisible();
   await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).toHaveClass(/active/);

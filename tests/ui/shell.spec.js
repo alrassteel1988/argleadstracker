@@ -3,6 +3,30 @@ const { phase, capture, login, blockExternalTraffic } = require("./helpers");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("all CRM pages share the approved responsive artwork behind clean cards", async ({page}, info) => {
+  test.setTimeout(120000);
+  const role = await login(page, info);
+  const mobile = info.project.name.endsWith("mobile");
+  const expected = `crm-silk-white-${mobile ? "mobile" : "desktop"}.png`;
+  for (const view of ["dashboard", "pipeline", "tasks", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email", ...(role === "admin" ? ["salesmen", "activity"] : [])]) {
+    await page.goto(`/?view=${view}`);
+    await expect(page.locator("#appShell > .main")).toBeVisible();
+    await expect(page.locator("#appShell > .main")).toHaveCSS("background-image", new RegExp(expected.replaceAll(".", "\\.")));
+    await expect(page.locator("#appShell > .main")).toHaveCSS("background-size", "cover");
+    await expect(page.locator("#appShell > .main")).toHaveCSS("background-repeat", "no-repeat");
+    if (["meeting-prep", "draft-email"].includes(view)) {
+      await page.locator("#aiWorkspaceCompany").selectOption("ui-lead-1");
+      const card = page.locator(view === "meeting-prep" ? ".meeting-talking" : ".email-editor");
+      await expect(card).toHaveCSS("background-image", "none");
+      await expect(card).toHaveCSS("background-color", "rgb(255, 255, 255)");
+      await capture(page, info, `76-background-${view}`, {fullPage:false});
+    }
+  }
+  await page.goto("/leads/ui-lead-1");
+  await expect(page.locator("#appShell > .main")).toHaveCSS("background-image", new RegExp(expected.replaceAll(".", "\\.")));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+});
+
 test("login displays the approved Al Ras Steel logo on desktop and mobile", async ({ page }, info) => {
   await page.goto("/");
   await expect(page.locator("#loginForm")).toBeVisible();

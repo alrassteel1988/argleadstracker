@@ -80,9 +80,9 @@
 body .app-shell > .main {
   background-color: var(--crm-surface) !important;
   background-image: var(--crm-background) !important;
-  background-position: center bottom;
-  background-size: cover;
-  background-repeat: no-repeat;
+  background-position: center bottom !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
 }
 
 body .app-shell .topbar-copy h1 {

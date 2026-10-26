@@ -1,5 +1,38 @@
 # UI Proposal: Open Questions, Mismatches and Hold Points
 
+## Meeting Brief From AI Actions: 26 October
+
+- Mobile uses a company-first compact header, Back to AI actions, regenerate
+  icon, context controls, real status/health/contact summary and a fixed Log/Copy
+  bar. All generated text remains intact; Copy still copies the entire brief.
+- Checklist precedes the remaining company facts on mobile. Existing additional
+  facts and post-meeting actions remain reachable, not discarded. No sample
+  missing-PMR claims, risk labels, or quotation creation are introduced.
+
+- Latest reference uses AI actions / Meeting brief navigation and a compact
+  company metadata row with Change company and Open lead. The latter always
+  points to the currently selected visible company, including after switching.
+- Shared artwork behind clean cards and tighter header spacing do not change generated
+  content, provider notices, temporary checklists, or activity and PMR forms.
+- No sample facts or quote-creation workflow are introduced by this UI update.
+
+## AI Actions Reference: 26 October
+
+- Mobile refinement groups the three secondary daily actions into rows, shortens
+  visible hints, scrolls shortcut chips horizontally, and keeps a fixed Assistant
+  draft-input bar. Back goes to Dashboard; regular mobile navigation returns there.
+- Enter or the Assistant button transfers typed text into the existing dialog.
+  It never invokes interpretation, confirmation or a provider automatically.
+
+- Reference layout uses Your day (Salesperson only), One company, five existing
+  company actions, and the existing Assistant launcher in a non-floating footer.
+- Overdue follow-up shortcuts use visible leads with past next_action_date values;
+  they select a company without running an AI request. They are not a new contact
+  cadence score. Sample badge counts and last-visit dates are not copied.
+- Admin portfolio actions remain unavailable. Flagging still requires review;
+  email remains a draft. No prompt, provider, permission or database changes.
+- Publication was subsequently authorized; see `docs/meeting-email-release.md`.
+
 ## Meeting Reference Refinement: 26 October
 
 - Latest screenshots refine presentation, not health calculations, quotation

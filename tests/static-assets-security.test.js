@@ -50,6 +50,8 @@ const blockedRequests = [
   "/unknown.css",
   "/assets/brand/README.md",
   "/assets/brand/unapproved.png",
+  "/assets/email/Al%20Ras%20Group%20-%20Company%20Profile.pdf",
+  "/assets/email/Al Ras Group - Company Profile.pdf",
   "/assets/icons/LICENSE"
 ];
 

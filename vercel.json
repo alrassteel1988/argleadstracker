@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "builds": [
-    { "src": "server.js", "use": "@vercel/node" },
+    { "src": "server.js", "use": "@vercel/node", "config": { "includeFiles": "assets/email/Al Ras Group - Company Profile.pdf" } },
     { "src": "index.html", "use": "@vercel/static" },
     { "src": "client.js", "use": "@vercel/static" },
     { "src": "styles.css", "use": "@vercel/static" },
