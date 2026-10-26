@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v131-consistent-artwork-email";
+const CACHE_VERSION = "arg-pwa-v133-mobile-salesperson-dashboard";
 const APP_SHELL = [
   "/",
   "/index.html",

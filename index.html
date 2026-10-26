@@ -35,7 +35,7 @@
   <link rel="stylesheet" href="/crm-icons.css?v=1">
   <link rel="stylesheet" href="/crm-controls.css?v=1">
   <link rel="stylesheet" href="/crm-shell.css?v=1">
-  <link rel="stylesheet" href="/crm-dashboard.css?v=11-consistent-artwork">
+  <link rel="stylesheet" href="/crm-dashboard.css?v=13-mobile-salesperson">
   <link rel="stylesheet" href="/crm-data.css?v=1">
   <link rel="stylesheet" href="/crm-record.css?v=4-meeting-entry">
   <link rel="stylesheet" href="/crm-activity.css?v=1">
@@ -150,10 +150,11 @@
       </aside>
 
       <main class="main">
-        <header class="topbar">
+        <header class="topbar" id="salespersonDashboardSearchTools">
           <div class="topbar-title">
             <button class="mobile-menu-button" id="mobileMenuToggle" type="button" aria-expanded="false" aria-controls="mobileSidebar">Menu</button>
             <div class="topbar-copy">
+              <p class="salesperson-dashboard-date hidden" id="salespersonDashboardDate"></p>
               <h1 id="topbarPageTitle">Dashboard</h1>
               <p id="topbarContext">Track team movement, overdue follow-ups, and pipeline momentum.</p>
             </div>
@@ -217,7 +218,30 @@
           </div>
           <div class="admin-dashboard-analytics-row" id="adminDashboardAnalyticsRow" aria-label="Pipeline analytics"></div>
           <div class="panel salesman-simplified-dashboard dashboard-grid hidden" id="salesmanSimplifiedDashboard">
+            <header class="salesperson-mobile-header">
+              <div><p id="salespersonMobileDate"></p><h1 id="salespersonMobileGreeting"></h1></div>
+              <button type="button" class="ghost-button salesperson-mobile-search" data-dashboard-search aria-label="Search CRM" title="Search CRM" aria-expanded="false" aria-controls="salespersonDashboardSearchTools"></button>
+            </header>
+            <div class="salesperson-dashboard-layout">
+            <div class="salesperson-dashboard-primary">
+              <section class="salesperson-focus-card" aria-labelledby="salespersonFocusTitle">
+                <div class="salesperson-focus-heading"><div><span class="salesperson-focus-badge">CRM priorities</span><h2 id="salespersonFocusTitle">Focus <em class="crm-title-accent">today</em></h2></div><button class="ghost-button" type="button" data-dashboard-refresh>Refresh</button></div>
+                <p class="salesperson-focus-description">Your next contacts, ranked by scheduled follow-up and first touch.</p>
+                <ol id="salespersonFocusList" class="salesperson-focus-list" aria-live="polite"></ol>
+              </section>
+              <section class="salesperson-quick-card" aria-labelledby="salespersonQuickTitle">
+                <div class="salesperson-card-heading"><h2 id="salespersonQuickTitle">One-tap <em class="crm-title-accent">AI actions</em></h2><button class="text-button" type="button" data-dashboard-ai-all>All AI actions</button></div>
+                <div class="salesperson-quick-grid" id="salespersonQuickGrid"></div>
+              </section>
+            </div>
+            <div class="salesperson-dashboard-secondary">
+            <section class="salesperson-followup-card" aria-labelledby="salespersonFollowupTitle">
+            <h2 id="salespersonFollowupTitle">Follow-ups</h2>
             <div class="salesman-simplified-metrics" id="salesmanSimplifiedMetrics"></div>
+            <p class="salesperson-oldest" id="salespersonOldest"></p>
+            <div class="salesperson-origin" id="salespersonOrigin"></div>
+            <button class="ghost-button" type="button" data-dashboard-today>Work through your follow-ups</button>
+            </section>
             <section class="salesman-simplified-block salesman-dashboard-pipeline">
               <div class="panel-header">
                 <div>
@@ -225,8 +249,19 @@
                   <span>Current status counts for your assigned leads.</span>
                 </div>
               </div>
-              <div class="salesman-simplified-pipeline-strip" id="salesmanSimplifiedPipeline"></div>
+              <div class="salesperson-mobile-pipeline" id="salespersonMobilePipeline"></div>
+              <details class="salesperson-pipeline-breakdown" id="salespersonPipelineBreakdown" open>
+                <summary>Stage breakdown</summary>
+                <div class="salesman-simplified-pipeline-strip" id="salesmanSimplifiedPipeline"></div>
+              </details>
+              <p class="salesperson-pipeline-note" id="salespersonPipelineNote"></p>
             </section>
+            </div>
+            </div>
+            <details class="salesman-dashboard-more-tools">
+              <summary>More dashboard tools</summary>
+              <div class="salesman-dashboard-more-content">
+                <div class="salesperson-mobile-tool-buttons"><button class="ghost-button" type="button" data-dashboard-refresh>Refresh priorities</button><button class="ghost-button" type="button" data-dashboard-alerts>Alerts</button></div>
             <section class="salesman-simplified-block salesman-dashboard-call-queue">
                 <div class="panel-header">
                   <div>
@@ -239,9 +274,6 @@
                 </div>
                 <div class="salesman-simplified-queue" id="salesmanSimplifiedQueue"></div>
             </section>
-            <details class="salesman-dashboard-more-tools">
-              <summary>More dashboard tools</summary>
-              <div class="salesman-dashboard-more-content">
                 <div class="salesman-dashboard-priority-row">
                   <div class="salesman-simplified-hero">
                     <div class="panel-header salesman-simplified-hero-header">
@@ -295,6 +327,10 @@
             </section>
               </div>
             </details>
+            <form class="salesperson-dashboard-assistant">
+              <input type="text" id="salespersonDashboardQuestion" aria-label="Ask the AI Assistant about your accounts" placeholder="Ask the AI Assistant anything about your accounts" maxlength="4000">
+              <span class="salesperson-dashboard-assistant-host"></span>
+            </form>
           </div>
           <div class="panel dashboard-quick-actions" id="dashboardQuickActions">
             <div class="panel-header">
@@ -989,6 +1025,7 @@
       <button class="nav-item active" data-view="dashboard" aria-label="Home"><span aria-hidden="true">Home</span>Home</button>
       <button class="nav-item" data-view="pipeline" aria-label="Leads"><span aria-hidden="true">Leads</span>Leads</button>
       <button class="nav-item mobile-log-tab" data-mobile-action="quick-log" aria-label="Log activity"><span aria-hidden="true">+</span>Log</button>
+      <button class="nav-item salesperson-mobile-ai-tab" data-view="ai-actions" aria-label="AI actions"><span aria-hidden="true">AI</span>AI</button>
       <button class="nav-item" data-mobile-action="map" aria-label="Map"><span aria-hidden="true">Map</span>Map</button>
       <button class="nav-item" data-mobile-action="alerts"><span aria-hidden="true">!</span>Alerts<em id="mobileAlertsBadge" class="mobile-alert-badge hidden">0</em></button>
     </div>

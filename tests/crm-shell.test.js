@@ -20,7 +20,7 @@ assert.equal((html.match(/id="openSalesmanForm"/g) || []).length, 1);
 const footer = html.match(/<div class="sidebar-footer">([\s\S]*?)<\/aside>/)[1];
 assert.match(footer, /id="logoutButton"/);
 assert.match(footer, /sidebar-user-dropdown[\s\S]*id="openSalesmanForm"/);
-const topbar = html.match(/<header class="topbar">([\s\S]*?)<\/header>/)[1];
+const topbar = html.match(/<header class="topbar"[^>]*>([\s\S]*?)<\/header>/)[1];
 assert.doesNotMatch(topbar, /id="(?:logoutButton|openSalesmanForm)"/);
 assert.match(topbar, /id="smartSearchInput"/);
 assert.match(topbar, /id="openPlacesSearch"/);
