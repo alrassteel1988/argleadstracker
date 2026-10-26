@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v134-dashboard-neglected-navigation";
+const CACHE_VERSION = "arg-pwa-v135-lead-email-subpage";
 const APP_SHELL = [
   "/",
   "/index.html",

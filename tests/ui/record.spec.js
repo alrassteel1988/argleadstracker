@@ -4,6 +4,54 @@ const { inspectPresentation } = require("./presentation-audit");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("Send Email opens a scoped lead subpage without generating or sending", async ({page}, info) => {
+  const role = await login(page, info);
+  await page.goto('/leads/ui-lead-1');
+  const writes=[];
+  page.on('request', request => {
+    if (request.method() !== 'GET' && request.url().includes('/api/') && !request.url().endsWith('/api/ai/lead-summary') && request.postDataJSON()?.action !== 'pipeline_health') writes.push(request.url());
+  });
+  await page.getByRole('button',{name:'Send Email',exact:true}).click();
+  await expect(page).toHaveURL(/\/leads\/ui-lead-1\/draft-email$/);
+  await expect(page.locator('#emailDraftTo')).toHaveValue('contact-1@example.test');
+  await expect(page.locator('[data-email-change]')).toHaveCount(0);
+  await expect(page.locator('#emailDraftBody')).toHaveValue('');
+  await expect(page.locator('[data-email-generate]')).toBeEnabled();
+  expect(writes).toEqual([]);
+  await page.reload();
+  await expect(page.locator('#emailDraftTo')).toHaveValue('contact-1@example.test');
+  await page.goBack();
+  await expect(page.locator('#leadDrawerTitle')).toHaveText('Synthetic Steel Company 01');
+  await page.goForward();
+  await expect(page.locator('#emailDraftTo')).toHaveValue('contact-1@example.test');
+  await capture(page,info,'19-lead-email-subpage',{fullPage:false});
+  await page.locator(info.project.name.endsWith('mobile') ? '.email-mobile-back[data-email-parent]' : '.email-breadcrumb [data-email-parent]').click();
+  await expect(page).toHaveURL(/\/leads\/ui-lead-1$/);
+  await page.route('**/api/leads', async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response=await route.fetch();
+    const leads=await response.json();
+    await route.fulfill({response,json:leads.map(lead => lead.id === 'ui-lead-2' ? {...lead,email:'',contact_email:''} : lead)});
+  });
+  await page.goto('/leads/ui-lead-2');
+  await page.getByRole('button',{name:'Send Email',exact:true}).click();
+  await expect(page).toHaveURL(/\/leads\/ui-lead-2\/draft-email$/);
+  await expect(page.locator('#emailDraftTo')).toHaveValue('');
+  await expect(page.locator('#emailDraftTo')).toBeEnabled();
+  await page.locator('#emailDraftTo').fill('manual@example.test');
+  await page.goto('/leads/not-visible/draft-email');
+  await expect(page.locator('#aiWorkspaceView')).toContainText('unavailable or you do not have access');
+  await expect(page.locator('#emailDraftTo')).toHaveValue('');
+  await expect(page.locator('[data-email-generate]')).toBeDisabled();
+  if (role === 'salesman') {
+    await page.goto('/leads/ui-lead-13/draft-email');
+    await expect(page.locator('#emailDraftTo')).toHaveValue('');
+    await expect(page.locator('[data-email-generate]')).toBeDisabled();
+  }
+  await page.goto('/?view=draft-email');
+  await expect(page.locator('#aiWorkspaceCompany')).toBeVisible();
+});
+
 test("responsive Lead Details follows the reference and preserves existing actions", async ({ page }, info) => {
   await login(page, info);
   await page.goto('/leads/ui-lead-1');
@@ -65,7 +113,7 @@ test("responsive Lead Details follows the reference and preserves existing actio
     expect(left.width / right.width).toBeCloseTo(1.6, 1);
     await expect(summary.locator('.record-recent-activity')).toContainText('Synthetic baseline call');
     await expect(page.locator('.record-call')).toHaveAttribute('href', 'tel:+12025550101');
-    await expect(page.locator('.record-email')).toHaveAttribute('href', 'mailto:contact-1@example.test');
+    await expect(page.locator('.record-email')).toHaveText('Send Email');
     await expect(page.locator('#drawerStageSelect')).toHaveCount(info.project.name.startsWith('admin') ? 1 : 0);
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await summary.getByRole('button', {name: 'Copy phone number', exact: true}).click();

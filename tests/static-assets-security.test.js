@@ -9,6 +9,7 @@ const publicRequests = [
   ["/", "text/html"],
   ["/index.html", "text/html"],
   ["/leads/lead-1001?tab=activities", "text/html"],
+  ["/leads/lead-1001/draft-email", "text/html"],
   ["/client.js?v=test", "text/javascript"],
   ["/styles.css?v=test", "text/css"],
   ["/crm-theme.css?v=test", "text/css"],
@@ -52,7 +53,8 @@ const blockedRequests = [
   "/assets/brand/unapproved.png",
   "/assets/email/Al%20Ras%20Group%20-%20Company%20Profile.pdf",
   "/assets/email/Al Ras Group - Company Profile.pdf",
-  "/assets/icons/LICENSE"
+  "/assets/icons/LICENSE",
+  "/leads/lead-1001/unknown"
 ];
 
 async function run() {
@@ -101,6 +103,7 @@ async function run() {
       "Vercel must retain the lead-detail SPA fallback"
     );
     const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
+    assert.ok(vercel.routes.some(route => route.src === "/leads/([^/]+)/draft-email/?$" && route.dest === "/index.html"), "Vercel must retain the lead email SPA fallback");
     for (const asset of ["/styles.css", "/client.js", "/favicon.svg", "/manifest.json"]) {
       assert.ok(index.includes(`\"${asset}`), `Index assets must be root-relative: ${asset}`);
     }
