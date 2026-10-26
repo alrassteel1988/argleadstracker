@@ -63,4 +63,7 @@ for (const file of ["crm-theme.css", ...Object.keys(assets)]) {
   assert.ok(worker.includes(`"/${file}"`), `Cache only approved public asset ${file}`);
 }
 assert.match(worker, /if \(url\.pathname\.startsWith\("\/api\/"\)\) return;/, "Keep API responses outside service-worker caching");
+const dashboardCss = fs.readFileSync(path.join(root, "crm-dashboard.css"), "utf8");
+assert.match(css, /background-size: cover !important;/, "Legacy route background shorthands must not reset artwork sizing");
+assert.doesNotMatch(dashboardCss, /body\.(?:meeting-brief|one-tap|today|email-draft)-mode[^{}]*> \.main\s*\{[^}]*background-image:\s*none/, "AI pages must retain the approved responsive shared artwork");
 console.log("PASS revised CRM design tokens, artwork provenance, contrast and asset contracts");

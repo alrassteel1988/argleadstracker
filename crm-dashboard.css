@@ -554,21 +554,28 @@ body.meeting-brief-mode #appShell .topbar:not(.hidden):not([hidden]) { display: 
 body .meeting-menu { display: none !important; }
 body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-panel { border-color: var(--crm-divider) !important; background: white !important; }
 body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-evidence { border-color: #8EC5C5 !important; }
-body.meeting-brief-mode #appShell > .main { padding: 32px 48px 48px !important; }
-body.meeting-brief-mode #appShell #aiWorkspaceView:not(.hidden) { display: grid; gap: 22px; max-width: 1104px; width: 100%; margin-inline: auto; padding-bottom: 0; }
+body.meeting-brief-mode #appShell > .main { padding: 32px 48px 48px !important; background-color: var(--crm-page-muted) !important; }
+body.meeting-brief-mode #appShell #aiWorkspaceView:not(.hidden) { display: grid; gap: 16px; max-width: 1104px; width: 100%; margin-inline: auto; padding-bottom: 0; }
 body.meeting-brief-mode #aiWorkspaceView :is(h2, h3, h4, p) { margin: 0; }
 body.meeting-brief-mode #aiWorkspaceView { color: var(--crm-navy); font: 400 14px/1.55 var(--crm-font-ui); }
 body.meeting-brief-mode #aiWorkspaceView a { color: var(--crm-navy); text-underline-offset: 3px; }
 body .meeting-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
 body .meeting-breadcrumb a { display: inline-flex; align-items: center; min-height: 32px; }
-body .meeting-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; flex-wrap: wrap; }
+body .meeting-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 0 8px; }
+body .meeting-heading-copy { grid-column: 1; grid-row: 1; min-width: 0; }
+body .meeting-heading > .meeting-company-meta { grid-column: 1; grid-row: 2; }
+body .meeting-heading > .meeting-regenerate { grid-column: 2; grid-row: 1 / span 2; }
+body .meeting-heading > .meeting-toolbar { grid-column: 3; grid-row: 1 / span 2; }
+body .meeting-company-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-top: 6px; font-size: 13px; line-height: 1.5; color: var(--crm-text-secondary); overflow-wrap: anywhere; }
+body .meeting-company-meta strong { font-weight: 600; color: var(--crm-navy); }
+body .meeting-open-lead { display: inline-flex; align-items: center; min-height: 32px; font-weight: 600; }
 body #appShell #aiWorkspaceView .meeting-heading h2 { font: 800 32px/1.2 var(--crm-font-ui); color: var(--crm-navy); }
 body .meeting-heading em, body .meeting-facts em { font-family: var(--crm-font-title); font-weight: 400; color: #8A5200; }
 body .meeting-heading p { padding-top: 6px; color: var(--crm-text-secondary); font-size: 14px; }
 body .meeting-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
 body .meeting-assistant-host { display: inline-flex; }
 body .meeting-footer { display: flex; justify-content: flex-end; }
-body.meeting-brief-mode #appShell .meeting-company-change { margin-left: auto; min-height: 36px; font-size: 12px; --crm-button-icon: var(--crm-icon-pencil); }
+body.meeting-brief-mode #appShell .meeting-company-change { min-height: 32px; padding: 0 4px; border: 0 !important; background: none !important; box-shadow: none !important; font-size: 13px; font-weight: 600; --crm-button-icon: var(--crm-icon-pencil); }
 body.meeting-brief-mode #appShell #aiWorkspaceView #aiAssistantLauncher { position: static !important; inset: auto !important; transform: none !important; width: auto !important; min-height: 44px; }
 body.meeting-brief-mode #appShell .meeting-toolbar [data-meeting-log] { background: var(--crm-amber) !important; border-color: var(--crm-amber) !important; color: var(--crm-navy) !important; }
 body #appShell .meeting-toolbar button { min-height: 44px; }
@@ -622,9 +629,14 @@ body :is([data-meeting-copy]) { --crm-button-icon: var(--crm-icon-clipboard-list
 body :is([data-meeting-log]) { --crm-button-icon: var(--crm-icon-plus); }
 body :is([data-meeting-pmr], [data-ai-open-brief]) { --crm-button-icon: var(--crm-icon-file-text); }
 body .meeting-state { padding-block: 16px; color: var(--crm-text-secondary); }
+body #appShell :is(.meeting-back, .meeting-mobile-company, .meeting-title-short, .meeting-mobile-origin, .meeting-mobile-summary) { display: none; }
+body #appShell .meeting-regenerate { min-height: 44px; }
 @media (max-width: 900px) {
   body .meeting-layout { grid-template-columns: minmax(0, 1fr); }
-  body .meeting-heading { align-items: start; }
+  body .meeting-heading { grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; }
+  body .meeting-heading > .meeting-company-meta { grid-column: 1 / -1; grid-row: 2; }
+  body .meeting-heading > .meeting-regenerate { grid-column: 2; grid-row: 1; }
+  body .meeting-heading > .meeting-toolbar { grid-column: 1 / -1; grid-row: 3; }
   body .meeting-toolbar { width: 100%; }
   body .meeting-toolbar button { flex: 1 1 120px; }
 }
@@ -634,12 +646,49 @@ body .meeting-state { padding-block: 16px; color: var(--crm-text-secondary); }
   body.meeting-brief-mode #appShell .meeting-company-change { min-height: 44px; }
 }
 @media (max-width: 720px) {
-  body.meeting-brief-mode #appShell > .main { padding: 16px 16px 96px !important; }
-  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-heading h2 { font-size: 26px; }
+  body.meeting-brief-mode #appShell > .main { padding: 28px 16px 112px !important; }
+  body.meeting-brief-mode #mobileTabs { display: none !important; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView:not(.hidden) { gap: 14px; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-breadcrumb { display: none; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-title-full { display: none; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-title-short { display: inline; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-heading { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 12px; align-items: center; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-heading-copy { display: flex; flex-direction: column; gap: 2px; grid-column: 2; grid-row: 1; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-back { display: inline-flex; grid-column: 1; grid-row: 1; align-items: center; justify-content: center; width: 44px; min-height: 44px; padding: 0; --crm-button-icon: var(--crm-icon-chevron-left); }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-back::before { content: ""; display: block !important; position: static; margin: 0; width: 18px; height: 18px; flex: 0 0 18px; background: var(--crm-navy); mask: var(--crm-icon-chevron-left) center / contain no-repeat; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-mobile-company { display: block; font-size: 12px; line-height: 1.4; color: var(--crm-text-secondary); overflow-wrap: anywhere; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-heading h2 { font-size: 21px; line-height: 1.2; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-regenerate { grid-column: 3; grid-row: 1; width: 44px; min-width: 44px; padding: 0; justify-content: center; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-regenerate > span { display: none; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-regenerate::before { margin: 0; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-company-meta { grid-column: 1 / -1; grid-row: 2; flex-wrap: nowrap; padding: 0 10px; gap: 8px; border: 1px solid var(--crm-divider); border-radius: 12px; background: white; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-company-meta > :is(a, button) { width: auto !important; min-width: 0; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-company-meta > :is(button, .meeting-open-lead) { flex: 0 0 auto; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-company-meta > :is(strong, .meeting-generated-at) { display: none; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-mobile-origin { display: inline-flex; align-items: center; flex: 1; min-height: 44px; font-size: 12px; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-company-change { padding: 0; font-size: 13px; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-mobile-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--crm-text-secondary); }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-mobile-summary > span:last-child { flex: 1 1 150px; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-toolbar { position: fixed; left: 0; right: 0; bottom: 0; width: 100%; box-sizing: border-box; z-index: 60; display: flex; flex-wrap: nowrap; gap: 10px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--crm-divider); background: white; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-toolbar button { flex-direction: row !important; align-items: center; justify-content: center; width: auto !important; min-width: 0; height: 48px; min-height: 48px; padding: 0 12px; text-decoration: none !important; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-toolbar [data-meeting-log] { order: -1; flex: 1 1 0; background: var(--crm-navy) !important; border-color: var(--crm-navy) !important; color: white !important; }
+  body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-toolbar [data-meeting-copy] { flex: 0 0 84px; min-width: 84px; }
   body .meeting-breadcrumb a { min-height: 44px; }
+  body .meeting-open-lead { min-height: 44px; }
+  body .meeting-heading-copy { flex-basis: 100%; }
   body .meeting-company { align-items: stretch; flex-direction: column; gap: 6px; }
   body.meeting-brief-mode #appShell .meeting-company #aiWorkspaceCompany { width: 100%; font-size: 16px; }
   body :is(.meeting-panel, .meeting-ask) { padding: 16px; }
+  body :is(.meeting-main, .meeting-side, .meeting-layout) { gap: 14px; }
+  body .meeting-target { display: none; }
+  body .meeting-ask p { font-size: 16px; }
+  body .meeting-checklist { order: -1; }
+  body #aiWorkspaceView .meeting-panel h3 { font-size: 15px; }
+  body .meeting-talking li { font-size: 14px; line-height: 1.5; padding-left: 32px; }
+  body .meeting-talking li::before { width: 22px; height: 22px; }
+  body .meeting-evidence > header { font-size: 12px; gap: 6px; }
+  body .meeting-evidence-row :is(p, div) { font-size: 13px; line-height: 1.5; }
+  body .meeting-evidence-row h4 { font-size: 12px; font-weight: 700; }
   body .meeting-evidence-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
 body.ai-workspace-mode #appShell > .main { height: auto !important; min-height: 100dvh; overflow: visible !important; }
@@ -656,7 +705,108 @@ body #appShell .crm-ai-action-grid { display: grid; grid-template-columns: repea
 body #appShell .crm-ai-action-card { min-width: 0; min-height: 60px; padding: 14px; justify-content: flex-start; text-align: left; }
 body #appShell .crm-ai-workspace-status { margin: 14px 0 0; color: var(--crm-text-secondary); font: 400 14px/1.5 var(--crm-font-ui); }
 body #appShell .crm-ai-workspace-error { color: var(--crm-health-red); font: 600 14px/1.5 var(--crm-font-ui); }
-body.today-mode #appShell > .main { background-image: none !important; background-color: var(--crm-page-muted) !important; }
+body.one-tap-mode #appShell > .main { padding: 36px 48px 48px !important; background-color: var(--crm-page-muted) !important; }
+body.one-tap-mode #appShell #aiWorkspaceView:not(.hidden) { max-width: 1104px; width: 100%; margin-inline: auto; gap: 24px; padding-bottom: 48px; }
+body.one-tap-mode #appShell .topbar:not(.hidden):not([hidden]) { display: none !important; }
+body #appShell .crm-onetap-heading h2 { margin: 0; font: 800 34px/1.15 var(--crm-font-ui); color: var(--crm-navy); }
+body #appShell .crm-onetap-heading p { margin: 6px 0 0; font-size: 14px; color: var(--crm-text-secondary); }
+body #appShell :is(.crm-onetap-heading, .crm-onetap-section) em { font-family: var(--crm-font-title); font-weight: 400; color: #8A5200; }
+body #appShell .crm-onetap-section { min-width: 0; padding: 22px 24px; background: white; border: 1px solid var(--crm-divider); border-radius: 14px; }
+body #appShell .crm-onetap-section h3 { margin: 0 0 16px; font: 700 19px/1.4 var(--crm-font-ui); color: var(--crm-navy); }
+body #appShell .crm-onetap-section-heading { display: flex; gap: 16px; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }
+body #appShell .crm-onetap-section-heading p { margin: 0 0 16px; font-size: 12px; color: var(--crm-text-secondary); }
+body #appShell .crm-onetap-day-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+body #appShell .crm-onetap-company-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+body.one-tap-mode #appShell .crm-ai-action-card { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 12px; padding: 16px; min-height: 124px; width: 100%; border-radius: 10px !important; background: white; border: 1px solid var(--crm-divider) !important; color: var(--crm-navy); white-space: normal; }
+body.one-tap-mode #appShell .crm-ai-action-card::before { display: none !important; }
+body #appShell .crm-onetap-card-copy { display: grid; gap: 4px; min-width: 0; }
+body #appShell .crm-onetap-card-copy strong { font: 700 15px/1.4 var(--crm-font-ui); text-decoration: none !important; }
+body #appShell .crm-onetap-card-copy small { font: 400 13px/1.45 var(--crm-font-ui) !important; color: var(--crm-text-secondary); text-decoration: none !important; }
+body.one-tap-mode #appShell .crm-ai-action-card { text-decoration: none !important; }
+body #appShell .crm-onetap-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; border-radius: 8px; background: #EDF3F8; color: var(--crm-navy); }
+body #appShell .crm-onetap-icon > span { width: 18px; height: 18px; background: currentColor; mask: var(--onetap-icon, var(--crm-icon-sparkles)) center / contain no-repeat; }
+body #appShell .crm-onetap-chevron { width: 18px; height: 18px; flex: 0 0 18px; margin-left: auto; background: var(--crm-amber); mask: var(--crm-icon-chevron-right) center / contain no-repeat; }
+body #appShell .crm-onetap-neglected { --onetap-icon: var(--crm-icon-users); }
+body #appShell .crm-onetap-pipeline_health { --onetap-icon: var(--crm-icon-layout-dashboard); }
+body #appShell .crm-onetap-new_intel { --onetap-icon: var(--crm-icon-file-text); }
+body #appShell .crm-onetap-prepare { --onetap-icon: var(--crm-icon-calendar-days); }
+body #appShell .crm-onetap-next { --onetap-icon: var(--crm-icon-arrow-right); }
+body #appShell .crm-onetap-email { --onetap-icon: var(--crm-icon-mail); }
+body #appShell .crm-onetap-summary { --onetap-icon: var(--crm-icon-file-text); }
+body #appShell .crm-onetap-flag { --onetap-icon: var(--crm-icon-circle-alert); }
+body.one-tap-mode #appShell :is(.crm-onetap-focus_today, .crm-onetap-prepare) { flex-direction: row; align-items: center; min-height: 80px; padding: 18px 20px; gap: 16px; }
+body.one-tap-mode #appShell .crm-onetap-focus_today { background: var(--crm-navy) !important; color: white !important; border-color: var(--crm-navy) !important; }
+body #appShell .crm-onetap-focus_today small { color: white; }
+body #appShell .crm-onetap-focus_today .crm-onetap-icon { color: var(--crm-amber); background: #34546D; }
+body.one-tap-mode #appShell .crm-onetap-prepare { grid-column: 1 / -1; }
+body #appShell .crm-onetap-prepare .crm-onetap-icon { background: #FFF0D1; color: #8A5200; }
+body.one-tap-mode #appShell .crm-ai-action-card:disabled { opacity: 1; color: var(--crm-text-secondary); background: #F6F7F9 !important; border-style: dashed !important; cursor: not-allowed; }
+body #appShell .crm-onetap-company-row { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+body #appShell .crm-onetap-picker { flex: 1 1 340px; max-width: 420px; min-width: 0; }
+body #appShell .crm-onetap-picker label { display: block; margin-bottom: 6px; font: 600 14px/1.4 var(--crm-font-ui); }
+body.one-tap-mode #appShell #aiWorkspaceCompany { width: 100%; margin: 0; min-height: 44px; }
+body #appShell .crm-onetap-shortcuts { min-width: 0; flex: 1 1 300px; }
+body #appShell .crm-onetap-shortcuts > span { display: block; margin-bottom: 6px; font-size: 12px; color: var(--crm-text-secondary); }
+body #appShell .crm-onetap-shortcuts > div { display: flex; gap: 8px; flex-wrap: wrap; }
+body.one-tap-mode #appShell .crm-onetap-shortcuts button { min-height: 44px; padding: 6px 14px; border-radius: 999px; font-size: 13px; white-space: normal; max-width: 100%; }
+body.one-tap-mode #appShell .crm-onetap-shortcuts button { --crm-button-icon: var(--crm-icon-building); border-radius: 999px !important; border-color: var(--crm-divider) !important; }
+body.one-tap-mode #appShell .crm-ai-workspace-status { margin: 16px 0; padding: 10px 14px; background: #F2F5F9; border-radius: 8px; font-size: 13px; }
+body #appShell .crm-onetap-assistant { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 8px 8px 16px; border: 1px solid #8EC5C5; border-radius: 10px; background: white; }
+body #appShell .crm-onetap-assistant p { margin: 0; font-size: 13px; color: var(--crm-text-secondary); }
+body.one-tap-mode #appShell #aiAssistantLauncher { position: static !important; inset: auto !important; transform: none !important; width: auto !important; min-width: 44px; min-height: 44px; border-radius: 8px; box-shadow: none; }
+body.one-tap-mode #appShell #aiAssistantLauncher span:last-child { display: inline !important; }
+body #appShell :is(.crm-onetap-mobile-copy, .crm-onetap-assistant-input, .crm-onetap-back) { display: none !important; }
+@media (max-width: 1024px) {
+  body.one-tap-mode #appShell > .main { padding: 24px !important; }
+  body.one-tap-mode #appShell .topbar:not(.hidden):not([hidden]) { display: flex !important; margin-bottom: 16px; }
+  body.one-tap-mode #appShell .topbar :is(.topbar-copy, .topbar-actions) { display: none !important; }
+  body #appShell .crm-onetap-company-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  body.one-tap-mode #appShell > .main { padding: 28px 16px 112px !important; }
+  body.one-tap-mode #appShell .topbar:not(.hidden):not([hidden]), body.one-tap-mode #mobileTabs { display: none !important; }
+  body.one-tap-mode #appShell #aiWorkspaceView:not(.hidden) { gap: 20px; padding-bottom: 16px; }
+  body #appShell .crm-onetap-heading { display: flex; align-items: center; gap: 12px; }
+  body #appShell .crm-onetap-heading > div { min-width: 0; }
+  body #appShell .crm-onetap-heading h2 { font-size: 24px; }
+  body #appShell .crm-onetap-heading p { font-size: 12px; line-height: 1.4; margin-top: 3px; }
+  body #appShell .crm-onetap-back { display: inline-flex !important; align-items: center; justify-content: center; width: 44px; min-width: 44px; height: 44px; padding: 0; --crm-button-icon: var(--crm-icon-chevron-left); }
+  body #appShell .crm-onetap-back::before { position: static; margin: 0; width: 18px; height: 18px; flex: 0 0 18px; }
+  body #appShell .crm-onetap-desktop-copy { display: none !important; }
+  body #appShell .crm-onetap-mobile-copy { display: inline !important; }
+  body #appShell .crm-onetap-section { padding: 0; border: 0; border-radius: 0; background: none; }
+  body #appShell .crm-onetap-section h3 { font-size: 16px; margin-bottom: 12px; }
+  body #appShell .crm-onetap-section-heading p { display: none; }
+  body #appShell .crm-onetap-day-grid { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 14px; margin-top: 14px; background: white; border: 1px solid var(--crm-divider); border-radius: 12px; }
+  body.one-tap-mode #appShell .crm-onetap-day-grid .crm-ai-action-card { flex-direction: row; align-items: center; gap: 12px; padding: 14px 0; min-height: 66px; border: 0 !important; border-radius: 0 !important; background: transparent; }
+  body.one-tap-mode #appShell .crm-onetap-day-grid .crm-ai-action-card + .crm-ai-action-card { border-top: 1px solid var(--crm-divider) !important; }
+  body #appShell .crm-onetap-day-grid small { display: none; }
+  body #appShell .crm-onetap-card-copy strong { font-size: 14px; font-weight: 600; }
+  body #appShell .crm-onetap-icon { width: 32px; height: 32px; flex-basis: 32px; }
+  body #appShell .crm-onetap-chevron { width: 12px; flex-basis: 12px; }
+  body.one-tap-mode #appShell :is(.crm-onetap-focus_today, .crm-onetap-prepare) { padding: 14px; gap: 10px; min-height: 66px; }
+  body #appShell .crm-onetap-focus_today small, body #appShell .crm-onetap-prepare small { font-size: 12px !important; line-height: 1.4 !important; }
+  body #appShell .crm-onetap-company-body { padding: 14px; border: 1px solid var(--crm-divider); border-radius: 14px; background: white; min-width: 0; }
+  body #appShell .crm-onetap-picker { max-width: none; flex-basis: 100%; }
+  body #appShell .crm-onetap-picker label { font-size: 12px; }
+  body.one-tap-mode #appShell #aiWorkspaceCompany { font-size: 16px; }
+  body #appShell .crm-onetap-company-row { gap: 12px; }
+  body #appShell .crm-onetap-shortcuts { flex-basis: 100%; }
+  body #appShell .crm-onetap-shortcuts > span { display: none; }
+  body #appShell .crm-onetap-shortcuts > div { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  body.one-tap-mode #appShell .crm-onetap-shortcuts button { flex: 0 0 auto; max-width: none; white-space: nowrap; font-size: 12px; padding-inline: 12px; }
+  body.one-tap-mode #appShell .crm-ai-workspace-status { margin-block: 12px; font-size: 12px; padding: 10px 12px; }
+  body #appShell .crm-onetap-company-grid { gap: 10px; }
+  body.one-tap-mode #appShell .crm-onetap-company-grid .crm-ai-action-card:not(.crm-onetap-prepare) { min-height: 94px; padding: 12px; gap: 8px; }
+  body #appShell .crm-onetap-company-grid .crm-ai-action-card:not(.crm-onetap-prepare) small { display: none; }
+  body #appShell .crm-onetap-company-grid .crm-ai-action-card:not(.crm-onetap-prepare) strong { font-size: 13px; font-weight: 400; }
+  body.one-tap-mode #appShell .crm-onetap-assistant { position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; gap: 8px; flex-wrap: nowrap; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--crm-divider); border-radius: 0; }
+  body #appShell .crm-onetap-assistant p { display: none; }
+  body #appShell .crm-onetap-assistant-input { display: block !important; flex: 1; width: 0; min-width: 0; min-height: 44px; margin: 0; font-size: 16px; }
+  body.one-tap-mode #appShell #aiAssistantLauncher { width: 44px !important; padding: 0; justify-content: center; border-radius: 8px !important; }
+  body.one-tap-mode #appShell #aiAssistantLauncher span:last-child { display: none !important; }
+}
+body.today-mode #appShell > .main { background-color: var(--crm-page-muted) !important; }
 body.today-mode #appShell .topbar { background: none !important; }
 body.today-mode #appShell #openPlacesSearch { display: none !important; }
 body.today-mode #appShell .topbar #aiAssistantLauncher { position: static; inset: auto; flex: 0 1 auto; align-self: center; min-width: 0; max-width: 100%; min-height: 44px; border-radius: var(--crm-radius-control); box-shadow: none; }
@@ -957,4 +1107,112 @@ body.neglected-mode .crm-neglected-state { padding: 32px 8px; color: var(--crm-t
   body.neglected-mode [data-neglected-log] { width: 44px !important; min-width: 44px; min-height: 44px; padding: 10px !important; }
   body.neglected-mode [data-neglected-log]::before { margin: 0; }
   body.neglected-mode [data-neglected-log] span { display: none; }
+}
+/* Draft-only email composer. Document bytes are fetched only for an explicit download. */
+body.email-draft-mode #appShell .topbar:not(.hidden):not([hidden]) { display: none !important; }
+body.email-draft-mode #appShell > .main { padding: 32px 48px 48px !important; background-color: var(--crm-page-muted) !important; }
+body.email-draft-mode #aiWorkspaceView { padding: 0; }
+body.email-draft-mode .email-page { max-width: 1200px; margin: 0 auto; color: var(--crm-text-primary); }
+body.email-draft-mode :is(.email-mobile-back, .email-mobile-title, .email-mobile-company, .email-mobile-source, .email-mobile-tone-host, .email-mobile-note),
+body.email-draft-mode .email-delivery-details > summary { display: none; }
+body.email-draft-mode .email-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 16px; }
+body.email-draft-mode .email-breadcrumb button,
+body.email-draft-mode .email-company button,
+body.email-draft-mode .email-to button { border: 0 !important; background: transparent !important; box-shadow: none !important; color: #0b3b75 !important; padding: 4px 0; min-height: 44px; font-size: 13px; width: auto !important; }
+body.email-draft-mode .email-breadcrumb button::before,
+body.email-draft-mode .email-company button::before,
+body.email-draft-mode .email-to button::before { display: none !important; }
+body.email-draft-mode .email-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+body.email-draft-mode .email-heading > div { min-width: 0; }
+body.email-draft-mode #aiWorkspaceHeading { font-size: 32px; line-height: 1.15; color: #0b3b75; margin: 0; letter-spacing: 0; }
+body.email-draft-mode .email-page em { color: #976000; font-family: Georgia, serif; font-weight: 400; }
+body.email-draft-mode .email-company { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+body.email-draft-mode .email-company strong { overflow-wrap: anywhere; }
+body.email-draft-mode .email-toolbar { display: flex; gap: 10px; flex-shrink: 0; }
+body.email-draft-mode .email-toolbar button { min-height: 44px; width: auto !important; }
+body.email-draft-mode #aiWorkspaceView [data-email-generate] { --crm-button-icon: var(--crm-icon-refresh-cw); }
+body.email-draft-mode #aiWorkspaceView [data-email-copy] { --crm-button-icon: var(--crm-icon-clipboard-list); }
+body.email-draft-mode [data-email-download] { --crm-button-icon: var(--crm-icon-download); }
+body.email-draft-mode .email-picker { max-width: 540px; margin-bottom: 16px; }
+body.email-draft-mode .email-status { font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
+body.email-draft-mode .email-status:empty { display: none; }
+body.email-draft-mode .email-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+body.email-draft-mode .email-editor,
+body.email-draft-mode .email-side > section { border: 1px solid #e3e8ef; border-radius: 14px; background: #fff; min-width: 0; overflow: hidden; }
+body.email-draft-mode .email-provenance { display: flex; align-items: center; gap: 10px; padding: 14px 22px; background: #f3f6fa; border-bottom: 1px solid #e3e8ef; }
+body.email-draft-mode .email-provenance span { background: #0b3b75; color: #fff; border-radius: 16px; padding: 4px 10px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+body.email-draft-mode .email-page small { font-size: 12px; line-height: 1.5; color: #4a5568; }
+body.email-draft-mode .email-page fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+body.email-draft-mode .email-fields { display: grid; grid-template-columns: 66px minmax(0, 1fr); align-items: center; padding: 0 22px; }
+body.email-draft-mode .email-fields > label { font-size: 12px; font-weight: 700; text-transform: uppercase; margin: 0; }
+body.email-draft-mode #appShell #aiWorkspaceView .email-fields input { border: 0 !important; border-bottom: 1px solid #eef1f5 !important; border-radius: 0 !important; box-shadow: none; min-height: 48px; padding: 10px 0; font-size: 14px; width: 100%; min-width: 0; color: #0b2545; background: transparent; }
+body.email-draft-mode #emailDraftSubject { font-weight: 700; }
+body.email-draft-mode .email-to { display: flex; align-items: center; gap: 10px; min-width: 0; }
+body.email-draft-mode .email-to button { flex: 0 0 auto; }
+body.email-draft-mode #appShell #aiWorkspaceView #emailDraftBody { display: block; box-sizing: border-box; width: 100%; min-height: 350px !important; resize: vertical; padding: 22px; border: 0 !important; border-radius: 0 !important; font-size: 14px; line-height: 1.65; color: #0b2545; background: #fff; }
+body.email-draft-mode .email-assistant-host { display: flex; justify-content: flex-end; padding-top: 20px; }
+body.email-draft-mode #emailCompanyPicker.hidden { display: none !important; }
+body.email-draft-mode .email-assistant-host #aiAssistantLauncher { position: static !important; inset: auto !important; width: auto !important; }
+body.email-draft-mode .email-attached { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid #eef1f5; padding: 12px 22px; font-size: 12px; }
+body.email-draft-mode .email-file { border: 1px solid #d8e1ee; border-radius: 5px; padding: 4px 8px; }
+body.email-draft-mode .email-editor footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 22px; background: #f8fafc; border-top: 1px solid #e3e8ef; }
+body.email-draft-mode .email-editor footer button { flex: 0 0 auto; width: auto !important; min-height: 44px; background: #ffb51b !important; color: #0b2545 !important; border: 1px solid #e9a008 !important; }
+body.email-draft-mode .email-side { display: grid; gap: 20px; }
+body.email-draft-mode .email-side > section { padding: 20px; }
+body.email-draft-mode .email-side h3 { font-size: 18px; margin: 0 0 16px; }
+body.email-draft-mode .email-side legend { font-size: 13px; font-weight: 600; margin-bottom: 8px; padding: 0; }
+body.email-draft-mode .email-tones { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #e8edf3; border-radius: 8px; padding: 4px; }
+body.email-draft-mode .email-tones button { width: auto !important; min-height: 44px; border: 0 !important; background: transparent !important; color: #0b3b75 !important; box-shadow: none !important; font-size: 13px; }
+body.email-draft-mode .email-tones button::before { display: none !important; }
+body.email-draft-mode .email-tones button[aria-pressed="true"] { background: #fff !important; border-radius: 6px; font-weight: 700; }
+body.email-draft-mode .email-tone-note { display: block; margin: 8px 0 18px; }
+body.email-draft-mode .email-attach { display: flex; align-items: center; gap: 8px; border: 1px solid #d8e1ee; border-radius: 6px; padding: 10px; min-height: 44px; font-size: 13px; }
+body.email-draft-mode .email-attach input { width: 18px !important; height: 18px; accent-color: #0b3b75; flex: 0 0 18px; }
+body.email-draft-mode .email-side ul { margin: 0; padding-left: 18px; display: grid; gap: 10px; font-size: 13px; line-height: 1.5; }
+body.email-draft-mode .email-side p { margin: 16px 0 0; font-size: 12px; line-height: 1.6; color: #4a5568; }
+@media (max-width: 1000px) {
+  body.email-draft-mode .email-layout { grid-template-columns: minmax(0, 1fr); }
+  body.email-draft-mode .email-side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  body.email-draft-mode #appShell > .main { padding: 24px 16px calc(112px + env(safe-area-inset-bottom)) !important; }
+  body.email-draft-mode #mobileTabs { display: none !important; }
+  body.email-draft-mode #aiWorkspaceView { padding: 0; }
+  body.email-draft-mode :is(.email-breadcrumb, .email-desktop-title, .email-company strong, .email-provenance, .email-attachment-caption) { display: none !important; }
+  body.email-draft-mode .email-mobile-title { display: inline; }
+  body.email-draft-mode .email-heading { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 0 10px; margin-bottom: 12px; }
+  body.email-draft-mode :is(.email-heading-copy, .email-toolbar) { display: contents; }
+  body.email-draft-mode .email-mobile-company { display: block; grid-column: 2; grid-row: 1; align-self: end; font-size: 12px; line-height: 1.3; color: #4a5568; overflow-wrap: anywhere; }
+  body.email-draft-mode #aiWorkspaceHeading { grid-column: 2; grid-row: 2; font-size: 21px; line-height: 1.2; align-self: start; }
+  body.email-draft-mode #aiWorkspaceView .email-mobile-back { display: inline-flex; align-items: center !important; justify-content: center !important; flex-direction: row !important; grid-column: 1; grid-row: 1 / span 2; min-width: 44px; width: 44px !important; height: 44px; padding: 0; --crm-button-icon: var(--crm-icon-chevron-left); }
+  body.email-draft-mode #aiWorkspaceView .email-mobile-back::before { position: static !important; width: 16px; height: 16px; margin: 0; }
+  body.email-draft-mode #aiWorkspaceView [data-email-generate] { grid-column: 3; grid-row: 1 / span 2; width: 44px !important; min-width: 44px; height: 44px; padding: 0; }
+  body.email-draft-mode [data-email-generate] span { display: none; }
+  body.email-draft-mode #aiWorkspaceView [data-email-generate]::before { margin: 0; }
+  body.email-draft-mode .email-company { grid-column: 1 / -1; grid-row: 3; display: flex; gap: 0 10px; margin-top: 12px; padding: 0 10px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; }
+  body.email-draft-mode .email-mobile-source { display: inline; flex: 1 1 110px; font-size: 12px; color: #4a5568; }
+  body.email-draft-mode .email-company button { flex: 0 0 auto; min-width: 44px; font-size: 12px; font-weight: 600; }
+  body.email-draft-mode .email-mobile-tone-host { display: block; margin-bottom: 12px; }
+  body.email-draft-mode .email-tones { padding: 4px; }
+  body.email-draft-mode .email-layout { gap: 12px; }
+  body.email-draft-mode .email-adjust-panel { display: none !important; }
+  body.email-draft-mode .email-side { grid-template-columns: minmax(0, 1fr); }
+  body.email-draft-mode .email-fields { padding: 0 14px; grid-template-columns: 58px minmax(0, 1fr); column-gap: 8px; }
+  body.email-draft-mode .email-fields > label { font-size: 12px; }
+  body.email-draft-mode .email-to { gap: 6px; }
+  body.email-draft-mode .email-to button { min-width: 44px; font-size: 12px; }
+  body.email-draft-mode #appShell #aiWorkspaceView #emailDraftBody { padding: 14px; min-height: 300px !important; height: 300px; font-size: 16px; line-height: 1.6; }
+  body.email-draft-mode .email-editor footer { position: fixed; z-index: 60; inset: auto 0 0; padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); background: #fff; flex-direction: row; border-top: 1px solid #e3e8ef; }
+  body.email-draft-mode .email-editor footer small { display: none; }
+  body.email-draft-mode #appShell .email-editor footer button { margin-left: 94px; width: calc(100% - 94px) !important; min-width: 0; height: 48px; min-height: 48px; flex-direction: row !important; padding-inline: 10px; }
+  body.email-draft-mode #aiWorkspaceView [data-email-copy] { position: fixed; z-index: 61; left: 16px; bottom: calc(24px + env(safe-area-inset-bottom)); width: 84px !important; height: 48px; min-height: 48px; padding: 8px; display: inline-flex; flex-direction: row !important; gap: 6px; background: #fff !important; }
+  body.email-draft-mode .email-attached { padding: 8px 14px; }
+  body.email-draft-mode .email-attached .email-attach { box-sizing: border-box; min-height: 44px; width: auto; display: inline-flex; margin: 0; border-radius: 999px; padding: 8px 10px; background: #eef3f9; border-color: #a0b7d0; color: #0b3b75; font-size: 12px; font-weight: 600; }
+  body.email-draft-mode .email-attached .email-attach input { width: 16px !important; height: 16px; flex-basis: 16px; }
+  body.email-draft-mode .email-tones button { flex-direction: row !important; }
+  body.email-draft-mode .email-side > .email-delivery-panel { border: 0; border-radius: 0; padding: 0; background: transparent; }
+  body.email-draft-mode .email-mobile-note { display: block; margin: 0 0 6px !important; }
+  body.email-draft-mode .email-delivery-details > summary { display: flex; align-items: center; min-height: 44px; font-size: 12px; color: #0b3b75; cursor: pointer; }
+  body.email-draft-mode .email-delivery-details > h3 { display: none; }
+  body.email-draft-mode .email-assistant-host { display: none; }
 }

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v124-meeting-reference-polish";
+const CACHE_VERSION = "arg-pwa-v131-consistent-artwork-email";
 const APP_SHELL = [
   "/",
   "/index.html",

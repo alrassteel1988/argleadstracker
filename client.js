@@ -3076,9 +3076,10 @@ function renderMeetingBriefWorkspace(workspace) {
   const checklist = ["Confirm procurement contact and number", "Confirm a live project and steel requirements", "Confirm required compliance documents", "Confirm the current supplier"];
   workspace.setAttribute("aria-busy", String(busy));
   workspace.innerHTML = `
-    <nav class="meeting-breadcrumb" aria-label="Meeting brief breadcrumb"><button type="button" class="ghost-button meeting-menu" data-meeting-menu aria-label="Open navigation menu">Menu</button><a href="/?view=pipeline">Pipeline</a>${lead ? `<span>/</span><a href="${escapeHtml(leadRouteUrl(lead.id))}">${escapeHtml(lead.company_name)}</a>` : ""}<span>/</span><span>Meeting brief</span>${brief?.output ? `<button class="ghost-button meeting-company-change" type="button" data-meeting-change aria-controls="meetingCompanyPicker" aria-expanded="false">Change company</button>` : ""}</nav>
-    <header class="meeting-heading"><div><h2 id="aiWorkspaceHeading">Prepare me for this <em>meeting</em></h2><p>${lead ? escapeHtml(lead.company_name) : "Choose a company"}${brief?.generatedAt ? ` · Generated ${escapeHtml(new Date(brief.generatedAt).toLocaleString("en-GB", { timeZone: "Asia/Dubai" }))}` : ""}</p></div>
-      <div class="meeting-toolbar"><button class="ghost-button" type="button" data-meeting-generate ${!lead || busy ? "disabled" : ""}>${brief?.output ? "Regenerate" : "Generate brief"}</button><button class="ghost-button" type="button" data-meeting-copy ${!brief?.output || busy ? "disabled" : ""}>Copy brief</button><button class="primary-button" type="button" data-meeting-log ${!lead || busy ? "disabled" : ""}>Log meeting</button></div></header>
+    <nav class="meeting-breadcrumb" aria-label="Meeting brief breadcrumb"><button type="button" class="ghost-button meeting-menu" data-meeting-menu aria-label="Open navigation menu">Menu</button><a href="/?view=ai-actions">AI actions</a><span>/</span><span>Meeting brief</span></nav>
+    <header class="meeting-heading"><a class="ghost-button meeting-back" href="/?view=ai-actions" aria-label="Back to AI actions" title="Back to AI actions"></a><div class="meeting-heading-copy"><span class="meeting-mobile-company">${lead ? escapeHtml(lead.company_name) : "Choose a company"}</span><h2 id="aiWorkspaceHeading"><span class="meeting-title-full">Prepare me for this </span><span class="meeting-title-short">Prepare for </span><em>meeting</em></h2></div><div class="meeting-company-meta"><a class="meeting-mobile-origin" href="/?view=ai-actions">From AI actions</a><strong>${lead ? escapeHtml(lead.company_name) : "Choose a company"}</strong>${brief?.generatedAt ? `<span class="meeting-generated-at">· Generated ${escapeHtml(new Date(brief.generatedAt).toLocaleString("en-GB", { timeZone: "Asia/Dubai" }))}</span>` : ""}${brief?.output ? `<button class="ghost-button meeting-company-change" type="button" data-meeting-change aria-controls="meetingCompanyPicker" aria-expanded="false"><span class="meeting-title-full">Change company</span><span class="meeting-title-short">Change</span></button>` : ""}${lead ? `<a class="meeting-open-lead" href="${escapeHtml(leadRouteUrl(lead.id))}">Open lead</a>` : ""}</div>
+      <button class="ghost-button meeting-regenerate" type="button" data-meeting-generate aria-label="${brief?.output ? "Regenerate brief" : "Generate brief"}" title="${brief?.output ? "Regenerate brief" : "Generate brief"}" ${!lead || busy ? "disabled" : ""}><span>${brief?.output ? "Regenerate" : "Generate brief"}</span></button><div class="meeting-toolbar"><button class="ghost-button" type="button" data-meeting-copy ${!brief?.output || busy ? "disabled" : ""}><span class="meeting-title-full">Copy brief</span><span class="meeting-title-short">Copy</span></button><button class="primary-button" type="button" data-meeting-log ${!lead || busy ? "disabled" : ""}>Log meeting</button></div></header>
+    ${lead ? `<div class="meeting-mobile-summary">${factValue("Status", stageDisplayLabel(lead.stage))}${factValue("Current CRM health", lead.health?.label || "Not available")}<span>Last contact ${factValue("Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "Not recorded")}</span></div>` : ""}
     <div id="meetingCompanyPicker" class="meeting-company${brief?.output ? " hidden" : ""}"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${state.leadsLoading && !state.leadsLoaded || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${item.id === lead?.id ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>
     ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
     ${busy ? `<p class="meeting-state" role="status">Preparing your brief from CRM records...</p>` : brief?.error ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(brief.error)}</p>` : ""}
@@ -3086,7 +3087,7 @@ function renderMeetingBriefWorkspace(workspace) {
     <div class="meeting-layout"><div class="meeting-main">
       <section class="meeting-ask"><span class="meeting-target" aria-hidden="true"></span><div><h3>Your one ask</h3>${brief?.output ? section("Recommended ask") : `<p>Generate a brief to see the recommended ask.</p>`}</div></section>
       <section class="meeting-panel meeting-talking"><h3>Talking points</h3>${brief?.output ? section("Talking points") : `<p>No brief generated yet.</p>`}</section>
-      <section class="meeting-panel meeting-evidence"><header><span class="meeting-ai-badge">${brief?.provider === "fallback" ? "CRM fallback" : brief?.output ? "AI answer" : "Brief sources"}</span><span>Company record, activity history, PMRs and matched intelligence</span></header>
+      <section class="meeting-panel meeting-evidence"><header><span class="meeting-ai-badge">${brief?.provider === "fallback" ? "CRM fallback" : brief?.output ? "AI answer" : "Brief sources"}</span><span class="meeting-title-full">Company record, activity history, PMRs and matched intelligence</span><span class="meeting-title-short">Record, activity, PMRs, intel</span></header>
         ${brief?.provider === "fallback" ? `<p class="meeting-provenance">CRM-data fallback was used. Review before acting.</p>` : ""}
         ${brief?.output ? `<div class="meeting-evidence-row"><h4>History</h4><div>${section("What happened last time")}</div></div>` : `<p>Generate a brief to review its supporting context.</p>`}
         <div class="meeting-evidence-row"><h4>Last PMR</h4><div><a href="${escapeHtml(leadRouteUrl(lead.id, "pmr"))}">Review PMRs in the company record</a></div></div>
@@ -3102,6 +3103,207 @@ function renderMeetingBriefWorkspace(workspace) {
   if (launcher) workspace.querySelector(".meeting-assistant-host")?.appendChild(launcher);
 }
 
+function renderOneTapWorkspace(workspace, leads, selectedCompany, busy) {
+  const shortcuts = leads.filter(lead => lead.next_action_date && daysUntil(lead.next_action_date) < 0)
+    .sort((a, b) => new Date(a.next_action_date) - new Date(b.next_action_date)).slice(0, 3);
+  const portfolioHints = {
+    focus_today: "Your priority accounts to contact, with the reason for each",
+    neglected: "Accounts past their expected contact date",
+    pipeline_health: "Where deals are stuck and why",
+    new_intel: "News and research matched to your prospects"
+  };
+  const companyActions = [
+    ["prepare", "Prepare me for this meeting", "History, latest PMR, intel, quote reference, talking points and one recommended ask"],
+    ["next", "What should I do next?", "The next action and why"],
+    ["email", "Draft follow-up email", "A draft from your CRM records, for your review"],
+    ["summary", "Summarise for handoff", "A relationship recap for a colleague or the director"],
+    ["flag", "Flag needs attention", "Review the account before notifying the director"]
+  ];
+  const portfolioCard = action => `<button class="ghost-button crm-ai-action-card crm-onetap-${action}" type="button" data-workspace-portfolio-action="${action}" ${busy || state.dailyAiLoading ? "disabled" : ""}><span class="crm-onetap-icon" aria-hidden="true"><span></span></span><span class="crm-onetap-card-copy"><strong>${escapeHtml(SALESPERSON_ACTION_LABELS[action])}</strong><small><span class="crm-onetap-desktop-copy">${portfolioHints[action]}</span>${action === "focus_today" ? '<span class="crm-onetap-mobile-copy">Priority accounts, with reasons</span>' : ""}</small></span>${action === "focus_today" ? '<span class="crm-onetap-chevron" aria-hidden="true"></span>' : ""}</button>`;
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `
+    <header class="crm-onetap-heading"><button type="button" class="ghost-button crm-onetap-back" data-workspace-view="dashboard" aria-label="Back to dashboard" title="Back to dashboard"></button><div><h2 id="aiWorkspaceHeading">One-tap AI <em>actions</em></h2><p><span class="crm-onetap-desktop-copy">Answers built only from the CRM records you can see. No typing needed.</span><span class="crm-onetap-mobile-copy">From the CRM records you can see</span></p></div></header>
+    ${isSalesmanRole() ? `<section class="crm-onetap-section" aria-label="Portfolio intelligence"><header class="crm-onetap-section-heading"><h3>Your <em>day</em></h3><p>Across your visible accounts${state.currentUser.territory ? ` · ${escapeHtml(state.currentUser.territory)}` : ""}</p></header>${portfolioCard("focus_today")}<div class="crm-onetap-day-grid">${["neglected", "pipeline_health", "new_intel"].map(portfolioCard).join("")}</div></section>` : ""}
+    <section class="crm-onetap-section" aria-label="Company intelligence"><h3>One <em>company</em></h3>
+      <div class="crm-onetap-company-body">
+      <div class="crm-onetap-company-row"><div class="crm-onetap-picker"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${busy || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(lead => `<option value="${escapeHtml(String(lead.id))}" ${String(lead.id) === selectedCompany ? "selected" : ""}>${escapeHtml(lead.company_name || "Unnamed company")}</option>`).join("")}</select></div>
+      ${!busy && shortcuts.length ? `<div class="crm-onetap-shortcuts"><span>Overdue follow-ups</span><div>${shortcuts.map(lead => `<button class="ghost-button" type="button" data-workspace-pick="${escapeHtml(String(lead.id))}">${escapeHtml(lead.company_name || "Unnamed company")}</button>`).join("")}</div></div>` : ""}</div>
+      <p class="crm-ai-workspace-status" aria-live="polite">${busy ? "Loading your visible companies..." : selectedCompany ? "Company actions are ready." : leads.length ? "Choose a company to enable its actions." : "No visible companies are available. Add a lead or check your current assignment."}</p>
+      <div class="crm-onetap-company-grid">${companyActions.map(([action, title, hint]) => `<button class="ghost-button crm-ai-action-card crm-onetap-${action}" type="button" data-workspace-company-action="${action}" ${!selectedCompany || busy ? "disabled" : ""}><span class="crm-onetap-icon" aria-hidden="true"><span></span></span><span class="crm-onetap-card-copy"><strong>${title}</strong><small><span class="crm-onetap-desktop-copy">${hint}</span>${action === "prepare" ? '<span class="crm-onetap-mobile-copy">Brief, talking points, one ask</span>' : ""}</small></span>${action === "prepare" ? '<span class="crm-onetap-chevron" aria-hidden="true"></span>' : ""}</button>`).join("")}</div>
+      </div>
+    </section>
+    ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
+    <form class="crm-onetap-assistant"><p>Not here? Ask the AI Assistant about your accounts</p><input class="crm-onetap-assistant-input" type="text" aria-label="Ask the AI Assistant" placeholder="Ask the AI Assistant..." maxlength="4000"><span class="crm-onetap-assistant-host"></span></form>`;
+}
+
+let emailDraftState = null;
+
+function newEmailDraft(lead) {
+  return { owner: String(state.currentUser.id), leadId: String(lead.id), to: lead.email || lead.contact_email || "",
+    cc: "", showCc: false, subject: "", body: "", tone: "formal", includeProfile: true,
+    loading: false, downloading: false, dirty: false, provider: "", error: "" };
+}
+
+function emailToneBody(body, tone) {
+  return String(body).replace(/^(Dear|Hello)\s+([^\n]+),/i, `${tone === "friendly" ? "Hello" : "Dear"} $2,`)
+    .replace(/^(?:Kind regards|Best regards|Regards),?$/im, tone === "friendly" ? "Best regards," : "Kind regards,");
+}
+
+function emailBase64(bytes) {
+  let text = "";
+  for (let index = 0; index < bytes.length; index += 8192) text += String.fromCharCode(...bytes.subarray(index, index + 8192));
+  return btoa(text).match(/.{1,76}/g)?.join("\r\n") || "";
+}
+
+function emailDraftMime(draft, profileBytes) {
+  const addressList = value => {
+    const addresses = String(value || "").split(/[,;]/).map(item => item.trim()).filter(Boolean);
+    if (addresses.length > 20 || addresses.some(item => !/^[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(item))) throw new Error("Enter valid email addresses, separated by commas.");
+    return addresses.join(", ");
+  };
+  const to = addressList(draft.to);
+  const cc = addressList(draft.cc);
+  if (!to || !draft.subject.trim() || !draft.body.trim()) throw new Error("Complete the recipient, subject and email body.");
+  if (/[\r\n\x00-\x1f\x7f]/.test(draft.subject)) throw new Error("The subject must be a single line.");
+  const boundary = `arg-draft-${crypto.randomUUID()}`;
+  // Fold encoded words independently so non-ASCII subjects remain valid RFC 2047 headers.
+  const subjectWords = Array.from(draft.subject).reduce((chunks, char) => {
+    if (!chunks.length || new TextEncoder().encode(chunks.at(-1) + char).length > 42) chunks.push(char);
+    else chunks[chunks.length - 1] += char;
+    return chunks;
+  }, []).map(chunk => `=?UTF-8?B?${btoa(String.fromCharCode(...new TextEncoder().encode(chunk)))}?=`).join("\r\n ");
+  const lines = ["X-Unsent: 1", "MIME-Version: 1.0", `To: ${to}`, ...(cc ? [`Cc: ${cc}`] : []),
+    `Subject: ${subjectWords}`, `Content-Type: multipart/mixed; boundary="${boundary}"`, "",
+    `--${boundary}`, 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "",
+    emailBase64(new TextEncoder().encode(draft.body.replace(/\r?\n/g, "\r\n")))];
+  if (draft.includeProfile) {
+    if (!profileBytes?.length) throw new Error("Company profile could not be loaded. Try downloading again.");
+    lines.push(`--${boundary}`, 'Content-Type: application/pdf; name="Al Ras Group - Company Profile.pdf"',
+      'Content-Disposition: attachment; filename="Al Ras Group - Company Profile.pdf"', "Content-Transfer-Encoding: base64", "", emailBase64(profileBytes));
+  }
+  lines.push(`--${boundary}--`, "");
+  return lines.join("\r\n");
+}
+
+async function generateEmailDraft() {
+  const draft = emailDraftState;
+  const lead = state.leads.find(item => String(item.id) === draft?.leadId);
+  if (!lead || draft.owner !== String(state.currentUser?.id) || draft.loading || draft.downloading) return;
+  if (draft.dirty && !window.confirm("Replace your edited subject and body with a new draft?")) return;
+  draft.loading = true;
+  draft.error = "";
+  renderAiWorkspace();
+  try {
+    const result = await api(`/api/leads/${encodeURIComponent(lead.id)}/ai-actions`, { method: "POST", body: JSON.stringify({ action: "email" }) });
+    if (emailDraftState !== draft || draft.owner !== String(state.currentUser?.id)) return;
+    const parsed = parseEmailDraft(result.output);
+    if (!parsed.body) throw new Error("No email draft returned. Please try again.");
+    draft.subject = parsed.subject;
+    draft.body = emailToneBody(parsed.body, draft.tone);
+    draft.provider = result.provider || "";
+    draft.dirty = false;
+  } catch (error) { draft.error = error.message || "Could not generate the draft. Your edits have been kept."; }
+  finally {
+    draft.loading = false;
+    if (emailDraftState === draft && currentView === "draft-email" && draft.owner === String(state.currentUser?.id)) renderAiWorkspace();
+  }
+}
+
+async function downloadEmailDraft() {
+  const draft = emailDraftState;
+  const owner = String(state.currentUser?.id);
+  if (!draft || draft.owner !== owner || draft.loading || draft.downloading || !state.leads.some(item => String(item.id) === draft.leadId)) return;
+  try {
+    emailDraftMime({ ...draft, includeProfile: false });
+    draft.downloading = true;
+    draft.error = "";
+    renderAiWorkspace();
+    const parts = [];
+    let count = 1;
+    let size = 0;
+    for (let part = 0; draft.includeProfile && part < count; part++) {
+      if (emailDraftState !== draft || String(state.currentUser?.id) !== owner) return;
+      const response = await authenticatedFetch(`/api/leads/${encodeURIComponent(draft.leadId)}/email-profile?part=${part}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load the company profile. Please retry; no draft was downloaded.");
+      count = Number(response.headers.get("X-Profile-Parts"));
+      size = Number(response.headers.get("X-Profile-Size"));
+      if (!Number.isInteger(count) || count < 1 || count > 32 || !Number.isInteger(size) || size < 1 || size > 32 * 1024 * 1024) throw new Error("Invalid company profile response.");
+      parts.push(new Uint8Array(await response.arrayBuffer()));
+    }
+    if (emailDraftState !== draft || String(state.currentUser?.id) !== owner || !state.leads.some(item => String(item.id) === draft.leadId)) return;
+    let bytes = null;
+    if (draft.includeProfile) {
+      if (parts.reduce((total, part) => total + part.length, 0) !== size) throw new Error("Incomplete company profile. Please retry.");
+      bytes = new Uint8Array(size);
+      let offset = 0;
+      parts.forEach(part => { bytes.set(part, offset); offset += part.length; });
+    }
+    const blob = new Blob([emailDraftMime(draft, bytes)], { type: "message/rfc822" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Al Ras - Follow-up draft.eml";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setToast("Email draft downloaded. Review and send it from your mail client.", "success");
+  } catch (error) { draft.error = error.message || "Could not download the email draft."; }
+  finally {
+    draft.downloading = false;
+    if (emailDraftState === draft && currentView === "draft-email" && String(state.currentUser?.id) === owner) renderAiWorkspace();
+  }
+}
+
+function arrangeEmailDraftLayout() {
+  const page = document.querySelector(".email-page");
+  if (!page) return;
+  const mobile = window.matchMedia("(max-width: 700px)").matches;
+  const tones = page.querySelector(".email-tones");
+  const profile = page.querySelector(".email-attach");
+  const toneHost = page.querySelector(mobile ? ".email-mobile-tone-host" : ".email-adjust-fieldset");
+  if (tones && toneHost) {
+    if (mobile) toneHost.appendChild(tones);
+    else toneHost.insertBefore(tones, toneHost.querySelector(".email-tone-note"));
+  }
+  const profileHost = page.querySelector(mobile ? ".email-attached" : ".email-adjust-fieldset");
+  if (profile && profileHost) profileHost.appendChild(profile);
+  const details = page.querySelector(".email-delivery-details");
+  if (details && page.dataset.mobileLayout !== String(mobile)) details.open = !mobile;
+  page.dataset.mobileLayout = String(mobile);
+}
+
+window.matchMedia("(max-width: 700px)").addEventListener("change", () => {
+  if (currentView === "draft-email") arrangeEmailDraftLayout();
+});
+
+function renderEmailDraftWorkspace(workspace) {
+  const owner = String(state.currentUser.id);
+  const leads = [...state.leads].sort((a, b) => String(a.company_name || "").localeCompare(String(b.company_name || "")));
+  if (emailDraftState?.owner !== owner || state.leadsLoaded && !leads.some(item => String(item.id) === emailDraftState?.leadId)) emailDraftState = null;
+  const draft = emailDraftState;
+  const lead = leads.find(item => String(item.id) === draft?.leadId);
+  const busy = Boolean(draft?.loading || draft?.downloading);
+  const disabled = !lead || busy ? "disabled" : "";
+  workspace.setAttribute("aria-busy", String(busy));
+  workspace.innerHTML = `<div class="email-page">
+    <nav class="email-breadcrumb" aria-label="Breadcrumb"><button type="button" data-workspace-view="ai-actions">AI actions</button><span>/</span><span>Follow-up email</span></nav>
+    <header class="email-heading"><button class="ghost-button email-mobile-back" type="button" data-workspace-view="ai-actions" aria-label="Back to AI actions" title="Back to AI actions"></button><div class="email-heading-copy"><span class="email-mobile-company">${escapeHtml(lead?.company_name || "Choose a company")}</span><h2 id="aiWorkspaceHeading"><span class="email-desktop-title">Draft follow-up</span><span class="email-mobile-title">Follow-up</span> <em>email</em></h2><div class="email-company"><strong>${escapeHtml(lead?.company_name || "Choose a company")}</strong><span class="email-mobile-source">${draft?.provider === "fallback" ? "CRM draft" : draft?.provider ? "AI draft" : "Draft"} · review first</span><button type="button" data-email-change aria-expanded="${!draft?.body}"><span class="email-desktop-title">Change company</span><span class="email-mobile-title">Change</span></button><button type="button" data-email-open ${disabled}>Open lead</button></div></div>
+    <div class="email-toolbar"><button class="ghost-button" type="button" data-email-generate aria-label="${draft?.body ? "Regenerate draft" : "Generate draft"}" title="${draft?.body ? "Regenerate draft" : "Generate draft"}" ${disabled}><span>${draft?.loading ? "Generating..." : draft?.body ? "Regenerate" : "Generate draft"}</span></button><button class="ghost-button" type="button" data-email-copy ${!draft?.body || busy ? "disabled" : ""}>Copy</button></div></header>
+    <div id="emailCompanyPicker" class="email-picker${draft?.body ? " hidden" : ""}"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${busy || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${String(item.id) === draft?.leadId ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>
+    ${state.leadsError ? `<p role="alert">${escapeHtml(state.leadsError)}</p><button type="button" class="ghost-button" data-workspace-retry>Retry loading companies</button>` : ""}
+    <p class="email-status" role="status">${escapeHtml(draft?.error || (draft?.downloading ? "Preparing email with the company profile..." : draft?.loading ? "Reading CRM records and drafting your email..." : !lead ? "Choose a company to start a draft." : !draft.body ? "Generate a draft from CRM records, or write your own below." : ""))}</p>
+    <div class="email-mobile-tone-host"></div><div class="email-layout"><section class="email-editor" aria-label="Email draft"><div class="email-provenance"><span>${draft?.provider === "fallback" ? "CRM draft" : draft?.provider ? "AI draft" : "Draft"}</span><small>${draft?.provider === "fallback" ? "CRM-data fallback was used. Review before sending." : draft?.provider ? "Built from CRM records. Review before sending." : "Editable email. Nothing is sent from this page."}</small></div>
+    <fieldset ${disabled}><div class="email-fields"><label for="emailDraftTo">To</label><div class="email-to"><input id="emailDraftTo" data-email-field="to" type="text" inputmode="email" maxlength="1000" placeholder="recipient@example.com" value="${escapeHtml(draft?.to || "")}"><button type="button" data-email-cc aria-expanded="${Boolean(draft?.showCc)}">${draft?.showCc ? "Remove CC" : "Add CC"}</button></div>
+    ${draft?.showCc ? `<label for="emailDraftCc">CC</label><input id="emailDraftCc" data-email-field="cc" type="text" inputmode="email" maxlength="1000" placeholder="Separate addresses with commas" value="${escapeHtml(draft.cc)}">` : ""}
+    <label for="emailDraftSubject">Subject</label><input id="emailDraftSubject" data-email-field="subject" maxlength="240" value="${escapeHtml(draft?.subject || "")}"></div>
+    <label for="emailDraftBody" class="sr-only">Email body</label><textarea id="emailDraftBody" data-email-field="body" maxlength="20000" placeholder="Write your email, or generate a draft from CRM records.">${escapeHtml(draft?.body || "")}</textarea></fieldset>
+    <div class="email-attached"><span class="email-attachment-caption">Attached:</span><span class="email-attachment-caption">${draft?.includeProfile ? '<span class="email-file">Company profile (PDF) · 11 MB</span>' : 'None'}</span></div>
+    <footer><small>Nothing is sent or logged when you download.</small><button class="primary-button" type="button" data-email-download ${!draft?.body.trim() || !draft?.subject.trim() || !draft?.to.trim() || busy ? "disabled" : ""}>${draft?.downloading ? "Preparing..." : '<span class="email-desktop-title">Download email draft</span><span class="email-mobile-title">Download draft</span>'}</button></footer></section>
+    <aside class="email-side"><section class="email-adjust-panel"><h3>Adjust the <em>draft</em></h3><fieldset class="email-adjust-fieldset" ${disabled}><legend>Tone</legend><div class="email-tones" role="group" aria-label="Email tone">${["formal", "friendly"].map(tone => `<button type="button" data-email-tone="${tone}" aria-pressed="${(draft?.tone || "formal") === tone}" ${disabled}>${tone === "formal" ? "Formal" : "Friendly"}</button>`).join("")}</div><small class="email-tone-note">Updates the greeting and sign-off only.</small><label class="email-attach"><input type="checkbox" data-email-profile ${draft?.includeProfile ? "checked" : ""} ${disabled}><span class="email-desktop-title">Company profile (PDF)</span><span class="email-mobile-title">Company profile</span></label></fieldset></section>
+    <section class="email-delivery-panel"><p class="email-mobile-note">Downloading does not send email, log activity or change reminders.</p><details class="email-delivery-details" open><summary>Draft details</summary><h3>When you download</h3><ul><li>An editable .eml file is saved to your device</li><li>${draft?.includeProfile ? "The company profile PDF is included" : "No attachments are included"}</li><li>No email is sent and no activity or reminder is changed</li></ul><p>Open or import the file in a compatible mail client, review it, then send. Some clients open .eml files read-only; use their edit or forward command. With the profile, the draft is about 16 MB; mailbox limits may apply.</p></details></section></aside></div><div class="email-assistant-host"></div></div>`;
+  arrangeEmailDraftLayout();
+  arrangeAssistantLauncher(false);
+}
+
 function renderAiWorkspace() {
   const workspace = document.querySelector("#aiWorkspaceView");
   const config = aiWorkspacePage();
@@ -3111,10 +3313,12 @@ function renderAiWorkspace() {
   if (currentView === "focus" && isSalesmanRole()) return renderTodayWorkspace(workspace);
   if (currentView === "neglected" && isSalesmanRole()) return renderNeglectedWorkspace(workspace);
   if (currentView === "meeting-prep") return renderMeetingBriefWorkspace(workspace);
+  if (currentView === "draft-email") return renderEmailDraftWorkspace(workspace);
   const previousCompany = workspace.querySelector("#aiWorkspaceCompany")?.value || "";
   const leads = [...state.leads].sort((a, b) => String(a.company_name || "").localeCompare(String(b.company_name || "")));
   const selectedCompany = leads.some(lead => String(lead.id) === previousCompany) ? previousCompany : "";
   const busy = Boolean(state.leadsLoading && !state.leadsLoaded);
+  if (currentView === "ai-actions") return renderOneTapWorkspace(workspace, leads, selectedCompany, busy);
   const portfolioActions = config.portfolioAction ? [config.portfolioAction] : Object.keys(SALESPERSON_ACTION_LABELS);
   const companyActions = config.companyAction ? [config.companyAction] : ["prepare", "next", "email", "summary", "flag"];
   workspace.setAttribute("aria-busy", String(busy));
@@ -3322,6 +3526,15 @@ function startAiLoadingTicker() {
 }
 
 async function runLeadAiAction(lead, action) {
+  if (lead && action === "email") {
+    const sameDraft = emailDraftState?.owner === String(state.currentUser?.id) && emailDraftState.leadId === String(lead.id);
+    if (!sameDraft) {
+      if (emailDraftState?.owner === String(state.currentUser?.id) && emailDraftState.dirty && !window.confirm("Discard your edited draft and change company?")) return;
+      emailDraftState = newEmailDraft(lead);
+    }
+    setView("draft-email");
+    return;
+  }
   if (!lead || state.aiAction.loading) return;
   if (!navigator.onLine) {
     setToast("AI briefings need a connection.", "error");
@@ -14070,6 +14283,8 @@ function arrangeAssistantLauncher(isTasks) {
   const host = currentView === "lead"
     ? document.querySelector(".record-assistant-host") || document.body
     : currentView === "meeting-prep" ? document.querySelector(".meeting-assistant-host") || document.body
+    : currentView === "draft-email" ? document.querySelector(".email-assistant-host") || document.body
+    : currentView === "ai-actions" ? document.querySelector(".crm-onetap-assistant-host") || document.body
     : isTasks ? document.querySelector("#appShell .topbar-actions") : document.body;
   if (launcher && host && launcher.parentElement !== host) host.appendChild(launcher);
 }
@@ -14120,7 +14335,9 @@ function applyView() {
   document.body.classList.toggle("admin-tasks-mode", Boolean(isTasks && !isSalesmanRole()));
   document.body.classList.toggle("lead-detail-mode", isLead);
   document.body.classList.toggle("ai-workspace-mode", isAiWorkspace);
+  document.body.classList.toggle("one-tap-mode", currentView === "ai-actions");
   document.body.classList.toggle("meeting-brief-mode", currentView === "meeting-prep");
+  document.body.classList.toggle("email-draft-mode", currentView === "draft-email");
   document.body.classList.toggle("today-mode", currentView === "focus" && isSalesmanRole());
   document.body.classList.toggle("neglected-mode", currentView === "neglected" && isSalesmanRole());
   document.body.classList.toggle("neglected-tools-open", currentView === "neglected" && isSalesmanRole() && neglectedToolsOpen);
@@ -15303,7 +15520,36 @@ els.aiActionResult?.addEventListener("click", event => {
   render();
 });
 
+document.querySelector("#aiWorkspaceView")?.addEventListener("input", event => {
+  if (currentView !== "draft-email" || !emailDraftState || emailDraftState.owner !== String(state.currentUser?.id)) return;
+  const field = event.target.dataset.emailField;
+  if (!["to", "cc", "subject", "body"].includes(field)) return;
+  emailDraftState[field] = event.target.value;
+  emailDraftState.dirty = true;
+  const button = document.querySelector("[data-email-download]");
+  if (button) button.disabled = !emailDraftState.to.trim() || !emailDraftState.subject.trim() || !emailDraftState.body.trim();
+  const copy = document.querySelector("[data-email-copy]");
+  if (copy) copy.disabled = !emailDraftState.body.trim();
+});
+
 document.querySelector("#aiWorkspaceView")?.addEventListener("change", event => {
+  if (currentView === "draft-email") {
+    if (event.target.hasAttribute("data-email-profile") && emailDraftState) {
+      emailDraftState.includeProfile = event.target.checked;
+      renderAiWorkspace();
+      return;
+    }
+    if (event.target.id === "aiWorkspaceCompany") {
+      if (emailDraftState?.dirty && !window.confirm("Discard your edited draft and change company?")) {
+        event.target.value = emailDraftState.leadId;
+        return;
+      }
+      const lead = state.leads.find(item => String(item.id) === event.target.value);
+      emailDraftState = lead ? newEmailDraft(lead) : null;
+      renderAiWorkspace();
+      return;
+    }
+  }
   if (event.target.hasAttribute("data-meeting-check") && meetingBriefState) {
     const key = event.target.dataset.meetingCheck;
     if (event.target.checked) meetingBriefState.checked.add(key);
@@ -15324,9 +15570,54 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("change", event => 
   if (status) status.textContent = selected ? "Company actions are ready." : "Choose a company to enable its actions.";
 });
 
+document.querySelector("#aiWorkspaceView")?.addEventListener("submit", event => {
+  if (!event.target.matches(".crm-onetap-assistant")) return;
+  event.preventDefault();
+  event.target.querySelector("#aiAssistantLauncher")?.click();
+});
+
 document.querySelector("#aiWorkspaceView")?.addEventListener("click", async event => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
+  if (currentView === "draft-email" && Object.keys(button.dataset).some(key => key.startsWith("email"))) {
+    if (button.hasAttribute("data-email-change")) {
+      const picker = document.querySelector("#emailCompanyPicker");
+      const expanded = picker.classList.contains("hidden");
+      picker.classList.toggle("hidden", !expanded);
+      button.setAttribute("aria-expanded", String(expanded));
+      if (expanded) picker.querySelector("select")?.focus();
+      return;
+    }
+    const draft = emailDraftState;
+    if (!draft || draft.owner !== String(state.currentUser?.id) || !state.leads.some(item => String(item.id) === draft.leadId)) return;
+    if (button.hasAttribute("data-email-generate")) await generateEmailDraft();
+    else if (button.hasAttribute("data-email-download")) await downloadEmailDraft();
+    else if (button.hasAttribute("data-email-open")) openLeadDrawer(draft.leadId);
+    else if (button.hasAttribute("data-email-cc")) {
+      draft.showCc = !draft.showCc;
+      if (!draft.showCc) draft.cc = "";
+      renderAiWorkspace();
+    } else if (button.dataset.emailTone) {
+      draft.tone = button.dataset.emailTone;
+      draft.body = emailToneBody(draft.body, draft.tone);
+      draft.dirty = Boolean(draft.body);
+      renderAiWorkspace();
+    } else if (button.hasAttribute("data-email-copy")) {
+      try {
+        await navigator.clipboard.writeText(`To: ${draft.to}\n${draft.cc ? `Cc: ${draft.cc}\n` : ""}Subject: ${draft.subject}\n\n${draft.body}`);
+        setToast("Email text copied. Attachments are included only in the downloaded draft.", "success");
+      } catch { setToast("Could not copy. Select the email text to copy it.", "error"); }
+    }
+    return;
+  }
+  if (button.id === "aiAssistantLauncher" && currentView === "ai-actions") {
+    const input = document.querySelector(".crm-onetap-assistant-input");
+    if (input?.value.trim()) {
+      aiAssistantElements().command.value = input.value.trim();
+      input.value = "";
+    }
+    return;
+  }
   if (button.hasAttribute("data-meeting-menu")) { toggleMobileMenu(); return; }
   if (button.hasAttribute("data-meeting-change")) {
     const picker = document.querySelector("#meetingCompanyPicker");
@@ -15393,6 +15684,14 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
   }
   if (button.dataset.workspaceView) {
     setView(button.dataset.workspaceView);
+    return;
+  }
+  if (button.dataset.workspacePick) {
+    const select = document.querySelector("#aiWorkspaceCompany");
+    if (!select || !state.leads.some(lead => String(lead.id) === button.dataset.workspacePick)) return;
+    select.value = button.dataset.workspacePick;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    select.focus();
     return;
   }
   if (button.hasAttribute("data-workspace-retry")) {
