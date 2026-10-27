@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v142-lead-summary-tabs";
+const CACHE_VERSION = "arg-pwa-v143-salesman-priorities";
 const APP_SHELL = [
   "/",
   "/index.html",
