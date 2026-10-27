@@ -1,6 +1,7 @@
 const assert = require("assert");
 const {
   enrichCompanyFromGoogle,
+  searchGooglePlaces,
   mergeLeadWithEnrichment,
   _test
 } = require("../enrichment");
@@ -34,6 +35,15 @@ async function run(name, test) {
 }
 
 (async () => {
+  await run("search requests and preserves Google coordinates", async () => {
+    global.fetch = async (_url, options) => {
+      assert.match(options.headers["X-Goog-FieldMask"], /(?:^|,)places\.location(?:,|$)/);
+      return jsonResponse({ places: [{ id: "test-id", displayName: { text: "Example" }, location: { latitude: 25.1, longitude: 55.2 } }] });
+    };
+    const matches = await searchGooglePlaces("steel", "Dubai", "map-test");
+    assert.equal(matches[0].latitude, 25.1);
+    assert.equal(matches[0].longitude, 55.2);
+  });
   await run("successful enrichment", async () => {
     global.fetch = async url => {
       if (String(url).includes("places:searchText")) {

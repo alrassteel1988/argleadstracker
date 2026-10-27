@@ -15,6 +15,7 @@ const googleSearchFields = [
   "places.primaryType",
   "places.primaryTypeDisplayName",
   "places.types",
+  "places.location",
   "places.googleMapsUri"
 ].join(",");
 
