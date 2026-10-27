@@ -2150,6 +2150,9 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
   els.activityDetailsBody.querySelectorAll("[data-details-download-attachment]").forEach(button => {
     button.addEventListener("click", () => downloadActivityAttachment(button.dataset.detailsDownloadAttachment));
   });
+  const readOnlyActivityLog = currentView === "activity" && String(state.currentUser?.role || "").toLowerCase() === "admin";
+  els.editActivityFromDetails.classList.toggle("hidden", readOnlyActivityLog);
+  els.requestActivityDeletionFromDetails.classList.toggle("hidden", readOnlyActivityLog);
   els.editActivityFromDetails.disabled = activity.deletion_status === "pending";
   els.requestActivityDeletionFromDetails.disabled = activity.deletion_status === "pending";
   els.requestActivityDeletionFromDetails.textContent = activity.deletion_status === "pending" ? "Deletion Pending" : "Request Deletion";
@@ -2157,7 +2160,7 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
     String(pendingRequest.requested_by) === String(state.currentUser?.id)
     || ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase())
   );
-  els.cancelActivityDeletionFromDetails?.classList.toggle("hidden", !canCancel);
+  els.cancelActivityDeletionFromDetails?.classList.toggle("hidden", readOnlyActivityLog || !canCancel);
   if (els.cancelActivityDeletionFromDetails) {
     els.cancelActivityDeletionFromDetails.dataset.requestId = canCancel ? pendingRequest.id : "";
   }
@@ -12618,8 +12621,9 @@ function activityTableMarkup(activities) {
     const date = formatDisplayDate(activityDisplayDate(activity));
     const time = activityDisplayTime(activity);
     const status = activityTableStatus(activity);
+    const readOnlyActivityLog = String(state.currentUser?.role || "").toLowerCase() === "admin";
     const overflowActions = [
-      activityDeleteButton(activity.lead_id, activity.activity_index, activity),
+      readOnlyActivityLog ? "" : activityDeleteButton(activity.lead_id, activity.activity_index, activity),
       activity.quotation_ref ? `<button class="small-action" type="button" data-quotation-ref="${escapeHtml(activity.quotation_ref)}">Open quote ${escapeHtml(activity.quotation_ref)}</button>` : ""
     ].filter(Boolean).join("");
     return `
@@ -12635,7 +12639,7 @@ function activityTableMarkup(activities) {
         <td data-label="Actions">
           <div class="activity-table-actions">
             ${activityViewButton(activity.lead_id, activity.activity_index, activity)}
-            ${activityEditButton(activity.lead_id, activity.activity_index, activity)}
+            ${readOnlyActivityLog ? "" : activityEditButton(activity.lead_id, activity.activity_index, activity)}
             ${overflowActions ? `<details class="activity-row-menu"><summary aria-label="More actions for ${escapeHtml(activity.company_name || "activity")}">&#8230;</summary><div>${overflowActions}</div></details>` : ""}
           </div>
         </td>

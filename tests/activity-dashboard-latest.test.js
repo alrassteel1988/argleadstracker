@@ -61,6 +61,9 @@ assert.ok(
 assert.equal((html.match(/activity-section-header/g) || []).length, 3, "Only the three requested Admin Activity headers should use the framed title class");
 assert.match(html, /activity-kpi-card--blue/, "Activity KPIs need semantic card variants");
 assert.match(client, /function activityTableMarkup\(activities\)/, "Activity Log needs the shared semantic table renderer");
+assert.match(client, /currentView === "activity" && String\(state\.currentUser\?\.role \|\| ""\)\.toLowerCase\(\) === "admin"/, "Admin activity details must hide mutation controls only in the activity log");
+assert.match(client, /readOnlyActivityLog \? "" : activityEditButton\(activity\.lead_id/, "Admin log rows must not expose edit controls");
+assert.match(client, /readOnlyActivityLog \? "" : activityDeleteButton\(activity\.lead_id/, "Admin log rows must not expose deletion requests");
 assert.match(client, /<table class="activity-table">/, "Activity Log must use semantic table markup");
 assert.match(client, /activityPageSize:\s*10/, "Activity pagination should show ten records per page");
 assert.match(client, /data-activity-page=/, "Activity pagination controls must be wired");
@@ -94,7 +97,7 @@ assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.activity-table td::befo
 assert.doesNotMatch(css, /\.sidebar\b/, "The Activity redesign must not change sidebar sizing");
 assert.doesNotMatch(css, /(?:linear|radial)-gradient|backdrop-filter:\s*blur|filter:\s*blur/i, "The latest Activity layer must remain flat and opaque");
 assert.match(serviceWorker, /"\/activity-dashboard-latest\.css"/, "The PWA shell must cache the latest Activity layer");
-assert.match(serviceWorker, /arg-pwa-v143-salesman-priorities/, "The PWA cache must include the latest UI asset revision");
+assert.match(serviceWorker, /arg-pwa-v144-admin-activity-readonly/, "The PWA cache must include the latest UI asset revision");
 assert.match(serviceWorker, /\.then\(\(\) => self\.skipWaiting\(\)\)/, "The updated service worker must activate immediately for stale CRM sessions");
 assert.match(serviceWorker, /event\.respondWith\(networkFirst\(request\)\)/, "Same-origin UI assets must prefer the network before cached fallbacks");
 assert.match(vercel, /"src": "activity-dashboard-latest\.css"/, "Vercel must publish the latest Activity layer");
