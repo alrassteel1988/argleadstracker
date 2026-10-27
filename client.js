@@ -7741,25 +7741,19 @@ function renderSalespersonReferencePanels(datasets) {
       const overdue = leadHasOverdueNextAction(lead);
       const emailAction = /email/i.test(lead.next_action || "");
       const phone = String(contact.phone || "").replace(/[^+\d*#,;]/g, "");
-      const contactMarkup = (label, icon) => `<span class="salesperson-contact-icon contact-${icon}" aria-hidden="true"></span><span class="salesperson-contact-label">${label}</span>`;
-      const action = emailAction
-        ? `<button class="ghost-button" type="button" data-dashboard-email="${escapeHtml(lead.id)}" aria-label="Draft email to ${escapeHtml(lead.company_name)}" title="Draft email">${contactMarkup("Email", "mail")}</button>`
-        : phone ? `<a class="primary-button" href="tel:${escapeHtml(phone)}" aria-label="Call ${escapeHtml(lead.company_name)}" title="Call">${contactMarkup("Call", "phone")}</a>`
-          : `<button class="ghost-button" type="button" data-dashboard-focus-open="${escapeHtml(lead.id)}" aria-label="Open ${escapeHtml(lead.company_name)}" title="Open lead: no phone number saved">${contactMarkup("Open", "open")}</button>`;
-      return `<li><span class="salesperson-focus-number">${index + 1}</span><div><button type="button" class="salesperson-focus-company" data-dashboard-focus-open="${escapeHtml(lead.id)}">${escapeHtml(lead.company_name || "Unnamed company")}</button>${overdue ? `<span class="salesperson-overdue-chip">${daysOverdue(lead.next_action_date)}d overdue</span>` : ""}<p>${escapeHtml(lead.next_action || "No first contact logged. Review the company and plan your opening contact.")}</p></div>${action}</li>`;
+      const id = escapeHtml(lead.id), company = escapeHtml(lead.company_name || "Unnamed company");
+      const call = phone ? `<a class="${emailAction ? "ghost-button" : "primary-button"} focus-contact" href="tel:${escapeHtml(phone)}" aria-label="Call ${company}" title="Call"><span class="focus-icon focus-phone"></span>${emailAction ? "" : "<span>Call</span>"}</a>` : `<button class="ghost-button focus-contact" type="button" disabled aria-label="No phone number for ${company}" title="No phone number on file"><span class="focus-icon focus-phone"></span></button>`;
+      const email = `<button class="${emailAction ? "primary-button" : "ghost-button"} focus-contact" type="button" data-dashboard-email="${id}" aria-label="Draft email to ${company}" title="${contact.email ? "Draft email" : "No email address on file"}" ${contact.email ? "" : "disabled"}><span class="focus-icon focus-mail"></span>${emailAction ? "<span>Email</span>" : ""}</button>`;
+      return `<li><span class="salesperson-focus-number">${index + 1}</span><div class="focus-copy"><button type="button" class="salesperson-focus-company" data-dashboard-focus-open="${id}">${company}</button>${overdue ? `<span class="salesperson-overdue-chip">${daysOverdue(lead.next_action_date)}d overdue</span>` : ""}<p>${escapeHtml(lead.next_action || "No first contact logged. Review the company and plan your opening contact.")}</p></div><div class="focus-actions">${emailAction ? email + call : call + email}<button class="ghost-button" type="button" data-dashboard-focus-log="${id}" aria-label="Log activity for ${company}" title="Log activity"><span class="focus-icon focus-check"></span></button><button class="ghost-button" type="button" data-dashboard-focus-open="${id}" aria-label="Open ${company}" title="Open lead"><span class="focus-icon focus-chevron"></span></button></div></li>`;
     }).join("") : '<li class="empty-copy">Your scheduled queue and first touches are clear.</li>';
-  const oldest = datasets.overdueCalls[0];
-  root.querySelector("#salespersonOldest").textContent = loading ? "Loading follow-ups..." : unavailable ? "Follow-ups unavailable." : oldest
-    ? `Oldest: ${oldest.company_name}, ${daysOverdue(oldest.next_action_date)} days overdue`
-    : "No overdue scheduled next actions.";
   // Only explicit creator provenance is classified; missing provenance stays unknown.
-  const origins = { "Assigned by management": 0, "Self-generated": 0, "Unrecorded origin": 0 };
+  const origins = { "Created by others": 0, "Self-generated": 0, "Unrecorded origin": 0 };
   datasets.myLeads.forEach(lead => {
     const label = !lead.created_by ? "Unrecorded origin"
-      : leadOriginForCurrentUser(lead).includes("Admin") ? "Assigned by management" : "Self-generated";
+      : leadGeneratedBySalesman(lead, state.currentUser) ? "Self-generated" : "Created by others";
     origins[label] += 1;
   });
-  root.querySelector("#salespersonOrigin").innerHTML = `<h3>Accounts by origin</h3>${loading || unavailable ? '<p class="empty-copy">Account totals not available yet.</p>' : Object.entries(origins).filter(([label, count]) => count || label !== "Unrecorded origin").map(([label, count]) => `<div class="salesperson-origin-row${label === "Unrecorded origin" ? " origin-unknown" : ""}"><span class="salesperson-origin-label">${escapeHtml(label)}</span><span class="salesperson-mobile-label">${label === "Assigned by management" ? "Management accounts" : label === "Self-generated" ? "Self-generated accounts" : "Unrecorded origin"}</span><strong>${count}</strong><meter min="0" max="${Math.max(1, datasets.myLeads.length)}" value="${count}" aria-label="${escapeHtml(label)}"></meter></div>`).join("")}`;
+  root.querySelector("#salespersonOrigin").innerHTML = loading || unavailable ? '<p class="empty-copy">Account totals not available yet.</p>' : Object.entries(origins).filter(([label, count]) => count || label !== "Unrecorded origin").map(([label, count]) => `<div class="salesperson-origin-row${label === "Unrecorded origin" ? " origin-unknown" : ""}"><span class="salesperson-origin-label">${escapeHtml(label)}</span><span class="salesperson-mobile-label">${escapeHtml(label)}</span><strong>${count} accounts</strong><meter min="0" max="${Math.max(1, datasets.myLeads.length)}" value="${count}" aria-label="${escapeHtml(label)} account share"></meter><small>Task totals unavailable</small></div>`).join("");
   root.querySelector("#salespersonPipelineNote").textContent = loading ? "Loading pipeline..." : unavailable ? "Pipeline unavailable." : datasets.myLeads.length
     ? `${datasets.stageNew.length} of ${datasets.myLeads.length} leads are at ${stageDisplayLabel("NEW")}.`
     : "No assigned leads yet.";
@@ -7773,7 +7767,7 @@ function renderSalespersonReferencePanels(datasets) {
     { action: "neglected", label: "Who have I neglected?", icon: "myLeads", count: metrics?.contact_overdue_count },
     { action: "pipeline_health", label: "My pipeline health", mobileLabel: "Pipeline health", icon: "stageNegotiation" },
     { action: "new_intel", label: "New intel on my prospects", mobileLabel: "New intel", icon: "dueToday" }
-  ].map(item => `<button type="button" class="salesperson-quick-action" data-dashboard-portfolio="${item.action}" ${loading || unavailable || state.dailyAiLoading ? "disabled" : ""}><span class="salesperson-quick-icon">${salesmanDashboardSummaryIcon(item.icon)}</span>${Number.isFinite(item.count) ? `<span class="salesperson-quick-count">${item.count}</span>` : ""}<strong><span class="salesperson-desktop-label">${item.label}</span><span class="salesperson-mobile-label">${item.mobileLabel || item.label}</span></strong></button>`).join("");
+  ].map(item => `<button type="button" class="salesperson-quick-action" data-dashboard-portfolio="${item.action}" ${loading || unavailable || state.dailyAiLoading ? "disabled" : ""}><span class="salesperson-quick-icon">${salesmanDashboardSummaryIcon(item.icon)}</span><span class="salesperson-quick-count">${Number.isFinite(item.count) ? item.count : "Not available"}</span><strong><span class="salesperson-desktop-label">${item.label}</span><span class="salesperson-mobile-label">${item.mobileLabel || item.label}</span></strong></button>`).join("");
 }
 
 function arrangeSalespersonMobileDashboard() {
@@ -7784,13 +7778,6 @@ function arrangeSalespersonMobileDashboard() {
     breakdown.open = !mobile;
     breakdown.dataset.mobile = String(mobile);
   }
-  const metrics = document.querySelector("#salesmanSimplifiedMetrics");
-  const freshCard = metrics?.querySelector('[data-summary-card="salesmanMyLeads"]');
-  const movedCard = breakdown.querySelector(':scope > [data-summary-card="salesmanMyLeads"]');
-  if (freshCard && movedCard && freshCard !== movedCard) movedCard.remove();
-  const card = freshCard || movedCard;
-  const host = mobile ? breakdown : metrics;
-  if (card && host && card.parentElement !== host) host.appendChild(card);
   document.querySelector("[data-dashboard-stages]")?.setAttribute("aria-expanded", String(breakdown.open));
 }
 
@@ -7803,6 +7790,8 @@ function renderSalesmanSimplifiedDashboard() {
   const queue = actionableSalesmanLeads();
   const overdue = datasets.overdueCalls;
   const dueToday = datasets.dueToday;
+  const overdueFollowups = leads.filter(lead => !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage)))
+    .flatMap(remindersForLead).filter(reminder => reminder.due_date && daysUntil(reminder.due_date) < 0).length;
   renderSalespersonReferencePanels(datasets);
   const pipelineCounts = {
     NEW: datasets.stageNew.length,
@@ -7819,22 +7808,23 @@ function renderSalesmanSimplifiedDashboard() {
 
   if (els.salesmanSimplifiedMetrics) {
     const summaryLoading = state.leadsLoading && !state.leadsLoaded;
+    const summaryUnavailable = Boolean(state.leadsError && !state.leadsLoaded);
     els.salesmanSimplifiedMetrics.innerHTML = [
-      { type: "salesmanMyLeads", icon: "myLeads", label: "My leads", value: leads.length, meta: "Total assigned to you", action: "View summary", tone: "info" },
-      { type: "salesmanOverdueCalls", icon: "overdueCalls", label: "Overdue", value: overdue.length, meta: overdue.length ? `${overdue[0].company_name || "Next lead"} first` : "Nothing overdue right now", action: "See details", tone: "danger" },
-      { type: "salesmanDueToday", icon: "dueToday", label: "Due today", value: dueToday.length, meta: dueToday.length ? `${dueToday[0].company_name || "Next lead"} is due today` : "No follow-ups due today", action: "View today's list", tone: "warm" }
+      { type: "salesmanOverdueCalls", icon: "overdueCalls", label: "Overdue leads", value: overdue.length, meta: `${overdueFollowups} overdue follow-ups${overdue.length ? ` · oldest next action ${daysOverdue(overdue[0].next_action_date)} days` : ""}`, action: "See details", tone: "danger" },
+      { type: "salesmanDueToday", icon: "dueToday", label: "Due today", value: dueToday.length, meta: dueToday.length ? `${dueToday[0].company_name || "Next lead"} is due today` : "Nothing scheduled", action: "View today's list", tone: "warm" },
+      { type: "salesmanMyLeads", icon: "myLeads", label: "My leads", value: leads.length, meta: "Total assigned to you", action: "View summary", tone: "info" }
     ].map(card => `
-      <button class="salesman-simplified-metric tone-${escapeHtml(card.tone)} ${summaryLoading ? "is-loading" : ""}" type="button" data-summary-card="${escapeHtml(card.type)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" aria-label="${escapeHtml(`${card.label}, ${card.value}. ${card.action}`)}" title="${escapeHtml(`View ${card.label} breakdown`)}" aria-busy="${summaryLoading}" ${summaryLoading ? "disabled" : ""}>
+      <button class="salesman-simplified-metric tone-${escapeHtml(card.tone)} ${summaryLoading ? "is-loading" : ""}" type="button" data-summary-card="${escapeHtml(card.type)}" aria-haspopup="dialog" aria-controls="summaryCardDetailsDialog" aria-label="${escapeHtml(`${card.label}, ${summaryUnavailable ? "unavailable" : card.value}. ${card.action}`)}" title="${escapeHtml(`View ${card.label} breakdown`)}" aria-busy="${summaryLoading}" ${summaryLoading || summaryUnavailable ? "disabled" : ""}>
         <span class="salesman-summary-card-icon">${salesmanDashboardSummaryIcon(card.icon)}</span>
         <span class="salesman-summary-card-copy">
           <span class="salesman-summary-card-label">${escapeHtml(card.label)}</span>
-          <strong>${escapeHtml(String(card.value))}</strong>
-          <small class="crm-visually-hidden-mobile">${escapeHtml(card.meta)}</small>
+          <strong>${summaryUnavailable ? "Unavailable" : escapeHtml(String(card.value))}</strong>
+          <small>${summaryUnavailable ? "Could not load leads" : escapeHtml(card.meta)}</small>
           <span class="salesman-summary-card-action">${escapeHtml(card.action)} <span aria-hidden="true">&rarr;</span></span>
         </span>
         <span class="salesman-summary-card-chevron" aria-hidden="true">&rsaquo;</span>
       </button>
-    `).join("");
+    `).join("") + `<div class="salesman-simplified-metric management-metric"><span class="salesman-summary-card-copy"><span class="salesman-summary-card-label">Management tasks</span><strong>Not available</strong><small>Task totals not recorded</small></span></div>`;
   }
 
   if (els.salesmanSimplifiedActions) {
@@ -9462,7 +9452,7 @@ function renderTopbar() {
   dashboardDate?.classList.toggle("hidden", !salespersonHome);
   if (salespersonHome) {
     document.querySelector("#salespersonMobileDate").textContent = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Dubai" }).format(new Date());
-    document.querySelector("#salespersonMobileGreeting").innerHTML = `${escapeHtml(greetingText())}, <em class="crm-title-accent">${escapeHtml(firstName(state.currentUser.name || state.currentUser.email))}</em>`;
+    document.querySelector("#salespersonMobileGreeting").innerHTML = 'What should I do <em class="crm-title-accent">today?</em>';
     dashboardDate.textContent = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Dubai" }).format(new Date());
     els.topbarPageTitle.innerHTML = 'What should I do <em class="crm-title-accent">today?</em>';
     els.topbarContext.textContent = `${greetingText()}, ${firstName(state.currentUser.name || state.currentUser.email)}. Start with your focus list, then work through the overdue queue.`;
@@ -14598,7 +14588,7 @@ function applyView() {
   els.tasksView?.classList.toggle("hidden", !isTasks);
   document.querySelector("#aiWorkspaceView")?.classList.toggle("hidden", !isAiWorkspace);
   document.querySelectorAll("[data-ai-portfolio-nav]").forEach(item => item.classList.toggle("hidden", !isSalesmanRole()));
-  document.querySelector('#mobileSidebar [data-view="ai-actions"]')?.classList.toggle("hidden", isSalesmanRole());
+  document.querySelector('#mobileSidebar [data-view="ai-actions"]')?.classList.remove("hidden");
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
     const navigationView = currentView === "lead" || currentView === "meeting-prep" && state.meetingRouteLeadId ? "pipeline" : isSalesmanRole() && isAiWorkspace && currentView !== "focus" ? "dashboard"
@@ -15231,6 +15221,10 @@ els.salesmanSimplifiedDashboard?.addEventListener("click", async event => {
   } else if (button.hasAttribute("data-dashboard-ai-all")) setView("ai-actions");
   else if (button.hasAttribute("data-dashboard-today")) setView("focus");
   else if (button.hasAttribute("data-dashboard-focus-open")) openLeadDrawer(button.dataset.dashboardFocusOpen);
+  else if (button.hasAttribute("data-dashboard-focus-log")) {
+    const lead = salesmanDashboardLeads().find(item => String(item.id) === button.dataset.dashboardFocusLog);
+    if (lead) openActivityModal(lead.id, button);
+  }
   else if (button.hasAttribute("data-dashboard-email")) {
     const lead = salesmanDashboardLeads().find(item => String(item.id) === button.dataset.dashboardEmail);
     if (lead) runLeadAiAction(lead, "email");

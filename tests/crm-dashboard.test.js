@@ -14,7 +14,7 @@ assert.match(css, /\.salesman-summary-card-copy small\s*\{[^}]*overflow:\s*visib
 assert.match(css, /\.salesman-simplified-queue\s*\{[^}]*max-height:\s*204px[^}]*overflow-y:\s*auto/s);
 assert.match(html, /<details class="salesman-dashboard-more-tools">[\s\S]*id="salesmanSimplifiedActions"[\s\S]*id="salesmanDashboardLeadList"/);
 assert.ok(html.indexOf('class="salesman-simplified-block salesman-dashboard-call-queue"') > html.indexOf('class="salesman-dashboard-more-tools"'), "The full queue remains available in expanded tools");
-assert.match(html, /class="salesperson-dashboard-layout"[\s\S]*id="salespersonFocusList"[\s\S]*id="salesmanSimplifiedMetrics"/);
+assert.match(html, /id="salesmanSimplifiedMetrics"[\s\S]*class="salesperson-dashboard-layout"[\s\S]*id="salespersonFocusList"/);
 assert.match(css, /\.salesperson-dashboard-layout\s*\{[^}]*minmax\(0, 1\.65fr\) minmax\(300px, 1fr\)/s);
 assert.match(html, /class="salesperson-dashboard-assistant"/);
 assert.match(css, /\.salesman-dashboard-lead-table\s*\{[^}]*overflow:\s*auto/s);
@@ -48,7 +48,7 @@ function referencePanels({ loading = false, error = "", leads = [] } = {}) {
     actionableSalesmanLeads: () => leads, firstTouchDueLeads: () => leads,
     primaryLeadContact: lead => ({ phone: lead.phone }), leadHasOverdueNextAction: lead => lead.overdue,
     daysOverdue: () => 4, stageDisplayLabel: () => "Prospect", salesmanDashboardSummaryIcon: () => "<svg></svg>",
-    leadOriginForCurrentUser: () => "Self-generated",
+    leadGeneratedBySalesman: lead => lead.created_by === "self",
     escapeHtml: value => String(value).replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]),
     datasets
   };
@@ -61,7 +61,8 @@ assert.match(panels("#salespersonFocusList").innerHTML, /&lt;img/);
 assert.doesNotMatch(panels("#salespersonFocusList").innerHTML, /<script>|<img/);
 assert.equal((panels("#salespersonFocusList").innerHTML.match(/<li>/g) || []).length, 1, "First-touch duplicates must not repeat in focus");
 assert.match(panels("#salespersonOrigin").innerHTML, /Unrecorded origin/, "Missing creator metadata cannot imply management or self-generated origin");
-assert.doesNotMatch(panels("#salespersonQuickGrid").innerHTML, /salesperson-quick-count/, "Unloaded AI counts must not be fabricated");
+assert.match(referencePanels({leads:[{id:'a',created_by:'other'}]})('#salespersonOrigin').innerHTML, /Created by others/, "A different creator must not be assumed to be management");
+assert.match(panels("#salespersonQuickGrid").innerHTML, /salesperson-quick-count">Not available/, "Unloaded AI counts must be labelled unavailable rather than fabricated");
 assert.match(referencePanels()("#salespersonFocusList").innerHTML, /are clear/);
 assert.match(referencePanels({ loading: true })("#salespersonFocusList").innerHTML, /Loading/);
 assert.match(referencePanels({ error: "Unavailable" })("#salespersonFocusList").innerHTML, /unavailable/);
