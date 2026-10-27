@@ -47,8 +47,15 @@ test("Overview keeps organized company details without duplicate AI panels", asy
   expect(url.hostname).toBe('www.linkedin.com');
   expect(url.searchParams.get('keywords')).toContain('Synthetic Steel Company 01');
   expect(url.searchParams.get('keywords')).toContain('project manager');
-  await page.locator('.lead-detail-tabs [data-drawer-tab="notes"]').click();
-  await expect(page.locator('#leadAiSummaryPagePanel')).toBeVisible();
+  for (const tab of ['activities', 'pmr', 'reminders', 'notes']) {
+    await page.locator(`.lead-detail-tabs [data-drawer-tab="${tab}"]`).click();
+    await expect(page.locator('#leadAiSummaryPagePanel')).toBeHidden();
+    await expect(page.locator('#leadAiSummaryPageContent')).toBeEmpty();
+  }
+  for (const tab of ['intel']) {
+    await page.locator(`.lead-detail-tabs [data-drawer-tab="${tab}"]`).click();
+    await expect(page.locator('#leadAiSummaryPagePanel')).toBeVisible();
+  }
 });
 
 test("profile request opens the scoped draft with attachment, without sending or logging", async ({page}, info) => {

@@ -1278,9 +1278,9 @@ function renderLeadAiSummaryPanel(lead, options = {}) {
   const content = options.content || els.leadAiSummaryPageContent;
   if (!panel || !content) return;
   if (panel === els.leadAiSummaryPagePanel) {
-    const hideOverviewSummary = state.leadDrawerTab === "overview";
-    panel.hidden = hideOverviewSummary;
-    if (hideOverviewSummary) {
+    const hideSummary = ["overview", "activities", "pmr", "reminders", "notes"].includes(state.leadDrawerTab);
+    panel.hidden = hideSummary;
+    if (hideSummary) {
       content.replaceChildren();
       return;
     }
