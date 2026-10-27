@@ -33,12 +33,17 @@ assert.match(css, /\.record-desktop-overview, \.record-header-actions, \.record-
 assert.match(read("client.js"), /function desktopLeadOverviewMarkup\(lead\)/);
 assert.match(read("client.js"), /record-overview-notes">\$\{renderDrawerNotes\(lead\)\}/);
 const client = read("client.js");
-const overviewHelpers = client.slice(client.indexOf("function desktopLeadOverviewMarkup("), client.indexOf("function renderDrawerOverview("));
+const routeContext = { URLSearchParams };
+vm.createContext(routeContext);
+for (const name of ["isLeadRoutePath", "parseAppRoute"]) vm.runInContext(client.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0], routeContext);
+assert.equal(routeContext.parseAppRoute({pathname:"/leads/example/overview",search:""}).leadId,"example");
+assert.equal(routeContext.parseAppRoute({pathname:"/leads/example/overview",search:""}).tab,"overview");
+const overviewHelpers = client.slice(client.indexOf("function companyAiActionsMarkup("), client.indexOf("function renderDrawerOverview("));
 const context = {
   state: {selectedId: "other", leadAiSummary: null}, summaryText: String,
   escapeHtml: value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[char])),
   remindersForLead: () => [], daysUntil: () => -5,
-  normalizeNextActionPlan: String, formatDisplayDate: String,
+  normalizeNextActionPlan: String, formatDisplayDate: String, formatAED: String,
   activityTypeClass: value => `activity-${value}`,
   renderDrawerNotes: () => '<section class="drawer-notes-view">Existing notes editor</section>',
   drawerStageLabel: String,
@@ -51,6 +56,9 @@ assert.ok(emptyOverview.includes("Not added yet"));
 assert.ok(emptyOverview.includes("&lt;script&gt;contact&lt;/script&gt;"));
 assert.ok(!emptyOverview.includes("<script>") && !emptyOverview.includes("<img"));
 assert.ok(!emptyOverview.includes('href="#"'), "Missing contact methods must not create dead links");
+assert.match(emptyOverview, /record-overview-health/);
+assert.match(emptyOverview, /New scoring rules await approval/);
+assert.equal((emptyOverview.match(/data-company-ai-action=/g) || []).length, 4);
 const mobileNext = vm.runInNewContext(`${overviewHelpers}\nmobileLeadNextStepMarkup({...lead, next_action:'To Call', next_action_date:'2026-10-20'})`, context);
 assert.ok(mobileNext.includes("5 days overdue"));
 assert.ok(mobileNext.includes("Due 2026-10-20"));
@@ -60,7 +68,10 @@ assert.match(client, /data-record-note/);
 const mobileHelpers = client.slice(client.indexOf("function companyAiActionsMarkup("), client.indexOf("function desktopLeadOverviewMarkup("));
 const mobileExtras = vm.runInNewContext(`${mobileHelpers}\n${overviewHelpers}\nmobileLeadOverviewExtras(lead)`, context);
 assert.match(mobileExtras, /New scoring rules await approval/);
-assert.equal((mobileExtras.match(/data-company-ai-action=/g) || []).length, 5);
+assert.equal((mobileExtras.match(/data-company-ai-action=/g) || []).length, 4);
+assert.match(mobileExtras, /Flag to director/);
+assert.match(mobileNext, /data-refresh-lead-ai-summary=/);
+assert.match(mobileNext, /data-drawer-log-activity=/);
 assert.equal((mobileExtras.match(/Not rated/g) || []).length, 5);
 assert.doesNotMatch(mobileExtras, /At risk|Act now|expected 14|Create quote/);
 context.state = {selectedId: context.lead.id, leadAiSummary: {data:{recommended_next_action:'<script>unsafe</script>'}, provider:'fallback'}};
@@ -68,6 +79,9 @@ const guardedGuidance = vm.runInNewContext(`${overviewHelpers}\nmobileLeadNextSt
 assert.match(guardedGuidance, /CRM guidance/);
 assert.match(guardedGuidance, /&lt;script&gt;unsafe&lt;\/script&gt;/);
 assert.doesNotMatch(guardedGuidance, /<script>/);
+const desktopGuidance = vm.runInNewContext(`${overviewHelpers}\ndesktopLeadOverviewMarkup(lead)`, context);
+assert.match(desktopGuidance,/CRM guidance/);
+assert.match(desktopGuidance,/&lt;script&gt;unsafe&lt;\/script&gt;/);
 context.state.selectedId = "other-lead";
 context.state.leadAiSummary.data.recommended_next_action = "OTHER LEAD GUIDANCE";
 const mismatchedGuidance = vm.runInNewContext(`${overviewHelpers}\nmobileLeadNextStepMarkup(lead)`, context);

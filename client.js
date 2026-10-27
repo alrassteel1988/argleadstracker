@@ -638,7 +638,7 @@ let authRefreshPromise = null;
 let authInitialization = Promise.resolve();
 
 function isLeadRoutePath(pathname = window.location.pathname) {
-  return /^\/leads\/[^/]+\/?$/.test(pathname);
+  return /^\/leads\/[^/]+(?:\/overview)?\/?$/.test(pathname);
 }
 
 function parseAppRoute(locationLike = window.location) {
@@ -651,7 +651,7 @@ function parseAppRoute(locationLike = window.location) {
   if (isLeadRoutePath(pathname)) {
     return {
       view: "lead",
-      leadId: decodeURIComponent(pathname.replace(/^\/leads\//, "").replace(/\/$/, "")),
+      leadId: decodeURIComponent(pathname.split("/")[2]),
       tab: search.get("tab") || "overview"
     };
   }
@@ -9893,7 +9893,7 @@ function renderLossDetails(lead) {
   `;
 }
 
-function companyAiActionsMarkup(lead, { mobile = false } = {}) {
+function companyAiActionsMarkup(lead, { mobile = false, overview = false } = {}) {
   const actions = [
     ["prepare", "Prepare Me For This Meeting"],
     ["next", "What Should I Do Next?"],
@@ -9911,12 +9911,12 @@ function companyAiActionsMarkup(lead, { mobile = false } = {}) {
   if (mobile) {
     return `<section class="company-ai-actions record-mobile-ai" aria-label="One-tap AI actions">
       <h3>One-tap <em>AI actions</em></h3>
-      <div class="record-mobile-ai-grid">${actions.map(([action, label]) => `<button class="record-ai-card${action === "prepare" ? " record-ai-card-primary" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
+      <div class="record-mobile-ai-grid">${actions.filter(([action]) => ["prepare", "email", "summary"].includes(action)).map(([action, label]) => `<button class="record-ai-card${action === "prepare" ? " record-ai-card-primary" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(action === "summary" ? "Summarise for handoff" : label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
     </section>`;
   }
-  return `<section class="drawer-section company-ai-actions" aria-label="Company AI actions">
+  return `<section class="drawer-section company-ai-actions${overview ? " record-overview-ai" : ""}" aria-label="Company AI actions">
     <h3>One-tap <em class="crm-title-accent">AI actions</em></h3>
-    <div class="drawer-primary-actions">${actions.map(([action, label]) => `<button class="ghost-button${action === "prepare" ? " record-ai-card-primary" : ""}${action === "flag" ? " danger" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
+    <div class="drawer-primary-actions">${actions.filter(([action]) => !overview || ["prepare", "email", "summary"].includes(action)).map(([action, label]) => `<button class="ghost-button${action === "prepare" ? " record-ai-card-primary" : ""}${action === "flag" ? " danger" : ""}" type="button" data-company-ai-action="${action}" data-company-ai-lead="${escapeHtml(lead.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hints[action])}</small></span></button>`).join("")}</div>
   </section>`;
 }
 
@@ -9925,20 +9925,26 @@ function desktopLeadOverviewMarkup(lead) {
   const activities = [...(lead.activities || [])].sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))).slice(0, 3);
   const reminders = remindersForLead(lead).slice(0, 3);
   const overdueDays = lead.next_action_date ? Math.max(0, -daysUntil(lead.next_action_date)) : 0;
+  const summary = state.selectedId === lead.id ? state.leadAiSummary : null;
+  const guidance = !summary?.loading && !summary?.error ? summaryText(summary?.data?.recommended_next_action) : "";
+  const source = summary?.cached ? "Cached guidance" : summary?.provider === "fallback" ? "CRM guidance" : "AI guidance";
   const contactRow = (label, value, href = "") => `<div class="record-contact-row"><div><span>${escapeHtml(label)}</span>${value ? href ? `<a href="${escapeHtml(href)}"${label === "Website" || label === "Location" ? ' target="_blank" rel="noopener"' : ""}>${escapeHtml(value)}</a>` : `<strong>${escapeHtml(value)}</strong>` : '<em>Not added yet</em>'}</div>${label === "Phone" && value ? `<button class="record-copy-phone ghost-button" type="button" data-record-copy-phone="${id}" aria-label="Copy phone number" title="Copy phone number"></button>` : !value ? `<button class="record-text-action" type="button" data-drawer-edit-lead="${id}">Add<span class="sr-only"> ${escapeHtml(label)}</span></button>` : ""}</div>`;
   return `<div class="record-desktop-overview">
     <div class="record-main-column">
       <section class="drawer-section record-next-step">
         <div class="record-next-content"><div><span class="record-eyebrow">Next step</span><h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3><p>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong> ` : ""}${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p></div>
         <div class="record-action-row"><button class="ghost-button" type="button" data-drawer-edit-lead="${id}" title="Edit the lead's next action and due date">Reschedule</button><button class="primary-button" type="button" data-drawer-log-activity="${id}">Log outcome</button></div></div>
+        <div class="record-next-guidance" aria-live="polite"><div><span class="record-guidance-badge">${escapeHtml(guidance ? source : "Guidance")}</span><button class="ghost-button" type="button" data-refresh-lead-ai-summary="${id}" ${summary?.loading ? "disabled" : ""}>Ask again</button></div><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable. Ask again to retry."))}</p></div>
       </section>
-      <section class="drawer-section record-recent-activity"><div class="drawer-tab-heading"><h3>Activity</h3><button class="ghost-button" type="button" data-drawer-log-activity="${id}">Add activity</button></div>
+      ${companyAiActionsMarkup(lead, {overview:true})}
+      <section class="drawer-section record-recent-activity"><div class="drawer-tab-heading"><h3>Recent activity</h3><button class="record-text-action" type="button" data-drawer-tab="activities">View all</button></div>
         <div>${activities.map(activity => `<article class="record-activity-row"><span class="record-activity-icon ${escapeHtml(activityTypeClass(activity.type))}" aria-hidden="true"></span><div><strong>${escapeHtml(activity.type || "Activity")}</strong><p>${escapeHtml(activity.text || activity.note || "No note added.")}</p></div><time>${escapeHtml(activity.at ? formatDisplayDate(activity.at) : "Date not recorded")}</time></article>`).join("") || '<p class="empty-copy">No activity recorded yet.</p>'}</div>
         <button class="record-text-action" type="button" data-drawer-tab="activities">View all activity</button>
       </section>
       <div class="record-overview-notes">${renderDrawerNotes(lead)}</div>
     </div>
     <div class="record-side-column">
+      <section class="drawer-section record-overview-health" aria-label="Relationship health"><div class="record-health-heading"><h3>Relationship <em class="crm-title-accent">health</em></h3><span class="record-health-pending">Pending</span></div><p class="record-health-disclaimer">New scoring rules await approval.</p><dl>${[["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "No activity recorded"], ["Activities recorded", String((lead.activities || []).length)], ["Relationship status", drawerStageLabel(lead.stage)], ["Time in status", "Not scored"], ["PMR heat scores", "Not scored"]].map(([label,value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}<span class="record-health-pending">Not rated</span></dd></div>`).join("")}</dl><button class="ghost-button danger" type="button" data-company-ai-action="flag" data-company-ai-lead="${id}">Flag to director</button></section>
       <section class="drawer-section record-contact"><h3>Contact</h3>
         ${primaryContactMarkup(lead)}
         ${contactRow("Phone", lead.phone, lead.phone ? `tel:${lead.phone}` : "")}
@@ -9947,14 +9953,14 @@ function desktopLeadOverviewMarkup(lead) {
         ${contactRow("Location", [lead.location, lead.country_emirate].filter(Boolean).join(" - ") || (lead.google_maps_url ? "Open map" : ""), lead.google_maps_url)}
       </section>
       <section class="drawer-section record-details"><h3>Lead details</h3><dl>
-        ${[["Status", drawerStageLabel(lead.stage)], ["Priority", lead.priority || "Cold"], ["Tier", lead.tier ? `Tier ${lead.tier}` : ""], ["Territory", lead.territory], ["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "No activity yet"], ["Owner", lead.assigned_salesman]].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "Not added")}</dd></div>`).join("")}
+        ${[["Contact every", lead.expected_contact_days ? `${lead.expected_contact_days} days` : "Not recorded"], ["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "No activity yet"], ["Territory", lead.territory], ["Named buyer", lead.contact_person || "Not added"], ["Pipeline value", formatAED(lead.estimated_value)]].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "Not added")}</dd></div>`).join("")}
       </dl></section>
       <section class="drawer-section record-reminders"><div class="drawer-tab-heading"><h3>Reminders</h3><button class="ghost-button" type="button" data-drawer-add-reminder="${id}">Add reminder</button></div>
         ${reminders.map(reminder => `<div class="record-reminder-row"><strong>${escapeHtml(reminder.activity_required || reminder.text || reminder.reminder_type || "Follow up")}</strong><span>${escapeHtml(reminder.due_date ? formatDisplayDate(reminder.due_date) : "No due date")}</span></div>`).join("") || '<p class="empty-copy">No reminders set.</p>'}
         ${reminders.length ? '<button class="record-text-action" type="button" data-drawer-tab="reminders">View all reminders</button>' : ""}
       </section>
     </div>
-  </div>`;
+  </div><form class="record-overview-assistant"><input type="text" maxlength="4000" aria-label="Ask the AI Assistant about this lead" placeholder="Ask the AI Assistant about ${escapeHtml(lead.company_name || "this lead")}"><span class="record-overview-assistant-host"></span></form>`;
 }
 
 function primaryContactMarkup(lead) {
@@ -9970,8 +9976,9 @@ function mobileLeadNextStepMarkup(lead) {
   return `<section class="drawer-section record-mobile-next" aria-label="Next step">
     <div class="record-mobile-next-heading"><span>Next step</span>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong>` : ""}</div>
     <h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3>
-    <div class="record-mobile-guidance" aria-live="polite"><span>${escapeHtml(guidance ? guidanceLabel : "Guidance")}</span><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable."))}</p></div>
-    <div class="record-mobile-next-footer"><span>${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</span><button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Reschedule</button></div>
+    <div class="record-mobile-guidance" aria-live="polite"><div class="record-mobile-guidance-heading"><span>${escapeHtml(guidance ? guidanceLabel : "Guidance")}</span><button class="ghost-button" type="button" data-refresh-lead-ai-summary="${escapeHtml(lead.id)}" ${summary?.loading ? "disabled" : ""}>Ask again</button></div><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable."))}</p></div>
+    <p class="record-mobile-due">${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p>
+    <div class="record-mobile-next-footer"><button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Reschedule</button><button class="primary-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log outcome</button></div>
   </section>`;
 }
 
@@ -9989,6 +9996,7 @@ function mobileLeadOverviewExtras(lead) {
       <div class="record-health-heading"><h3>Relationship <em>health</em></h3><span class="record-health-pending">Pending</span></div>
       <p class="record-health-disclaimer">New scoring rules await approval.</p>
       <dl>${signals.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd><strong>${escapeHtml(value)}</strong><span class="record-health-pending">Not rated</span></dd></div>`).join("")}</dl>
+      <button class="ghost-button danger" type="button" data-company-ai-action="flag" data-company-ai-lead="${escapeHtml(lead.id)}">Flag to director</button>
     </section>
   </div>`;
 }
@@ -10027,7 +10035,7 @@ function renderDrawerOverview(lead) {
     ${mobileLeadOverviewExtras(lead)}
     ${desktopLeadOverviewMarkup(lead)}
     ${overviewSnapshot}
-    ${companyAiActionsMarkup(lead)}
+    <details class="record-more-actions"><summary>More company actions</summary>${companyAiActionsMarkup(lead)}</details>
     <section class="drawer-section drawer-overview-panel drawer-overview-panel--contact">
       <div class="drawer-tab-heading">
         <div>
@@ -10367,6 +10375,8 @@ function renderDrawerIntel(lead) {
 }
 
 function renderLeadDrawer() {
+  const searchTools = document.querySelector(".record-search-host .topbar-actions");
+  if (searchTools) document.querySelector("#appShell .topbar")?.appendChild(searchTools);
   const assistantLauncher = document.querySelector("#aiAssistantLauncher");
   if (assistantLauncher && els.leadDetailPageContent?.contains(assistantLauncher)) document.body.appendChild(assistantLauncher);
   const lead = state.leads.find(item => item.id === state.selectedId);
@@ -10419,6 +10429,7 @@ function renderLeadDrawer() {
       <button class="ghost-button lead-detail-back-button" type="button" id="leadDetailBack">Back to ${escapeHtml(state.lastNonLeadView === "activity" ? "Activity" : state.lastNonLeadView === "salesmen" ? "Salesmen" : state.lastNonLeadView === "dashboard" ? "Dashboard" : "Pipeline")}</button>
       <span class="record-breadcrumb-company" aria-hidden="true">/ ${escapeHtml(lead.company_name || "Lead")}</span>
       <div class="record-assistant-host"></div>
+      <div class="record-search-host"></div>
       <button class="ghost-button record-mobile-edit" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}" aria-label="Edit lead" title="Edit lead"></button>
     </div>
     <header class="drawer-header lead-page-header">
@@ -10432,11 +10443,13 @@ function renderLeadDrawer() {
       <div class="drawer-badges">
         ${admin ? `<select class="drawer-stage-select ${drawerStageClass(lead.stage)}" id="drawerStageSelect">${(state.settings.stages || []).map(stage => `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(drawerStageLabel(stage))}</option>`).join("")}</select>` : `<span class="drawer-stage-pill ${drawerStageClass(lead.stage)}">${escapeHtml(drawerStageLabel(lead.stage))}</span>`}
         <span class="chip ${priorityClass(lead.priority)}">${escapeHtml(lead.priority || "Cold")}</span>
-        <span class="chip">${escapeHtml(formatAED(lead.estimated_value))}</span>
+        <span class="chip">${escapeHtml(lead.tier ? `Tier ${lead.tier}` : "Tier not set")}</span>
+        <span class="record-owner-meta">${escapeHtml([lead.sector || lead.industry, lead.territory, lead.assigned_salesman ? `Owner ${lead.assigned_salesman}` : ""].filter(Boolean).join(" · "))}</span>
       </div>
       <div class="record-header-actions">
         ${lead.phone ? `<a class="primary-button record-call" href="tel:${escapeHtml(lead.phone)}">Call</a>` : ""}
         <button class="ghost-button record-email" type="button" data-record-send-email="${escapeHtml(lead.id)}" title="Prepare an email draft">Send Email</button>
+        <button class="ghost-button record-add-activity" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Add activity</button>
         <button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Edit</button>
       </div>
     </header>
@@ -10449,9 +10462,56 @@ function renderLeadDrawer() {
   renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });
   bindLeadDrawerEvents();
   hydrateLeadIntelligencePdfPreviews();
+  arrangeLeadRecordControls();
+  arrangeMobileLeadOverview();
+  arrangeAssistantLauncher(false);
+}
+
+function arrangeMobileLeadOverview() {
+  const root = els.leadDetailPageContent;
+  if (!root) return;
+  const mobile = state.leadDrawerTab === "overview" && window.matchMedia("(max-width: 1024px)").matches;
+  root.classList.toggle("record-mobile-overview-layout", mobile);
+  const flow = root.querySelector(".record-mobile-overview");
+  if (!flow) return;
+  const classes = ["record-reminders", "record-recent-activity", "record-overview-notes", "record-contact", "record-details"];
+  let contact = flow.querySelector(".record-contact-details");
+  if (mobile && !contact) {
+    contact = document.createElement("div");
+    contact.className = "record-contact-details";
+    const heading = document.createElement("h3");
+    heading.textContent = "Contact and details";
+    contact.appendChild(heading);
+    flow.appendChild(contact);
+  }
+  // Move existing nodes, preserving their listeners and original positions across breakpoints.
+  classes.forEach(name => {
+    const node = root.querySelector(`.${name}`);
+    let slot = root.querySelector(`[data-record-mobile-slot="${name}"]`);
+    if (!node) return;
+    if (mobile) {
+      if (!slot) {
+        slot = document.createElement("span");
+        slot.hidden = true;
+        slot.dataset.recordMobileSlot = name;
+        node.before(slot);
+      }
+      (name === "record-contact" || name === "record-details" ? contact : flow).appendChild(node);
+    } else if (slot) slot.replaceWith(node);
+  });
+  if (mobile) flow.appendChild(contact);
+  else contact?.remove();
 }
 
 function bindLeadDrawerEvents() {
+  const assistantForm = els.leadDetailPageContent?.querySelector(".record-overview-assistant");
+  const transferQuestion = () => {
+    const input = assistantForm.querySelector("input");
+    aiAssistantElements().command.value = input.value.trim();
+    input.value = "";
+  };
+  assistantForm?.addEventListener("submit", event => { event.preventDefault(); transferQuestion(); openAiAssistant(); });
+  assistantForm?.addEventListener("click", event => { if (event.target.closest("#aiAssistantLauncher")) transferQuestion(); });
   els.leadDetailPageContent?.querySelector("[data-record-send-email]")?.addEventListener("click", event => {
     const lead = state.leads.find(item => String(item.id) === event.currentTarget.dataset.recordSendEmail);
     if (lead) runLeadAiAction(lead, "email");
@@ -10679,6 +10739,7 @@ function bindLeadDrawerEvents() {
   document.querySelector("[data-drawer-edit-notes]")?.addEventListener("click", () => {
     document.querySelector(".drawer-notes-view")?.classList.add("hidden");
     document.querySelector("#drawerNotesForm")?.classList.remove("hidden");
+    document.querySelector("#drawerNotesForm textarea")?.focus();
   });
   document.querySelector("#drawerNotesForm")?.addEventListener("submit", async event => {
     event.preventDefault();
@@ -14390,7 +14451,7 @@ function render() {
 function arrangeAssistantLauncher(isTasks) {
   const launcher = document.querySelector("#aiAssistantLauncher");
   const host = currentView === "lead"
-    ? document.querySelector(".record-assistant-host") || document.body
+    ? (state.leadDrawerTab === "overview" ? document.querySelector(".record-overview-assistant-host") : null) || document.querySelector(".record-assistant-host") || document.body
     : currentView === "meeting-prep" ? document.querySelector(".meeting-assistant-host") || document.body
     : currentView === "draft-email" ? document.querySelector(".email-assistant-host") || document.body
     : currentView === "ai-actions" ? document.querySelector(".crm-onetap-assistant-host") || document.body
@@ -14399,7 +14460,22 @@ function arrangeAssistantLauncher(isTasks) {
   if (launcher && host && launcher.parentElement !== host) host.appendChild(launcher);
 }
 
+window.matchMedia("(min-width: 1025px)").addEventListener("change", () => {
+  if (currentView === "lead") {
+    arrangeMobileLeadOverview();
+    applyView();
+  }
+});
+
+function arrangeLeadRecordControls() {
+  const topbar = document.querySelector("#appShell .topbar");
+  const actions = document.querySelector("#appShell .topbar-actions");
+  const recordSearchHost = currentView === "lead" && window.matchMedia("(min-width: 1025px)").matches ? document.querySelector(".record-search-host") : null;
+  if (actions && (recordSearchHost || topbar)) (recordSearchHost || topbar).appendChild(actions);
+}
+
 function applyView() {
+  arrangeLeadRecordControls();
   if (isSalesmanRole() && ["salesmen", "activity"].includes(currentView)) {
     currentView = "dashboard";
   }
@@ -14430,7 +14506,7 @@ function applyView() {
   document.querySelector('#mobileSidebar [data-view="ai-actions"]')?.classList.toggle("hidden", isSalesmanRole());
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
-    const navigationView = isSalesmanRole() && isAiWorkspace && currentView !== "focus" ? "dashboard"
+    const navigationView = currentView === "lead" ? "pipeline" : isSalesmanRole() && isAiWorkspace && currentView !== "focus" ? "dashboard"
       : isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
     item.classList.toggle("active", item.dataset.view === navigationView && !item.dataset.mobileAction);
   });
