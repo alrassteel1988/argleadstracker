@@ -37,7 +37,8 @@ const overviewSource = client.slice(client.indexOf("function renderDrawerOvervie
 assert.doesNotMatch(overviewSource,/record-more-actions/);
 assert.match(overviewSource,/record-supporting-details/);
 assert.match(overviewSource,/record-linkedin/);
-assert.match(client,/panel\.hidden = hideOverviewSummary/);
+assert.match(client,/\["overview", "activities", "pmr", "reminders", "notes"\]\.includes\(state\.leadDrawerTab\)/);
+assert.match(client,/panel\.hidden = hideSummary/);
 assert.match(client,/content\.replaceChildren\(\)/);
 const routeContext = { URLSearchParams };
 vm.createContext(routeContext);

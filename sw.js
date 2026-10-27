@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v141-lead-sidebar-height";
+const CACHE_VERSION = "arg-pwa-v142-lead-summary-tabs";
 const APP_SHELL = [
   "/",
   "/index.html",
