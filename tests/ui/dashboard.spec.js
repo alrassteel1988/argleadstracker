@@ -3,6 +3,49 @@ const { capture, login, blockExternalTraffic } = require("./helpers");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("salesman priority controls and responsive headline layout", async ({page}, info) => {
+  if (!info.project.name.startsWith('salesman')) return;
+  await login(page, info);
+  await page.route('**/api/leads', async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const leads = await response.json();
+    await route.fulfill({response, json: leads.map(lead => lead.id === 'ui-lead-1' ? {...lead, email:'', contacts:[]} : lead)});
+  });
+  await page.reload();
+  await expect(page.locator('#overdueBanner')).toBeHidden();
+  await expect(page.locator('#salesmanSimplifiedMetrics > *')).toHaveCount(4);
+  await expect(page.locator('[data-summary-card="salesmanOverdueCalls"] small')).toBeVisible();
+  await expect(page.locator('.management-metric')).toContainText('Not available');
+  await expect(page.locator('#salespersonFocusList > li')).toHaveCount(3);
+  const row = page.locator('#salespersonFocusList > li').first();
+  await expect(row.locator('.focus-actions > *')).toHaveCount(4);
+  await expect(row.locator('[data-dashboard-email]')).toBeDisabled();
+  await expect(row.locator('[data-dashboard-focus-log]')).toHaveAttribute('aria-label', /Log activity/);
+  await expect(page.locator('#salespersonOrigin')).toContainText('Task totals unavailable');
+  if (info.project.name.endsWith('mobile')) {
+    const sizes = await row.locator('.focus-actions > *').evaluateAll(items => items.map(item => ({width:item.getBoundingClientRect().width,height:item.getBoundingClientRect().height})));
+    expect(sizes.every(size => size.width >= 44 && size.height >= 44)).toBeTruthy();
+    const tops = await row.locator('.focus-actions > *').evaluateAll(items => items.map(item => item.getBoundingClientRect().top));
+    expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  } else {
+    await expect(page.locator('#mobileSidebar')).toHaveCSS('position', 'sticky');
+    await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).toBeVisible();
+    await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toBeVisible();
+    const shell = page.locator('#appShell');
+    const sidebar = page.locator('#mobileSidebar');
+    expect(await shell.evaluate(element => getComputedStyle(element).backgroundColor)).toBe(await sidebar.evaluate(element => getComputedStyle(element).backgroundColor));
+    expect((await shell.boundingBox()).height).toBeGreaterThanOrEqual((await page.locator('.salesperson-dashboard-assistant').boundingBox()).y + (await page.locator('.salesperson-dashboard-assistant').boundingBox()).height);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => sidebar.evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+  }
+  await capture(page, info, '46-salesman-priorities', {fullPage:true});
+  await row.locator('[data-dashboard-focus-log]').click();
+  await expect(page.locator('#activityDialog')).toBeVisible();
+});
+
 test("dashboard layout, existing drill-down counts and management controls", async ({ page }, info) => {
   const role = await login(page, info);
   if (role === "admin") {
@@ -53,18 +96,18 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     await expect(page.locator('[data-summary-card="salesmanStageLost"] .salesman-stage-label')).toHaveText("Lost");
     if (mobile) {
       await expect(page.locator(".topbar")).toBeHidden();
-      await expect(page.locator("#salespersonMobileGreeting")).toContainText("Demo");
+      await expect(page.locator("#salespersonMobileGreeting")).toContainText("What should I do");
       await expect(page.locator("#salespersonMobileDate")).not.toBeEmpty();
       await expect(page.locator("#overdueBanner")).toBeHidden();
       const nav = await page.locator("#mobileTabs .nav-item:visible").evaluateAll(elements => elements.map(e => e.getAttribute("aria-label") || e.textContent.trim()));
       expect(nav).toEqual(["Home", "Leads", "Log activity", "AI actions", "Map"]);
       await expect(page.locator('#mobileTabs [data-view="dashboard"]')).toHaveCSS("display", "grid");
       expect(await page.locator('#mobileTabs [data-view="dashboard"]').evaluate(e => getComputedStyle(e, "::before").position)).toBe("static");
-      await expect(page.locator(".salesperson-contact-icon").first()).toBeVisible();
+      await expect(page.locator(".focus-icon").first()).toBeVisible();
       const origins = await page.locator("#salespersonOrigin .salesperson-origin-row:not(.origin-unknown)").evaluateAll(elements => elements.map(e => e.getBoundingClientRect().top));
-      expect(Math.max(...origins) - Math.min(...origins)).toBeLessThanOrEqual(1);
+      expect(origins[1]).toBeGreaterThan(origins[0]);
       await page.locator("[data-dashboard-stages]").click();
-    } else await expect(page.locator("#overdueBanner")).toBeVisible();
+    } else await expect(page.locator("#overdueBanner")).toBeHidden();
     expect(await page.locator("#overdueBanner").evaluate(e => e.parentElement.id)).toBe("sharedDashboardTopSlot");
     for (const selector of [".salesman-dashboard-pipeline", ".salesman-dashboard-call-queue"]) {
       const accent = page.locator(`${selector} h2 .crm-title-accent`);
@@ -91,8 +134,9 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     {
       const positions = await page.locator('#salesmanSimplifiedMetrics > button:not([data-summary-card="salesmanMyLeads"])').evaluateAll(elements => elements.map(e => e.getBoundingClientRect().top));
       expect(Math.max(...positions) - Math.min(...positions)).toBeLessThanOrEqual(1);
-      const metricWidths = await page.locator('#salesmanSimplifiedMetrics > button:not([data-summary-card="salesmanMyLeads"])').evaluateAll(elements => elements.map(e => e.getBoundingClientRect().width));
-      expect(metricWidths.reduce((sum, width) => sum + width, mobile ? 8 : 10)).toBeCloseTo((await page.locator("#salesmanSimplifiedMetrics").boundingBox()).width, 0);
+      const metricWidths = await page.locator('#salesmanSimplifiedMetrics > *').evaluateAll(elements => elements.map(e => e.getBoundingClientRect().width));
+      expect(metricWidths.length).toBe(4);
+      expect(metricWidths.slice(0, mobile ? 2 : 4).reduce((sum, width) => sum + width, mobile ? 8 : 30)).toBeCloseTo((await page.locator("#salesmanSimplifiedMetrics").boundingBox()).width, 0);
     }
     await capture(page, info, "43-home-reference-layout", {fullPage:false});
     await capture(page, info, "44-salesperson-dashboard-complete");
@@ -105,7 +149,7 @@ test("dashboard layout, existing drill-down counts and management controls", asy
     await expect(page.locator("#salespersonQuickGrid button")).toHaveCount(3);
     const assistantBottom = await page.locator(".salesperson-dashboard-assistant").evaluate(e => e.getBoundingClientRect().bottom + scrollY);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThanOrEqual(assistantBottom);
-    await expect(page.locator("#salespersonOrigin")).toContainText("Accounts by origin");
+    await expect(page.locator("#salespersonOrigin")).toContainText("Task totals unavailable");
     await expect(page.locator("#salespersonFocusList")).not.toContainText("Synthetic Steel Company 13");
     const mainBackground = await page.locator("#appShell > .main").evaluate(e => getComputedStyle(e).backgroundImage);
     expect(mainBackground).toContain(info.project.name.endsWith("mobile") ? "crm-silk-white-mobile.png" : "crm-silk-white-desktop.png");
@@ -116,7 +160,7 @@ test("dashboard layout, existing drill-down counts and management controls", asy
       expect(followupBox.x).toBeGreaterThan(focusBox.x + focusBox.width);
       expect(Math.abs(followupBox.y - focusBox.y)).toBeLessThanOrEqual(1);
     } else {
-      expect(focusBox.y).toBeGreaterThanOrEqual(followupBox.y + followupBox.height);
+      expect(followupBox.y).toBeGreaterThanOrEqual(focusBox.y + focusBox.height);
       const quickBox = await page.locator(".salesperson-quick-card").boundingBox();
       expect(quickBox.y).toBeGreaterThanOrEqual(focusBox.y + focusBox.height);
       expect(pipelineBox.y).toBeGreaterThanOrEqual(quickBox.y + quickBox.height);
@@ -220,8 +264,8 @@ test("Salesperson dashboard reference actions and responsive bounds", async ({ p
     expect(clipped).toBe(0);
   }
   await page.setViewportSize(info.project.use.viewport);
-  await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).toHaveClass(/hidden/);
-  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveCount(0);
+  await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).not.toHaveClass(/hidden/);
   await page.locator('[data-dashboard-portfolio="neglected"]').click();
   await expect(page).toHaveURL(/\?view=dashboard\/neglected$/);
   await expect(page.locator('.crm-neglected-table tbody tr').first()).toBeVisible();

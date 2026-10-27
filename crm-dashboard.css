@@ -1426,3 +1426,54 @@ body.salesman-dashboard-mode #appShell .salesperson-pipeline-breakdown > summary
   body.salesman-dashboard-mode #mobileTabs [data-mobile-action="alerts"] { display: none !important; }
   body.salesman-dashboard-mode #mobileTabs .mobile-log-tab { grid-template-rows: 1fr; font-size: 0 !important; gap: 0; width: 56px; height: 56px; min-height: 56px; margin-top: -16px; border: 0 !important; }
 }
+
+/* Salesman dashboard priorities and responsive action controls. */
+body.salesman-dashboard-mode #appShell #overdueBanner { display: none !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard #salesmanSimplifiedMetrics { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; margin: 0; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesman-simplified-metric { min-width: 0; min-height: 92px; border: 1px solid #e3e8ef !important; background: white !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesman-simplified-metric.tone-danger { background: #fdf0ef !important; border-color: #ffc6c6 !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard [data-summary-card="salesmanMyLeads"] { grid-column: auto; padding: 12px 14px; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard [data-summary-card="salesmanMyLeads"] .salesman-summary-card-copy { flex-direction: column; align-items: start; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard [data-summary-card="salesmanMyLeads"] strong { font-size: 28px !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .management-metric strong { font-size: 16px !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-followup-card { border-top: 1px solid #e3e8ef !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-quick-action { min-height: 70px; padding: 10px; gap: 6px; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-actions { display: flex; flex-direction: row; gap: 6px; align-items: center; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-actions :is(button, a) { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-width: 38px; width: auto; height: 40px; min-height: 40px; padding: 8px; text-decoration: none; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-actions :is(button, a)::before { content: none !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-actions .primary-button { background: #f9a51a !important; border-color: #f9a51a !important; color: #0b2545 !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-icon { display: block; width: 16px; height: 16px; flex: none; background: currentColor; mask: var(--crm-icon-chevron-right) center / contain no-repeat; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-phone { mask-image: var(--crm-icon-phone); }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-mail { mask-image: var(--crm-icon-mail); }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-check { mask-image: var(--crm-icon-check); }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-dashboard-assistant-host #aiAssistantLauncher > span { display: none !important; }
+body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-dashboard-assistant-host #aiAssistantLauncher::after { content: "Ask"; }
+@media (min-width: 1025px) {
+  body.salesman-dashboard-mode { overflow: visible !important; }
+  body.salesman-dashboard-mode #appShell { background-color: var(--crm-sidebar-end) !important; }
+  body.salesman-dashboard-mode #mobileSidebar { position: sticky !important; top: 0; height: 100vh; max-height: 100vh; align-self: start; }
+  body.salesman-dashboard-mode #appShell .topbar:not(.hidden):not([hidden]) { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+  body.salesman-dashboard-mode #appShell .topbar-actions { width: auto !important; justify-self: end; }
+}
+@media (max-width: 720px) {
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard #salesmanSimplifiedMetrics { order: 1; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-followup-card { order: 4; display: block; padding: 14px 16px; border: 1px solid #e3e8ef !important; background: white !important; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-followup-card > #salespersonFollowupTitle { display: block !important; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesman-dashboard-pipeline { order: 5; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesman-dashboard-more-tools { order: 6; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-dashboard-assistant { order: 7; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-focus-list > li { grid-template-columns: minmax(0, 1fr); }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-focus-list > li > .focus-actions { display: flex; flex-direction: row; grid-column: 1; grid-row: auto; width: 100% !important; height: auto; justify-self: stretch; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-actions :is(button, a) { min-width: 44px; min-height: 44px; height: 44px; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-quick-grid { grid-template-columns: minmax(0, 1fr); }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-quick-action { min-height: 60px; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-quick-card > .salesperson-card-heading { display: flex !important; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-focus-list > li { grid-template-columns: 28px minmax(0, 1fr); align-items: start; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-focus-number { display: grid; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-focus-list > li > .focus-actions { grid-column: 2; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .focus-actions .primary-button { flex: 1 1 auto; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-origin { grid-template-columns: minmax(0, 1fr); }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-origin-row { grid-template-columns: minmax(0, 1fr) auto; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-origin-row strong { font-size: 14px; }
+  body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesman-summary-card-copy small { display: block !important; position: static !important; width: auto !important; height: auto !important; clip: auto !important; clip-path: none !important; overflow: visible !important; }
+}
