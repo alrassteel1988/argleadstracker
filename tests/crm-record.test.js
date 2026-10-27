@@ -33,6 +33,12 @@ assert.match(css, /\.record-desktop-overview, \.record-header-actions, \.record-
 assert.match(read("client.js"), /function desktopLeadOverviewMarkup\(lead\)/);
 assert.match(read("client.js"), /record-overview-notes">\$\{renderDrawerNotes\(lead\)\}/);
 const client = read("client.js");
+const overviewSource = client.slice(client.indexOf("function renderDrawerOverview("),client.indexOf("function renderDrawerActivities("));
+assert.doesNotMatch(overviewSource,/record-more-actions/);
+assert.match(overviewSource,/record-supporting-details/);
+assert.match(overviewSource,/record-linkedin/);
+assert.match(client,/panel\.hidden = hideOverviewSummary/);
+assert.match(client,/content\.replaceChildren\(\)/);
 const routeContext = { URLSearchParams };
 vm.createContext(routeContext);
 for (const name of ["isLeadRoutePath", "parseAppRoute"]) vm.runInContext(client.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0], routeContext);
