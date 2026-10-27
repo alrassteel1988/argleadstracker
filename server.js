@@ -48,6 +48,7 @@ const {
   validateActivityAttachment,
   workflowId
 } = require("./src/services/activityWorkflowService");
+const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
 const {
   enrichCompanyFromGoogle,
   enrichHunter,
@@ -1419,6 +1420,7 @@ function normalizeReminderActivity(input, lead, user) {
     due_date: dueDate,
     due_time: String(input.due_time || "09:00").trim(),
     reminder_status: "scheduled",
+    transaction_status: "pending",
     google_calendar_url: googleCalendarUrl({
       title,
       details,
@@ -1509,6 +1511,7 @@ function normalizeStructuredActivity(input, user) {
     next_action_plan: nextActionPlan,
     next_action_date: nextActionDate,
     activity_purpose: activityPurpose,
+    transaction_status: "pending",
     created_by: user.id,
     created_by_name: user.name || user.email || "User",
     created_at: createdAt
@@ -1521,7 +1524,8 @@ function normalizePlainActivity(input, user) {
     id: input.id || newRecordId("act"),
     at: new Date().toISOString().slice(0, 10),
     type: String(input.type || "Note"),
-    text: String(input.text || "Activity added")
+    text: String(input.text || "Activity added"),
+    transaction_status: "pending"
   };
   ACTIVITY_EXTRA_FIELDS.forEach(field => {
     if (input[field] !== undefined) activity[field] = input[field];
@@ -1852,6 +1856,12 @@ function flattenedActivitiesForUser(leads, user, filters = {}) {
       activity_time: activityTimeOnly(activity),
       reminder_due_date: activity.reminder_due_date || activity.due_date || "",
       reminder_status: activity.reminder_status || (activity.followup_completed ? "completed" : ""),
+      transaction_status: activityTransactionStatus(activity),
+      transaction_outcome: activity.transaction_outcome || "",
+      transaction_remarks: activity.transaction_remarks || "",
+      transaction_next_attempt: activity.transaction_next_attempt || "",
+      transaction_updated_at: activity.transaction_updated_at || "",
+      transaction_updated_by_name: activity.transaction_updated_by_name || "",
       stage: activity.stage || lead.stage || lead.lead_status || "",
       quotation_ref: activity.quotation_ref || "",
       quotation_status: activity.quotation_status || "",
@@ -6562,6 +6572,30 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { matches });
   }
 
+  if (req.method === "GET" && url.pathname === "/api/management/overdue-activities.csv") {
+    if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Management access required." });
+    const leads = supabaseEnabled
+      ? visibleLeadsForUser((await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead), user)
+      : visibleLeadsForUser(db.leads, user);
+    const asOf = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const byId = new Map(leads.map(lead => [String(lead.id), lead]));
+    const cell = value => {
+      const text = String(value ?? "");
+      const safe = /^[\s]*[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
+    const columns = ["Company", "Salesman", "Activity", "Follow-up due", "Status", "Outcome", "Remarks", "Next attempt", "Updated by", "Updated at"];
+    const rows = overdueActivityRows(leads, asOf).map(row => {
+      const lead = byId.get(String(row.lead_id));
+      const activity = row.activity;
+      return [lead?.company_name, lead?.assigned_salesman, activity.type, row.due_date, row.status,
+        activity.transaction_outcome, activity.transaction_remarks, activity.transaction_next_attempt,
+        activity.transaction_updated_by_name, activity.transaction_updated_at].map(cell).join(",");
+    });
+    res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="overdue-activities.csv"', "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" });
+    return res.end(`\ufeff${columns.map(cell).join(",")}\r\n${rows.join("\r\n")}\r\n`);
+  }
+
   if (req.method === "GET" && url.pathname === "/api/activities") {
     const filters = {
       salesman: isAdmin(user) ? url.searchParams.get("salesman") : "",
@@ -7460,6 +7494,48 @@ async function handleApi(req, res, url) {
     }
     const body = fs.readFileSync(localPath);
     return sendDownload(res, attachment.content_type || "application/octet-stream", safeOriginalFilename(attachment.original_filename), body);
+  }
+
+  const activityTransactionMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activities\/([^/]+)\/transaction$/);
+  if (req.method === "PATCH" && activityTransactionMatch) {
+    if (String(user.role || "").toLowerCase() !== "salesman") return sendJson(res, 403, { error: "Only the assigned salesman can update an activity transaction." });
+    const payload = await readBody(req);
+    let values;
+    try { values = validateActivityTransaction(payload); }
+    catch (error) { return sendJson(res, 400, { error: error.message }); }
+    const version = Number(payload.version);
+    if (!Number.isInteger(version) || version < 1) return sendJson(res, 400, { error: "A valid activity version is required." });
+    const leadId = decodeURIComponent(activityTransactionMatch[1]);
+    const activityId = decodeURIComponent(activityTransactionMatch[2]);
+    const freshDb = supabaseEnabled ? null : readDb();
+    const lead = await accessibleLeadById(freshDb, user, leadId, supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    const activities = Array.isArray(lead.activities) ? lead.activities : [];
+    const matches = activities.filter(activity => activity && String(activity.id || "") === activityId);
+    if (matches.length !== 1 || !activityId) return sendJson(res, 409, { error: "This activity needs a unique, permanent ID before it can be updated." });
+    const activity = matches[0];
+    if (activity.archived || activity.delete_request || activity.deletion_status === "pending") return sendJson(res, 409, { error: "This activity cannot be updated." });
+    if (!canManageActivity(user, lead, activity)) return sendJson(res, 403, { error: "You cannot edit this activity." });
+    let updated;
+    try { updated = updateActivityTransaction(activity, values, user, version); }
+    catch (error) { return sendJson(res, error.status || 400, { error: error.message }); }
+    if (supabaseEnabled) {
+      try {
+        updated = await rest("rpc/update_activity_transaction", {
+          method: "POST", ...supabaseDataOptions(user.token),
+          body: { p_lead_id: leadId, p_activity_id: activityId, p_expected_version: version,
+            p_status: values.status, p_outcome: values.outcome, p_remarks: values.remarks,
+            p_next_attempt: values.next_attempt || null }
+        });
+      } catch (error) {
+        if (/Activity changed; refresh/.test(error.message || "")) return sendJson(res, 409, { error: "This activity changed. Refresh before saving." });
+        throw error;
+      }
+    } else {
+      lead.activities = activities.map(item => item === activity ? updated : item);
+      writeDb(freshDb);
+    }
+    return sendJson(res, 200, { activity: updated });
   }
 
   const activityWorkflowMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activities\/([^/]+)$/);
