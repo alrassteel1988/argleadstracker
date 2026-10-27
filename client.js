@@ -3543,12 +3543,13 @@ function startAiLoadingTicker() {
 }
 
 async function runLeadAiAction(lead, action) {
-  if (lead && action === "email") {
+  if (lead && ["email", "profile"].includes(action)) {
     const sameDraft = emailDraftState?.owner === String(state.currentUser?.id) && emailDraftState.leadId === String(lead.id);
     if (!sameDraft) {
       if (emailDraftState?.owner === String(state.currentUser?.id) && emailDraftState.dirty && !window.confirm("Discard your edited draft and change company?")) return;
       emailDraftState = newEmailDraft(lead);
     }
+    if (action === "profile") emailDraftState.includeProfile = true;
     state.emailRouteLeadId = currentView === "lead" ? String(lead.id) : "";
     setView("draft-email");
     return;
@@ -9594,6 +9595,7 @@ function loadLeadDetailData(leadId) {
   if (!lead) return;
   state.leadDrawerLoading = true;
   state.leadDrawerPmrs = [];
+  state.leadDrawerPmrsError = false;
   state.leadDrawerIntel = [];
   state.leadDrawerHandoffs = [];
   primeLeadAiSummaryState(lead);
@@ -9608,6 +9610,7 @@ function loadLeadDetailData(leadId) {
     .then(results => {
       if (state.selectedId !== leadId) return;
       const syncedPmrs = results[0].status === "fulfilled" ? results[0].value || [] : [];
+      state.leadDrawerPmrsError = results[0].status !== "fulfilled";
       const pendingPmrs = results[3].status === "fulfilled"
         ? results[3].value
           .filter(item => item.kind === "pmr" && item.lead_id === leadId)
@@ -9893,6 +9896,56 @@ function renderLossDetails(lead) {
   `;
 }
 
+function recordDaysSince(value) {
+  const day = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const date = new Date(`${day}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== day) return null;
+  const days = Math.floor((new Date(`${today()}T00:00:00Z`) - date) / 86400000);
+  return Number.isFinite(days) && days >= 0 ? days : null;
+}
+
+function recordRelationshipHealth(lead) {
+  const cadence = Number(lead.expected_contact_days);
+  const days = recordDaysSince(lead.last_activity);
+  const closed = ["LOST", "DORMANT"].includes(String(lead.stage || "").toUpperCase());
+  const known = !closed && days !== null && Number.isFinite(cadence) && cadence > 0;
+  const tone = !known ? "unknown" : days > cadence * 1.6 ? "red" : days > cadence ? "amber" : "green";
+  const recent = (lead.activities || []).filter(activity => {
+    const elapsed = recordDaysSince(activity.at);
+    return elapsed !== null && elapsed <= 60;
+  });
+  const visits = recent.filter(activity => /in.person|site visit|meeting/i.test(activity.type || "") && !/pmr filed/i.test(activity.type || ""));
+  const pmrsReady = state.selectedId === lead.id && !state.leadDrawerLoading && !state.leadDrawerPmrsError;
+  const pmrs = pmrsReady ? (state.leadDrawerPmrs || []).filter(pmr => String(pmr.company_id) === String(lead.id) && !pmr.pending_sync).sort((a, b) => String(b.meeting_date || "").localeCompare(String(a.meeting_date || ""))).slice(0, 3) : [];
+  const scores = pmrs.map(pmr => Number(pmr.relationship_heat_score)).filter(score => Number.isFinite(score) && score >= 1 && score <= 5);
+  return {
+    tone,
+    label: closed ? "Closed" : ({red:"At risk", amber:"Watch", green:"Healthy", unknown:"Unknown"})[tone],
+    rows: [
+      ["Days since last activity", days === null ? "No valid activity date" : `${days} days${cadence > 0 ? ` · expected ${cadence}` : " · cadence unavailable"}`, tone, known ? ({red:"Act now", amber:"Watch", green:"On track"})[tone] : "Not rated"],
+      ["Activity trend, last 60 days", `${recent.length} ${recent.length === 1 ? "activity" : "activities"} recorded`, recent.length ? "green" : "amber", recent.length ? "Recorded" : "Watch"],
+      ["Engagement quality", visits.length ? `${visits.length} meeting / visit records in 60 days` : recent.length ? "Follow-ups only, no visit logged in 60 days" : "No recent engagement recorded", visits.length ? "green" : "amber", visits.length ? "Recorded" : "Watch"],
+      ["Time in status", "Stage-change date not recorded", "unknown", "Not rated"],
+      ["PMR heat scores, last 3", !pmrsReady ? state.leadDrawerLoading && state.selectedId === lead.id ? "Loading PMRs..." : "PMR data unavailable" : scores.length ? `${scores.join(", ")} / 5` : "None filed with a heat score", !pmrsReady ? "unknown" : scores.length ? "green" : "amber", !pmrsReady ? "Not rated" : scores.length ? "Recorded" : "Watch"]
+    ]
+  };
+}
+
+function recordHealthMarkup(lead, mobile = false) {
+  const health = recordRelationshipHealth(lead);
+  return `<section class="drawer-section ${mobile ? "record-mobile-health" : "record-overview-health"}" aria-label="Relationship health"><div class="record-health-heading"><h3>Relationship <em class="crm-title-accent">health</em></h3><span class="record-health-status tone-${health.tone}">${health.label}</span></div><p class="record-health-disclaimer">Contact timing uses the current status and tier cadence.</p><dl>${health.rows.map(([label, value, tone, badge]) => `<div><dt>${escapeHtml(label)}</dt><dd><strong>${escapeHtml(value)}</strong><span class="record-health-status tone-${tone}">${badge}</span></dd></div>`).join("")}</dl><button class="ghost-button danger" type="button" data-company-ai-action="flag" data-company-ai-lead="${escapeHtml(lead.id)}">Flag to director</button></section>`;
+}
+
+function recordProfileFollowupMarkup(lead) {
+  const notes = String(lead.notes || "");
+  const profile = /company\s+profile/i;
+  const sent = text => profile.test(text) && !/not\s+(?:yet\s+)?(?:sent|emailed|shared)|hasn.t.*(?:sent|emailed|shared)|send.*pending/i.test(text) && /\bsent\b|\bemailed\b|\bshared\b/i.test(text);
+  const requested = profile.test(notes) && /request|\bshare\b|\bsend\b/i.test(notes) && !/(?:did not|didn.t|never|not)\s+request(?:ed)?|\bno\s+(?:company\s+)?profile\s+request/i.test(notes);
+  if (!requested || sent(notes) || (lead.activities || []).some(activity => sent(`${activity.text || ""} ${activity.note || ""}`))) return "";
+  return `<div class="record-profile-followup"><span>Company profile requested · review delivery history</span><button class="record-text-action" type="button" data-record-send-profile="${escapeHtml(lead.id)}">Send profile</button></div>`;
+}
+
 function companyAiActionsMarkup(lead, { mobile = false, overview = false } = {}) {
   const actions = [
     ["prepare", "Prepare Me For This Meeting"],
@@ -9935,6 +9988,7 @@ function desktopLeadOverviewMarkup(lead) {
         <div class="record-next-content"><div><span class="record-eyebrow">Next step</span><h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3><p>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong> ` : ""}${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p></div>
         <div class="record-action-row"><button class="ghost-button" type="button" data-drawer-edit-lead="${id}" title="Edit the lead's next action and due date">Reschedule</button><button class="primary-button" type="button" data-drawer-log-activity="${id}">Log outcome</button></div></div>
         <div class="record-next-guidance" aria-live="polite"><div><span class="record-guidance-badge">${escapeHtml(guidance ? source : "Guidance")}</span><button class="ghost-button" type="button" data-refresh-lead-ai-summary="${id}" ${summary?.loading ? "disabled" : ""}>Ask again</button></div><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable. Ask again to retry."))}</p></div>
+        ${recordProfileFollowupMarkup(lead)}
       </section>
       ${companyAiActionsMarkup(lead, {overview:true})}
       <section class="drawer-section record-recent-activity"><div class="drawer-tab-heading"><h3>Recent activity</h3><button class="record-text-action" type="button" data-drawer-tab="activities">View all</button></div>
@@ -9944,7 +9998,7 @@ function desktopLeadOverviewMarkup(lead) {
       <div class="record-overview-notes">${renderDrawerNotes(lead)}</div>
     </div>
     <div class="record-side-column">
-      <section class="drawer-section record-overview-health" aria-label="Relationship health"><div class="record-health-heading"><h3>Relationship <em class="crm-title-accent">health</em></h3><span class="record-health-pending">Pending</span></div><p class="record-health-disclaimer">New scoring rules await approval.</p><dl>${[["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "No activity recorded"], ["Activities recorded", String((lead.activities || []).length)], ["Relationship status", drawerStageLabel(lead.stage)], ["Time in status", "Not scored"], ["PMR heat scores", "Not scored"]].map(([label,value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}<span class="record-health-pending">Not rated</span></dd></div>`).join("")}</dl><button class="ghost-button danger" type="button" data-company-ai-action="flag" data-company-ai-lead="${id}">Flag to director</button></section>
+      ${recordHealthMarkup(lead)}
       <section class="drawer-section record-contact"><h3>Contact</h3>
         ${primaryContactMarkup(lead)}
         ${contactRow("Phone", lead.phone, lead.phone ? `tel:${lead.phone}` : "")}
@@ -9979,25 +10033,14 @@ function mobileLeadNextStepMarkup(lead) {
     <div class="record-mobile-guidance" aria-live="polite"><div class="record-mobile-guidance-heading"><span>${escapeHtml(guidance ? guidanceLabel : "Guidance")}</span><button class="ghost-button" type="button" data-refresh-lead-ai-summary="${escapeHtml(lead.id)}" ${summary?.loading ? "disabled" : ""}>Ask again</button></div><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable."))}</p></div>
     <p class="record-mobile-due">${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p>
     <div class="record-mobile-next-footer"><button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Reschedule</button><button class="primary-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log outcome</button></div>
+    ${recordProfileFollowupMarkup(lead)}
   </section>`;
 }
 
 function mobileLeadOverviewExtras(lead) {
-  const signals = [
-    ["Since last activity", lead.last_activity ? daysAgoLabel(lead.last_activity) : "No activity recorded"],
-    ["Activity trend, 60 days", "Not scored"],
-    ["Engagement quality", "Not scored"],
-    ["Time in status", "Not scored"],
-    ["PMR heat scores", "Not scored"]
-  ];
   return `<div class="record-mobile-overview">
     ${companyAiActionsMarkup(lead, { mobile: true })}
-    <section class="drawer-section record-mobile-health" aria-label="Relationship health">
-      <div class="record-health-heading"><h3>Relationship <em>health</em></h3><span class="record-health-pending">Pending</span></div>
-      <p class="record-health-disclaimer">New scoring rules await approval.</p>
-      <dl>${signals.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd><strong>${escapeHtml(value)}</strong><span class="record-health-pending">Not rated</span></dd></div>`).join("")}</dl>
-      <button class="ghost-button danger" type="button" data-company-ai-action="flag" data-company-ai-lead="${escapeHtml(lead.id)}">Flag to director</button>
-    </section>
+    ${recordHealthMarkup(lead, true)}
   </div>`;
 }
 
@@ -10444,6 +10487,7 @@ function renderLeadDrawer() {
         ${admin ? `<select class="drawer-stage-select ${drawerStageClass(lead.stage)}" id="drawerStageSelect">${(state.settings.stages || []).map(stage => `<option value="${escapeHtml(stage)}" ${stage === lead.stage ? "selected" : ""}>${escapeHtml(drawerStageLabel(stage))}</option>`).join("")}</select>` : `<span class="drawer-stage-pill ${drawerStageClass(lead.stage)}">${escapeHtml(drawerStageLabel(lead.stage))}</span>`}
         <span class="chip ${priorityClass(lead.priority)}">${escapeHtml(lead.priority || "Cold")}</span>
         <span class="chip">${escapeHtml(lead.tier ? `Tier ${lead.tier}` : "Tier not set")}</span>
+        <span class="record-health-status tone-${recordRelationshipHealth(lead).tone}">${recordRelationshipHealth(lead).label}</span>
         <span class="record-owner-meta">${escapeHtml([lead.sector || lead.industry, lead.territory, lead.assigned_salesman ? `Owner ${lead.assigned_salesman}` : ""].filter(Boolean).join(" · "))}</span>
       </div>
       <div class="record-header-actions">
@@ -10512,6 +10556,12 @@ function bindLeadDrawerEvents() {
   };
   assistantForm?.addEventListener("submit", event => { event.preventDefault(); transferQuestion(); openAiAssistant(); });
   assistantForm?.addEventListener("click", event => { if (event.target.closest("#aiAssistantLauncher")) transferQuestion(); });
+  els.leadDetailPageContent?.querySelectorAll("[data-record-send-profile]").forEach(button => {
+    button.addEventListener("click", () => {
+      const lead = state.leads.find(item => String(item.id) === button.dataset.recordSendProfile);
+      if (lead) runLeadAiAction(lead, "profile");
+    });
+  });
   els.leadDetailPageContent?.querySelector("[data-record-send-email]")?.addEventListener("click", event => {
     const lead = state.leads.find(item => String(item.id) === event.currentTarget.dataset.recordSendEmail);
     if (lead) runLeadAiAction(lead, "email");

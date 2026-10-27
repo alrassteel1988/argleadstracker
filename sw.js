@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v137-mobile-lead-overview";
+const CACHE_VERSION = "arg-pwa-v138-overview-health-profile";
 const APP_SHELL = [
   "/",
   "/index.html",
