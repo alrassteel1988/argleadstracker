@@ -102,6 +102,7 @@
     { "src": "/icons/shortcut-focus.png", "dest": "/icons/shortcut-focus.png" },
     { "src": "/icons/shortcut-log.png", "dest": "/icons/shortcut-log.png" },
     { "src": "/leads/([^/]+)/draft-email/?$", "dest": "/index.html" },
+    { "src": "/leads/([^/]+)/overview/?$", "dest": "/index.html" },
     { "src": "/leads/([^/]+)/?$", "dest": "/index.html" }
   ],
   "crons": [

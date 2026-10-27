@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v135-lead-email-subpage";
+const CACHE_VERSION = "arg-pwa-v137-mobile-lead-overview";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -1,4 +1,9 @@
 /* Shared record presentation; all six tabs and existing forms stay intact. */
+.record-search-host, .record-overview-assistant, .record-overview-health { display: none; }
+@media (max-width: 1024px) {
+  body #appShell #leadDetailView :is(.record-add-activity, .record-owner-meta, .record-more-actions) { display: none; }
+  body #appShell #leadDetailView .record-header-actions .record-add-activity { display: none !important; }
+}
 .record-desktop-overview, .record-header-actions, .record-breadcrumb-company { display: none; }
 .record-mobile-next, .record-mobile-edit, .record-mobile-actions { display: none; }
 .record-mobile-overview { display: none; }
@@ -735,4 +740,115 @@ body #appShell #leadDetailView :is(.meta-label, .activity-type-label, .handoff-e
   body #appShell #leadDetailView .record-reminder-row span { color: var(--crm-text-secondary); }
   body #appShell #leadDetailView .record-overview-notes .drawer-notes-view { padding: 12px; border: 0; background: var(--crm-surface-muted); }
   body #appShell #leadDetailView .lead-detail-ai-column { max-height: none; }
+}
+
+/* Reference overview: existing CRM actions and truthful record context. */
+@media (min-width: 1025px) {
+  body.lead-detail-mode #appShell { height: auto !important; min-height: 100dvh; overflow: visible !important; }
+  body.lead-detail-mode #appShell > .main { max-height: none !important; overflow: visible !important; }
+  body.lead-detail-mode #mobileSidebar { position: sticky !important; top: 0; height: 100dvh; align-self: start; }
+  body.lead-detail-mode #appShell .topbar { display: none !important; }
+  body.lead-detail-mode #appShell > .main > .topbar:not(.hidden):not([hidden]) { display: none !important; }
+  body #appShell #leadDetailView .lead-detail-page-toolbar { flex-wrap: wrap; }
+  body #appShell #leadDetailView .record-search-host { display: flex; margin-left: auto; min-width: 0; }
+  body #appShell #leadDetailView .record-search-host .topbar-actions { display: flex !important; flex-wrap: wrap; justify-content: flex-end; width: auto !important; gap: 8px; }
+  body #appShell #leadDetailView .record-search-host .smart-search-shell { flex: 0 1 260px; width: 260px; }
+  body #appShell #leadDetailView .record-search-host .topbar-actions > button { min-height: 40px; font-size: 13px; }
+  body #appShell #leadDetailView .lead-page-header { grid-template-columns: minmax(0, 1fr); }
+  body #appShell #leadDetailView .record-header-actions { grid-column: 1; grid-row: auto; flex-wrap: wrap; }
+  body #appShell #leadDetailView .drawer-title-copy p { display: none; }
+  body #appShell #leadDetailView .drawer-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  body #appShell #leadDetailView .record-owner-meta { color: #4a5568 !important; background: transparent !important; font-size: 12px; }
+  body #appShell #leadDetailView .lead-detail-tabs button { min-height: 44px; font-size: 13px; }
+  body #appShell #leadDetailView .lead-detail-tabs button.active { border-bottom-color: var(--crm-navy) !important; }
+  body #appShell #leadDetailView .lead-detail-page-body > .company-ai-actions { display: none; }
+  body #appShell #leadDetailView .record-desktop-overview .drawer-section { border-radius: 14px; padding: 20px 22px; }
+  body #appShell #leadDetailView .record-desktop-overview h3 { font-size: 18px; }
+  body #appShell #leadDetailView .record-next-step h3 { font-size: 20px; }
+  body #appShell #leadDetailView .record-next-guidance { border-radius: 10px; padding: 14px 16px; background: #f3f6fa; }
+  body #appShell #leadDetailView .record-next-guidance > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  body #appShell #leadDetailView .record-next-guidance p { margin: 8px 0 0; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+  body #appShell #leadDetailView .record-next-guidance button { min-height: 32px; padding: 4px 10px; font-size: 12px; }
+  body #appShell #leadDetailView .record-guidance-badge { display: inline-block; border-radius: 99px; padding: 3px 9px; font-size: 12px; color: #fff; background: var(--crm-navy); }
+  body #appShell #leadDetailView .record-overview-ai .drawer-primary-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 0; }
+  body #appShell #leadDetailView .record-overview-ai .drawer-primary-actions button { display: flex !important; align-items: center; gap: 12px; min-width: 0; border-radius: 8px; padding: 14px; }
+  body #appShell #leadDetailView .record-overview-ai .drawer-primary-actions button::before { position: static !important; flex-shrink: 0; margin: 0; }
+  body #appShell #leadDetailView .record-overview-ai [data-company-ai-action="prepare"]::before { mask-image: var(--crm-icon-calendar-days) !important; }
+  body #appShell #leadDetailView .record-overview-ai .drawer-primary-actions .record-ai-card-primary { grid-column: 1 / -1; min-height: 72px; background: var(--crm-navy) !important; border-color: var(--crm-navy) !important; color: #fff !important; }
+  body #appShell #leadDetailView .record-overview-ai .drawer-primary-actions .record-ai-card-primary small { color: #fff; }
+  body #appShell #leadDetailView .record-overview-ai [data-company-ai-action="prepare"] { --crm-button-icon: var(--crm-icon-calendar-days); }
+  body #appShell #leadDetailView .record-overview-ai [data-company-ai-action="email"] { --crm-button-icon: var(--crm-icon-mail); }
+  body #appShell #leadDetailView .record-overview-ai [data-company-ai-action="summary"] { --crm-button-icon: var(--crm-icon-file-text); }
+  body #appShell #leadDetailView .record-overview-health { display: flex; flex-direction: column; }
+  body #appShell #leadDetailView .record-health-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  body #appShell #leadDetailView .record-health-disclaimer { margin: 0; font-size: 12px; line-height: 1.5; color: var(--crm-text-secondary); }
+  body #appShell #leadDetailView .record-health-pending { display: inline-block; padding: 3px 8px; border-radius: 99px; background: var(--crm-surface-muted); color: var(--crm-text-secondary); font-size: 12px; white-space: nowrap; }
+  body #appShell #leadDetailView .record-overview-health h3 .crm-title-accent { color: #8a5200 !important; }
+  body #appShell #leadDetailView .record-overview-health dl { margin: 0; }
+  body #appShell #leadDetailView .record-overview-health dl > div { padding: 8px 0; border-top: 1px solid var(--crm-divider); }
+  body #appShell #leadDetailView .record-overview-health dt { font-size: 12px; line-height: 1.3; color: var(--crm-text-secondary); }
+  body #appShell #leadDetailView .record-overview-health dd { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin: 2px 0 0; font-size: 13px; line-height: 1.3; font-weight: 600; }
+  body #appShell #leadDetailView .record-overview-health button { width: 100%; min-height: 40px; --crm-button-icon: var(--crm-icon-circle-alert); }
+  body #appShell #leadDetailView .record-overview-assistant { display: flex; gap: 10px; align-items: center; margin-top: 20px; padding: 8px 8px 8px 16px; background: #fff; border: 1px solid #bfe3e0; border-radius: 12px; }
+  body #appShell #leadDetailView .record-overview-assistant input { flex: 1; min-width: 0; border: 0; background: none; font-size: 14px; }
+  body #appShell #leadDetailView .record-overview-assistant-host #aiAssistantLauncher { position: static !important; width: auto; min-width: 0; padding: 8px 12px; border-radius: 8px; min-height: 40px; box-shadow: none; }
+}
+@media (min-width: 1400px) {
+  body #appShell #leadDetailView .lead-page-header { grid-template-columns: minmax(0, 1fr) auto; }
+  body #appShell #leadDetailView .record-header-actions { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+/* Mobile overview shares the existing record controls and keeps their reading order. */
+@media (max-width: 1024px) {
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-desktop-overview,
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-mobile-actions { display: none; }
+  body #appShell #leadDetailView .record-mobile-overview-layout { padding-bottom: 92px; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-assistant-host { display: none; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-mobile-edit { margin-left: auto; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-header-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-header-actions .record-add-activity { display: flex !important; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-header-actions > * { padding: 8px 5px; font-size: 12px; gap: 4px; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-add-activity::before { mask-image: var(--crm-icon-plus); }
+  body #appShell #leadDetailView .record-mobile-guidance-heading { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  body #appShell #leadDetailView .record-mobile-guidance-heading > span { border-radius: 99px; background: var(--crm-navy); color: white; padding: 3px 8px; font-size: 12px; }
+  body #appShell #leadDetailView .record-mobile-guidance-heading button { min-height: 44px; padding: 6px 9px; font-size: 12px; }
+  body #appShell #leadDetailView .record-mobile-due { margin: 0; color: var(--crm-text-secondary); font-size: 12px; }
+  body #appShell #leadDetailView .record-mobile-next-footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  body #appShell #leadDetailView .record-mobile-next-footer button { width: 100%; min-width: 0; }
+  body #appShell #leadDetailView .record-mobile-next-footer .primary-button { --crm-button-icon: var(--crm-icon-check); }
+  body #appShell #leadDetailView .record-mobile-next-footer .primary-button { background: var(--crm-navy) !important; color: white !important; }
+  body #appShell #leadDetailView .record-mobile-ai-grid .record-ai-card { min-height: 92px; gap: 8px; }
+  body #appShell #leadDetailView .record-mobile-ai-grid .record-ai-card-primary { background: var(--crm-navy) !important; color: white !important; min-height: 72px; }
+  body #appShell #leadDetailView .record-mobile-ai-grid .record-ai-card-primary small { color: white; }
+  body #appShell #leadDetailView .record-mobile-ai-grid .record-ai-card-primary::before { color: var(--crm-amber); --crm-button-icon: var(--crm-icon-calendar-days); }
+  body #appShell #leadDetailView .record-mobile-overview h3 em { color: #8a5200 !important; }
+  body #appShell #leadDetailView .record-mobile-health > button { width: 100%; min-height: 44px; --crm-button-icon: var(--crm-icon-circle-alert); }
+  body #appShell #leadDetailView .record-mobile-overview :is(.record-reminders, .record-recent-activity, .record-overview-notes > .drawer-section, .record-contact-details) { padding: 16px; margin: 0; border: 1px solid var(--crm-divider) !important; border-radius: 14px; background: white !important; }
+  body #appShell #leadDetailView .record-mobile-overview .drawer-tab-heading { display: flex !important; flex-direction: row !important; justify-content: space-between; align-items: center; gap: 8px; }
+  body #appShell #leadDetailView .record-mobile-overview .drawer-tab-heading > button { width: auto !important; flex: 0 0 auto; }
+  body #appShell #leadDetailView .record-mobile-overview h3 { text-align: left; }
+  body #appShell #leadDetailView .record-mobile-overview .drawer-tab-heading h3 { min-width: 0; font-size: 16px; }
+  body #appShell #leadDetailView .record-recent-activity .record-activity-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 12px 0; border-top: 1px solid var(--crm-divider); font-size: 14px; }
+  body #appShell #leadDetailView .record-recent-activity .record-activity-icon { display: none; }
+  body #appShell #leadDetailView .record-recent-activity .record-activity-row p { margin: 4px 0 0; font-size: 12px; color: var(--crm-text-secondary); overflow-wrap: anywhere; }
+  body #appShell #leadDetailView .record-recent-activity time { max-width: 72px; text-align: right; font-size: 12px; color: var(--crm-text-secondary); }
+  body #appShell #leadDetailView .record-recent-activity > .record-text-action { display: none; }
+  body #appShell #leadDetailView .record-overview-notes .drawer-notes-view { padding: 12px; background: var(--crm-surface-muted); border-radius: 10px; }
+  body #appShell #leadDetailView .record-contact-details :is(.record-contact, .record-details) { border: 0 !important; padding: 0; margin: 0; background: transparent !important; box-shadow: none; }
+  body #appShell #leadDetailView .record-contact-details .record-contact h3 { display: none; }
+  body #appShell #leadDetailView .record-contact-details .record-contact-row > div { display: flex; flex: 1; justify-content: space-between; align-items: center; gap: 8px; }
+  body #appShell #leadDetailView .record-contact-details .record-contact-row :is(a, strong, em) { max-width: 68%; text-align: right; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .drawer-title-copy > p { display: none; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-owner-meta { display: block; width: 100%; font-size: 12px; color: #4a5568 !important; }
+  body #appShell #leadDetailView .record-contact-details .record-details h3 { display: none; }
+  body #appShell #leadDetailView .record-contact-details .record-details dl { gap: 0; }
+  body #appShell #leadDetailView .record-contact-details .record-details dl > div { padding: 12px 0; border-top: 1px solid var(--crm-divider); }
+  body #appShell #leadDetailView .record-contact-details .record-details dl > div:last-child { padding-bottom: 0; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-more-actions { display: block; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-more-actions > summary { min-height: 44px; padding: 12px 0; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-more-actions .company-ai-actions { display: grid; }
+  body #appShell #leadDetailView .record-mobile-overview-layout .record-overview-assistant { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; gap: 8px; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); margin: 0; background: white; border-top: 1px solid var(--crm-divider); }
+  body #appShell #leadDetailView .record-overview-assistant input { flex: 1; min-width: 0; min-height: 48px; font-size: 14px; border: 1px solid var(--crm-control-border); border-radius: 10px; background: white; padding: 10px 12px; }
+  body #appShell #leadDetailView .record-overview-assistant-host #aiAssistantLauncher { position: static !important; inset: auto !important; transform: none !important; width: 48px; height: 48px; min-width: 48px; min-height: 48px; margin: 0; padding: 12px; border-radius: 10px; box-shadow: none; }
+  body #appShell #leadDetailView .record-overview-assistant-host #aiAssistantLauncher span { display: none; }
 }
