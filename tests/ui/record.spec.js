@@ -4,6 +4,36 @@ const { inspectPresentation } = require("./presentation-audit");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("profile request opens the scoped draft with attachment, without sending or logging", async ({page}, info) => {
+  await login(page,info);
+  await page.route('**/api/leads',async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const leads = await response.json();
+    await route.fulfill({response,json:leads.map(lead => lead.id === 'ui-lead-1' ? {...lead,notes:'Customer requested to share company profile.',email:'',contact_email:''} : lead)});
+  });
+  await page.goto('/leads/ui-lead-1/overview');
+  const next = page.locator(info.project.name.endsWith('mobile') ? '.record-mobile-next' : '.record-next-step');
+  await expect(next.locator('.record-profile-followup')).toContainText('review delivery history');
+  expect(await page.evaluate(inspectPresentation,{checkTouchTargets:true})).toEqual([]);
+  await capture(page,info,'20-lead-profile-request',{fullPage:false});
+  const writes = [];
+  page.on('request',request => { if (['PATCH','PUT','DELETE'].includes(request.method()) || request.method() === 'POST' && !request.url().includes('/ai/lead-summary') && request.postDataJSON()?.action !== 'pipeline_health') writes.push(request.url()); });
+  await next.getByRole('button',{name:'Send profile',exact:true}).click();
+  await expect(page).toHaveURL(/\/leads\/ui-lead-1\/draft-email$/);
+  await expect(page.locator('[data-email-profile]')).toBeChecked();
+  await expect(page.locator('#emailDraftTo')).toHaveValue('');
+  await expect(page.locator('#emailDraftTo')).toBeEnabled();
+  await expect(page.locator('#emailDraftBody')).toHaveValue('');
+  await page.locator('#emailDraftSubject').fill('Keep my edits');
+  await page.locator('[data-email-profile]').uncheck();
+  await page.locator(info.project.name.endsWith('mobile') ? '.email-mobile-back[data-email-parent]' : '.email-breadcrumb [data-email-parent]').click();
+  await next.getByRole('button',{name:'Send profile',exact:true}).click();
+  await expect(page.locator('[data-email-profile]')).toBeChecked();
+  await expect(page.locator('#emailDraftSubject')).toHaveValue('Keep my edits');
+  expect(writes).toEqual([]);
+});
+
 test("Send Email opens a scoped lead subpage without generating or sending", async ({page}, info) => {
   const role = await login(page, info);
   await page.goto('/leads/ui-lead-1/overview');
@@ -72,8 +102,8 @@ test("responsive Lead Details follows the reference and preserves existing actio
     expect(tabs.y + tabs.height).toBeLessThanOrEqual(nextStep.y);
     await expect(page.locator('.record-mobile-ai [data-company-ai-action]')).toHaveCount(3);
     await expect(page.locator('.record-header-actions .record-add-activity')).toBeVisible();
-    await expect(page.locator('.record-mobile-health')).toContainText('New scoring rules await approval.');
-    await expect(page.locator('.record-mobile-health .record-health-pending')).toHaveCount(6);
+    await expect(page.locator('.record-mobile-health')).toContainText('Contact timing uses the current status and tier cadence.');
+    await expect(page.locator('.record-mobile-health .record-health-status')).toHaveCount(6);
     const health = await page.locator('.record-mobile-health').boundingBox();
     const aiCards = await page.locator('.record-mobile-ai').boundingBox();
     expect(aiCards.y + aiCards.height).toBeLessThanOrEqual(health.y);
@@ -134,7 +164,7 @@ test("responsive Lead Details follows the reference and preserves existing actio
     const left = await page.locator('.record-main-column').boundingBox();
     const right = await page.locator('.record-side-column').boundingBox();
     await expect(page.locator('.record-overview-ai [data-company-ai-action]')).toHaveCount(3);
-    await expect(page.locator('.record-overview-health')).toContainText('New scoring rules await approval.');
+    await expect(page.locator('.record-overview-health')).toContainText('Contact timing uses the current status and tier cadence.');
     await expect(page.locator('.record-next-guidance')).not.toBeEmpty();
     await expect(page.locator('.record-search-host #smartSearchInput')).toBeVisible();
     await expect(page.locator('.record-header-actions [data-drawer-log-activity]')).toBeVisible();
@@ -172,10 +202,11 @@ test("responsive Lead Details follows the reference and preserves existing actio
   await page.locator('#closeAiAssistant').click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   if (!info.project.name.endsWith('mobile')) {
-    for (const width of [1100,1280,1440]) {
+    for (const width of [1100,1280,1440,2340]) {
       await page.setViewportSize({width,height:900});
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
       await expect(page.locator('.record-search-host #smartSearchInput')).toBeVisible();
+      expect((await page.locator('#leadDetailView').boundingBox()).width).toBeLessThanOrEqual(1440);
     }
     await page.locator('#mobileSidebar [data-view="pipeline"]').click();
     await expect(page.locator('.topbar #smartSearchInput')).toBeVisible();

@@ -38,9 +38,10 @@ vm.createContext(routeContext);
 for (const name of ["isLeadRoutePath", "parseAppRoute"]) vm.runInContext(client.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0], routeContext);
 assert.equal(routeContext.parseAppRoute({pathname:"/leads/example/overview",search:""}).leadId,"example");
 assert.equal(routeContext.parseAppRoute({pathname:"/leads/example/overview",search:""}).tab,"overview");
-const overviewHelpers = client.slice(client.indexOf("function companyAiActionsMarkup("), client.indexOf("function renderDrawerOverview("));
+const overviewHelpers = client.slice(client.indexOf("function recordDaysSince("), client.indexOf("function renderDrawerOverview("));
 const context = {
   state: {selectedId: "other", leadAiSummary: null}, summaryText: String,
+  today: () => "2026-10-27",
   escapeHtml: value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[char])),
   remindersForLead: () => [], daysUntil: () => -5,
   normalizeNextActionPlan: String, formatDisplayDate: String, formatAED: String,
@@ -57,7 +58,7 @@ assert.ok(emptyOverview.includes("&lt;script&gt;contact&lt;/script&gt;"));
 assert.ok(!emptyOverview.includes("<script>") && !emptyOverview.includes("<img"));
 assert.ok(!emptyOverview.includes('href="#"'), "Missing contact methods must not create dead links");
 assert.match(emptyOverview, /record-overview-health/);
-assert.match(emptyOverview, /New scoring rules await approval/);
+assert.match(emptyOverview, /Contact timing uses the current status and tier cadence/);
 assert.equal((emptyOverview.match(/data-company-ai-action=/g) || []).length, 4);
 const mobileNext = vm.runInNewContext(`${overviewHelpers}\nmobileLeadNextStepMarkup({...lead, next_action:'To Call', next_action_date:'2026-10-20'})`, context);
 assert.ok(mobileNext.includes("5 days overdue"));
@@ -67,13 +68,37 @@ assert.match(css, /\.record-mobile-actions\s*\{[^}]*position: fixed;[^}]*safe-ar
 assert.match(client, /data-record-note/);
 const mobileHelpers = client.slice(client.indexOf("function companyAiActionsMarkup("), client.indexOf("function desktopLeadOverviewMarkup("));
 const mobileExtras = vm.runInNewContext(`${mobileHelpers}\n${overviewHelpers}\nmobileLeadOverviewExtras(lead)`, context);
-assert.match(mobileExtras, /New scoring rules await approval/);
+assert.match(mobileExtras, /Contact timing uses the current status and tier cadence/);
 assert.equal((mobileExtras.match(/data-company-ai-action=/g) || []).length, 4);
 assert.match(mobileExtras, /Flag to director/);
 assert.match(mobileNext, /data-refresh-lead-ai-summary=/);
 assert.match(mobileNext, /data-drawer-log-activity=/);
-assert.equal((mobileExtras.match(/Not rated/g) || []).length, 5);
+assert.equal((mobileExtras.match(/Not rated/g) || []).length, 3);
 assert.doesNotMatch(mobileExtras, /At risk|Act now|expected 14|Create quote/);
+const health = lead => vm.runInNewContext(`${overviewHelpers}\nrecordRelationshipHealth(lead)`, {...context, lead});
+for (const [elapsed, expected] of [[10,"Healthy"], [11,"Watch"], [16,"Watch"], [17,"At risk"]]) {
+  const last = new Date(Date.UTC(2026, 9, 27 - elapsed)).toISOString().slice(0, 10);
+  assert.equal(health({expected_contact_days:10,last_activity:last}).label, expected);
+}
+for (const last_activity of ["", "invalid", "2026-02-30", "2026-10-28"]) assert.equal(health({expected_contact_days:10,last_activity,next_action_date:"2026-10-01"}).label,"Unknown");
+assert.equal(health({last_activity:"2026-10-01"}).label,"Unknown");
+assert.equal(health({stage:"LOST",last_activity:"2026-10-01",expected_contact_days:10}).label,"Closed");
+const profile = lead => vm.runInNewContext(`${overviewHelpers}\nrecordProfileFollowupMarkup(lead)`, {...context,lead});
+assert.match(profile({id:'safe"<id>',notes:"Customer requested to share company profile"}), /data-record-send-profile="safe&quot;&lt;id&gt;"/);
+assert.match(profile({notes:"Customer requested company profile, not sent yet"}), /Send profile/);
+assert.equal(profile({notes:"Company profile sent to customer"}), "");
+assert.equal(profile({notes:"Customer requested company profile",activities:[{text:"Company profile emailed"}]}), "");
+assert.equal(profile({notes:"Customer requested price list"}), "");
+assert.equal(profile({notes:"Customer did not request company profile"}), "");
+assert.match(profile({notes:"Company profile requested, not emailed yet"}), /Send profile/);
+const pmrContext = {...context, state:{selectedId:"test",leadDrawerPmrs:[{company_id:"other",relationship_heat_score:1},{company_id:"test",relationship_heat_score:4},{company_id:"test",relationship_heat_score:1,pending_sync:true}]},lead:{id:"test"}};
+assert.equal(vm.runInNewContext(`${overviewHelpers}\nrecordRelationshipHealth(lead).rows[4][1]`,pmrContext),"4 / 5");
+pmrContext.state.leadDrawerPmrsError = true;
+assert.equal(vm.runInNewContext(`${overviewHelpers}\nrecordRelationshipHealth(lead).rows[4][1]`,pmrContext),"PMR data unavailable");
+const serverSource = read("server.js");
+const derivedLead = serverSource.match(/function leadWithDerivedFields\([^]*?\n\}/)[0];
+const derivedContext = {expectedFrequencyDays:lead => require("../src/config/contactRules").effectiveThreshold(lead.stage,lead.tier),normalizeStageValue:stage => stage,relationshipHealth:()=>({})};
+assert.equal(vm.runInNewContext(`${derivedLead}\nleadWithDerivedFields({stage:"ENGAGED",tier:1}).expected_contact_days`,derivedContext),10);
 context.state = {selectedId: context.lead.id, leadAiSummary: {data:{recommended_next_action:'<script>unsafe</script>'}, provider:'fallback'}};
 const guardedGuidance = vm.runInNewContext(`${overviewHelpers}\nmobileLeadNextStepMarkup(lead)`, context);
 assert.match(guardedGuidance, /CRM guidance/);

@@ -16,7 +16,7 @@ assert.ok(tasksStyleIndex >= 0, "Tasks stylesheet must remain linked");
 assert.ok(globalStyleIndex > tasksStyleIndex, "The shared Bauhaus system must load after every page override");
 assert.ok(mobileStyleIndex > globalStyleIndex, "The shared mobile layer must load after desktop and page styles");
 assert.match(serviceWorker, /"\/bauhaus-global\.css"/, "The PWA shell must cache the shared Bauhaus stylesheet");
-assert.match(serviceWorker, /arg-pwa-v137-mobile-lead-overview/, "The PWA cache must rotate for the latest UI assets");
+assert.match(serviceWorker, /arg-pwa-v138-overview-health-profile/, "The PWA cache must rotate for the latest UI assets");
 assert.match(vercelConfig, /"src": "bauhaus-global\.css"/, "Vercel must build the shared Bauhaus stylesheet");
 assert.match(vercelConfig, /"src": "\/bauhaus-global\.css", "dest": "\/bauhaus-global\.css"/, "Vercel must expose the shared Bauhaus stylesheet");
 

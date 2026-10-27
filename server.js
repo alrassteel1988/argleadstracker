@@ -1722,6 +1722,7 @@ function leadWithDerivedFields(lead) {
   };
   return {
     ...normalizedLead,
+    expected_contact_days: expectedFrequencyDays(normalizedLead),
     health: relationshipHealth(normalizedLead)
   };
 }
