@@ -4,7 +4,44 @@ const {inspectPresentation} = require("./presentation-audit");
 
 test.beforeEach(async ({page}) => blockExternalTraffic(page));
 
-test("existing preparation dialog opens the full meeting brief without regenerating", async ({page}, info) => {
+test("meeting deep links reload safely and never fall back to another lead", async ({page}, info) => {
+  const role = await login(page,info);
+  const preparations = [];
+  await page.route('**/api/leads/*/ai-actions', async route => {
+    preparations.push(route.request().url());
+    await route.fulfill({json:{action:'prepare',provider:'fallback',output:'## Recommended ask\nScoped meeting request.\n## Talking points\n- Verify requirements.'}});
+  });
+  await page.goto('/leads/ui-lead-1/prepare-meeting');
+  await expect(page.locator('.meeting-company-meta')).toContainText('Synthetic Steel Company 01');
+  await expect(page.locator('#aiWorkspaceCompany')).toHaveCount(0);
+  await expect(page.locator('[data-meeting-generate]')).toBeEnabled();
+  expect(preparations).toEqual([]);
+  await page.locator('[data-meeting-generate]').click();
+  await expect(page.locator('.meeting-ask')).toContainText('Scoped meeting request.');
+  await page.reload();
+  await expect(page.locator('.meeting-company-meta')).toContainText('Synthetic Steel Company 01');
+  await expect(page.locator('[data-meeting-copy]')).toBeDisabled();
+  expect(preparations).toHaveLength(1);
+  await page.goto('/leads/ui-lead-2/prepare-meeting');
+  await expect(page.locator('.meeting-company-meta')).toContainText('Synthetic Steel Company 02');
+  await expect(page.locator('#aiWorkspaceView')).not.toContainText('Scoped meeting request.');
+  await page.goBack();
+  await expect(page.locator('.meeting-company-meta')).toContainText('Synthetic Steel Company 01');
+  await page.goForward();
+  await expect(page.locator('.meeting-company-meta')).toContainText('Synthetic Steel Company 02');
+  for (const id of role === 'salesman' ? ['not-visible','ui-lead-13'] : ['not-visible']) {
+    await page.goto(`/leads/${id}/prepare-meeting`);
+    await expect(page.locator('#aiWorkspaceView')).toContainText('unavailable or you do not have access');
+    await expect(page.locator('[data-meeting-generate]')).toBeDisabled();
+    await expect(page.locator('[data-meeting-copy]')).toBeDisabled();
+    await expect(page.locator('#aiWorkspaceView')).not.toContainText('Synthetic Steel Company 02');
+  }
+  expect(preparations).toHaveLength(1);
+  await page.goto('/?view=meeting-prep');
+  await expect(page.locator('#aiWorkspaceCompany')).toBeVisible();
+});
+
+test("lead preparation opens its nested meeting brief directly", async ({page}, info) => {
   await login(page, info);
   await page.goto("/leads/ui-lead-1");
   let count = 0;
@@ -12,26 +49,25 @@ test("existing preparation dialog opens the full meeting brief without regenerat
     if (request.method() === "POST" && request.url().endsWith("/api/leads/ui-lead-1/ai-actions")) count++;
   });
   await page.locator('[data-company-ai-action="prepare"]:visible').click();
-  await expect(page.locator("#aiActionDialog")).toContainText("CRM-data fallback was used");
-  await page.locator("[data-ai-open-brief]").click();
-  await expect(page).toHaveURL(/view=meeting-prep/);
+  await expect(page).toHaveURL(/\/leads\/ui-lead-1\/prepare-meeting$/);
+  await expect(page.locator('.meeting-provenance')).toContainText('CRM-data fallback was used');
   await expect(page.locator("#aiActionDialog")).toBeHidden();
   await expect(page.locator(".meeting-ai-badge")).toHaveText("CRM fallback");
   await expect(page.locator('.meeting-heading [data-meeting-generate], .meeting-heading [data-meeting-copy], .meeting-heading [data-meeting-log]')).toHaveCount(3);
   await expect(page.locator("#meetingCompanyPicker")).toBeHidden();
-  await expect(page.locator('.meeting-breadcrumb a')).toHaveText('AI actions');
-  await expect(page.locator('.meeting-breadcrumb')).not.toContainText('Pipeline');
-  await expect(page.locator('.meeting-breadcrumb a')).toHaveAttribute('href', '/?view=ai-actions');
-  await expect(page.locator('.meeting-company-meta [data-meeting-change]')).toBeVisible();
+  await expect(page.locator('.meeting-breadcrumb a')).toHaveText('Pipeline');
+  await expect(page.locator('.meeting-breadcrumb [data-meeting-parent]')).toHaveText('Synthetic Steel Company 01');
+  await expect(page.locator('.meeting-company-meta [data-meeting-change]')).toHaveCount(0);
   await expect(page.locator('.meeting-open-lead')).toHaveAttribute('href', /\/leads\/ui-lead-1/);
-  await expect(page.locator(".meeting-evidence > .meeting-evidence-row > h4")).toHaveText(["History", "Last PMR", "Recent intel", "Quote reference"]);
+  await expect(page.locator(".meeting-evidence > .meeting-evidence-row > h4")).toHaveText(["History", "Latest note", "Last PMR", "Recent intel", "Quote reference"]);
   await expect(page.locator(".meeting-assistant-host #aiAssistantLauncher")).toHaveCSS("position", "static");
   await expect(page.locator(".meeting-talking li")).toHaveCount(3);
   await expect(page.locator(".meeting-ask")).not.toContainText("Generate a brief");
   expect(count).toBe(1);
+  expect(await page.evaluate(inspectPresentation,{checkTouchTargets:true})).toEqual([]);
   await capture(page, info, "74-meeting-brief-existing-result", {fullPage:true});
-  await page.locator(info.project.name.endsWith('mobile') ? '.meeting-back' : '.meeting-breadcrumb a').click();
-  await expect(page).toHaveURL(/view=ai-actions/);
+  await page.locator(info.project.name.endsWith('mobile') ? '.meeting-back' : '.meeting-parent-back').click();
+  await expect(page).toHaveURL(/\/leads\/ui-lead-1$/);
   await expect(page.locator("#aiAssistantLauncher")).toHaveCount(1);
   await expect(page.locator("#aiAssistantLauncher")).toBeVisible();
 });

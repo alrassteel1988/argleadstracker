@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v138-overview-health-profile";
+const CACHE_VERSION = "arg-pwa-v141-lead-sidebar-height";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -648,6 +648,8 @@ function parseAppRoute(locationLike = window.location) {
   const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
   const emailRoute = pathname.match(/^\/leads\/([^/]+)\/draft-email\/?$/);
   if (emailRoute) return { view: "draft-email", leadId: decodeURIComponent(emailRoute[1]), tab: "overview" };
+  const meetingRoute = pathname.match(/^\/leads\/([^/]+)\/prepare-meeting\/?$/);
+  if (meetingRoute) return { view: "meeting-prep", leadId: decodeURIComponent(meetingRoute[1]), tab: "overview" };
   if (isLeadRoutePath(pathname)) {
     return {
       view: "lead",
@@ -670,6 +672,9 @@ function leadRouteUrl(leadId, tab = "overview") {
 }
 
 function currentRouteState() {
+  if (currentView === "meeting-prep" && state.meetingRouteLeadId) {
+    return { view: "meeting-prep", leadId: state.meetingRouteLeadId, returnView: state.lastNonLeadView || "pipeline" };
+  }
   if (currentView === "draft-email" && state.emailRouteLeadId) {
     return { view: "draft-email", leadId: state.emailRouteLeadId, returnView: state.lastNonLeadView || "pipeline" };
   }
@@ -693,6 +698,7 @@ function syncBrowserRoute(options = {}) {
   const nextUrl = routeState.view === "lead" && routeState.leadId
     ? leadRouteUrl(routeState.leadId, routeState.tab)
     : routeState.view === "draft-email" && routeState.leadId ? `${leadRouteUrl(routeState.leadId)}/draft-email`
+    : routeState.view === "meeting-prep" && routeState.leadId ? `${leadRouteUrl(routeState.leadId)}/prepare-meeting`
     : routeState.view === "neglected" ? "/?view=dashboard/neglected"
       : (routeState.view && routeState.view !== "dashboard" ? `/?view=${encodeURIComponent(routeState.view)}` : "/");
   const currentUrl = `${window.location.pathname}${window.location.search}`;
@@ -704,11 +710,12 @@ function applyRouteState(route, options = {}) {
   const parsed = route?.view ? route : parseAppRoute();
   const nextView = parsed.view === "lead" ? "lead" : (parsed.view || "dashboard");
   state.emailRouteLeadId = nextView === "draft-email" ? parsed.leadId || "" : "";
+  state.meetingRouteLeadId = nextView === "meeting-prep" ? parsed.leadId || "" : "";
   if (nextView !== "lead") {
     state.leadDrawerOpen = false;
     currentView = nextView;
-    if (state.emailRouteLeadId) {
-      if (parsed.returnView && !["lead", "draft-email"].includes(parsed.returnView)) state.lastNonLeadView = parsed.returnView;
+    if (state.emailRouteLeadId || state.meetingRouteLeadId) {
+      if (parsed.returnView && !["lead", "draft-email", "meeting-prep"].includes(parsed.returnView)) state.lastNonLeadView = parsed.returnView;
     } else state.lastNonLeadView = currentView;
     return;
   }
@@ -1270,6 +1277,14 @@ function renderLeadAiSummaryPanel(lead, options = {}) {
   const panel = options.panel || els.leadAiSummaryPagePanel;
   const content = options.content || els.leadAiSummaryPageContent;
   if (!panel || !content) return;
+  if (panel === els.leadAiSummaryPagePanel) {
+    const hideOverviewSummary = state.leadDrawerTab === "overview";
+    panel.hidden = hideOverviewSummary;
+    if (hideOverviewSummary) {
+      content.replaceChildren();
+      return;
+    }
+  }
   const summaryState = state.leadAiSummary || emptyLeadAiSummaryState();
   const summary = summaryState.data;
   const confidence = summary?.confidence || "Medium";
@@ -3024,11 +3039,13 @@ function openMeetingBriefPage(lead) {
     output: existing?.output || "", provider: existing?.provider || "", loading: false,
     error: "", generatedAt: existing?.generatedAt || "", checked: new Set() };
   els.aiActionDialog?.close();
+  state.meetingRouteLeadId = currentView === "lead" ? String(lead.id) : "";
   setView("meeting-prep");
 }
 
 async function generateMeetingBrief(lead) {
   if (!lead || meetingBriefState?.loading) return;
+  if (!state.leads.some(item => String(item.id) === String(lead.id)) || state.meetingRouteLeadId && String(lead.id) !== state.meetingRouteLeadId) return;
   if (!navigator.onLine) return setToast("AI briefings need a connection.", "error");
   if (Date.now() < state.aiCooldownUntil) return setToast("Please wait a few seconds before running another AI action.", "error");
   const request = { owner: String(state.currentUser.id), leadId: lead.id, loading: true,
@@ -3057,6 +3074,11 @@ function renderMeetingBriefWorkspace(workspace) {
   const owner = String(state.currentUser.id);
   const leads = [...state.leads].sort((a, b) => String(a.company_name || "").localeCompare(String(b.company_name || "")));
   if (meetingBriefState?.owner !== owner) meetingBriefState = null;
+  const parentId = state.meetingRouteLeadId;
+  if (parentId && meetingBriefState?.leadId !== parentId) {
+    const parentLead = leads.find(item => String(item.id) === parentId);
+    meetingBriefState = parentLead ? {owner,leadId:parentId,output:"",provider:"",loading:false,error:"",generatedAt:"",checked:new Set()} : null;
+  }
   const lead = leads.find(item => String(item.id) === meetingBriefState?.leadId);
   if (meetingBriefState && !lead && state.leadsLoaded) meetingBriefState = null;
   const brief = lead ? meetingBriefState : null;
@@ -3067,7 +3089,14 @@ function renderMeetingBriefWorkspace(workspace) {
   const additional = Object.entries(sections).filter(([title, text]) => !known.includes(title) && text.trim());
   const contextSections = ["Relationship snapshot", "Open items"].filter(title => sections[title]?.trim());
   const list = value => (Array.isArray(value) ? value.filter(item => typeof item === "string").join(", ") : typeof value === "string" ? value : "") || "Not recorded";
-  const facts = lead ? [
+  const facts = lead && parentId ? [
+    ["Phone",lead.phone || "Not recorded"],
+    ["Last activity",lead.last_activity ? formatDisplayDate(lead.last_activity) : "Not recorded"],
+    ["Contact every",lead.expected_contact_days ? `${lead.expected_contact_days} days (Tier ${lead.tier || "2"})` : "Not recorded"],
+    ["Named contact",lead.contact_person || lead.contact_name || "Not recorded"],
+    ["Competitors",list(lead.competitors_likely_using)],
+    ["Recorded certifications",list(lead.certifications)]
+  ] : lead ? [
     ["Status", stageDisplayLabel(lead.stage)], ["Current CRM health", lead.health?.label || "Not available"],
     ["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "Not recorded"],
     ["Named contact", lead.contact_person || lead.contact_name || "Not recorded"],
@@ -3076,6 +3105,11 @@ function renderMeetingBriefWorkspace(workspace) {
   ] : [];
   const healthTone = { RED: "is-risk", AMBER: "is-watch", GREEN: "is-healthy" }[lead?.health?.label] || "";
   const factValue = (label, value) => {
+    if (label === "Phone" && value !== "Not recorded") return `<a href="tel:${escapeHtml(value)}">${escapeHtml(value)}</a>`;
+    if (label === "Current CRM health" && state.meetingRouteLeadId && lead) {
+      const health = recordRelationshipHealth(lead);
+      return `<span class="meeting-health-badge ${({red:"is-risk",amber:"is-watch",green:"is-healthy"})[health.tone] || ""}">${health.label}</span>`;
+    }
     if (label === "Status") return `<span class="meeting-status-badge">${escapeHtml(value)}</span>`;
     if (label === "Current CRM health" && healthTone) return `<span class="meeting-health-badge ${healthTone}">${escapeHtml(value)}</span>`;
     if (label === "Last activity" && lead?.last_activity && !Number.isNaN(new Date(lead.last_activity).getTime())) {
@@ -3085,22 +3119,25 @@ function renderMeetingBriefWorkspace(workspace) {
     return value === "Not recorded" || value === "Not available" ? `<em class="meeting-missing">${value}</em>` : escapeHtml(value);
   };
   const checklist = ["Confirm procurement contact and number", "Confirm a live project and steel requirements", "Confirm required compliance documents", "Confirm the current supplier"];
+  const backHref = parentId ? leadRouteUrl(parentId) : "/?view=ai-actions";
+  const parentHealth = parentId && lead ? recordRelationshipHealth(lead) : null;
   workspace.setAttribute("aria-busy", String(busy));
   workspace.innerHTML = `
-    <nav class="meeting-breadcrumb" aria-label="Meeting brief breadcrumb"><button type="button" class="ghost-button meeting-menu" data-meeting-menu aria-label="Open navigation menu">Menu</button><a href="/?view=ai-actions">AI actions</a><span>/</span><span>Meeting brief</span></nav>
-    <header class="meeting-heading"><a class="ghost-button meeting-back" href="/?view=ai-actions" aria-label="Back to AI actions" title="Back to AI actions"></a><div class="meeting-heading-copy"><span class="meeting-mobile-company">${lead ? escapeHtml(lead.company_name) : "Choose a company"}</span><h2 id="aiWorkspaceHeading"><span class="meeting-title-full">Prepare me for this </span><span class="meeting-title-short">Prepare for </span><em>meeting</em></h2></div><div class="meeting-company-meta"><a class="meeting-mobile-origin" href="/?view=ai-actions">From AI actions</a><strong>${lead ? escapeHtml(lead.company_name) : "Choose a company"}</strong>${brief?.generatedAt ? `<span class="meeting-generated-at">· Generated ${escapeHtml(new Date(brief.generatedAt).toLocaleString("en-GB", { timeZone: "Asia/Dubai" }))}</span>` : ""}${brief?.output ? `<button class="ghost-button meeting-company-change" type="button" data-meeting-change aria-controls="meetingCompanyPicker" aria-expanded="false"><span class="meeting-title-full">Change company</span><span class="meeting-title-short">Change</span></button>` : ""}${lead ? `<a class="meeting-open-lead" href="${escapeHtml(leadRouteUrl(lead.id))}">Open lead</a>` : ""}</div>
-      <button class="ghost-button meeting-regenerate" type="button" data-meeting-generate aria-label="${brief?.output ? "Regenerate brief" : "Generate brief"}" title="${brief?.output ? "Regenerate brief" : "Generate brief"}" ${!lead || busy ? "disabled" : ""}><span>${brief?.output ? "Regenerate" : "Generate brief"}</span></button><div class="meeting-toolbar"><button class="ghost-button" type="button" data-meeting-copy ${!brief?.output || busy ? "disabled" : ""}><span class="meeting-title-full">Copy brief</span><span class="meeting-title-short">Copy</span></button><button class="primary-button" type="button" data-meeting-log ${!lead || busy ? "disabled" : ""}>Log meeting</button></div></header>
+    <nav class="meeting-breadcrumb" aria-label="Meeting brief breadcrumb"><button type="button" class="ghost-button meeting-menu" data-meeting-menu aria-label="Open navigation menu">Menu</button>${parentId ? `<a href="/?view=pipeline">Pipeline</a><span>/</span><button class="record-text-action" type="button" data-meeting-parent>${escapeHtml(lead?.company_name || "Lead details")}</button>` : '<a href="/?view=ai-actions">AI actions</a>'}<span>/</span><span>Prepare meeting</span></nav>
+    <header class="meeting-heading"><a class="ghost-button meeting-back" href="${escapeHtml(backHref)}" aria-label="${parentId ? "Back to Lead Details" : "Back to AI actions"}" title="${parentId ? "Back to Lead Details" : "Back to AI actions"}"></a><div class="meeting-heading-copy"><span class="meeting-mobile-company">${lead ? escapeHtml(lead.company_name) : "Choose a company"}</span><h2 id="aiWorkspaceHeading"><span class="meeting-title-full">Prepare me for this </span><span class="meeting-title-short">Prepare for </span><em>meeting</em></h2></div><div class="meeting-company-meta"><a class="meeting-mobile-origin" href="${escapeHtml(backHref)}">${parentId ? "From lead details" : "From AI actions"}</a><strong>${lead ? escapeHtml(lead.company_name) : "Choose a company"}</strong>${parentHealth ? `<span class="meeting-status-badge">${escapeHtml(stageDisplayLabel(lead.stage))}</span><span class="meeting-health-badge ${({red:"is-risk",amber:"is-watch",green:"is-healthy"})[parentHealth.tone] || ""}">${parentHealth.label}</span>` : ""}${brief?.generatedAt ? `<span class="meeting-generated-at">· Generated ${escapeHtml(new Date(brief.generatedAt).toLocaleString("en-GB", { timeZone: "Asia/Dubai" }))}</span>` : ""}${!parentId && brief?.output ? `<button class="ghost-button meeting-company-change" type="button" data-meeting-change aria-controls="meetingCompanyPicker" aria-expanded="false"><span class="meeting-title-full">Change company</span><span class="meeting-title-short">Change</span></button>` : ""}${lead ? `<a class="meeting-open-lead" href="${escapeHtml(leadRouteUrl(lead.id))}">Open lead</a>` : ""}</div>
+      ${parentId ? '<button class="ghost-button meeting-parent-back" type="button" data-meeting-parent>Back to lead</button>' : ""}<button class="ghost-button meeting-regenerate" type="button" data-meeting-generate aria-label="${brief?.output ? "Regenerate brief" : "Generate brief"}" title="${brief?.output ? "Regenerate brief" : "Generate brief"}" ${!lead || busy ? "disabled" : ""}><span>${brief?.output ? "Regenerate" : "Generate brief"}</span></button><div class="meeting-toolbar"><button class="ghost-button" type="button" data-meeting-copy ${!brief?.output || busy ? "disabled" : ""}><span class="meeting-title-full">Copy brief</span><span class="meeting-title-short">Copy</span></button><button class="primary-button" type="button" data-meeting-log ${!lead || busy ? "disabled" : ""}>Log meeting</button></div></header>
     ${lead ? `<div class="meeting-mobile-summary">${factValue("Status", stageDisplayLabel(lead.stage))}${factValue("Current CRM health", lead.health?.label || "Not available")}<span>Last contact ${factValue("Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "Not recorded")}</span></div>` : ""}
-    <div id="meetingCompanyPicker" class="meeting-company${brief?.output ? " hidden" : ""}"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${state.leadsLoading && !state.leadsLoaded || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${item.id === lead?.id ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>
+    ${parentId ? "" : `<div id="meetingCompanyPicker" class="meeting-company${brief?.output ? " hidden" : ""}"><label for="aiWorkspaceCompany">Company</label><select id="aiWorkspaceCompany" ${state.leadsLoading && !state.leadsLoaded || !leads.length ? "disabled" : ""}><option value="">Choose a company</option>${leads.map(item => `<option value="${escapeHtml(String(item.id))}" ${item.id === lead?.id ? "selected" : ""}>${escapeHtml(item.company_name || "Unnamed company")}</option>`).join("")}</select></div>`}
     ${state.leadsError ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(state.leadsError)}</p><button class="ghost-button" type="button" data-workspace-retry>Retry loading companies</button>` : ""}
     ${busy ? `<p class="meeting-state" role="status">Preparing your brief from CRM records...</p>` : brief?.error ? `<p class="crm-ai-workspace-error" role="alert">${escapeHtml(brief.error)}</p>` : ""}
-    ${!lead ? `<p class="meeting-state" role="status">${leads.length ? "Choose a company to prepare its meeting brief." : "No visible companies are available."}</p>` : `
+    ${!lead ? `<p class="meeting-state" role="status">${parentId ? busy ? "Loading lead details..." : "This lead is unavailable or you do not have access." : leads.length ? "Choose a company to prepare its meeting brief." : "No visible companies are available."}</p>` : `
     <div class="meeting-layout"><div class="meeting-main">
       <section class="meeting-ask"><span class="meeting-target" aria-hidden="true"></span><div><h3>Your one ask</h3>${brief?.output ? section("Recommended ask") : `<p>Generate a brief to see the recommended ask.</p>`}</div></section>
       <section class="meeting-panel meeting-talking"><h3>Talking points</h3>${brief?.output ? section("Talking points") : `<p>No brief generated yet.</p>`}</section>
       <section class="meeting-panel meeting-evidence"><header><span class="meeting-ai-badge">${brief?.provider === "fallback" ? "CRM fallback" : brief?.output ? "AI answer" : "Brief sources"}</span><span class="meeting-title-full">Company record, activity history, PMRs and matched intelligence</span><span class="meeting-title-short">Record, activity, PMRs, intel</span></header>
         ${brief?.provider === "fallback" ? `<p class="meeting-provenance">CRM-data fallback was used. Review before acting.</p>` : ""}
         ${brief?.output ? `<div class="meeting-evidence-row"><h4>History</h4><div>${section("What happened last time")}</div></div>` : `<p>Generate a brief to review its supporting context.</p>`}
+        ${parentId ? `<div class="meeting-evidence-row"><h4>Latest note</h4><p>${escapeHtml(lead.notes || "No note recorded.")}</p></div>` : ""}
         <div class="meeting-evidence-row"><h4>Last PMR</h4><div><a href="${escapeHtml(leadRouteUrl(lead.id, "pmr"))}">Review PMRs in the company record</a></div></div>
         ${brief?.output ? `<div class="meeting-evidence-row"><h4>Recent intel</h4><div>${section("Recent intelligence")}</div></div>` : ""}
         <div class="meeting-evidence-row"><h4>Quote reference</h4><p>${escapeHtml(lead.quotation_ref || "Not recorded")}</p></div>
@@ -3543,6 +3580,11 @@ function startAiLoadingTicker() {
 }
 
 async function runLeadAiAction(lead, action) {
+  if (lead && ["prepare", "prepare_meeting"].includes(action) && currentView === "lead") {
+    openMeetingBriefPage(lead);
+    await generateMeetingBrief(lead);
+    return;
+  }
   if (lead && ["email", "profile"].includes(action)) {
     const sameDraft = emailDraftState?.owner === String(state.currentUser?.id) && emailDraftState.leadId === String(lead.id);
     if (!sameDraft) {
@@ -9638,7 +9680,7 @@ function loadLeadDetailData(leadId) {
 function openLeadDrawer(leadId, tab = "overview", options = {}) {
   const lead = state.leads.find(item => item.id === leadId);
   if (!lead) return;
-  if (currentView !== "lead" && !(currentView === "draft-email" && state.emailRouteLeadId)) {
+  if (currentView !== "lead" && !(currentView === "draft-email" && state.emailRouteLeadId) && !(currentView === "meeting-prep" && state.meetingRouteLeadId)) {
     state.lastNonLeadView = currentView === "lead" ? (state.lastNonLeadView || "pipeline") : currentView;
   }
   state.selectedId = leadId;
@@ -9828,7 +9870,7 @@ function linkedinControls(lead) {
     : ["Procurement Manager", "Supply Chain Manager", "Project Manager", "Estimation Manager", "MD CEO"];
   return `
     <div class="linkedin-search">
-      <select data-linkedin-title="${escapeHtml(lead.id)}">
+      <select data-linkedin-title="${escapeHtml(lead.id)}" aria-label="Contact role for LinkedIn search">
         ${titles.map(title => `<option value="${escapeHtml(title)}">${escapeHtml(title)}</option>`).join("")}
       </select>
       <button class="ghost-button" type="button" data-linkedin-search="${escapeHtml(lead.id)}">Find contact on LinkedIn</button>
@@ -9996,6 +10038,9 @@ function desktopLeadOverviewMarkup(lead) {
         <button class="record-text-action" type="button" data-drawer-tab="activities">View all activity</button>
       </section>
       <div class="record-overview-notes">${renderDrawerNotes(lead)}</div>
+      <section class="drawer-section record-details"><h3>Lead details</h3><dl>
+        ${[["Contact every", lead.expected_contact_days ? `${lead.expected_contact_days} days` : "Not recorded"], ["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "No activity yet"], ["Territory", lead.territory], ["Named buyer", lead.contact_person || "Not added"], ["Pipeline value", formatAED(lead.estimated_value)]].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "Not added")}</dd></div>`).join("")}
+      </dl></section>
     </div>
     <div class="record-side-column">
       ${recordHealthMarkup(lead)}
@@ -10006,9 +10051,6 @@ function desktopLeadOverviewMarkup(lead) {
         ${contactRow("Website", lead.website, lead.website)}
         ${contactRow("Location", [lead.location, lead.country_emirate].filter(Boolean).join(" - ") || (lead.google_maps_url ? "Open map" : ""), lead.google_maps_url)}
       </section>
-      <section class="drawer-section record-details"><h3>Lead details</h3><dl>
-        ${[["Contact every", lead.expected_contact_days ? `${lead.expected_contact_days} days` : "Not recorded"], ["Last activity", lead.last_activity ? formatDisplayDate(lead.last_activity) : "No activity yet"], ["Territory", lead.territory], ["Named buyer", lead.contact_person || "Not added"], ["Pipeline value", formatAED(lead.estimated_value)]].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "Not added")}</dd></div>`).join("")}
-      </dl></section>
       <section class="drawer-section record-reminders"><div class="drawer-tab-heading"><h3>Reminders</h3><button class="ghost-button" type="button" data-drawer-add-reminder="${id}">Add reminder</button></div>
         ${reminders.map(reminder => `<div class="record-reminder-row"><strong>${escapeHtml(reminder.activity_required || reminder.text || reminder.reminder_type || "Follow up")}</strong><span>${escapeHtml(reminder.due_date ? formatDisplayDate(reminder.due_date) : "No due date")}</span></div>`).join("") || '<p class="empty-copy">No reminders set.</p>'}
         ${reminders.length ? '<button class="record-text-action" type="button" data-drawer-tab="reminders">View all reminders</button>' : ""}
@@ -10078,7 +10120,6 @@ function renderDrawerOverview(lead) {
     ${mobileLeadOverviewExtras(lead)}
     ${desktopLeadOverviewMarkup(lead)}
     ${overviewSnapshot}
-    <details class="record-more-actions"><summary>More company actions</summary>${companyAiActionsMarkup(lead)}</details>
     <section class="drawer-section drawer-overview-panel drawer-overview-panel--contact">
       <div class="drawer-tab-heading">
         <div>
@@ -10096,6 +10137,7 @@ function renderDrawerOverview(lead) {
         ${detailField("Location", locationLine)}
       </div>
     </section>
+    <div class="record-supporting-details" aria-label="Company details">
     <details class="drawer-disclosure drawer-overview-panel drawer-overview-panel--commercial" open>
       <summary>
         <span>Commercial Details</span>
@@ -10112,7 +10154,7 @@ function renderDrawerOverview(lead) {
         </div>
       </div>
     </details>
-    <details class="drawer-disclosure drawer-overview-panel drawer-overview-panel--company">
+    <details class="drawer-disclosure drawer-overview-panel drawer-overview-panel--company" open>
       <summary>
         <span>Additional Company Details</span>
         <small>Legal, location, and enrichment-backed company profile data.</small>
@@ -10128,7 +10170,7 @@ function renderDrawerOverview(lead) {
         </div>
       </div>
     </details>
-    <details class="drawer-disclosure drawer-overview-panel drawer-overview-panel--secondary">
+    <details class="drawer-disclosure drawer-overview-panel drawer-overview-panel--secondary" open>
       <summary>
         <span>Secondary Contacts & Notes</span>
         <small>Optional relationship details, tags, and sales remarks.</small>
@@ -10143,9 +10185,10 @@ function renderDrawerOverview(lead) {
         <p class="drawer-remarks">${autoField(lead, "recent_projects") ? `<span class="auto-tag">Auto</span> ` : ""}${escapeHtml(lead.products_services_remarks || "No products/services remarks added.")}</p>
       </div>
     </details>
+    <section class="drawer-section record-linkedin"><h3>Find a Contact</h3>${linkedinControls(lead)}</section>
+    </div>
     ${renderLossDetails(lead)}
     ${autoEnrichmentReviewPanel(lead)}
-    ${linkedinControls(lead)}
   `;
 }
 
@@ -10514,6 +10557,8 @@ function renderLeadDrawer() {
 function arrangeMobileLeadOverview() {
   const root = els.leadDetailPageContent;
   if (!root) return;
+  const assistant = root.querySelector(".record-overview-assistant");
+  if (assistant) root.querySelector(".lead-detail-page-body")?.appendChild(assistant);
   const mobile = state.leadDrawerTab === "overview" && window.matchMedia("(max-width: 1024px)").matches;
   root.classList.toggle("record-mobile-overview-layout", mobile);
   const flow = root.querySelector(".record-mobile-overview");
@@ -10725,7 +10770,7 @@ function bindLeadDrawerEvents() {
   document.querySelectorAll("[data-linkedin-search]").forEach(button => {
     button.addEventListener("click", async () => {
       const lead = state.leads.find(item => item.id === button.dataset.linkedinSearch);
-      const title = document.querySelector(`[data-linkedin-title="${CSS.escape(button.dataset.linkedinSearch)}"]`)?.value || "";
+      const title = button.closest(".linkedin-search")?.querySelector("[data-linkedin-title]")?.value || "";
       if (!lead) return;
       try {
         const result = await api(`/api/linkedin/search-url?company=${encodeURIComponent(lead.company_name)}&title=${encodeURIComponent(title)}`);
@@ -14556,7 +14601,7 @@ function applyView() {
   document.querySelector('#mobileSidebar [data-view="ai-actions"]')?.classList.toggle("hidden", isSalesmanRole());
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
-    const navigationView = currentView === "lead" ? "pipeline" : isSalesmanRole() && isAiWorkspace && currentView !== "focus" ? "dashboard"
+    const navigationView = currentView === "lead" || currentView === "meeting-prep" && state.meetingRouteLeadId ? "pipeline" : isSalesmanRole() && isAiWorkspace && currentView !== "focus" ? "dashboard"
       : isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
     item.classList.toggle("active", item.dataset.view === navigationView && !item.dataset.mobileAction);
   });
@@ -14575,6 +14620,7 @@ function applyView() {
   document.body.classList.toggle("ai-workspace-mode", isAiWorkspace);
   document.body.classList.toggle("one-tap-mode", currentView === "ai-actions");
   document.body.classList.toggle("meeting-brief-mode", currentView === "meeting-prep");
+  document.body.classList.toggle("lead-meeting-mode", currentView === "meeting-prep" && Boolean(state.meetingRouteLeadId));
   document.body.classList.toggle("email-draft-mode", currentView === "draft-email");
   document.body.classList.toggle("today-mode", currentView === "focus" && isSalesmanRole());
   document.body.classList.toggle("neglected-mode", currentView === "neglected" && isSalesmanRole());
@@ -14598,9 +14644,10 @@ function toggleMobileMenu() {
 
 function setView(view) {
   if (view !== "draft-email") state.emailRouteLeadId = "";
+  if (view !== "meeting-prep") state.meetingRouteLeadId = "";
   if (isSalesmanRole() && ["salesmen", "activity"].includes(view)) view = "dashboard";
   if (!isSalesmanRole() && ["focus", "neglected"].includes(view)) view = "ai-actions";
-  if (view !== "lead" && !(view === "draft-email" && state.emailRouteLeadId)) state.lastNonLeadView = view;
+  if (view !== "lead" && !(view === "draft-email" && state.emailRouteLeadId) && !(view === "meeting-prep" && state.meetingRouteLeadId)) state.lastNonLeadView = view;
   currentView = view;
   state.leadDrawerOpen = view === "lead";
   syncBrowserRoute({ replace: false });
@@ -15914,7 +15961,13 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
     return;
   }
   if (button.hasAttribute("data-meeting-menu")) { toggleMobileMenu(); return; }
+  if (button.hasAttribute("data-meeting-parent")) {
+    if (state.leads.some(item => String(item.id) === state.meetingRouteLeadId)) openLeadDrawer(state.meetingRouteLeadId);
+    else setView("pipeline");
+    return;
+  }
   if (button.hasAttribute("data-meeting-change")) {
+    if (state.meetingRouteLeadId) return;
     const picker = document.querySelector("#meetingCompanyPicker");
     const expanded = picker.classList.contains("hidden");
     picker.classList.toggle("hidden", !expanded);

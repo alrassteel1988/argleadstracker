@@ -11,6 +11,7 @@ const publicRequests = [
   ["/leads/lead-1001?tab=activities", "text/html"],
   ["/leads/lead-1001/draft-email", "text/html"],
   ["/leads/lead-1001/overview", "text/html"],
+  ["/leads/lead-1001/prepare-meeting", "text/html"],
   ["/client.js?v=test", "text/javascript"],
   ["/styles.css?v=test", "text/css"],
   ["/crm-theme.css?v=test", "text/css"],
@@ -106,6 +107,7 @@ async function run() {
     const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
     assert.ok(vercel.routes.some(route => route.src === "/leads/([^/]+)/draft-email/?$" && route.dest === "/index.html"), "Vercel must retain the lead email SPA fallback");
     assert.ok(vercel.routes.some(route => route.src === "/leads/([^/]+)/overview/?$" && route.dest === "/index.html"), "Vercel must serve the overview alias");
+    assert.ok(vercel.routes.some(route => route.src === "/leads/([^/]+)/prepare-meeting/?$" && route.dest === "/index.html"), "Vercel must serve only the exact meeting subpage fallback");
     for (const asset of ["/styles.css", "/client.js", "/favicon.svg", "/manifest.json"]) {
       assert.ok(index.includes(`\"${asset}`), `Index assets must be root-relative: ${asset}`);
     }

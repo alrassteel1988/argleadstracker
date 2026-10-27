@@ -4,6 +4,53 @@ const { inspectPresentation } = require("./presentation-audit");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("Overview keeps organized company details without duplicate AI panels", async ({page}, info) => {
+  await login(page,info);
+  await page.goto('/leads/ui-lead-1/overview');
+  const details = page.locator('.record-supporting-details');
+  await expect(page.locator('#leadAiSummaryPagePanel')).toBeHidden();
+  await expect(page.locator('#leadAiSummaryPageContent')).toBeEmpty();
+  await expect(page.locator('.record-more-actions')).toHaveCount(0);
+  await expect(page.locator(info.project.name.endsWith('mobile') ? '.record-mobile-ai' : '.record-overview-ai')).toBeVisible();
+  const commercial = details.locator('.drawer-overview-panel--commercial');
+  const company = details.locator('.drawer-overview-panel--company');
+  const secondary = details.locator('.drawer-overview-panel--secondary');
+  const linkedin = details.locator('.record-linkedin');
+  for (const section of [commercial,company,secondary,linkedin]) await expect(section).toBeVisible();
+  await expect(commercial).toContainText('Rebar');
+  await expect(company).toContainText('Legal name');
+  await expect(secondary).toContainText('Secondary phone');
+  const left = await commercial.boundingBox();
+  const right = await company.boundingBox();
+  if (info.project.name.endsWith('mobile')) {
+    expect(right.y).toBeGreaterThanOrEqual(left.y + left.height);
+    expect(Math.abs(right.x-left.x)).toBeLessThan(2);
+  } else {
+    expect(right.x).toBeGreaterThan(left.x + left.width);
+    expect(Math.abs(right.y-left.y)).toBeLessThan(2);
+    const sidebar = await page.locator('#mobileSidebar').boundingBox();
+    const shell = await page.locator('#appShell').boundingBox();
+    expect(Math.abs(sidebar.y + sidebar.height - (shell.y + shell.height))).toBeLessThan(2);
+    const contact = await secondary.boundingBox();
+    const search = await linkedin.boundingBox();
+    expect(Math.abs(contact.y-search.y)).toBeLessThan(2);
+  }
+  const assistant = await page.locator('.record-overview-assistant').boundingBox();
+  if (!info.project.name.endsWith('mobile')) expect(assistant.y).toBeGreaterThanOrEqual((await details.boundingBox()).y + (await details.boundingBox()).height);
+  expect(await page.evaluate(inspectPresentation,{checkTouchTargets:true})).toEqual([]);
+  await capture(page,info,'21-overview-organized-details',{fullPage:true});
+  await page.evaluate(() => { window.__linkedinSearches = []; window.open = url => { window.__linkedinSearches.push(url); return null; }; });
+  await linkedin.getByRole('combobox').selectOption({label:'Project Manager'});
+  await linkedin.getByRole('button',{name:'Find contact on LinkedIn'}).click();
+  await expect.poll(() => page.evaluate(() => window.__linkedinSearches.length)).toBe(1);
+  const url = new URL(await page.evaluate(() => window.__linkedinSearches[0]));
+  expect(url.hostname).toBe('www.linkedin.com');
+  expect(url.searchParams.get('keywords')).toContain('Synthetic Steel Company 01');
+  expect(url.searchParams.get('keywords')).toContain('project manager');
+  await page.locator('.lead-detail-tabs [data-drawer-tab="notes"]').click();
+  await expect(page.locator('#leadAiSummaryPagePanel')).toBeVisible();
+});
+
 test("profile request opens the scoped draft with attachment, without sending or logging", async ({page}, info) => {
   await login(page,info);
   await page.route('**/api/leads',async route => {
@@ -110,9 +157,7 @@ test("responsive Lead Details follows the reference and preserves existing actio
     expect(health.y + health.height).toBeLessThanOrEqual((await page.locator('.record-contact').boundingBox()).y);
     const order = await page.locator('.record-mobile-overview').evaluate(element => [...element.children].map(child => child.className));
     expect(order).toEqual(['company-ai-actions record-mobile-ai', 'drawer-section record-mobile-health', 'drawer-section record-reminders', 'drawer-section record-recent-activity', 'record-overview-notes', 'record-contact-details']);
-    const recordBody = await page.locator('.lead-detail-page-body').boundingBox();
-    const aiSummary = await page.locator('#leadAiSummaryPagePanel').boundingBox();
-    expect(aiSummary.y).toBeGreaterThanOrEqual(recordBody.y + recordBody.height);
+    await expect(page.locator('#leadAiSummaryPagePanel')).toBeHidden();
     await expect(page.locator('.record-mobile-next .record-mobile-guidance')).toContainText(/guidance/i);
     await expect(page.locator('.topbar')).toBeHidden();
     await expect(page.locator('#mobileTabs')).toBeHidden();
@@ -130,10 +175,11 @@ test("responsive Lead Details follows the reference and preserves existing actio
     await page.locator('#closeAiAssistant').click();
     await capture(page, info, '18-lead-mobile-reference', {fullPage: true});
     await page.locator('.record-mobile-ai [data-company-ai-action="prepare"]').click();
-    await expect(page.locator('#aiActionDialog')).toContainText('CRM-data fallback was used.');
-    await page.locator('#aiActionDialog').press('Escape');
+    await expect(page).toHaveURL(/\/leads\/ui-lead-1\/prepare-meeting$/);
+    await expect(page.locator('.meeting-provenance')).toContainText('CRM-data fallback was used.');
     await expect(page.locator('#aiActionDialog')).toBeHidden();
-    await expect(page).toHaveURL(/\/leads\/ui-lead-1/);
+    await page.locator('.meeting-back').click();
+    await expect(page).toHaveURL(/\/leads\/ui-lead-1$/);
     await page.locator('.record-mobile-health [data-company-ai-action="flag"]').click();
     await expect(page.locator('#flagAttentionDialog')).toBeVisible();
     await expect(page.locator('#flagAttentionForm input[name="company_id"]')).toHaveValue('ui-lead-1');

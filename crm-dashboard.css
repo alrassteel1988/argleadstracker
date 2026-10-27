@@ -552,6 +552,23 @@ body.salesman-dashboard-mode #appShell .salesman-dashboard-more-tools:not([open]
 body.ai-workspace-mode { height: auto !important; overflow-y: auto !important; }
 body.meeting-brief-mode #appShell .topbar:not(.hidden):not([hidden]) { display: none !important; }
 body .meeting-menu { display: none !important; }
+body .meeting-parent-back { display: none; }
+@media (max-width: 700px) {
+  body.lead-meeting-mode #aiWorkspaceView .meeting-company-meta > :is(.meeting-status-badge, .meeting-health-badge) { display: none; }
+}
+body.lead-meeting-mode #appShell #aiWorkspaceView .meeting-breadcrumb > button { width: auto; min-height: 44px; padding: 4px; color: var(--crm-navy); border: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 12px; }
+body.lead-meeting-mode #appShell .meeting-parent-back { --crm-button-icon: var(--crm-icon-chevron-left); }
+body.lead-meeting-mode .meeting-company-meta .meeting-open-lead { display: none; }
+@media (min-width: 701px) {
+  body.lead-meeting-mode #aiWorkspaceView .meeting-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  body.lead-meeting-mode #aiWorkspaceView .meeting-heading-copy,
+  body.lead-meeting-mode #aiWorkspaceView .meeting-company-meta { flex-basis: 100%; }
+  body.lead-meeting-mode #aiWorkspaceView .meeting-parent-back { display: inline-flex; min-height: 44px; }
+  body.lead-meeting-mode #aiWorkspaceView .meeting-ask { border-color: #f1d7a4 !important; background: #fff7e8 !important; }
+  body.lead-meeting-mode #aiWorkspaceView .meeting-main { gap: 20px; }
+  body.lead-meeting-mode #aiWorkspaceView .meeting-evidence-row { padding-block: 14px; }
+  body.lead-meeting-mode #aiWorkspaceView .meeting-evidence-row :is(p, li, a) { font-size: 13px; line-height: 1.55; }
+}
 body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-panel { border-color: var(--crm-divider) !important; background: white !important; }
 body.meeting-brief-mode #appShell #aiWorkspaceView .meeting-evidence { border-color: #8EC5C5 !important; }
 body.meeting-brief-mode #appShell > .main { padding: 32px 48px 48px !important; background-color: var(--crm-page-muted) !important; }

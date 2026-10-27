@@ -7,6 +7,25 @@
 .record-desktop-overview, .record-header-actions, .record-breadcrumb-company { display: none; }
 .record-mobile-next, .record-mobile-edit, .record-mobile-actions { display: none; }
 .record-mobile-overview { display: none; }
+body #appShell #leadAiSummaryPagePanel[hidden] { display: none !important; }
+body #appShell #leadDetailView:has(> #leadAiSummaryPagePanel[hidden]) { grid-template-areas: "info"; grid-template-columns: minmax(0, 1fr); }
+body #appShell #leadDetailView .record-supporting-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; margin-top: 20px; }
+body #appShell #leadDetailView .record-supporting-details > :is(.drawer-disclosure, .record-linkedin) { min-width: 0; margin: 0; border-color: #e3e8ef !important; background: white !important; }
+body #appShell #leadDetailView .record-supporting-details .drawer-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+body #appShell #leadDetailView .record-supporting-details .drawer-field { min-width: 0; min-height: 0 !important; border: 0 !important; border-radius: 0; padding: 0; background: transparent !important; box-shadow: none; }
+body #appShell #leadDetailView .record-supporting-details .drawer-remarks { padding: 0; border: 0 !important; background: transparent !important; }
+body #appShell #leadDetailView .record-supporting-details .drawer-field-value { overflow-wrap: anywhere; }
+body #appShell #leadDetailView .record-supporting-details .drawer-disclosure > summary { min-height: 44px; }
+body #appShell #leadDetailView .record-supporting-details .drawer-disclosure > summary > span,
+body #appShell #leadDetailView .record-linkedin h3 { font-size: 16px; }
+body #appShell #leadDetailView .record-linkedin { display: grid; gap: 16px; padding: 20px; }
+body #appShell #leadDetailView .record-linkedin h3 { margin: 0; }
+body #appShell #leadDetailView .record-linkedin .linkedin-search { display: grid; gap: 12px; margin: 0; padding: 0; }
+body #appShell #leadDetailView .record-linkedin :is(select, button) { width: 100%; min-width: 0; min-height: 44px; }
+@media (max-width: 1024px) {
+  body #appShell #leadDetailView .record-supporting-details { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  body #appShell #leadDetailView .record-supporting-details .drawer-field-grid { grid-template-columns: minmax(0, 1fr); }
+}
 body #appShell #leadDetailView .record-health-status { display: inline-block; flex-shrink: 0; width: auto; padding: 3px 8px; border: 0; border-radius: 99px; font-size: 12px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
 body #appShell #leadDetailView .record-health-status.tone-red { color: #9b1c1c !important; background: #fdecec !important; }
 body #appShell #leadDetailView .record-health-status.tone-amber { color: #7a5410 !important; background: #fff3dc !important; }
@@ -755,7 +774,7 @@ body #appShell #leadDetailView :is(.meta-label, .activity-type-label, .handoff-e
 @media (min-width: 1025px) {
   body.lead-detail-mode #appShell { height: auto !important; min-height: 100dvh; overflow: visible !important; }
   body.lead-detail-mode #appShell > .main { max-height: none !important; overflow: visible !important; }
-  body.lead-detail-mode #mobileSidebar { position: sticky !important; top: 0; height: 100dvh; align-self: start; }
+  body.lead-detail-mode #mobileSidebar { position: relative !important; top: auto; height: auto; max-height: none; align-self: stretch; }
   body.lead-detail-mode #appShell .topbar { display: none !important; }
   body.lead-detail-mode #appShell > .main > .topbar:not(.hidden):not([hidden]) { display: none !important; }
   body #appShell #leadDetailView .lead-detail-page-toolbar { flex-wrap: wrap; }
