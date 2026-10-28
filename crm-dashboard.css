@@ -1,6 +1,13 @@
 /* Proposal dashboard presentation. Existing datasets and actions remain. */
 body.salesman-dashboard-mode #appShell #dailyAiGreeting { color: var(--crm-navy) !important; }
 body.salesman-dashboard-mode #appShell #dailyAiSummary { background: var(--crm-surface-muted) !important; }
+body.admin-dashboard-mode #salespersonDashboardDate {
+  margin: 0 0 4px;
+  color: #4a5568;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
 body.admin-dashboard-mode #appShell :is(#actionPlanSummary, #needsAttentionCount, .ghost-button, .agent-chip, .meta-label, .chip, .stage-badge, .dashboard-funnel-note, .market-snapshot-total, .panel-icon) {
   font-size: 13px !important;
   line-height: 1.5;
@@ -913,9 +920,10 @@ body.admin-dashboard-mode #appShell #dashboardView > #overdueBanner {
   min-height: 0;
   margin: 0;
   padding: var(--crm-space-3);
-  border: 1px solid var(--crm-health-red) !important;
+  border: 1px solid #f3c7c7 !important;
+  border-top: 3px solid #b42318 !important;
   border-radius: var(--crm-radius-panel) !important;
-  background: var(--crm-health-red-soft) !important;
+  background: var(--crm-surface) !important;
   color: var(--crm-text) !important;
 }
 body.admin-dashboard-mode #appShell #overdueBanner :is(.overdue-banner-copy, .overdue-banner-kpis, .overdue-banner-kpis span) {
@@ -927,10 +935,10 @@ body.admin-dashboard-mode #appShell #overdueBanner :is(.overdue-banner-copy, .ov
 body.admin-dashboard-mode #appShell #overdueBanner :is(strong, b, span) { font-size: 13px !important; line-height: 1.5; }
 body.admin-dashboard-mode #appShell #dashboardView .panel {
   min-width: 0;
-  border: 1px solid var(--crm-border) !important;
+  border: 1px solid #e3e8ef !important;
   border-radius: var(--crm-radius-panel) !important;
   background: var(--crm-surface) !important;
-  box-shadow: var(--crm-shadow-panel) !important;
+  box-shadow: none !important;
 }
 body.admin-dashboard-mode #appShell :is(#adminTaskSummary, #needsAttentionCount) {
   background: var(--crm-surface-muted) !important;
@@ -945,6 +953,7 @@ body.admin-dashboard-mode #appShell #dashboardView .panel-header {
   gap: var(--crm-space-3);
   padding: var(--crm-space-4);
   background: var(--crm-surface) !important;
+  border-bottom-color: #e3e8ef !important;
 }
 body.admin-dashboard-mode #appShell #dashboardView .panel-header h2 {
   color: var(--crm-navy) !important;

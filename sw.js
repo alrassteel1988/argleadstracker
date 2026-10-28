@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v143-salesman-priorities";
+const CACHE_VERSION = "arg-pwa-v144-admin-dashboard-heading";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -9408,7 +9408,7 @@ function renderTopbar() {
     : (state.currentUser.territory || "UAE");
   const config = {
     dashboard: {
-      title: state.currentUser.role === "admin" ? "Dashboard" : "What do I do next?",
+      title: state.currentUser.role === "admin" ? "Team dashboard" : "What do I do next?",
       context: state.currentUser.role === "admin"
         ? `${state.leads.length} account${state.leads.length === 1 ? "" : "s"} across ${territory}`
         : "Start with the urgent queue, then open the wider CRM."
@@ -9449,7 +9449,11 @@ function renderTopbar() {
     dashboardQuestion.dataset.owner = questionOwner;
   }
   const salespersonHome = currentView === "dashboard" && isSalesmanRole();
-  dashboardDate?.classList.toggle("hidden", !salespersonHome);
+  const adminHome = currentView === "dashboard" && state.currentUser.role === "admin";
+  dashboardDate?.classList.toggle("hidden", !(salespersonHome || adminHome));
+  if (adminHome && dashboardDate) {
+    dashboardDate.textContent = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Dubai" }).format(new Date());
+  }
   if (salespersonHome) {
     document.querySelector("#salespersonMobileDate").textContent = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Dubai" }).format(new Date());
     document.querySelector("#salespersonMobileGreeting").innerHTML = 'What should I do <em class="crm-title-accent">today?</em>';
