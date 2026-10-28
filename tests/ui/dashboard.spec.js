@@ -32,7 +32,7 @@ test("salesman priority controls and responsive headline layout", async ({page},
   } else {
     await expect(page.locator('#mobileSidebar')).toHaveCSS('position', 'sticky');
     await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).toBeVisible();
-    await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toBeVisible();
+    await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveCount(0);
     const shell = page.locator('#appShell');
     const sidebar = page.locator('#mobileSidebar');
     expect(await shell.evaluate(element => getComputedStyle(element).backgroundColor)).toBe(await sidebar.evaluate(element => getComputedStyle(element).backgroundColor));
@@ -265,7 +265,7 @@ test("Salesperson dashboard reference actions and responsive bounds", async ({ p
   }
   await page.setViewportSize(info.project.use.viewport);
   await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).not.toHaveClass(/hidden/);
-  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveCount(0);
   await page.locator('[data-dashboard-portfolio="neglected"]').click();
   await expect(page).toHaveURL(/\?view=dashboard\/neglected$/);
   await expect(page.locator('.crm-neglected-table tbody tr').first()).toBeVisible();
