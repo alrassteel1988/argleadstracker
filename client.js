@@ -2885,7 +2885,7 @@ function aiWorkspacePage(view = currentView) {
   return {
     "ai-actions": { title: "One-tap AI actions", context: "Relationship intelligence grounded in your visible CRM records." },
     focus: { title: "Today", context: "Your follow-ups, starting with the most urgent.", portfolioAction: "focus_today" },
-    neglected: { title: "Who have I neglected?", context: "Review contact gaps using the CRM's existing tier and status rules.", portfolioAction: "neglected" },
+    neglected: { title: "Who have I neglected?", context: "Review overdue activity follow-ups and their remarks.", portfolioAction: "neglected" },
     "meeting-prep": { title: "Prepare for this meeting", context: "Review relationship history, PMRs and relevant intelligence.", companyAction: "prepare" },
     "draft-email": { title: "Draft follow-up email", context: "Review a grounded draft, then edit it in your mail app before sending.", companyAction: "email" }
   }[view] || null;
@@ -2954,6 +2954,62 @@ function renderTodayWorkspace(workspace) {
 
 let neglectedWorkspace = null;
 let neglectedToolsOpen = false;
+let neglectedActivityFilter = "all";
+let neglectedActivityEditor = null;
+const neglectedOutcomes = {
+  pending: ["Call back requested", "Meeting or visit scheduled", "Will try again", "Waiting for customer reply"],
+  closed: ["Done - spoke to customer", "Done - visit or meeting held", "Not reached - no answer", "Not reached - wrong or invalid number", "Not interested", "Company closed or moved"]
+};
+
+function neglectedActivityRows(leads, referenceDate) {
+  const rows = [];
+  for (const lead of leads || []) {
+    const activities = Array.isArray(lead.activities) ? lead.activities : [];
+    for (const activity of activities) {
+      if (!activity || activity.archived || activity.delete_request || activity.deletion_status === "pending") continue;
+      const due = String(activity.next_action_date || activity.reminder_due_date || (activity.reminder ? activity.due_date : "") || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(`${due}T00:00:00Z`)) || new Date(`${due}T00:00:00Z`).toISOString().slice(0, 10) !== due || due >= referenceDate) continue;
+      const id = String(activity.id || "").trim();
+      const stable = Boolean(id && activities.filter(item => item && String(item.id || "") === id).length === 1);
+      rows.push({ lead, activity, due, stable, status: activity.transaction_status === "closed" ? "closed" : "pending" });
+    }
+  }
+  return rows.sort((a, b) => a.due.localeCompare(b.due));
+}
+
+function renderNeglectedActivities(workspace) {
+  const manager = !isSalesmanRole();
+  if (neglectedActivityEditor && neglectedActivityEditor.owner !== String(state.currentUser?.id)) neglectedActivityEditor = null;
+  const referenceDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const unavailable = !state.leadsLoaded;
+  const rows = unavailable ? [] : neglectedActivityRows(state.leads, referenceDate);
+  const closed = rows.filter(row => row.status === "closed").length;
+  const done = rows.filter(row => row.status === "closed" && String(row.activity.transaction_outcome || "").startsWith("Done -")).length;
+  const notReached = rows.filter(row => row.status === "closed" && String(row.activity.transaction_outcome || "").startsWith("Not reached -")).length;
+  const missing = rows.filter(row => !String(row.activity.transaction_remarks || "").trim()).length;
+  const visible = rows.map((row, index) => ({ ...row, index })).filter(row => neglectedActivityFilter === "all" || row.status === neglectedActivityFilter);
+  const outcomeLabel = status => status === "pending" ? "Where does it stand?" : "Why is it closed?";
+  workspace.innerHTML = `
+    <div class="neglected-v2-head"><div><button type="button" data-workspace-view="dashboard" class="neglected-v2-back">Dashboard</button><span> / Neglected accounts</span><h2>Who have I <em>neglected?</em></h2><p>Overdue activity follow-ups, based on their scheduled dates.</p></div>${manager ? `<button type="button" class="ghost-button" data-neglected-export>Export for management</button>` : ""}</div>
+    <div class="neglected-v2-stats"><article><span>Overdue activities</span><strong>${unavailable ? "—" : rows.length}</strong></article><article><span>Follow-ups closed</span><strong>${unavailable ? "—" : `${closed} / ${rows.length}`}</strong>${unavailable ? "" : `<progress max="${Math.max(1, rows.length)}" value="${closed}" aria-label="Follow-ups closed"></progress>`}</article><article><span>Still pending</span><strong>${unavailable ? "—" : rows.length - closed}</strong>${unavailable ? "" : `<small>Closed: ${done} done · ${notReached} not reached</small>`}</article><article><span>Missing remarks</span><strong>${unavailable ? "—" : missing}</strong></article></div>
+    <section class="neglected-v2-list" aria-label="Overdue follow-ups"><div class="neglected-v2-filters">${["all", "pending", "closed"].map(filter => `<button type="button" data-neglected-filter="${filter}" aria-pressed="${neglectedActivityFilter === filter}" ${unavailable ? "disabled" : ""}>${filter[0].toUpperCase() + filter.slice(1)} · ${unavailable ? "—" : filter === "all" ? rows.length : filter === "closed" ? closed : rows.length - closed}</button>`).join("")}</div>
+    ${state.leadsLoading && !state.leadsLoaded ? `<p role="status">Loading follow-ups...</p>` : state.leadsError && !state.leadsLoaded ? `<p role="alert">${escapeHtml(state.leadsError)}</p><button type="button" data-neglected-retry>Retry</button>` : !visible.length ? `<p class="neglected-v2-empty">No overdue activities match this filter.</p>` : visible.map(row => {
+      const a = row.activity;
+      const editing = neglectedActivityEditor && neglectedActivityEditor.leadId === String(row.lead.id) && neglectedActivityEditor.activityId === String(a.id);
+      const editor = editing ? neglectedActivityEditor : null;
+      const days = Math.floor((Date.parse(`${referenceDate}T00:00:00Z`) - Date.parse(`${row.due}T00:00:00Z`)) / 86400000);
+      return `<article class="neglected-v2-row"><div class="neglected-v2-row-main"><div><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(row.lead.id)}">${escapeHtml(row.lead.company_name || "Unnamed company")}</button><p>${escapeHtml(a.activity_purpose || a.type || "Activity")} · due ${escapeHtml(row.due)}</p></div><strong class="neglected-v2-overdue">${days} d overdue</strong><div class="neglected-v2-switch" aria-label="Follow-up status">${["pending", "closed"].map(status => `<button type="button" data-neglected-status="${status}" data-neglected-index="${row.index}" aria-pressed="${row.status === status}" ${manager || !row.stable ? "disabled" : ""}>${status === "pending" ? "Pending" : "Closed"}</button>`).join("")}</div><div class="neglected-v2-remark">${a.transaction_remarks ? `<strong>${escapeHtml(a.transaction_outcome || "Update")}</strong><p>${escapeHtml(a.transaction_remarks)}</p><small>${escapeHtml(a.transaction_updated_by_name || "User")} · ${escapeHtml(String(a.transaction_updated_at || "").slice(0, 10))}${a.transaction_next_attempt ? ` · next attempt ${escapeHtml(a.transaction_next_attempt)}` : ""}</small>` : `<span>No remarks</span>`}${!row.stable ? `<small>Activity needs a permanent ID before editing.</small>` : ""}</div>${!manager ? `<div class="neglected-v2-actions">${row.lead.phone ? `<a class="primary-button" href="tel:${escapeHtml(String(row.lead.phone).replace(/[^+\d*#,;]/g, ""))}" aria-label="Call ${escapeHtml(row.lead.company_name || "company")}">Call</a>` : `<button type="button" disabled title="No phone number saved">Call</button>`}<button type="button" class="ghost-button" data-neglected-task="${escapeHtml(row.lead.id)}">Task</button>${row.stable ? `<button type="button" class="ghost-button" data-neglected-edit="${row.index}">${a.transaction_remarks ? "Edit remarks" : "Add remarks"}</button>` : ""}</div>` : ""}</div>
+      ${editor ? `<form class="neglected-v2-editor" data-neglected-form><label>${outcomeLabel(editor.status)}<select name="outcome" required><option value="">Choose...</option>${neglectedOutcomes[editor.status].map(outcome => `<option value="${escapeHtml(outcome)}" ${editor.outcome === outcome ? "selected" : ""}>${escapeHtml(outcome)}</option>`).join("")}</select></label>${editor.status === "pending" ? `<label>Next attempt<input type="date" name="next_attempt" value="${escapeHtml(editor.nextAttempt)}" required></label>` : ""}<label>Remarks <span>required</span><textarea name="remarks" maxlength="4000" required placeholder="Add a note for management">${escapeHtml(editor.remarks)}</textarea></label><div><button type="submit" class="primary-button" data-neglected-save disabled>Save update</button><button type="button" class="ghost-button" data-neglected-cancel>Cancel</button><p role="alert">${escapeHtml(editor.error || "")}</p></div></form>` : ""}</article>`;
+    }).join("")}</section><form class="neglected-v2-assistant"><label class="sr-only" for="neglectedQuestion">Ask the AI Assistant</label><input id="neglectedQuestion" placeholder="Ask the AI Assistant about these accounts" maxlength="4000"><span class="neglected-assistant-host"></span></form>`;
+  const form = workspace.querySelector("[data-neglected-form]");
+  if (form) updateNeglectedSaveButton(form);
+  arrangeAssistantLauncher(false);
+}
+
+function updateNeglectedSaveButton(form) {
+  const button = form.querySelector("[data-neglected-save]");
+  if (button) button.disabled = !form.elements.outcome.value || !form.elements.remarks.value.trim() || Boolean(form.elements.next_attempt && !form.elements.next_attempt.value);
+}
 
 async function loadNeglectedWorkspace(request) {
   try {
@@ -3365,7 +3421,7 @@ function renderAiWorkspace() {
   const launcher = workspace.querySelector("#aiAssistantLauncher");
   if (launcher) document.body.appendChild(launcher);
   if (currentView === "focus" && isSalesmanRole()) return renderTodayWorkspace(workspace);
-  if (currentView === "neglected" && isSalesmanRole()) return renderNeglectedWorkspace(workspace);
+  if (currentView === "neglected" && (isSalesmanRole() || isPrivilegedDashboardRole())) return renderNeglectedActivities(workspace);
   if (currentView === "meeting-prep") return renderMeetingBriefWorkspace(workspace);
   if (currentView === "draft-email") return renderEmailDraftWorkspace(workspace);
   const previousCompany = workspace.querySelector("#aiWorkspaceCompany")?.value || "";
@@ -14508,7 +14564,7 @@ function renderDetail() {
 }
 
 function render() {
-  if (state.currentUser && !isSalesmanRole() && ["focus", "neglected"].includes(currentView)) currentView = "ai-actions";
+  if (state.currentUser && !isSalesmanRole() && (currentView === "focus" || currentView === "neglected" && !isPrivilegedDashboardRole())) currentView = "ai-actions";
   document.querySelector("#aiAssistantLauncher")?.classList.toggle("hidden", !state.currentUser);
   renderMetrics();
   renderOverdueBanner();
@@ -14541,6 +14597,7 @@ function arrangeAssistantLauncher(isTasks) {
     : currentView === "draft-email" ? document.querySelector(".email-assistant-host") || document.body
     : currentView === "ai-actions" ? document.querySelector(".crm-onetap-assistant-host") || document.body
     : currentView === "dashboard" && isSalesmanRole() ? document.querySelector(".salesperson-dashboard-assistant-host") || document.body
+    : currentView === "neglected" ? document.querySelector(".neglected-assistant-host") || document.body
     : isTasks ? document.querySelector("#appShell .topbar-actions") : document.body;
   if (launcher && host && launcher.parentElement !== host) host.appendChild(launcher);
 }
@@ -14564,7 +14621,7 @@ function applyView() {
   if (isSalesmanRole() && ["salesmen", "activity"].includes(currentView)) {
     currentView = "dashboard";
   }
-  if (!isSalesmanRole() && ["focus", "neglected"].includes(currentView)) currentView = "ai-actions";
+  if (!isSalesmanRole() && (currentView === "focus" || currentView === "neglected" && !isPrivilegedDashboardRole())) currentView = "ai-actions";
   const isDashboard = currentView === "dashboard";
   const isPipeline = currentView === "pipeline";
   const isActivity = currentView === "activity";
@@ -14587,11 +14644,11 @@ function applyView() {
   els.salesmenView.classList.toggle("hidden", currentView !== "salesmen");
   els.tasksView?.classList.toggle("hidden", !isTasks);
   document.querySelector("#aiWorkspaceView")?.classList.toggle("hidden", !isAiWorkspace);
-  document.querySelectorAll("[data-ai-portfolio-nav]").forEach(item => item.classList.toggle("hidden", !isSalesmanRole()));
+  document.querySelectorAll("[data-ai-portfolio-nav]").forEach(item => item.classList.toggle("hidden", !isSalesmanRole() && !(item.dataset.view === "neglected" && isPrivilegedDashboardRole())));
   document.querySelector('#mobileSidebar [data-view="ai-actions"]')?.classList.remove("hidden");
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
-    const navigationView = currentView === "lead" || currentView === "meeting-prep" && state.meetingRouteLeadId ? "pipeline" : isSalesmanRole() && isAiWorkspace && currentView !== "focus" ? "dashboard"
+    const navigationView = currentView === "lead" || currentView === "meeting-prep" && state.meetingRouteLeadId ? "pipeline" : isSalesmanRole() && isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "dashboard"
       : isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
     item.classList.toggle("active", item.dataset.view === navigationView && !item.dataset.mobileAction);
   });
@@ -14613,7 +14670,7 @@ function applyView() {
   document.body.classList.toggle("lead-meeting-mode", currentView === "meeting-prep" && Boolean(state.meetingRouteLeadId));
   document.body.classList.toggle("email-draft-mode", currentView === "draft-email");
   document.body.classList.toggle("today-mode", currentView === "focus" && isSalesmanRole());
-  document.body.classList.toggle("neglected-mode", currentView === "neglected" && isSalesmanRole());
+  document.body.classList.toggle("neglected-mode", currentView === "neglected" && (isSalesmanRole() || isPrivilegedDashboardRole()));
   document.body.classList.toggle("neglected-tools-open", currentView === "neglected" && isSalesmanRole() && neglectedToolsOpen);
   arrangeAssistantLauncher(isTasks || (["focus", "neglected", "pipeline"].includes(currentView) && isSalesmanRole()));
   arrangeAdminDashboardLayout();
@@ -14636,7 +14693,7 @@ function setView(view) {
   if (view !== "draft-email") state.emailRouteLeadId = "";
   if (view !== "meeting-prep") state.meetingRouteLeadId = "";
   if (isSalesmanRole() && ["salesmen", "activity"].includes(view)) view = "dashboard";
-  if (!isSalesmanRole() && ["focus", "neglected"].includes(view)) view = "ai-actions";
+  if (!isSalesmanRole() && (view === "focus" || view === "neglected" && !isPrivilegedDashboardRole())) view = "ai-actions";
   if (view !== "lead" && !(view === "draft-email" && state.emailRouteLeadId) && !(view === "meeting-prep" && state.meetingRouteLeadId)) state.lastNonLeadView = view;
   currentView = view;
   state.leadDrawerOpen = view === "lead";
@@ -15852,6 +15909,15 @@ els.aiActionResult?.addEventListener("click", event => {
 });
 
 document.querySelector("#aiWorkspaceView")?.addEventListener("input", event => {
+  if (currentView === "neglected" && event.target.closest("[data-neglected-form]")) {
+    const form = event.target.closest("[data-neglected-form]");
+    if (neglectedActivityEditor) {
+      neglectedActivityEditor.remarks = form.elements.remarks.value;
+      neglectedActivityEditor.nextAttempt = form.elements.next_attempt?.value || "";
+    }
+    updateNeglectedSaveButton(form);
+    return;
+  }
   if (currentView !== "draft-email" || !emailDraftState || emailDraftState.owner !== String(state.currentUser?.id)) return;
   const field = event.target.dataset.emailField;
   if (!["to", "cc", "subject", "body"].includes(field)) return;
@@ -15864,6 +15930,15 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("input", event => {
 });
 
 document.querySelector("#aiWorkspaceView")?.addEventListener("change", event => {
+  if (currentView === "neglected" && event.target.closest("[data-neglected-form]")) {
+    const form = event.target.closest("[data-neglected-form]");
+    if (neglectedActivityEditor) {
+      neglectedActivityEditor.outcome = form.elements.outcome.value;
+      neglectedActivityEditor.nextAttempt = form.elements.next_attempt?.value || "";
+    }
+    updateNeglectedSaveButton(form);
+    return;
+  }
   if (currentView === "draft-email") {
     if (event.target.hasAttribute("data-email-profile") && emailDraftState) {
       emailDraftState.includeProfile = event.target.checked;
@@ -15902,7 +15977,41 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("change", event => 
   if (status) status.textContent = selected ? "Company actions are ready." : "Choose a company to enable its actions.";
 });
 
-document.querySelector("#aiWorkspaceView")?.addEventListener("submit", event => {
+document.querySelector("#aiWorkspaceView")?.addEventListener("submit", async event => {
+  if (event.target.matches(".neglected-v2-assistant")) {
+    event.preventDefault();
+    const input = event.target.querySelector("#neglectedQuestion");
+    const assistant = aiAssistantElements();
+    if (input?.value.trim() && assistant.command) assistant.command.value = input.value.trim();
+    event.target.querySelector("#aiAssistantLauncher")?.click();
+    return;
+  }
+  if (event.target.matches("[data-neglected-form]")) {
+    event.preventDefault();
+    const editor = neglectedActivityEditor;
+    if (!isSalesmanRole() || !editor || editor.owner !== String(state.currentUser?.id)) return;
+    const form = event.target;
+    if (!form.reportValidity() || !form.elements.remarks.value.trim()) return;
+    form.querySelector("[data-neglected-save]").disabled = true;
+    try {
+      const result = await api(`/api/leads/${encodeURIComponent(editor.leadId)}/activities/${encodeURIComponent(editor.activityId)}/transaction`, {
+        method: "PATCH", body: JSON.stringify({ status: editor.status, outcome: form.elements.outcome.value, remarks: form.elements.remarks.value.trim(), next_attempt: form.elements.next_attempt?.value || "", version: editor.version })
+      });
+      if (editor.owner !== String(state.currentUser?.id) || neglectedActivityEditor !== editor) return;
+      const lead = state.leads.find(item => String(item.id) === editor.leadId);
+      const index = lead?.activities?.findIndex(item => String(item.id) === editor.activityId) ?? -1;
+      if (index >= 0) lead.activities[index] = result.activity;
+      neglectedActivityEditor = null;
+      renderAiWorkspace();
+      setToast("Follow-up updated.", "success");
+    } catch (error) {
+      if (neglectedActivityEditor === editor) {
+        editor.error = error.message || "Unable to save the update.";
+        renderAiWorkspace();
+      }
+    }
+    return;
+  }
   if (!event.target.matches(".crm-onetap-assistant")) return;
   event.preventDefault();
   event.target.querySelector("#aiAssistantLauncher")?.click();
@@ -15911,6 +16020,37 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("submit", event => 
 document.querySelector("#aiWorkspaceView")?.addEventListener("click", async event => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
+  if (currentView === "neglected" && button.id === "aiAssistantLauncher") {
+    const input = document.querySelector("#neglectedQuestion");
+    const assistant = aiAssistantElements();
+    if (input?.value.trim() && assistant.command) assistant.command.value = input.value.trim();
+    return;
+  }
+  if (currentView === "neglected" && button.dataset.neglectedFilter) {
+    neglectedActivityFilter = button.dataset.neglectedFilter;
+    neglectedActivityEditor = null;
+    renderAiWorkspace();
+    return;
+  }
+  if (currentView === "neglected" && button.hasAttribute("data-neglected-cancel")) {
+    neglectedActivityEditor = null;
+    renderAiWorkspace();
+    return;
+  }
+  if (currentView === "neglected" && button.hasAttribute("data-neglected-export") && isPrivilegedDashboardRole()) {
+    try { await downloadExport("/api/management/overdue-activities.csv", "overdue-activities.csv"); }
+    catch (error) { setToast(error.message || "Export failed.", "error"); }
+    return;
+  }
+  if (currentView === "neglected" && isSalesmanRole() && (button.dataset.neglectedStatus || button.hasAttribute("data-neglected-edit"))) {
+    const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const row = neglectedActivityRows(state.leads, date)[Number(button.dataset.neglectedIndex ?? button.dataset.neglectedEdit)];
+    if (!row || !row.stable) return;
+    const status = button.dataset.neglectedStatus || row.status;
+    neglectedActivityEditor = { owner: String(state.currentUser.id), leadId: String(row.lead.id), activityId: String(row.activity.id), version: Number(row.activity.version || 1), status, outcome: status === row.status ? row.activity.transaction_outcome || "" : "", remarks: row.activity.transaction_remarks || "", nextAttempt: status === "pending" ? row.activity.transaction_next_attempt || "" : "", error: "" };
+    renderAiWorkspace();
+    return;
+  }
   if (currentView === "draft-email" && Object.keys(button.dataset).some(key => key.startsWith("email"))) {
     if (button.hasAttribute("data-email-parent") && state.emailRouteLeadId) {
       openLeadDrawer(state.emailRouteLeadId);
@@ -15993,7 +16133,7 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
     button.setAttribute("aria-expanded", String(neglectedToolsOpen));
     return;
   }
-  if (button.hasAttribute("data-neglected-retry") && isSalesmanRole()) {
+  if (button.hasAttribute("data-neglected-retry") && (isSalesmanRole() || isPrivilegedDashboardRole())) {
     neglectedWorkspace = null;
     if (!state.leadsLoaded) {
       try { await loadLeads(); } catch { /* The page displays the existing load error. */ }
@@ -16002,8 +16142,8 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
     return;
   }
   const neglectedLeadId = button.dataset.neglectedLead || button.dataset.neglectedLog || button.dataset.neglectedTask;
-  if (neglectedLeadId && isSalesmanRole()) {
-    const lead = salesmanDashboardLeads().find(item => String(item.id) === neglectedLeadId);
+  if (neglectedLeadId && (isSalesmanRole() || isPrivilegedDashboardRole())) {
+    const lead = state.leads.find(item => String(item.id) === neglectedLeadId);
     if (!lead) return;
     if (button.dataset.neglectedLog) openActivityModal(lead.id, button);
     else openLeadDrawer(lead.id, button.dataset.neglectedTask ? "reminders" : "overview");

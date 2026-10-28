@@ -4,6 +4,106 @@ const {inspectPresentation} = require("./presentation-audit");
 
 test.beforeEach(async ({page}) => blockExternalTraffic(page));
 
+test("Neglected follow-up activity rows are responsive and management is read-only", async ({page}, info) => {
+  const role = await login(page, info);
+  await page.route("**/api/leads", async route => {
+    const response = await route.fetch();
+    const leads = await response.json();
+    if (leads.length) leads[0].activities = [
+      {id:"demo-one", type:"Phone Call", next_action_date:"2020-01-01", version:1},
+      {id:"demo-two", type:"Email", next_action_date:"2020-01-02", transaction_status:"closed", transaction_remarks:"Synthetic remark", transaction_outcome:"Done - spoke to customer"}
+    ];
+    await route.fulfill({response, json:leads});
+  });
+  await page.goto("/?view=neglected");
+  await expect(page.locator(".neglected-v2-row")).toHaveCount(2);
+  await expect(page.locator(".neglected-v2-stats")).toContainText("1 / 2");
+  if (role === "salesman") {
+    await expect(page.locator("[data-neglected-export]")).toHaveCount(0);
+    expect(await page.evaluate(async () => (await authenticatedFetch("/api/management/overdue-activities.csv")).status)).toBe(403);
+    await page.locator("[data-neglected-edit]").first().click();
+    await expect(page.locator("[data-neglected-save]")).toBeDisabled();
+    await page.locator("[data-neglected-form] select").selectOption("Will try again");
+    await page.locator("[data-neglected-form] textarea").fill("Synthetic follow-up");
+    await expect(page.locator("[data-neglected-save]")).toBeDisabled();
+    await page.locator("[data-neglected-form] input[type=date]").fill("2026-11-01");
+    await expect(page.locator("[data-neglected-save]")).toBeEnabled();
+  } else {
+    await expect(page.locator("[data-neglected-export]")).toBeVisible();
+    await expect(page.locator("[data-neglected-edit]")).toHaveCount(0);
+    expect(await page.evaluate(async () => (await authenticatedFetch("/api/leads/ui-lead-1/activities/demo-one/transaction", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({})})).status)).toBe(403);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await capture(page, info, "neglected-activity-review", {fullPage:true});
+});
+
+test("Neglected follow-up update persists in the isolated local database", async ({page}, info) => {
+  const role = await login(page, info);
+  test.skip(role !== "salesman", "Only assigned salesmen may update transactions.");
+  const lead = await page.evaluate(async () => (await api("/api/leads"))[0]);
+  const created = await page.evaluate(async leadId => api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+    method: "POST", body: JSON.stringify({type:"Reminder", reminder:true, due_date:"2020-01-01", activity_required:"Synthetic follow-up"})
+  }), lead.id);
+  await page.goto("/?view=neglected");
+  // Reminder type and due date identify the synthetic record even when the text is not shown.
+  const target = page.locator(".neglected-v2-row").filter({hasText:"2020-01-01"}).first();
+  await expect(target).toBeVisible();
+  await target.locator("[data-neglected-edit]").click();
+  const form = page.locator("[data-neglected-form]");
+  await form.locator("select").selectOption("Will try again");
+  await form.locator("textarea").fill("Synthetic saved remark");
+  await form.locator("input[type=date]").fill("2026-11-01");
+  await form.locator("[data-neglected-save]").click();
+  await expect(target).toContainText("Synthetic saved remark");
+  await page.reload();
+  await expect(page.locator(".neglected-v2-row").filter({hasText:"2020-01-01"}).first()).toContainText("Synthetic saved remark");
+  const persisted = await page.evaluate(async leadId => (await api("/api/leads")).find(item => item.id === leadId), lead.id);
+  expect(persisted.activities.find(item => item.id === created.activity.id).transaction_remarks).toBe("Synthetic saved remark");
+});
+
+test("Neglected activity loading errors, retry, empty results and responsive actions", async ({page}, info) => {
+  const role = await login(page, info);
+  await page.goto("/?view=neglected");
+  await expect(page.locator(".neglected-v2-list")).toBeVisible();
+  let mode = "error";
+  await page.route("**/api/leads", async route => {
+    if (route.request().method() !== "GET") return route.continue();
+    if (mode === "error") return route.fulfill({status:503, json:{error:"Synthetic lead service unavailable"}});
+    const response = await route.fetch();
+    const leads = await response.json();
+    if (mode === "empty") leads.forEach(lead => { lead.activities = []; });
+    else if (leads.length) leads[0].activities = [{id:"demo-retry", type:"Phone Call", next_action_date:"2020-01-01"}];
+    await route.fulfill({response, json:leads});
+  });
+  await page.evaluate(async () => { state.leadsLoaded = false; state.leads = []; try { await loadLeads(); } catch {} renderAiWorkspace(); });
+  await expect(page.locator('.neglected-v2-list [role="alert"]')).toContainText("Synthetic lead service unavailable");
+  mode = "success";
+  await page.locator("[data-neglected-retry]").click();
+  await expect(page.locator(".neglected-v2-row")).toHaveCount(1);
+  await expect(page.locator(".neglected-v2-row")).not.toContainText("Company 13");
+  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveClass(/active/);
+  if (info.project.name.endsWith("mobile")) {
+    await page.setViewportSize({width:320,height:812});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  }
+  if (role === "salesman") {
+    await expect(page.locator("[data-neglected-task]")).toBeVisible();
+    await expect(page.locator('.neglected-v2-actions a[href^="tel:"]')).toHaveCount(1);
+    await page.locator("[data-neglected-task]").click();
+    await expect(page.locator("#leadDetailView")).toBeVisible();
+    await expect(page.locator('[data-drawer-tab="reminders"]')).toHaveClass(/active/);
+    await page.goto("/?view=neglected");
+  }
+  await expect(page.locator("#aiAssistantLauncher")).toBeVisible();
+  await expect(page.locator("#aiAssistantLauncher")).toHaveCSS("position", "static");
+  await page.locator(".neglected-v2-back").click();
+  await expect(page.locator("#dashboardView")).toBeVisible();
+  mode = "empty";
+  await page.goto("/?view=neglected");
+  await expect(page.locator(".neglected-v2-empty")).toContainText("No overdue activities");
+  await expect(page.locator(".neglected-v2-stats article").first().locator("strong")).toHaveText("0");
+});
+
 test("Draft Email downloads an editable MIME draft with the exact protected profile", async ({page}, info) => {
   test.setTimeout(120000);
   const fs = require("node:fs");
@@ -206,7 +306,7 @@ test("AI workspace routes reuse authorized company and portfolio actions", async
   await expect(page.locator('[data-meeting-generate]')).toBeVisible();
   await expect(page.locator(`#mobileSidebar [data-view="${role === "salesman" ? "dashboard" : "ai-actions"}"]`)).toHaveClass(/active/);
   if (role === "salesman") {
-    for (const [view, action] of [["focus", "focus_today"], ["neglected", "neglected"]]) {
+    for (const [view, action] of [["focus", "focus_today"]]) {
       await page.goto(`/?view=${view}`);
       if (view === "focus") await page.locator(".crm-today-more summary").click();
       const button = page.locator(`[data-workspace-portfolio-action="${action}"]`);
@@ -276,81 +376,4 @@ test("Today uses existing follow-ups, contact actions, summaries and quick actio
   await page.goto("/?view=focus");
   await page.locator('[data-today-action="report"]').click();
   await expect(page.locator("#tasksView")).toBeVisible();
-});
-
-test("Neglected accounts uses scoped cadence data and responsive existing actions", async ({page}, info) => {
-  const role = await login(page, info);
-  let metrics = null;
-  if (role === 'salesman') await page.route('**/api/salesperson-ai-actions', async route => {
-    if (route.request().postDataJSON()?.action !== 'pipeline_health') return route.continue();
-    const response = await route.fetch();
-    expect(response.status()).toBe(200);
-    metrics = (await response.json()).metrics;
-    await route.fulfill({response});
-  });
-  await page.goto("/?view=dashboard/neglected");
-  if (role === "admin") {
-    await expect(page.locator('.crm-neglected-panel')).toHaveCount(0);
-    return;
-  }
-  await expect(page.locator('.crm-neglected-table tbody tr').first()).toBeVisible();
-  await expect.poll(() => metrics).not.toBeNull();
-  await expect(page.locator('.crm-neglected-table tbody tr')).toHaveCount(metrics.contact_overdue_companies.length);
-  await expect(page.locator('.crm-neglected-stats article')).toHaveCount(3);
-  await expect(page.locator('.crm-neglected-panel')).not.toContainText('Company 13');
-  await expect(page.locator('.crm-neglected-panel')).not.toContainText('Sampling');
-  await expect(page.locator('.crm-neglected-toolbar')).not.toContainText('Export');
-  if (!info.project.name.endsWith('mobile')) {
-    const panel = await page.locator('.crm-neglected-panel').boundingBox();
-    expect(panel.y + panel.height).toBeLessThan(page.viewportSize().height - 80);
-  }
-  if (info.project.name.endsWith('mobile')) {
-    await page.setViewportSize({width:320,height:812});
-    expect(await page.evaluate(inspectPresentation, {checkTouchTargets:true})).toEqual([]);
-    await page.setViewportSize(info.project.use.viewport);
-    await expect(page.locator('#appShell .topbar-actions')).toBeHidden();
-    await page.locator('[data-neglected-tools]').click();
-    await expect(page.locator('#openPlacesSearch')).toBeVisible();
-    await expect(page.locator('#openLeadForm')).toBeVisible();
-    await expect(page.locator('#aiAssistantLauncher')).toBeVisible();
-    await expect(page.locator('#aiAssistantLauncher')).toHaveCSS('position', 'static');
-    await page.locator('[data-neglected-tools]').click();
-  }
-  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-  expect(await page.evaluate(inspectPresentation, {checkTouchTargets:true})).toEqual([]);
-  await capture(page, info, '72-neglected-reference', {fullPage:false});
-  await page.locator('[data-neglected-log]').first().click();
-  await expect(page.locator('#activityDialog')).toBeVisible();
-  await expect(page.locator('#activityLeadName')).toContainText('Synthetic Steel Company');
-  await page.locator('#closeActivityDialog').click();
-  if (!info.project.name.endsWith('mobile')) {
-    await page.locator('[data-neglected-task]').first().click();
-    await expect(page.locator('#leadDetailView')).toBeVisible();
-    await expect(page.locator('[data-drawer-tab="reminders"]')).toHaveClass(/active/);
-    await page.goto('/?view=neglected');
-  }
-  await page.locator('.crm-neglected-toolbar [data-workspace-view="dashboard"]').click();
-  await expect(page.locator('#dashboardView')).toBeVisible();
-});
-
-test('Neglected accounts reports request errors, retries and honest empty results', async ({page}, info) => {
-  const role = await login(page, info);
-  if (role !== 'salesman') return;
-  let mode = 'error';
-  await page.route('**/api/salesperson-ai-actions', async route => {
-    if (route.request().postDataJSON()?.action !== 'pipeline_health') return route.continue();
-    if (mode === 'error') return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic contact service unavailable'})});
-    if (mode === 'empty') return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({metrics:{contact_overdue_companies:[]}})});
-    return route.continue();
-  });
-  await page.goto('/?view=neglected');
-  await expect(page.locator('.crm-neglected-panel [role="alert"]')).toContainText('Synthetic contact service unavailable');
-  await expect(page.locator('.crm-neglected-stats article').first().locator('strong')).toHaveText('—');
-  mode = 'success';
-  await page.locator('[data-neglected-retry]').click();
-  await expect(page.locator('.crm-neglected-table tbody tr').first()).toBeVisible();
-  mode = 'empty';
-  await page.reload();
-  await expect(page.locator('.crm-neglected-state')).toHaveText('No accounts are past their expected contact frequency.');
-  await expect(page.locator('.crm-neglected-stats article').first().locator('strong')).toHaveText('0');
 });
