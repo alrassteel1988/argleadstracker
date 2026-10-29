@@ -32,7 +32,7 @@ test("salesman priority controls and responsive headline layout", async ({page},
   } else {
     await expect(page.locator('#mobileSidebar')).toHaveCSS('position', 'sticky');
     await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).toBeVisible();
-    await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toBeVisible();
+    await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveCount(0);
     const shell = page.locator('#appShell');
     const sidebar = page.locator('#mobileSidebar');
     expect(await shell.evaluate(element => getComputedStyle(element).backgroundColor)).toBe(await sidebar.evaluate(element => getComputedStyle(element).backgroundColor));
@@ -265,24 +265,24 @@ test("Salesperson dashboard reference actions and responsive bounds", async ({ p
   }
   await page.setViewportSize(info.project.use.viewport);
   await expect(page.locator('#mobileSidebar [data-view="ai-actions"]')).not.toHaveClass(/hidden/);
-  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveCount(0);
   await page.locator('[data-dashboard-portfolio="neglected"]').click();
   await expect(page).toHaveURL(/\?view=dashboard\/neglected$/);
-  await expect(page.locator('.crm-neglected-table tbody tr').first()).toBeVisible();
+  await expect(page.locator('.neglected-v2-list')).toBeVisible();
   await expect(page.locator('#aiActionDialog')).not.toBeVisible();
   await expect(page.locator('#mobileSidebar [data-view="dashboard"]')).toHaveClass(/active/);
   await page.reload();
-  await expect(page.locator('.crm-neglected-panel')).toBeVisible();
+  await expect(page.locator('.neglected-v2-list')).toBeVisible();
   await expect(page).toHaveURL(/\?view=dashboard\/neglected$/);
   await page.goBack();
   await expect(page.locator('#dashboardView')).toBeVisible();
   await page.goForward();
-  await expect(page.locator('.crm-neglected-panel')).toBeVisible();
-  await page.locator('[aria-label="Back to Dashboard"]').click();
+  await expect(page.locator('.neglected-v2-list')).toBeVisible();
+  await page.locator('.neglected-v2-back').click();
   await expect(page.locator('#dashboardView')).toBeVisible();
   await page.goto('/?view=neglected');
-  await expect(page.locator('.crm-neglected-panel')).toBeVisible();
-  await page.locator('[aria-label="Back to Dashboard"]').click();
+  await expect(page.locator('.neglected-v2-list')).toBeVisible();
+  await page.locator('.neglected-v2-back').click();
   await expect(page.locator('#dashboardView')).toBeVisible();
   await page.locator("[data-dashboard-focus-open]").first().click();
   await expect(page.locator("#leadDetailView")).toBeVisible();

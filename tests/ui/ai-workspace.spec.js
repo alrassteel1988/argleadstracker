@@ -81,7 +81,7 @@ test("Neglected activity loading errors, retry, empty results and responsive act
   await page.locator("[data-neglected-retry]").click();
   await expect(page.locator(".neglected-v2-row")).toHaveCount(1);
   await expect(page.locator(".neglected-v2-row")).not.toContainText("Company 13");
-  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveClass(/active/);
+  await expect(page.locator('#mobileSidebar [data-view="neglected"]')).toHaveCount(0);
   if (info.project.name.endsWith("mobile")) {
     await page.setViewportSize({width:320,height:812});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();

@@ -78,7 +78,7 @@ console.log("PASS AI workspace routes, existing action reuse and escaped caller-
   context.window = { location:{pathname:"/",search:""}, history:{pushState:(state, unused, url) => { pushed = url; }} };
   vm.runInContext(`${client.match(/function syncBrowserRoute\([^]*?\n\}/)[0]}; syncBrowserRoute();`, context);
   assert.equal(pushed, "/?view=dashboard/neglected");
-  assert.match(html, /data-view="neglected" data-ai-portfolio-nav/);
+  assert.doesNotMatch(html, /data-view="neglected" data-ai-portfolio-nav/);
   assert.match(client, /item\.dataset\.view === "neglected" && isPrivilegedDashboardRole\(\)/);
   assert.match(client, /querySelector\('#mobileSidebar \[data-view="ai-actions"\]'\)\?\.classList\.remove\("hidden"\)/);
   assert.match(client, /button\.dataset\.dashboardPortfolio === "neglected"\) \{ setView\("neglected"\); return; \}/);

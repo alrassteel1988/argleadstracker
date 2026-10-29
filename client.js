@@ -14648,7 +14648,7 @@ function applyView() {
   document.querySelector('#mobileSidebar [data-view="ai-actions"]')?.classList.remove("hidden");
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
-    const navigationView = currentView === "lead" || currentView === "meeting-prep" && state.meetingRouteLeadId ? "pipeline" : isSalesmanRole() && isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "dashboard"
+    const navigationView = currentView === "lead" || currentView === "meeting-prep" && state.meetingRouteLeadId ? "pipeline" : currentView === "neglected" ? "dashboard" : isSalesmanRole() && isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "dashboard"
       : isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
     item.classList.toggle("active", item.dataset.view === navigationView && !item.dataset.mobileAction);
   });
