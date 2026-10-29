@@ -1,6 +1,8 @@
 const assert = require("assert");
+const { matchPlacesToVisibleLeads } = require("../src/services/placeCrmMatch");
 const {
   enrichCompanyFromGoogle,
+  searchGooglePlaces,
   mergeLeadWithEnrichment,
   _test
 } = require("../enrichment");
@@ -34,6 +36,31 @@ async function run(name, test) {
 }
 
 (async () => {
+  await run("places match only exact visible CRM IDs and do not guess ambiguous records", async () => {
+    const visible = [
+      { id: "lead-1", google_place_id: "place-1", stage: "CONTACTED" },
+      { id: "customer-1", google_place_id: "place-2", stage: "WON" },
+      { id: "duplicate-1", google_place_id: "place-3" },
+      { id: "duplicate-2", google_place_id: "place-3" }
+    ];
+    const matches = matchPlacesToVisibleLeads([
+      { google_place_id: "place-1" }, { google_place_id: "place-2" },
+      { google_place_id: "place-3" }, { google_place_id: "place-4" }, {}
+    ], visible);
+    assert.deepStrictEqual(matches.map(item => item.crm_status), ["lead", "customer", "unverified", "new", "unverified"]);
+    assert.equal(matches[0].crm_lead_id, "lead-1");
+    assert.equal(matches[2].crm_lead_id, null);
+    assert.equal(matches[3].crm_lead_id, null);
+  });
+  await run("search requests and preserves Google coordinates", async () => {
+    global.fetch = async (_url, options) => {
+      assert.match(options.headers["X-Goog-FieldMask"], /(?:^|,)places\.location(?:,|$)/);
+      return jsonResponse({ places: [{ id: "test-id", displayName: { text: "Example" }, location: { latitude: 25.1, longitude: 55.2 } }] });
+    };
+    const matches = await searchGooglePlaces("steel", "Dubai", "map-test");
+    assert.equal(matches[0].latitude, 25.1);
+    assert.equal(matches[0].longitude, 55.2);
+  });
   await run("successful enrichment", async () => {
     global.fetch = async url => {
       if (String(url).includes("places:searchText")) {

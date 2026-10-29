@@ -1,5 +1,6 @@
 const assert = require("assert");
 const server = require("../server");
+const { matchPlacesToVisibleLeads } = require("../src/services/placeCrmMatch");
 
 const admin = { id: "admin-1", name: "Glory", email: "glory@alrassteel.com", role: "admin", territory: "Mixed" };
 const director = { id: "director-1", name: "Director", email: "director@alrassteel.com", role: "director", territory: "Mixed" };
@@ -21,6 +22,16 @@ assert.equal(server.leadBelongsToUser(leads[0], salesman), false);
 assert.equal(server.leadBelongsToUser(leads[1], salesman), true);
 assert.equal(server.leadBelongsToUser(leads[3], salesman), true);
 assert.equal(server.leadBelongsToUser(leads[5], salesman), false);
+
+const placeLeads = [
+  { id: "other", assigned_to: "user-2", google_place_id: "place-other", stage: "WON" },
+  { id: "own", assigned_to: "user-1", google_place_id: "place-own", stage: "CONTACTED" }
+];
+const placeResults = [{ google_place_id: "place-other" }, { google_place_id: "place-own" }];
+const salesmanMatches = matchPlacesToVisibleLeads(placeResults, server.visibleLeadsForUser(placeLeads, salesman));
+assert.deepEqual(salesmanMatches.map(item => [item.crm_status, item.crm_lead_id]), [["new", null], ["lead", "own"]]);
+const adminMatches = matchPlacesToVisibleLeads(placeResults, server.visibleLeadsForUser(placeLeads, admin));
+assert.deepEqual(adminMatches.map(item => [item.crm_status, item.crm_lead_id]), [["customer", "other"], ["lead", "own"]]);
 
 const newLeadPayload = server.prepareLeadPayloadForUser({ company_name: "New Lead", assigned_salesman: "Rafiq Ali", territory: "Saudi" }, salesman);
 assert.equal(newLeadPayload.assigned_salesman, "Ahmed Khan");

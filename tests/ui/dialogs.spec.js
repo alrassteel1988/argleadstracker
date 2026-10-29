@@ -2,6 +2,26 @@ const { test, expect } = require("@playwright/test");
 const { capture, login, blockExternalTraffic } = require("./helpers");
 const { inspectPresentation } = require("./presentation-audit");
 
+test("places results open an accessible CRM record or offer a new business", async ({page}, info) => {
+  if (!info.project.name.startsWith("admin")) return;
+  await blockExternalTraffic(page);
+  await login(page, info);
+  await page.route("**/api/places/search", route => route.fulfill({
+    json: { matches: [
+      { company_name: "Existing company", crm_status: "customer", crm_lead_id: "ui-lead-1" },
+      { company_name: "New company", crm_status: "new", crm_lead_id: null },
+      { company_name: "Unknown company", crm_status: "unverified", crm_lead_id: null }
+    ] }
+  }));
+  await page.locator("#openPlacesSearch").click();
+  await page.locator('#placesForm input[name="keyword"]').fill("steel");
+  await page.locator('#placesForm button[type="submit"]').click();
+  await expect(page.locator("#placesResults")).toContainText("New among visible records");
+  await expect(page.locator("#placesResults")).toContainText("CRM match not verified");
+  await page.getByRole("button", { name: "Open account" }).click();
+  await expect(page).toHaveURL(/\/leads\/ui-lead-1/);
+});
+
 test.beforeEach(async ({page}) => blockExternalTraffic(page));
 
 test("existing company AI actions are exposed on Lead Details", async ({page}, info) => {

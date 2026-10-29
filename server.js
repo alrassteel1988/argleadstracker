@@ -49,6 +49,7 @@ const {
   workflowId
 } = require("./src/services/activityWorkflowService");
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
+const { matchPlacesToVisibleLeads } = require("./src/services/placeCrmMatch");
 const {
   enrichCompanyFromGoogle,
   enrichHunter,
@@ -6352,7 +6353,8 @@ async function handleApi(req, res, url) {
     try {
       const matches = await searchGooglePlaces(keyword, location, clientIp(req));
       if (supabaseEnabled) await recordSearch(user.token, user.id, keyword, location, "google_places", matches.length);
-      return sendJson(res, 200, { matches });
+      const visibleLeads = await assistantAuthorizedLeads(db, user, supabaseEnabled);
+      return sendJson(res, 200, { matches: matchPlacesToVisibleLeads(matches, visibleLeads) });
     } catch (error) {
       if (supabaseEnabled) await recordSearch(user.token, user.id, keyword, location, "google_places", 0, "failed", error.message);
       throw error;

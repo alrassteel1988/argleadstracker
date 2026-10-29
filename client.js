@@ -15520,12 +15520,18 @@ els.placesForm.addEventListener("submit", async event => {
         <strong>${escapeHtml(place.company_name)}</strong>
         <p>${escapeHtml(place.address || "Address not provided")}</p>
         <p>${escapeHtml(place.phone || "Phone not provided")} ${place.google_rating ? ` · Rating ${escapeHtml(place.google_rating)} (${escapeHtml(place.google_review_count)} reviews)` : ""}</p>
-        <button class="primary-button" type="button" data-place-index="${index}">Use Business</button>
+        <p>${place.crm_status === "customer" ? "Customer" : place.crm_status === "lead" ? "Lead" : place.crm_status === "new" ? "New among visible records" : "CRM match not verified"}</p>
+        <button class="primary-button" type="button" data-place-index="${index}">${place.crm_lead_id ? (place.crm_status === "customer" ? "Open account" : "Open lead") : "Use business"}</button>
       </article>
     `).join("");
     document.querySelectorAll("[data-place-index]").forEach(button => {
       button.addEventListener("click", () => {
         const place = result.matches[Number(button.dataset.placeIndex)];
+        if (place.crm_lead_id) {
+          els.placesDialog.close();
+          openLeadDrawer(place.crm_lead_id);
+          return;
+        }
         clearLeadAutoEnrichmentFields();
         applyLeadEnrichment(place, { overwrite: true });
         leadCompanyInputKey = leadCompanyOnlyKey(els.leadForm.elements.company_name.value);
