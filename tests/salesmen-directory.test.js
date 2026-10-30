@@ -52,13 +52,14 @@ for (const id of [
   "salesmenStatusFilter",
   "performanceStageFilter",
   "salesmenSort",
-  "clearSalesmenFilters",
-  "applySalesmenFilters"
+  "clearSalesmenFilters"
 ]) {
   assert.match(salesmenToolbar[1], new RegExp(`id="${id}"`), `${id} must remain in the toolbar`);
 }
 assert.match(salesmenToolbar[1], /data-salesmen-view="list"/, "List view must remain in the toolbar");
 assert.match(salesmenToolbar[1], /data-salesmen-view="cards"/, "Cards view must remain in the toolbar");
+assert.doesNotMatch(salesmenToolbar[1], /id="applySalesmenFilters"/, "Directory filters apply immediately");
+assert.match(client, /salesmenSearch\?\.addEventListener\("input", applySalesmenDirectoryFilters\)/, "Search updates the directory immediately");
 
 assert.match(client, /function salesmenDirectoryRows\(\)/, "Directory metrics must come from the existing application state");
 assert.match(client, /state\.userAccounts/, "The directory must reuse the existing account API result");

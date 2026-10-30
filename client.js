@@ -365,7 +365,6 @@ const els = {
   salesmenTerritoryFilter: document.querySelector("#salesmenTerritoryFilter"),
   salesmenStatusFilter: document.querySelector("#salesmenStatusFilter"),
   salesmenSort: document.querySelector("#salesmenSort"),
-  applySalesmenFilters: document.querySelector("#applySalesmenFilters"),
   clearSalesmenFilters: document.querySelector("#clearSalesmenFilters"),
   exportSalesmenDirectory: document.querySelector("#exportSalesmenDirectory"),
   salesmenDirectoryStatus: document.querySelector("#salesmenDirectoryStatus"),
@@ -15068,7 +15067,10 @@ els.performanceStageFilter?.addEventListener("change", event => {
   if (currentView === "salesmen") renderSalesmenManagementDashboard();
 });
 
-els.applySalesmenFilters?.addEventListener("click", applySalesmenDirectoryFilters);
+els.salesmenSearch?.addEventListener("input", applySalesmenDirectoryFilters);
+[els.salesmenTerritoryFilter, els.salesmenStatusFilter, els.salesmenSort].forEach(select => {
+  select?.addEventListener("change", applySalesmenDirectoryFilters);
+});
 els.clearSalesmenFilters?.addEventListener("click", clearSalesmenDirectoryFilters);
 els.exportSalesmenDirectory?.addEventListener("click", exportSalesmenDirectoryCsv);
 els.salesmenSearch?.addEventListener("keydown", event => {

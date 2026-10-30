@@ -68,7 +68,7 @@ assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*?#dashboardStatus\s*\{[^}
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v146-admin-dashboard/, "PWA cache must rotate for the revised presentation assets");
+assert.match(sw, /arg-pwa-v147-salesmen-live-filters/, "PWA cache must rotate for the revised presentation assets");
 assert.match(client, /title: state\.currentUser\.role === "admin" \? "Team dashboard"/, "Admin dashboard title must match the reference without changing other roles");
 assert.match(client, /const adminHome = currentView === "dashboard" && state\.currentUser\.role === "admin"/, "Admin date must appear only on the dashboard");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
