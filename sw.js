@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v145-neglected-sidebar";
+const CACHE_VERSION = "arg-pwa-v146-admin-dashboard";
 const APP_SHELL = [
   "/",
   "/index.html",
