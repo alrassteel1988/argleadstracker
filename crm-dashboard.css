@@ -1045,6 +1045,45 @@ body.admin-dashboard-mode #appShell #dashboardView .agent-collapsed { flex-wrap:
 }
 /* Neglected accounts: one worklist, responsive rows, existing CRM cadence data. */
 body.neglected-mode #appShell #aiWorkspaceView:not(.hidden) { display: block; min-width: 0; padding-bottom: 100px; }
+body.neglected-mode .neglected-v2-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 20px; }
+body.neglected-mode .neglected-v2-head h2 { margin: 10px 0 4px; color: #0b3b75; font-size: 30px; }
+body.neglected-mode .neglected-v2-head h2 em { color: #9a6a12; font-family: Georgia, serif; font-weight: normal; }
+body.neglected-mode .neglected-v2-head p, body.neglected-mode .neglected-v2-row p { margin: 4px 0; color: #475569; }
+body.neglected-mode .neglected-v2-back { border: 0; padding: 0; background: none; color: #0b3b75; font-weight: 700; }
+body.neglected-mode .neglected-v2-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
+body.neglected-mode .neglected-v2-stats article { display: grid; gap: 8px; padding: 16px; border: 1px solid #dce5ee; border-radius: 8px; background: white; }
+body.neglected-mode .neglected-v2-stats span { color: #475569; font-size: 12px; text-transform: uppercase; }
+body.neglected-mode .neglected-v2-stats strong { font-size: 24px; color: #0b2545; }
+body.neglected-mode .neglected-v2-list { border: 1px solid #bfe3e0; border-radius: 8px; background: #fff; overflow: hidden; }
+body.neglected-mode .neglected-v2-filters { display: flex; justify-content: end; flex-wrap: wrap; gap: 4px; padding: 14px; border-bottom: 1px solid #dce5ee; }
+body.neglected-mode .neglected-v2-filters button, body.neglected-mode .neglected-v2-switch button { min-height: 40px; padding: 8px 12px; border: 1px solid #dce5ee; border-radius: 6px; background: #f1f5f9; color: #0b2545; }
+body.neglected-mode .neglected-v2-filters button[aria-pressed="true"] { background: #0b3b75; color: white; }
+body.neglected-mode .neglected-v2-switch button[aria-pressed="true"] { background: #e0f2f1; color: #146964; font-weight: 700; }
+body.neglected-mode .neglected-v2-row { padding: 16px; border-bottom: 1px solid #e3e8ef; }
+body.neglected-mode .neglected-v2-row-main { display: grid; grid-template-columns: minmax(160px, 1.4fr) auto minmax(145px, auto) minmax(160px, 1fr) auto; align-items: center; gap: 14px; }
+body.neglected-mode .neglected-v2-row-main > * { min-width: 0; overflow-wrap: anywhere; }
+body.neglected-mode .neglected-v2-overdue, body.neglected-mode .neglected-v2-editor label span { color: #b91c1c; }
+body.neglected-mode .neglected-v2-switch, body.neglected-mode .neglected-v2-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+body.neglected-mode .neglected-v2-actions :is(button, a) { min-height: 40px; }
+body.neglected-mode .neglected-v2-remark small { display: block; color: #64748b; }
+body.neglected-mode .neglected-v2-editor { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(150px, 1fr) minmax(200px, 2fr) minmax(120px, auto); gap: 12px; margin-top: 14px; padding: 16px; border: 1px solid #dce5ee; border-radius: 8px; background: #f3f6fa; }
+body.neglected-mode .neglected-v2-editor label { display: grid; gap: 6px; font-weight: 600; }
+body.neglected-mode .neglected-v2-editor :is(select, input, textarea) { width: 100%; min-width: 0; min-height: 42px; padding: 8px; border: 1px solid #c9d1dc; border-radius: 6px; background: white; }
+body.neglected-mode .neglected-v2-editor textarea { min-height: 70px; resize: vertical; }
+body.neglected-mode .neglected-v2-editor > div { display: grid; align-content: start; gap: 8px; }
+body.neglected-mode .neglected-v2-editor [role="alert"] { color: #b91c1c; font-size: 12px; }
+body.neglected-mode .neglected-v2-empty { padding: 20px; }
+body.neglected-mode .neglected-v2-assistant { display: flex; align-items: center; gap: 10px; margin-top: 20px; padding: 8px; border: 1px solid #bfe3e0; border-radius: 8px; background: #fff; }
+body.neglected-mode .neglected-v2-assistant input { flex: 1; min-width: 0; min-height: 42px; padding: 8px; border: 0; }
+@media (max-width: 1024px) {
+  body.neglected-mode .neglected-v2-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.neglected-mode .neglected-v2-row-main { grid-template-columns: minmax(0, 1fr) auto; }
+  body.neglected-mode .neglected-v2-switch, body.neglected-mode .neglected-v2-remark, body.neglected-mode .neglected-v2-actions { grid-column: 1 / -1; }
+  body.neglected-mode .neglected-v2-switch button { flex: 1; min-height: 44px; }
+  body.neglected-mode .neglected-v2-actions :is(button, a) { min-height: 44px; }
+  body.neglected-mode .neglected-v2-editor { grid-template-columns: minmax(0, 1fr); }
+  body.neglected-mode .neglected-v2-head { align-items: start; flex-wrap: wrap; }
+}
 body.neglected-mode .crm-neglected-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
 body.neglected-mode .crm-neglected-toolbar > span { color: var(--crm-navy); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
 body.neglected-mode .crm-neglected-toolbar button { --crm-button-icon: var(--crm-icon-arrow-left); }
@@ -1476,4 +1515,14 @@ body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-origin-row { grid-template-columns: minmax(0, 1fr) auto; }
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-origin-row strong { font-size: 14px; }
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesman-summary-card-copy small { display: block !important; position: static !important; width: auto !important; height: auto !important; clip: auto !important; clip-path: none !important; overflow: visible !important; }
+}
+
+body.neglected-mode .neglected-v2-head h2 { display: none; }
+body.neglected-mode #appShell .neglected-v2-filters button[aria-pressed="true"] { background: #0b3b75 !important; color: white !important; }
+body.neglected-mode #appShell .neglected-v2-switch button[aria-pressed="true"] { background: #e0f2f1 !important; color: #146964 !important; }
+body.neglected-mode #appShell .neglected-v2-actions [data-neglected-task] { display: inline-flex !important; }
+body.neglected-mode #appShell .neglected-v2-actions a.primary-button { background: #f5a623 !important; color: #0b2545 !important; }
+@media (max-width: 1024px) {
+  body.neglected-mode #appShell .neglected-v2-actions { display: flex; flex-wrap: nowrap; }
+  body.neglected-mode #appShell .neglected-v2-actions > * { width: auto !important; flex: 1 1 auto; }
 }

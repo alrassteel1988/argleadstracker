@@ -61,7 +61,7 @@ assert.match(client, /else await runLeadAiAction\(lead, button\.dataset\.workspa
 assert.match(client, /await runSalespersonAiAction\(button\.dataset\.workspacePortfolioAction\)/);
 assert.match(client, /openFlagAttentionModal\(lead\)/);
 assert.match(client, /function render\(\)[^]*?renderAiWorkspace\(\);[^]*?applyView\(\);/);
-assert.match(client, /if \(!isSalesmanRole\(\) && \["focus", "neglected"\]\.includes\(view\)\) view = "ai-actions"/);
+assert.match(client, /view === "neglected" && !isPrivilegedDashboardRole\(\)/);
 console.log("PASS AI workspace routes, existing action reuse and escaped caller-scoped company selection");
 
 {
@@ -79,7 +79,7 @@ console.log("PASS AI workspace routes, existing action reuse and escaped caller-
   vm.runInContext(`${client.match(/function syncBrowserRoute\([^]*?\n\}/)[0]}; syncBrowserRoute();`, context);
   assert.equal(pushed, "/?view=dashboard/neglected");
   assert.doesNotMatch(html, /data-view="neglected" data-ai-portfolio-nav/);
-  assert.match(client, /querySelectorAll\("\[data-ai-portfolio-nav\]"\)\.forEach\(item => item\.classList\.toggle\("hidden", !isSalesmanRole\(\)\)\)/);
+  assert.match(client, /item\.dataset\.view === "neglected" && isPrivilegedDashboardRole\(\)/);
   assert.match(client, /querySelector\('#mobileSidebar \[data-view="ai-actions"\]'\)\?\.classList\.remove\("hidden"\)/);
   assert.match(client, /button\.dataset\.dashboardPortfolio === "neglected"\) \{ setView\("neglected"\); return; \}/);
   assert.match(client, /data-workspace-view="dashboard" aria-label="Back to Dashboard"/);
@@ -181,7 +181,37 @@ console.log("PASS AI workspace routes, existing action reuse and escaped caller-
   assert.match(workspace.innerHTML,/Unavailable &lt;script&gt;/);
   context.setResult({error:'',metrics:{contact_overdue_companies:[]}}); context.renderNeglected(workspace);
   assert.match(workspace.innerHTML,/No accounts are past/);
-  console.log('PASS Neglected scoped cadence rows, sort, unknown history, escaping and loading/error/empty states');
+  console.log('PASS legacy neglected cadence helpers');
+}
+
+{
+  const leads = [{ id: 'a', company_name: '<img src=x>', activities: [
+    { id: 'one', next_action_date: '2020-01-01' },
+    { id: 'two', next_action_date: '2020-01-02', transaction_status: 'closed', transaction_remarks: 'Done' },
+    { next_action_date: '2020-01-03' },
+    { id: 'future', next_action_date: '2099-01-01' },
+    { id: 'deleted', next_action_date: '2020-01-01', deletion_status: 'pending' }
+  ] }];
+  const state = { currentUser: { id: 'u' }, leads, leadsLoaded: true };
+  const context = { state, isSalesmanRole: () => true, arrangeAssistantLauncher: () => {}, Intl, Date };
+  vm.createContext(context);
+  vm.runInContext(`${client.match(/function escapeHtml\([^]*?\n\}/)[0]}; ${client.match(/function neglectedActivityRows\([^]*?\n\}/)[0]}; ${client.match(/function renderNeglectedActivities\([^]*?\n\}/)[0]}; let neglectedActivityFilter='all', neglectedActivityEditor=null; const neglectedOutcomes={pending:[],closed:[]}; rows=neglectedActivityRows; render=renderNeglectedActivities;`, context);
+  const rows = context.rows(leads, '2026-10-27');
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].status, 'pending');
+  assert.equal(rows[1].status, 'closed');
+  assert.equal(rows[2].stable, false);
+  const workspace = { innerHTML: '', querySelector: () => null };
+  context.render(workspace);
+  assert.match(workspace.innerHTML, /&lt;img src=x&gt;/);
+  assert.doesNotMatch(workspace.innerHTML, /<img/);
+  assert.match(workspace.innerHTML, /Activity needs a permanent ID/);
+  assert.doesNotMatch(workspace.innerHTML, /data-neglected-export/);
+  context.isSalesmanRole = () => false;
+  context.render(workspace);
+  assert.match(workspace.innerHTML, /data-neglected-export/);
+  assert.doesNotMatch(workspace.innerHTML, /data-neglected-edit/);
+  console.log('PASS overdue activity rows and management read-only controls');
 }
 
 {
