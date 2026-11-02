@@ -37,11 +37,20 @@ test("reference dashboard keeps real counts, drilldowns and responsive shell", a
   expect(order).toEqual([...order].sort((a, b) => a - b));
   await page.locator(".action-plan-toggle").first().click();
   await expect(page.locator(".salesman-plan-table-region").first()).toBeVisible();
+  const firstPlan = page.locator(".salesman-plan-card").first();
+  await expect(firstPlan.locator(".admin-v3-avatar")).toHaveText("DS");
+  await expect(firstPlan.locator(".admin-ref-plan-metrics > div")).toHaveCount(4);
+  await expect(firstPlan.locator("tbody tr:visible")).toHaveCount(3);
+  await expect(firstPlan.locator(".admin-ref-more-leads")).toHaveText("All 12 leads in Pipeline ›");
+  await expect(page.locator(".admin-v3-metric-meter")).toHaveCount(4);
+  expect(await page.locator(".metric-open").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgb(16, 59, 112)");
+  await capture(page, info, "admin-dashboard-v3-expanded");
   await page.locator("[data-summary-card='openPipeline']").click();
   await expect(page.locator("#summaryCardDetailsDialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.locator("[data-admin-interaction='cold']").click();
   await expect(page.locator("#relationshipFocusPanel")).toBeVisible();
+  await expect(page.locator("[data-admin-interaction='cold']")).toContainText(/Cold relationships · \d+/);
   await page.locator("[data-admin-interaction='latest']").click();
   await expect(page.locator("#dashboardActivityFeed")).toBeVisible();
   await page.locator(".action-plan-toggle").first().click();
@@ -52,6 +61,37 @@ test("reference dashboard keeps real counts, drilldowns and responsive shell", a
     expect(await page.locator("#mobileSidebar").evaluate(element => Math.abs(element.getBoundingClientRect().top))).toBeLessThanOrEqual(1);
   }
   expect(errors).toEqual([]);
+});
+
+test("v3 lead previews preserve keyboard access, scoped Pipeline links and narrow layouts", async ({ page }, info) => {
+  const role = await login(page, info);
+  if (role !== "admin") return;
+  await page.locator("[data-action-plan-bulk='expand']").click();
+  await expect(page.locator(".salesman-plan-table-region:visible")).toHaveCount(2);
+  const row = page.locator(".salesman-plan-row:visible").first();
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#leadDetailView")).toBeVisible();
+  await page.goto("/?view=dashboard");
+  await page.locator(".action-plan-toggle").first().click();
+  await page.locator(".admin-ref-more-leads").first().click();
+  await expect(page.locator("#pipelineView")).toBeVisible();
+  await expect(page.locator('[data-pipeline-filter="salesman"]')).toHaveValue("Demo Salesman");
+  await expect(page.locator(".admin-v3-header-avatar")).toBeHidden();
+  await expect(page.locator(".admin-v3-metric-unit").first()).toBeHidden();
+  await page.goto("/?view=dashboard");
+  await page.locator("#adminReferenceInsights summary").click();
+  await expect(page.locator("#adminReferenceInsights > details")).toHaveAttribute("open");
+  await page.locator("#adminReferenceInsights summary").click();
+  if (info.project.name.endsWith("mobile")) {
+    await page.setViewportSize({width:320, height:812});
+    await page.locator(".action-plan-toggle").first().click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await expect(page.locator("#mobileMenuToggle")).toBeVisible();
+    await page.locator("#mobileMenuToggle").click();
+    await expect(page.locator("#mobileSidebar")).toBeVisible();
+    await capture(page, info, "admin-dashboard-v3-narrow-menu");
+  }
 });
 
 test("Admin activity filters origin, notes and status without mutation controls", async ({ page }, info) => {
