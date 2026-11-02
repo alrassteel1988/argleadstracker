@@ -32,7 +32,8 @@ const label = { textContent: "" };
 const legend = { innerHTML: "" };
 let chart;
 const context = vm.createContext({
-  document: { documentElement: {} },
+  document: { documentElement: {}, querySelector: () => null },
+  state: { currentUser: { role: "manager" } },
   getComputedStyle: () => ({ getPropertyValue: name => palette[name.replace(/^--crm-/, "")] || "" }),
   els: { salesmenSummaryChart: { setAttribute() {} }, salesmenSummaryLegend: legend, salesmenConversionRate: label },
   Chart: function(canvas, configuration) { chart = configuration; this.destroy = () => {}; },
