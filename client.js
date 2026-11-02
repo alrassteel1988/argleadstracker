@@ -645,7 +645,7 @@ function parseAppRoute(locationLike = window.location) {
   const pathname = locationLike.pathname || "/";
   const search = new URLSearchParams(locationLike.search || "");
   const requestedView = search.get("view") === "dashboard/neglected" ? "neglected" : search.get("view");
-  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
+  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "quotes", "accounts", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
   const emailRoute = pathname.match(/^\/leads\/([^/]+)\/draft-email\/?$/);
   if (emailRoute) return { view: "draft-email", leadId: decodeURIComponent(emailRoute[1]), tab: "overview" };
   const meetingRoute = pathname.match(/^\/leads\/([^/]+)\/prepare-meeting\/?$/);
@@ -2151,6 +2151,9 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
     button.addEventListener("click", () => downloadActivityAttachment(button.dataset.detailsDownloadAttachment));
   });
   els.editActivityFromDetails.disabled = activity.deletion_status === "pending";
+  const readOnlyLog = state.currentUser?.role === "admin" && currentView === "activity";
+  els.editActivityFromDetails.classList.toggle("hidden", readOnlyLog);
+  els.requestActivityDeletionFromDetails.classList.toggle("hidden", readOnlyLog);
   els.requestActivityDeletionFromDetails.disabled = activity.deletion_status === "pending";
   els.requestActivityDeletionFromDetails.textContent = activity.deletion_status === "pending" ? "Deletion Pending" : "Request Deletion";
   const canCancel = pendingRequest && (
@@ -7067,6 +7070,12 @@ function renderPerformanceChart(rows) {
 }
 
 function renderSalesmenSummaryChart(rows) {
+  const panel = document.querySelector(".salesmen-snapshot-panel");
+  if (state.currentUser?.role === "admin" && panel) {
+    const bars = adminReferencePanel("adminReferenceSalesmenBars", "admin-ref-salesmen-bars", panel);
+    const total = rows.reduce((sum, row) => sum + row.totalAssigned, 0);
+    bars.innerHTML = rows.map(row => `<article><strong>${escapeHtml(row.name)}</strong><div><span>Assigned leads</span>${adminReferenceProgress(row.totalAssigned, total)}<b>${row.totalAssigned}</b></div><div><span>Converted</span>${adminReferenceProgress(row.activeCustomers, row.totalAssigned)}<b>${row.conversionRate}%</b></div><div><span>Overdue share</span>${adminReferenceProgress(row.overdueFollowups, row.totalAssigned)}<b>${percentOf(row.overdueFollowups, row.totalAssigned)}%</b></div></article>`).join("") || '<p class="empty-copy">No salesmen match the selected filters.</p>';
+  }
   if (!els.salesmenSummaryChart || !els.salesmenSummaryLegend || !els.salesmenConversionRate) return;
   const totalAssigned = rows.reduce((sum, row) => sum + row.totalAssigned, 0);
   const converted = rows.reduce((sum, row) => sum + row.activeCustomers, 0);
@@ -7629,7 +7638,399 @@ function renderSalesmanDashboard() {
   renderSalesmanSimplifiedDashboard();
 }
 
+// Reference screens are a presentation of the existing, role-scoped CRM records.
+const adminReference = {
+  owner: "", reportsOwner: "", reportsReady: false, reportsError: "", interaction: "latest",
+  activity: { search: "", date: "all", company: "all", type: "all", origin: "all", person: "all", linked: "all", status: "all", sort: "newest" },
+  records: { search: "", stage: "all", person: "all", tier: "all", territory: "all", page: 1 }
+};
+
+function adminReferencePanel(id, className, parent, markup = "") {
+  let panel = document.getElementById(id);
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.id = id;
+    panel.className = className;
+    panel.innerHTML = markup;
+    parent.appendChild(panel);
+  }
+  return panel;
+}
+
+function adminReferenceCard(label, value, detail, tone = "") {
+  return `<article class="admin-ref-stat ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(detail)}</small></article>`;
+}
+
+function adminReferenceProgress(value, total) {
+  const percent = total ? Math.max(0, Math.min(100, value / total * 100)) : 0;
+  return `<progress value="${percent}" max="100" aria-label="${escapeHtml(`${value} of ${total}`)}">${Math.round(percent)}%</progress>`;
+}
+
+function adminReferenceReportLabel(person) {
+  if (!adminReference.reportsReady) return adminReference.reportsError ? "Unavailable" : "Loading";
+  const id = person?.id || person?.user_id;
+  const matches = report => (id && String(report.rep_id || report.user_id) === String(id))
+    || String(report.rep_name || "").toLowerCase() === salesmanName(person).toLowerCase();
+  const row = state.weeklyReports.review.find(item => matches(item.report || item));
+  return row ? weeklyReportStatusMeta((row.report || row).status).label : "Not submitted";
+}
+
+function arrangeReferenceAdminDashboard() {
+  if (currentView !== "dashboard") return;
+  const root = els.dashboardView;
+  const triage = els.adminDashboardTriageRow;
+  const overview = els.adminDashboardOverviewSlot;
+  const work = els.adminDashboardWorkRow;
+  const analytics = els.adminDashboardAnalyticsRow;
+  work.classList.remove("hidden");
+  root.prepend(triage);
+  triage.className = "admin-ref-attention";
+  overview.appendChild(els.metricsShell);
+  triage.after(overview);
+  overview.after(work);
+  work.prepend(els.actionPlanPanel);
+  work.after(analytics);
+  const insights = adminReferencePanel("adminReferenceInsights", "admin-ref-insights", root,
+    '<details><summary>More insights</summary><div class="admin-ref-insights-grid"></div></details>');
+  const insightBody = insights.querySelector(".admin-ref-insights-grid");
+  [els.marketIntelPanel, els.needsAttentionPanel, els.adminTaskPanel, els.marketSnapshotPanel,
+    els.dashboardPipelineFunnelPanel, els.lossReasonsPanel, els.agentPanel, els.configAgentPanel].filter(Boolean)
+    .forEach(panel => insightBody.appendChild(panel));
+  const health = document.getElementById("pipelineHealthPanel");
+  const activity = document.getElementById("dashboardActivityPanel");
+  const cold = document.getElementById("relationshipFocusPanel");
+  analytics.append(health, activity);
+  activity.appendChild(cold);
+  els.adminDashboardBottomRow.classList.add("hidden");
+  const heading = els.actionPlanPanel.querySelector("h2");
+  heading.innerHTML = 'Salesmen &amp; <em class="crm-title-accent">lead plans</em>';
+  const rows = salesmenDirectoryRows();
+  els.actionPlanList.querySelectorAll(".salesman-plan-card").forEach((card, index) => {
+    const row = rows.find(item => item.name === card.querySelector("h3")?.textContent);
+    if (!row) return;
+    const territory = card.querySelector(".salesman-plan-head-copy p");
+    if (territory) territory.textContent = row.territory || "Territory not set";
+    let summary = card.querySelector(".admin-ref-plan-metrics");
+    if (!summary) {
+      summary = document.createElement("dl");
+      summary.className = "admin-ref-plan-metrics";
+      card.querySelector(".salesman-plan-head-copy").after(summary);
+    }
+    summary.innerHTML = [["Leads", row.totalAssigned], ["Overdue", row.overdueFollowups], ["Active customers", row.activeCustomers], ["Conversion", `${row.conversionRate}%`], ["Last activity", row.lastActivity ? formatDisplayDate(row.lastActivity.slice(0, 10)) : "Not recorded"]]
+      .map(([key, value]) => `<div><dt>${key}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join("");
+    const toggle = card.querySelector(".action-plan-toggle span");
+    if (toggle) toggle.textContent = card.classList.contains("is-collapsed") ? "Show leads" : "Hide leads";
+    // Keep a short preview without dropping the remaining leads or their actions.
+    const body = card.querySelector(".salesman-plan-table-region");
+    if (body) {
+      const tableRows = [...body.querySelectorAll("tbody tr")];
+      tableRows.forEach((item, i) => item.hidden = i >= 10);
+      if (tableRows.length > 10 && !body.querySelector(".admin-ref-more-leads")) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "text-button admin-ref-more-leads";
+        more.textContent = `Show all ${tableRows.length} leads`;
+        more.onclick = () => { tableRows.forEach(item => item.hidden = false); more.remove(); };
+        body.appendChild(more);
+      }
+    }
+  });
+  const coldLeads = state.leads.filter(lead => lead.health?.label === "RED" || normalizeStageKey(lead.stage) === "DORMANT");
+  const overdue = state.leads.filter(leadHasOverdueNextAction);
+  const flags = (state.attentionFlags || []).filter(flag => !["resolved", "closed"].includes(String(flag.status || "").toLowerCase()));
+  triage.innerHTML = `<h2>Needs your <em class="crm-title-accent">attention</em></h2><div class="admin-ref-attention-grid">${[
+    ["Overdue follow-ups", overdue.length, `${new Set(overdue.map(lead => lead.assigned_to || lead.assigned_salesman)).size} salesmen affected`, "View report", "overdue", "danger"],
+    ["Cold relationships", coldLeads.length, "At-risk and dormant relationships", "See accounts", "cold", "warning"],
+    ["Weekly reports", adminReference.reportsReady ? state.weeklyReports.missing.length : "--", adminReference.reportsError || (adminReference.reportsReady ? "Missing submissions for the selected week" : "Loading report status"), "Open review", "reports", "warning"],
+    ["Director alerts", flags.length, flags.length ? "Open flags awaiting management" : "No open director alerts", "Alert history", "alerts", "teal"]
+  ].map(([label, count, detail, text, action, tone]) => `<article class="admin-ref-attention-card ${tone}"><span>${label}</span><strong>${count}</strong><p>${escapeHtml(detail)}</p><button class="ghost-button" type="button" data-admin-attention="${action}">${text} &#8250;</button></article>`).join("")}</div>`;
+  triage.querySelectorAll("[data-admin-attention]").forEach(button => button.onclick = () => {
+    const action = button.dataset.adminAttention;
+    if (action === "overdue") { openSummaryCardDetails("tasksDue"); return; }
+    if (action === "reports") { setView("tasks"); return; }
+    if (action === "cold") {
+      adminReference.interaction = "cold";
+      renderReferenceInteractionTabs();
+      activity.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
+    insights.querySelector("details").open = true;
+    setDashboardSectionCollapsed(els.needsAttentionPanel, false, { force: true });
+    els.needsAttentionPanel.scrollIntoView({ block: "start" });
+  });
+  renderReferenceInteractionTabs();
+  root.appendChild(insights);
+}
+
+function renderReferenceInteractionTabs() {
+  const panel = document.getElementById("dashboardActivityPanel");
+  if (!panel || state.currentUser?.role !== "admin") return;
+  let tabs = panel.querySelector(".admin-ref-interaction-tabs");
+  if (!tabs) {
+    tabs = document.createElement("div");
+    tabs.className = "admin-ref-interaction-tabs";
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Relationship activity");
+    panel.prepend(tabs);
+  }
+  tabs.innerHTML = ["latest", "cold"].map(value => `<button type="button" role="tab" aria-selected="${adminReference.interaction === value}" data-admin-interaction="${value}">${value === "latest" ? "Latest interactions" : "Cold relationships"}</button>`).join("");
+  panel.querySelector(":scope > .panel-header")?.classList.add("hidden");
+  els.dashboardActivityFeed.hidden = adminReference.interaction !== "latest";
+  document.getElementById("relationshipFocusPanel").hidden = adminReference.interaction !== "cold";
+  tabs.querySelectorAll("button").forEach(button => button.onclick = () => {
+    adminReference.interaction = button.dataset.adminInteraction;
+    renderReferenceInteractionTabs();
+  });
+}
+
+function adminReferenceActivityRows() {
+  const people = [state.currentUser, ...(state.userAccounts || []), ...(state.settings.salesmen || []).filter(item => typeof item === "object")].filter(Boolean);
+  return allActivities().filter(item => !item.archived && !item.delete_request).map(activity => {
+    const creator = people.find(person => String(person.id || person.user_id) === String(activity.created_by || ""));
+    const assignedBy = people.find(person => String(person.id || person.user_id) === String(activity.assigned_by || activity.task_created_by || ""));
+    const manager = person => ["admin", "manager", "director"].includes(String(person?.role || "").toLowerCase());
+    const origin = manager(creator) || manager(assignedBy) ? "Management" : creator?.role === "salesman" ? "Self" : "Not recorded";
+    return { ...activity, origin, actor: activity.created_by_name || creator?.name || activity.logged_by || "Not recorded",
+      closed: activity.transaction_status === "closed", remarks: String(activity.transaction_remarks || "").trim(),
+      outcome: String(activity.transaction_outcome || ""), date: String(activity.at || activity.created_at || "").slice(0, 10) };
+  });
+}
+
+function adminReferenceFilterActivity(rows) {
+  const f = adminReference.activity;
+  return rows.filter(row => {
+    const age = row.date ? daysSince(row.date) : null;
+    return (!f.search || `${row.note || row.text || ""} ${row.remarks}`.toLowerCase().includes(f.search.toLowerCase()))
+      && (f.company === "all" || row.company_name === f.company)
+      && (f.type === "all" || row.type === f.type)
+      && (f.origin === "all" || row.origin === f.origin)
+      && (f.person === "all" || row.actor === f.person)
+      && (f.date === "all" || age !== null && (f.date === "7" ? age >= 0 && age <= 7 : f.date === "30" ? age >= 0 && age <= 30 : age > 30))
+      && (f.linked === "all" || (f.linked === "quote" ? Boolean(row.quotation_ref) : f.linked === "pmr" ? Boolean(row.pmr_id || row.pmr_ref) : !row.quotation_ref && !row.pmr_id && !row.pmr_ref))
+      && (f.status === "all" || (f.status === "missing" ? !row.remarks : f.status === "pending" ? !row.closed : f.status === "closed" ? row.closed : row.closed && (f.status === "done" ? /^done/i.test(row.outcome) : /^not reached/i.test(row.outcome))));
+  }).sort((a, b) => (f.sort === "oldest" ? 1 : -1) * String(a.at || "").localeCompare(String(b.at || "")));
+}
+
+function adminReferenceFilterMenu(key, label, options) {
+  const f = adminReference.activity;
+  const active = f[key] !== "all";
+  return `<details class="admin-ref-filter ${active ? "is-active" : ""}"><summary>${label} <span aria-hidden="true">&#9663;</span></summary><div role="group" aria-label="${label} filter">${options.map(([value, text]) => `<button type="button" data-admin-activity-filter="${key}" data-value="${escapeHtml(value)}" aria-pressed="${f[key] === value}">${escapeHtml(text)}</button>`).join("")}${key === "date" ? `<label>Sort<select data-admin-activity-sort><option value="newest" ${f.sort === "newest" ? "selected" : ""}>Newest first</option><option value="oldest" ${f.sort === "oldest" ? "selected" : ""}>Oldest first</option></select></label>` : ""}</div></details>`;
+}
+
+function renderReferenceAdminActivity() {
+  const root = els.activityView;
+  const legacy = root.querySelector(".activity-dashboard");
+  legacy?.remove();
+  const host = adminReferencePanel("adminReferenceActivity", "admin-ref-activity", root);
+  const all = adminReferenceActivityRows();
+  const filtered = adminReferenceFilterActivity(all);
+  const rows = filtered.slice(0, adminReference.activityLimit || 50);
+  const closed = all.filter(row => row.closed).length;
+  const missing = all.filter(row => !row.remarks).length;
+  const uniqueOptions = key => [["all", `All ${key === "actor" ? "salesmen" : key === "type" ? "types" : "companies"}`], ...[...new Set(all.map(row => row[key]).filter(Boolean))].sort().map(value => [value, value])];
+  const definitions = [
+    ["date", "Date & time", [["all", "All dates"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["older", "Older than 30 days"]]],
+    ["company", "Company", uniqueOptions("company_name")], ["type", "Type", uniqueOptions("type")],
+    ["origin", "Origin", [["all", "Self and management"], ["Management", "Assigned by management"], ["Self", "Self-generated"], ["Not recorded", "Not recorded"]]],
+    ["person", "Logged by", uniqueOptions("actor")],
+    ["linked", "Quote / PMR", [["all", "All entries"], ["quote", "Has quote reference"], ["pmr", "PMR linked"], ["neither", "Neither"]]],
+    ["status", "Status & remarks", [["all", "All statuses"], ["pending", "Pending"], ["closed", "Closed (all)"], ["done", "Closed - done"], ["not-reached", "Closed - not reached"], ["missing", "No remarks"]]]
+  ];
+  const tags = definitions.filter(([key]) => adminReference.activity[key] !== "all").map(([key, label, options]) => `<button class="admin-ref-tag" type="button" data-admin-clear-filter="${key}">${label}: ${escapeHtml(options.find(([value]) => value === adminReference.activity[key])?.[1] || adminReference.activity[key])} &times;</button>`).join("");
+  const status = row => `<div class="admin-ref-status"><span class="admin-ref-tag ${row.closed ? "teal" : "warning"}">${row.closed ? "Closed" : "Pending"}</span> <strong>${escapeHtml(row.outcome)}</strong>${row.remarks ? `<p>${escapeHtml(row.remarks)}</p><small>${escapeHtml(row.transaction_updated_by_name || row.actor)}${row.transaction_updated_at ? ` - updated ${escapeHtml(formatDisplayDate(String(row.transaction_updated_at).slice(0, 10)))}` : ""}</small>` : `<p class="admin-ref-danger">No remarks from ${escapeHtml(row.actor)}</p>`}<button class="text-button" type="button" data-admin-activity-history="${escapeHtml(row.lead_id)}" data-activity-id="${escapeHtml(row.id || "")}" data-index="${row.activity_index}">History &amp; details</button></div>`;
+  const people = [...new Set(all.map(row => row.actor))];
+  host.innerHTML = `<div class="admin-ref-heading-actions"><button class="ghost-button" type="button" data-admin-activity-export>Export</button><button class="primary-button" type="button" data-admin-log-activity>+ Log activity</button></div><div class="admin-ref-activity-stats">${adminReferenceCard("Activities closed", `${closed} / ${all.length}`, `${all.filter(row => row.closed && /^done/i.test(row.outcome)).length} done - ${all.filter(row => row.closed && /^not reached/i.test(row.outcome)).length} not reached`, "teal")}${adminReferenceCard("Still pending", all.length - closed, "Awaiting the next step", "warning")}${adminReferenceCard("No remarks", missing, "Unexplained activities", "danger")}<article class="admin-ref-by-person"><span>By salesman</span>${people.map(person => { const own = all.filter(row => row.actor === person); const n = own.filter(row => row.closed).length; return `<div><strong>${escapeHtml(person)}</strong>${adminReferenceProgress(n, own.length)}<small>${n}/${own.length} closed</small></div>`; }).join("") || "No activities recorded"}</article></div><div class="admin-ref-lock">Append-only view. Past entries cannot be edited or deleted here. Status history remains with each activity.</div><section class="admin-ref-table-panel"><div class="admin-ref-toolbar"><input type="search" data-admin-activity-search aria-label="Search notes and remarks" placeholder="Search notes and remarks" value="${escapeHtml(adminReference.activity.search)}"><div class="admin-ref-filter-tags">${tags}<span>Showing ${rows.length} of ${all.length}</span>${tags || adminReference.activity.search || adminReference.activity.sort !== "newest" ? '<button class="text-button admin-ref-danger" type="button" data-admin-clear-all>Clear all</button>' : ""}</div></div><div class="admin-ref-mobile-filters">${definitions.map(args => adminReferenceFilterMenu(...args)).join("")}</div><div class="admin-ref-table-scroll"><table class="admin-ref-table admin-ref-activity-table"><thead><tr>${definitions.slice(0, 5).map(args => `<th>${adminReferenceFilterMenu(...args)}</th>`).join("")}<th>Notes</th>${definitions.slice(5).map(args => `<th>${adminReferenceFilterMenu(...args)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr${!row.remarks ? ' class="is-unexplained"' : ""}><td data-label="Date & time">${escapeHtml(formatDisplayDate(row.date))}<small>${escapeHtml(activityDisplayTime(row))}</small></td><td data-label="Company"><button class="text-button" type="button" data-admin-open-lead="${escapeHtml(row.lead_id)}">${escapeHtml(row.company_name)}</button></td><td data-label="Type">${escapeHtml(row.type || "Note")}</td><td data-label="Origin"><span class="admin-ref-tag ${row.origin === "Management" ? "navy" : ""}">${escapeHtml(row.origin)}</span></td><td data-label="Logged by">${escapeHtml(row.actor)}</td><td data-label="Notes">${escapeHtml(row.note || row.text || "No notes")}</td><td data-label="Quote / PMR">${escapeHtml(row.quotation_ref || (row.pmr_id || row.pmr_ref ? "PMR linked" : "--"))}</td><td data-label="Status & remarks">${status(row)}</td></tr>`).join("") || '<tr><td colspan="8" class="empty-copy">No activities match these filters.</td></tr>'}</tbody></table></div><footer class="admin-ref-table-footer">Pending = next step open. Closed = done, or could not be reached. Only the assigned salesman updates transaction status.</footer></section><details class="admin-ref-calendar"><summary>Calendar, reminders &amp; review requests</summary><div class="admin-ref-existing-activity"></div></details>`;
+  if (legacy) host.querySelector(".admin-ref-existing-activity").appendChild(legacy);
+  if (els.openActivityDeletionQueue) host.querySelector(".admin-ref-existing-activity").appendChild(els.openActivityDeletionQueue);
+  host.querySelector(".admin-ref-stat").insertAdjacentHTML("beforeend", adminReferenceProgress(closed, all.length));
+  if (filtered.length > rows.length) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "ghost-button";
+    more.textContent = `Show more (${filtered.length - rows.length} remaining)`;
+    more.onclick = () => { adminReference.activityLimit = rows.length + 50; renderReferenceAdminActivity(); };
+    host.querySelector(".admin-ref-table-footer").appendChild(more);
+  }
+  host.querySelectorAll("[data-admin-activity-filter]").forEach(button => button.onclick = () => { adminReference.activity[button.dataset.adminActivityFilter] = button.dataset.value; renderReferenceAdminActivity(); });
+  host.querySelectorAll("[data-admin-clear-filter]").forEach(button => button.onclick = () => { adminReference.activity[button.dataset.adminClearFilter] = "all"; renderReferenceAdminActivity(); });
+  host.querySelector("[data-admin-clear-all]")?.addEventListener("click", () => { Object.keys(adminReference.activity).forEach(key => adminReference.activity[key] = key === "search" ? "" : key === "sort" ? "newest" : "all"); renderReferenceAdminActivity(); });
+  host.querySelectorAll("[data-admin-activity-sort]").forEach(select => select.onchange = () => { adminReference.activity.sort = select.value; renderReferenceAdminActivity(); });
+  host.querySelector("[data-admin-activity-search]").oninput = event => { const position = event.target.selectionStart; adminReference.activity.search = event.target.value; renderReferenceAdminActivity(); const input = host.querySelector("[data-admin-activity-search]"); input.focus(); if (input.type === "text") input.setSelectionRange(position, position); };
+  host.querySelector("[data-admin-log-activity]").onclick = () => els.openActivityCreate.click();
+  host.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, row.closed ? "Closed" : "Pending", row.outcome, row.remarks]));
+  host.querySelectorAll("[data-admin-activity-history]").forEach(button => button.onclick = () => {
+    openActivityDetails(button.dataset.adminActivityHistory, Number(button.dataset.index), button.dataset.activityId);
+    // This read-only entry point must not expose amendment or deletion controls.
+    els.editActivityFromDetails?.classList.add("hidden");
+    els.requestActivityDeletionFromDetails?.classList.add("hidden");
+  });
+  bindReferenceLeadLinks(host);
+}
+
+function adminReferenceExport(filename, headers, rows) {
+  if (state.currentUser?.role !== "admin") return;
+  const cell = value => `"${String(value ?? "").replace(/^\s*[=+@-]/, "'$&").replace(/"/g, '""')}"`;
+  downloadTextFile(filename, "\ufeff" + [headers, ...rows].map(row => row.map(cell).join(",")).join("\r\n"));
+}
+
+function bindReferenceLeadLinks(host) {
+  host.querySelectorAll("[data-admin-open-lead]").forEach(button => button.onclick = () => openLeadDrawer(button.dataset.adminOpenLead));
+}
+
+function crmIcon() {
+  return salesmanDashboardSummaryIcon("overdueCalls");
+}
+
+function adminReferenceQuoteRows(leads) {
+  return leads.flatMap(lead => {
+    const activities = (lead.activities || []).filter(item => !item.archived && !item.delete_request);
+    const refs = [...new Set([lead.quotation_ref, ...activities.map(item => item.quotation_ref)].map(value => String(value || "").trim()).filter(Boolean))];
+    return refs.map(ref => {
+      const linked = activities.filter(item => String(item.quotation_ref || "").trim() === ref);
+      const sent = linked.filter(item => /quotation sent|quote sent/i.test(item.type || item.activity_purpose || "")).sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")))[0];
+      const followed = sent ? linked.filter(item => String(item.at || "") > String(sent.at || "") && /follow.?up|call|email|visit|meeting/i.test(item.type || item.activity_purpose || "")).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))[0] : null;
+      const ordered = linked.some(item => /order placed/i.test(item.type || item.activity_purpose || ""));
+      const status = ordered ? "Won" : followed ? "Followed up" : sent ? "Needs follow-up" : "Not recorded";
+      return { lead, ref, sent: sent?.at || "", followed, status, estimated: refs.length === 1 ? lead.estimated_value : null };
+    });
+  });
+}
+
+function renderReferenceAdminRecords() {
+  const host = document.getElementById("adminRecordsView");
+  if (!host || state.currentUser?.role !== "admin" || !["quotes", "accounts"].includes(currentView)) return;
+  if (state.leadsError && !state.leadsLoaded) {
+    host.innerHTML = `<div class="admin-ref-record-error" role="alert"><p>${escapeHtml(state.leadsError)}</p><button type="button" class="ghost-button" data-admin-record-retry>Retry loading records</button></div>`;
+    host.querySelector("[data-admin-record-retry]").onclick = () => loadLeads().catch(error => setToast(error.message, "error"));
+    return;
+  }
+  const quotes = currentView === "quotes";
+  const f = adminReference.records;
+  const all = quotes ? adminReferenceQuoteRows(state.leads) : state.leads.map(lead => ({ lead, status: stageDisplayLabel(lead.stage) }));
+  const statuses = [...new Set(all.map(row => row.status))];
+  const rows = all.filter(row => (f.stage === "all" || row.status === f.stage)
+    && (!f.search || `${row.ref || ""} ${row.lead.company_name || ""} ${row.lead.sector || ""} ${row.lead.location || ""} ${row.lead.contact_person || ""}`.toLowerCase().includes(f.search.toLowerCase()))
+    && (f.person === "all" || row.lead.assigned_salesman === f.person)
+    && (f.tier === "all" || String(row.lead.tier) === f.tier)
+    && (f.territory === "all" || row.lead.territory === f.territory));
+  const pages = Math.max(1, Math.ceil(rows.length / 10));
+  f.page = Math.min(f.page, pages);
+  const shown = rows.slice((f.page - 1) * 10, f.page * 10);
+  const select = (key, label, values) => `<select data-admin-record-filter="${key}" aria-label="${label}"><option value="all">${label}</option>${values.map(value => `<option value="${escapeHtml(String(value))}" ${String(value) === f[key] ? "selected" : ""}>${escapeHtml(String(value))}</option>`).join("")}</select>`;
+  const names = [...new Set(state.leads.map(lead => lead.assigned_salesman).filter(Boolean))].sort();
+  const tableHead = quotes ? ["Quote ref", "Company", "Sent / age", "Estimated lead value", "Last follow-up", "Status", "Next action", "Actions"] : ["Company", "Tier", "Stage", "Salesman", "Last contact", "Relationship", "Estimated value", "Actions"];
+  const cell = (label, content) => `<td data-label="${label}">${content}</td>`;
+  host.innerHTML = `<div class="admin-ref-heading-actions"><button class="ghost-button" type="button" data-admin-record-export>Export</button></div>${quotes ? `<div class="admin-ref-quote-stats">${adminReferenceCard("Quote references", all.length, "Recorded in the CRM")}${adminReferenceCard("Needs follow-up", all.filter(row => row.status === "Needs follow-up").length, "Sent, with no linked follow-up", "danger")}${adminReferenceCard("Followed up", all.filter(row => row.status === "Followed up").length, "Based on linked activities")}${adminReferenceCard("Won", all.filter(row => row.status === "Won").length, "Linked order placed activity", "teal")}</div>` : ""}<section class="admin-ref-table-panel"><div class="admin-ref-record-tabs" role="group" aria-label="${quotes ? "Quote" : "Account"} status"><button type="button" data-admin-record-status="all" aria-pressed="${f.stage === "all"}">All ${quotes ? "quotes" : "accounts"} <b>${all.length}</b></button>${statuses.map(status => `<button type="button" data-admin-record-status="${escapeHtml(status)}" aria-pressed="${f.stage === status}">${escapeHtml(status)} <b>${all.filter(row => row.status === status).length}</b></button>`).join("")}</div><div class="admin-ref-toolbar"><input type="search" data-admin-record-search placeholder="${quotes ? "Quote reference or company" : "Company, contact, area or sector"}" aria-label="Search ${quotes ? "quotes" : "accounts"}" value="${escapeHtml(f.search)}">${select("person", "All salesmen", names)}${!quotes ? select("tier", "All tiers", [1, 2, 3]) + select("territory", "All territories", [...new Set(state.leads.map(lead => lead.territory).filter(Boolean))].sort()) : ""}<button class="text-button" type="button" data-admin-record-reset>Clear filters</button></div><div class="admin-ref-table-scroll"><table class="admin-ref-table"><thead><tr>${tableHead.map(label => `<th>${label}</th>`).join("")}</tr></thead><tbody>${shown.map(row => {
+    const lead = row.lead;
+    const company = `<button class="text-button" type="button" data-admin-open-lead="${escapeHtml(lead.id)}">${escapeHtml(lead.company_name || "Unnamed company")}</button><small>${escapeHtml(quotes ? lead.assigned_salesman || "Unassigned" : [lead.sector, lead.location].filter(Boolean).join(" - "))}</small>`;
+    const actions = `<div class="admin-ref-row-actions">${lead.phone ? `<a class="ghost-button" href="tel:${escapeHtml(String(lead.phone).replace(/[^+\d*#,;]/g, ""))}" title="Call company" aria-label="Call ${escapeHtml(lead.company_name)}">${crmIcon("phone")}</a>` : ""}<button class="ghost-button" type="button" data-admin-open-lead="${escapeHtml(lead.id)}" title="Open lead" aria-label="Open ${escapeHtml(lead.company_name)}">&#8250;</button></div>`;
+    const values = quotes ? [escapeHtml(row.ref), company, row.sent ? `${escapeHtml(formatDisplayDate(row.sent.slice(0, 10)))}<small>${daysSince(row.sent.slice(0, 10))} days</small>` : "Not recorded", row.estimated == null ? "Not recorded" : escapeHtml(money.format(row.estimated || 0)), row.followed ? escapeHtml(formatDisplayDate(String(row.followed.at).slice(0, 10))) : "Not recorded", `<span class="admin-ref-tag">${row.status}</span>`, escapeHtml(lead.next_action || "Not scheduled"), actions]
+      : [company, escapeHtml(`Tier ${lead.tier || "Not recorded"}`), `<span class="admin-ref-tag">${escapeHtml(row.status)}</span>`, escapeHtml(lead.assigned_salesman || "Unassigned"), escapeHtml(lead.last_activity ? daysAgoLabel(lead.last_activity) : "Not recorded"), escapeHtml(lead.health?.label || "Not calculated"), lead.estimated_value == null ? "Not recorded" : escapeHtml(money.format(lead.estimated_value)), actions];
+    return `<tr>${values.map((content, index) => cell(tableHead[index], content)).join("")}</tr>`;
+  }).join("") || `<tr><td colspan="8" class="empty-copy">${state.leadsLoading ? "Loading CRM records..." : state.leadsError ? escapeHtml(state.leadsError) : `No ${quotes ? "quote references" : "accounts"} match these filters.`}</td></tr>`}</tbody></table></div><footer class="admin-ref-table-footer"><span>Showing ${rows.length ? (f.page - 1) * 10 + 1 : 0}-${Math.min(f.page * 10, rows.length)} of ${rows.length}</span><div><button class="ghost-button" type="button" data-admin-record-page="${f.page - 1}" ${f.page === 1 ? "disabled" : ""} aria-label="Previous page">&#8249;</button> Page ${f.page} of ${pages} <button class="ghost-button" type="button" data-admin-record-page="${f.page + 1}" ${f.page === pages ? "disabled" : ""} aria-label="Next page">&#8250;</button></div></footer></section>${quotes ? '<p class="admin-ref-record-note">Values are lead estimates, not ERP quote totals. Sent dates and outcomes use linked activities only. Quote documents stay in the ERP; a reference is not validation.</p>' : ""}`;
+  host.querySelectorAll("[data-admin-record-status]").forEach(button => button.onclick = () => { f.stage = button.dataset.adminRecordStatus; f.page = 1; renderReferenceAdminRecords(); });
+  host.querySelectorAll("[data-admin-record-filter]").forEach(input => input.onchange = () => { f[input.dataset.adminRecordFilter] = input.value; f.page = 1; renderReferenceAdminRecords(); });
+  host.querySelector("[data-admin-record-search]").oninput = event => { f.search = event.target.value; f.page = 1; renderReferenceAdminRecords(); host.querySelector("[data-admin-record-search]").focus(); };
+  host.querySelectorAll("[data-admin-record-page]").forEach(button => button.onclick = () => { f.page = Number(button.dataset.adminRecordPage); renderReferenceAdminRecords(); });
+  host.querySelector("[data-admin-record-reset]").onclick = () => { Object.assign(f, { search: "", stage: "all", person: "all", tier: "all", territory: "all", page: 1 }); renderReferenceAdminRecords(); };
+  host.querySelector("[data-admin-record-export]").onclick = () => adminReferenceExport(`${currentView}.csv`, quotes ? ["Quote ref", "Company", "Salesman", "Sent", "Status", "Next action"] : ["Company", "Salesman", "Stage", "Tier", "Territory", "Last activity"], rows.map(row => quotes ? [row.ref, row.lead.company_name, row.lead.assigned_salesman, row.sent, row.status, row.lead.next_action] : [row.lead.company_name, row.lead.assigned_salesman, row.status, row.lead.tier, row.lead.territory, row.lead.last_activity]));
+  bindReferenceLeadLinks(host);
+}
+
+function renderReferenceAdminShell() {
+  const admin = state.currentUser?.role === "admin";
+  document.body.classList.toggle("admin-reference-mode", admin);
+  document.querySelectorAll("[data-records-view]").forEach(button => {
+    button.classList.toggle("active", admin && button.dataset.recordsView === currentView);
+    button.onclick = () => {
+      Object.assign(adminReference.records, { search: "", stage: "all", person: "all", tier: "all", territory: "all", page: 1 });
+      setView(admin ? button.dataset.recordsView : "pipeline");
+    };
+  });
+  const activityHost = document.getElementById("adminReferenceActivity");
+  if (!admin) {
+    document.getElementById("adminReferenceNavigation")?.classList.add("hidden");
+    if (activityHost) {
+      const legacy = activityHost.querySelector(".activity-dashboard");
+      if (legacy) els.activityView.prepend(legacy);
+      activityHost.remove();
+    }
+    return;
+  }
+  const owner = String(state.currentUser.id || "");
+  if (adminReference.owner !== owner) {
+    adminReference.owner = owner;
+    Object.keys(adminReference.activity).forEach(key => adminReference.activity[key] = key === "search" ? "" : key === "sort" ? "newest" : "all");
+  }
+  if (adminReference.reportsOwner !== owner) {
+    adminReference.reportsOwner = owner;
+    adminReference.reportsReady = false;
+    loadWeeklyReportWorkspace().then(() => {
+      if (String(state.currentUser?.id) !== owner) return;
+      adminReference.reportsReady = !els.tasksMessage?.classList.contains("error");
+      adminReference.reportsError = adminReference.reportsReady ? "" : "Report status unavailable";
+      render();
+    }).catch(() => { adminReference.reportsError = "Report status unavailable"; });
+  }
+  const titles = { activity: "Activity log", quotes: "Quotes tracker", accounts: "All accounts", tasks: "Weekly sales reports" };
+  if (titles[currentView]) els.topbarPageTitle.innerHTML = pageTitleMarkup(titles[currentView]);
+  if (currentView === "activity") els.topbarContext.textContent = "Every entry is tied to its creator. Transaction status and remarks stay with the activity.";
+  if (["quotes", "accounts"].includes(currentView)) els.topbarContext.textContent = `${state.leads.length} visible CRM accounts - all territories`;
+  const launcher = document.getElementById("aiAssistantLauncher");
+  const topbar = document.querySelector("#appShell .topbar-actions");
+  if (launcher && topbar) {
+    topbar.appendChild(launcher);
+    launcher.classList.remove("hidden");
+    launcher.setAttribute("aria-label", "Ask AI");
+    launcher.title = "Ask AI";
+  }
+  document.querySelectorAll("#salesmenSearch").forEach(input => input.oninput = applySalesmenDirectoryFilters);
+  document.querySelectorAll("#salesmenTerritoryFilter, #salesmenStatusFilter, #salesmenSort, #performanceStageFilter").forEach(input => input.onchange = applySalesmenDirectoryFilters);
+  const settings = adminReferencePanel("adminReferenceNavigation", "nav-group", document.querySelector(".sidebar-top"), '<span class="nav-group-label">Admin</span><nav class="nav-list" aria-label="Administration"><button class="nav-item" type="button" data-admin-tools="accounts">Salesman accounts</button><button class="nav-item" type="button" data-admin-tools="import">Import &amp; export</button><button class="nav-item" type="button" data-admin-tools="settings">CRM settings</button></nav>');
+  settings.classList.remove("hidden");
+  settings.querySelectorAll("[data-admin-tools]").forEach(button => button.onclick = () => {
+    if (button.dataset.adminTools === "accounts") { els.openSalesmanForm.click(); return; }
+    if (button.dataset.adminTools === "import") { els.sidebarToolsMenu.open = true; els.sidebarToolsMenu.scrollIntoView({ block: "nearest" }); return; }
+    setView("dashboard");
+    const insights = document.querySelector("#adminReferenceInsights details");
+    if (insights) insights.open = true;
+    setDashboardSectionCollapsed(els.configAgentPanel, false, { force: true });
+    els.configAgentPanel.scrollIntoView({ block: "start" });
+  });
+  renderReferenceAdminRecords();
+}
+
+function renderReferenceAdminTasks() {
+  const review = state.weeklyReports.review || [];
+  const missing = state.weeklyReports.missing || [];
+  const summary = adminReferencePanel("adminReferenceReportsSummary", "admin-ref-report-stats", els.tasksView);
+  const layout = els.tasksView.querySelector(".tasks-layout");
+  if (layout) layout.before(summary);
+  const count = status => review.filter(report => report.status === status).length;
+  summary.innerHTML = adminReferenceCard("Submitted", review.length, "Reports received this week")
+    + adminReferenceCard("Missing", missing.length, "Salesmen yet to submit", "danger")
+    + adminReferenceCard("Under review", count("under_review"), "Management review in progress", "warning")
+    + adminReferenceCard("Accepted", count("accepted"), "Reviewed and accepted", "teal");
+  let filter = els.tasksSidebar.querySelector(".admin-ref-report-search");
+  if (!filter) {
+    filter = document.createElement("label");
+    filter.className = "admin-ref-report-search";
+    filter.innerHTML = '<span>Find a salesman</span><input type="search" placeholder="Search submitted reports" aria-label="Search submitted reports">';
+    els.tasksSidebar.prepend(filter);
+    filter.querySelector("input").oninput = event => els.tasksSidebar.querySelectorAll(".tasks-review-card").forEach(card => {
+      card.hidden = !card.textContent.toLowerCase().includes(event.target.value.toLowerCase());
+    });
+  }
+  const flags = els.tasksPrimary.querySelector(".tasks-section-card.warning");
+  const shell = els.tasksPrimary.querySelector(".tasks-review-shell");
+  if (flags && shell) shell.prepend(flags);
+}
+
 function arrangeAdminDashboardLayout() {
+  if (state.currentUser?.role === "admin") {
+    arrangeReferenceAdminDashboard();
+    return;
+  }
   if (!els.dashboardView || !els.metricsShell || !els.overdueBanner) return;
   const isAdminDashboard = currentView === "dashboard" && !isSalesmanRole();
   els.adminDashboardWorkRow?.classList.toggle("hidden", !isAdminDashboard);
@@ -11577,7 +11978,7 @@ function salesmenDirectoryTableMarkup(rows) {
       <thead><tr>
         <th scope="col">Salesman</th><th scope="col">Territory</th><th scope="col">Assigned Leads</th>
         <th scope="col">Active Customers</th><th scope="col">Overdue Follow-ups</th><th scope="col">Tasks Due</th>
-        <th scope="col">Conversion Rate</th><th scope="col">Last Activity</th><th scope="col">Status</th><th scope="col">Actions</th>
+        <th scope="col">Conversion Rate</th><th scope="col">Last Activity</th><th scope="col">Status</th><th scope="col">Weekly report</th><th scope="col">Actions</th>
       </tr></thead>
       <tbody>${rows.map(row => `
         <tr>
@@ -11590,6 +11991,7 @@ function salesmenDirectoryTableMarkup(rows) {
           <td class="salesmen-number">${escapeHtml(String(row.conversionRate))}%</td>
           <td>${directoryActivityMarkup(row.lastActivity)}</td>
           <td><span class="salesmen-status-badge is-${escapeHtml(row.statusKey)}">${escapeHtml(row.statusLabel)}</span></td>
+          <td>${escapeHtml(adminReferenceReportLabel(row.person))}</td>
           <td>${salesmenRowActionsMarkup(row)}</td>
         </tr>
       `).join("")}</tbody>
@@ -12020,6 +12422,7 @@ function renderActionPlanPanel() {
       }
     });
   });
+  if (state.currentUser?.role === "admin" && currentView === "dashboard") arrangeReferenceAdminDashboard();
 }
 
 function allActivities() {
@@ -13932,6 +14335,7 @@ function renderTasksView() {
 
   if (admin) {
     renderWeeklyReviewView();
+    if (state.currentUser?.role === "admin") renderReferenceAdminTasks();
   } else {
     renderWeeklySalesmanView();
   }
@@ -14211,6 +14615,13 @@ function renderActivityCalendarVisibility() {
 
 function renderActivityView() {
   renderActivityCalendarVisibility();
+  renderLegacyActivityView();
+  if (state.currentUser?.role === "admin" && currentView === "activity") {
+    renderReferenceAdminActivity();
+  }
+}
+
+function renderLegacyActivityView() {
   const activities = state.activities || [];
   const canReviewDeletions = ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase());
   els.openActivityDeletionQueue?.classList.toggle("hidden", !canReviewDeletions);
@@ -14589,6 +15000,7 @@ function render() {
   renderPipelineFilterNotice();
   loadActivityAudioSources();
   applyView();
+  renderReferenceAdminShell();
   syncDashboardCollapsibles();
   renderSyncStatus();
 }
@@ -14622,6 +15034,7 @@ function arrangeLeadRecordControls() {
 
 function applyView() {
   arrangeLeadRecordControls();
+  if (state.currentUser && state.currentUser.role !== "admin" && ["quotes", "accounts"].includes(currentView)) currentView = "pipeline";
   if (isSalesmanRole() && ["salesmen", "activity"].includes(currentView)) {
     currentView = "dashboard";
   }
@@ -14631,6 +15044,7 @@ function applyView() {
   const isActivity = currentView === "activity";
   const isTasks = currentView === "tasks";
   const isLead = currentView === "lead";
+  document.querySelector("#adminRecordsView")?.classList.toggle("hidden", !["quotes", "accounts"].includes(currentView) || state.currentUser?.role !== "admin");
   const isAiWorkspace = Boolean(aiWorkspacePage());
   const showMetricsShell = isPipeline || (isDashboard && !isSalesmanRole());
   els.metricsShell?.classList.toggle("hidden", !showMetricsShell);
@@ -14694,6 +15108,7 @@ function toggleMobileMenu() {
 }
 
 function setView(view) {
+  if (["quotes", "accounts"].includes(view) && state.currentUser?.role !== "admin") view = "pipeline";
   if (view !== "draft-email") state.emailRouteLeadId = "";
   if (view !== "meeting-prep") state.meetingRouteLeadId = "";
   if (isSalesmanRole() && ["salesmen", "activity"].includes(view)) view = "dashboard";
@@ -14745,6 +15160,7 @@ async function loadLeads(options = {}) {
     throw error;
   } finally {
     state.leadsLoading = false;
+    if (state.currentUser?.role === "admin") renderReferenceAdminRecords();
     if (currentView === "pipeline") renderLeadList();
     if (els.summaryCardDetailsDialog?.open) renderSummaryCardDetailsResults();
   }
@@ -14817,6 +15233,11 @@ async function fetchSalesmanAccounts() {
 }
 
 function showLogin(message = "") {
+  document.body.classList.remove("admin-reference-mode");
+  adminReference.owner = "";
+  adminReference.reportsOwner = "";
+  adminReference.reportsReady = false;
+  adminReference.reportsError = "";
   if (els.summaryCardDetailsDialog?.open) els.summaryCardDetailsDialog.close();
   if (els.activityDialog?.open) closeActivityModal({ force: true });
   document.body.classList.remove("summary-details-modal-open");

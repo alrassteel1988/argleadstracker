@@ -9,7 +9,7 @@ const css = fs.readFileSync(path.join(root, "admin-dashboard-clean.css"), "utf8"
 const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /href="\/admin-dashboard-clean\.css\?v=6-intel-alert-spacing"/, "the Admin Dashboard stylesheet must use the Intel and alert spacing revision");
+assert.match(html, /href="\/admin-dashboard-clean\.css\?v=7-reference-screens"/, "the Admin stylesheet must use the reference-screen revision");
 assert.match(html, /id="adminDashboardOverviewSlot"[^>]*aria-label="Dashboard overview"/, "overview region needs an accessible label");
 assert.match(html, /id="adminDashboardTriageRow"[^>]*aria-label="Attention required"/, "attention region needs an accessible label");
 assert.match(html, /id="adminDashboardAnalyticsRow"[^>]*aria-label="Pipeline analytics"/, "analytics region needs an accessible label");
@@ -50,7 +50,11 @@ assert.match(css, /\.admin-dashboard-overview-slot \.metrics\s*\{[^}]*grid-templ
 assert.match(css, /\.admin-dashboard-bottom-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s, "remaining operational insights must use three equal columns");
 assert.doesNotMatch(css, /\.admin-dashboard-bottom-row\s*\{[^}]*height:\s*\d+px/s, "the three Admin Dashboard cards must grow to fit their content");
 assert.match(css, /\.admin-dashboard-bottom-row > \.panel\s*\{[^}]*min-height:\s*180px;[^}]*overflow:\s*visible/s, "Admin Dashboard cards must have a readable minimum while preserving natural content height");
-assert.doesNotMatch(css, /#dashboardFocus,[\s\S]*?#dashboardActivityFeed,[\s\S]*?#dashboardStatus[\s\S]*?overflow-y:\s*auto/s, "card content must not be cramped into an internal vertical scroll region");
+for (const block of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  if (/#dashboardFocus|#dashboardActivityFeed|#dashboardStatus/.test(block[1])) {
+    assert.doesNotMatch(block[2], /overflow-y:\s*auto/, "dashboard content must not be cramped into internal vertical scrolling");
+  }
+}
 assert.match(css, /\.dashboard-focus-item\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;[^}]*column-gap:\s*var\(--admin-space-2\)/s, "Cold relationships must reserve a separate badge column and title gap");
 assert.match(css, /:is\(\s*#dashboardFocus,\s*#dashboardActivityFeed\s*\)\s*>\s*\.dashboard-activity-item\s*\{[^}]*min-height:\s*54px;[^}]*padding:\s*var\(--admin-space-2\)\s+var\(--admin-space-3\)/s, "Cold relationships and Latest interactions cards need 8px vertical and 12px horizontal inner padding");
 assert.match(css, /\.dashboard-activity-item strong\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*text-overflow:\s*clip;[^}]*white-space:\s*normal/s, "Cold relationships and Latest interactions must wrap long account names safely");
@@ -68,7 +72,7 @@ assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*?#dashboardStatus\s*\{[^}
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v146-admin-dashboard/, "PWA cache must rotate for the revised presentation assets");
+assert.match(sw, /arg-pwa-v147-admin-reference/, "PWA cache must rotate for the revised presentation assets");
 assert.match(client, /title: state\.currentUser\.role === "admin" \? "Team dashboard"/, "Admin dashboard title must match the reference without changing other roles");
 assert.match(client, /const adminHome = currentView === "dashboard" && state\.currentUser\.role === "admin"/, "Admin date must appear only on the dashboard");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");

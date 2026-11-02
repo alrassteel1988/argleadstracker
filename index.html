@@ -27,7 +27,6 @@
   <link rel="stylesheet" href="/tasks-contrast.css?v=1">
   <link rel="stylesheet" href="/activity-modal.css?v=1">
   <link rel="stylesheet" href="/activity-workflow.css?v=1">
-  <link rel="stylesheet" href="/admin-dashboard-clean.css?v=6-intel-alert-spacing">
   <link rel="stylesheet" href="/ai-sales-assistant.css?v=1">
   <link rel="stylesheet" href="/activity-dashboard-latest.css?v=calendar-minimize-4">
   <link rel="stylesheet" href="/lead-detail-contrast.css?v=2-action-buttons">
@@ -42,6 +41,7 @@
   <link rel="stylesheet" href="/crm-team.css?v=1">
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
+  <link rel="stylesheet" href="/admin-dashboard-clean.css?v=7-reference-screens">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
   <body>
@@ -117,8 +117,8 @@
             <span class="nav-group-label">Shortcuts</span>
             <nav class="nav-list" aria-label="Records navigation">
               <button class="nav-item" data-view="tasks" type="button"><span class="nav-item-icon" aria-hidden="true">TS</span><span>Tasks</span></button>
-              <button class="nav-item" type="button" data-quick-view="pipeline"><span class="nav-item-icon" aria-hidden="true">QT</span><span>Quotes</span></button>
-              <button class="nav-item" type="button" data-quick-view="pipeline"><span class="nav-item-icon" aria-hidden="true">AC</span><span>Accounts</span></button>
+              <button class="nav-item" type="button" data-records-view="quotes"><span class="nav-item-icon" aria-hidden="true">QT</span><span>Quotes</span></button>
+              <button class="nav-item" type="button" data-records-view="accounts"><span class="nav-item-icon" aria-hidden="true">AC</span><span>Accounts</span></button>
               <button class="nav-item" type="button" id="sidebarSearchPlaces"><span class="nav-item-icon" aria-hidden="true">GP</span><span>Search Places</span></button>
             </nav>
           </div>
@@ -690,6 +690,7 @@
           </section>
         </section>
 
+        <section class="view-panel hidden" id="adminRecordsView" aria-live="polite"></section>
         <section class="view-panel hidden" id="salesmenView">
           <div class="panel performance-panel hidden" id="performancePanel">
             <section class="salesmen-metric-grid" aria-label="Salesmen summary">
