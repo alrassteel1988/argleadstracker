@@ -7691,7 +7691,7 @@ function arrangeReferenceAdminDashboard() {
   work.prepend(els.actionPlanPanel);
   work.after(analytics);
   const insights = adminReferencePanel("adminReferenceInsights", "admin-ref-insights", root,
-    '<details><summary>More insights</summary><div class="admin-ref-insights-grid"></div></details>');
+    '<details><summary><span>More <em class="crm-title-accent">insights</em><small>Market snapshot · Intel overview · Pipeline funnel · Salesman comparison</small></span><span class="admin-v3-disclosure" aria-hidden="true"></span></summary><div class="admin-ref-insights-grid"></div></details>');
   const insightBody = insights.querySelector(".admin-ref-insights-grid");
   [els.marketIntelPanel, els.needsAttentionPanel, els.adminTaskPanel, els.marketSnapshotPanel,
     els.dashboardPipelineFunnelPanel, els.lossReasonsPanel, els.agentPanel, els.configAgentPanel].filter(Boolean)
@@ -7705,32 +7705,61 @@ function arrangeReferenceAdminDashboard() {
   const heading = els.actionPlanPanel.querySelector("h2");
   heading.innerHTML = 'Salesmen &amp; <em class="crm-title-accent">lead plans</em>';
   const rows = salesmenDirectoryRows();
-  els.actionPlanList.querySelectorAll(".salesman-plan-card").forEach((card, index) => {
+  els.actionPlanList.querySelectorAll(".salesman-plan-card").forEach(card => {
     const row = rows.find(item => item.name === card.querySelector("h3")?.textContent);
     if (!row) return;
     const territory = card.querySelector(".salesman-plan-head-copy p");
-    if (territory) territory.textContent = row.territory || "Territory not set";
+    if (territory) territory.textContent = `${row.territory || "Territory not set"} · Last activity ${row.lastActivity ? formatDisplayDate(row.lastActivity.slice(0, 10)) : "not recorded"}`;
+    const copy = card.querySelector(".salesman-plan-head-copy");
+    if (!copy.querySelector(".admin-v3-avatar")) {
+      const avatar = document.createElement("span");
+      avatar.className = "admin-v3-avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = adminDashboardInitials(row.name);
+      copy.prepend(avatar);
+    }
     let summary = card.querySelector(".admin-ref-plan-metrics");
     if (!summary) {
       summary = document.createElement("dl");
       summary.className = "admin-ref-plan-metrics";
       card.querySelector(".salesman-plan-head-copy").after(summary);
     }
-    summary.innerHTML = [["Leads", row.totalAssigned], ["Overdue", row.overdueFollowups], ["Active customers", row.activeCustomers], ["Conversion", `${row.conversionRate}%`], ["Last activity", row.lastActivity ? formatDisplayDate(row.lastActivity.slice(0, 10)) : "Not recorded"]]
+    summary.innerHTML = [["Leads", row.totalAssigned], ["Overdue", row.overdueFollowups], ["Active", row.activeCustomers], ["Conversion", `${row.conversionRate}%`]]
       .map(([key, value]) => `<div><dt>${key}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join("");
+    const meta = card.querySelector(".salesman-plan-head-meta");
+    let status = meta.querySelector(".admin-v3-person-status");
+    if (!status) {
+      status = document.createElement("span");
+      status.className = "admin-v3-person-status";
+      meta.prepend(status);
+    }
+    status.dataset.status = row.statusKey;
+    status.textContent = row.statusLabel;
     const toggle = card.querySelector(".action-plan-toggle span");
     if (toggle) toggle.textContent = card.classList.contains("is-collapsed") ? "Show leads" : "Hide leads";
-    // Keep a short preview without dropping the remaining leads or their actions.
+    // Preview only; the existing Pipeline route retains access to every assigned lead.
     const body = card.querySelector(".salesman-plan-table-region");
     if (body) {
       const tableRows = [...body.querySelectorAll("tbody tr")];
-      tableRows.forEach((item, i) => item.hidden = i >= 10);
-      if (tableRows.length > 10 && !body.querySelector(".admin-ref-more-leads")) {
+      body.querySelector("thead tr").innerHTML = "<th>Lead</th><th>Stage</th><th>Next step</th><th>Due</th><th>Overdue</th>";
+      tableRows.forEach((item, i) => {
+        item.hidden = i >= 3;
+        const lead = state.leads.find(lead => String(lead.id) === item.dataset.actionPlanLead);
+        if (!lead) { item.querySelector("td")?.setAttribute("colspan", "5"); return; }
+        const plan = leadActionPlanState(lead);
+        item.innerHTML = `<td data-label="Lead"><strong>${escapeHtml(lead.company_name || "Unnamed company")}</strong><span class="admin-v3-plan-mobile-meta">${escapeHtml(plan.action)} · ${escapeHtml(formatPlanDate(lead.next_action_date) || "No due date")} · ${escapeHtml(plan.dueLabel)}</span></td><td data-label="Stage"><span class="admin-v3-stage" data-stage="${escapeHtml(normalizeStageKey(lead.stage))}">${escapeHtml(stageDisplayLabel(lead.stage))}</span></td><td data-label="Next step">${escapeHtml(plan.action)}</td><td data-label="Due">${escapeHtml(formatPlanDate(lead.next_action_date) || "Not set")}</td><td data-label="Overdue"><span class="chip ${plan.chipClass}">${escapeHtml(plan.dueLabel)}</span></td>`;
+      });
+      if (row.totalAssigned && !body.querySelector(".admin-ref-more-leads")) {
         const more = document.createElement("button");
         more.type = "button";
         more.className = "text-button admin-ref-more-leads";
-        more.textContent = `Show all ${tableRows.length} leads`;
-        more.onclick = () => { tableRows.forEach(item => item.hidden = false); more.remove(); };
+        more.textContent = `All ${row.totalAssigned} leads in Pipeline ›`;
+        more.onclick = () => {
+          resetPipelineFilters();
+          state.filters.salesman = row.name;
+          if (els.salesmanFilter) els.salesmanFilter.value = row.name;
+          setView("pipeline");
+        };
         body.appendChild(more);
       }
     }
@@ -7743,7 +7772,7 @@ function arrangeReferenceAdminDashboard() {
     ["Cold relationships", coldLeads.length, "At-risk and dormant relationships", "See accounts", "cold", "warning"],
     ["Weekly reports", adminReference.reportsReady ? state.weeklyReports.missing.length : "--", adminReference.reportsError || (adminReference.reportsReady ? "Missing submissions for the selected week" : "Loading report status"), "Open review", "reports", "warning"],
     ["Director alerts", flags.length, flags.length ? "Open flags awaiting management" : "No open director alerts", "Alert history", "alerts", "teal"]
-  ].map(([label, count, detail, text, action, tone]) => `<article class="admin-ref-attention-card ${tone}"><span>${label}</span><strong>${count}</strong><p>${escapeHtml(detail)}</p><button class="ghost-button" type="button" data-admin-attention="${action}">${text} &#8250;</button></article>`).join("")}</div>`;
+  ].map(([label, count, detail, text, action, tone]) => `<article class="admin-ref-attention-card ${tone}"><span>${label}</span><i class="admin-v3-icon attention-${action}" aria-hidden="true"></i><strong>${count}</strong><p>${escapeHtml(detail)}</p><button class="ghost-button" type="button" data-admin-attention="${action}">${text} &#8250;</button></article>`).join("")}</div>`;
   triage.querySelectorAll("[data-admin-attention]").forEach(button => button.onclick = () => {
     const action = button.dataset.adminAttention;
     if (action === "overdue") { openSummaryCardDetails("tasksDue"); return; }
@@ -7759,7 +7788,75 @@ function arrangeReferenceAdminDashboard() {
     els.needsAttentionPanel.scrollIntoView({ block: "start" });
   });
   renderReferenceInteractionTabs();
+  decorateAdminDashboardV3();
   root.appendChild(insights);
+}
+
+function adminDashboardInitials(name) {
+  return String(name || "Admin").trim().split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join("").toUpperCase();
+}
+
+function adminDashboardMetricPresentation(datasets, total) {
+  return [
+    ["openPipeline", "leads", datasets.openPipeline.length, total],
+    ["activeCustomers", `of ${total}`, datasets.activeCustomers.length, total],
+    ["atRisk", "leads", datasets.atRisk.length, total],
+    ["tasksDue", "tasks", datasets.tasksDue.filter(lead => lead.next_action_date && lead.next_action_date < today()).length, datasets.tasksDue.length]
+  ].map(([key, unit, count, denominator]) => ({ key, unit, percent: Math.min(100, Math.max(0, percentOf(count, denominator))) }));
+}
+
+function decorateAdminDashboardV3() {
+  const datasets = dashboardSummaryDatasets();
+  adminDashboardMetricPresentation(datasets, state.leads.length).forEach(({ key, unit, percent }) => {
+    const card = els.metricsShell.querySelector(`[data-summary-card="${key}"]`);
+    if (!card) return;
+    if (!card.querySelector(".admin-v3-metric-unit")) {
+      const suffix = document.createElement("span");
+      suffix.className = "admin-v3-metric-unit";
+      card.querySelector("strong").after(suffix);
+      const icon = document.createElement("i");
+      icon.className = "admin-v3-icon";
+      icon.setAttribute("aria-hidden", "true");
+      const meter = document.createElement("progress");
+      meter.className = "admin-v3-metric-meter";
+      meter.max = 100;
+      meter.setAttribute("aria-hidden", "true");
+      card.append(icon, meter);
+    }
+    card.querySelector(".admin-v3-metric-unit").textContent = unit;
+    card.querySelector("progress").value = percent;
+    if (key === "activeCustomers") {
+      let context = card.querySelector(".admin-v3-active-context");
+      if (!context) {
+        context = document.createElement("small");
+        context.className = "admin-v3-active-context";
+        card.querySelector("progress").before(context);
+      }
+      context.textContent = `${percent}% of accounts active`;
+    }
+  });
+  let avatar = document.querySelector(".admin-v3-header-avatar");
+  if (!avatar) {
+    avatar = document.createElement("span");
+    avatar.className = "admin-v3-header-avatar";
+    document.querySelector("#appShell .topbar-title").appendChild(avatar);
+  }
+  avatar.textContent = adminDashboardInitials(state.currentUser?.name);
+  avatar.setAttribute("aria-label", state.currentUser?.name || "Admin");
+  els.dashboardStatus.querySelectorAll(".status-card").forEach((card, index) => {
+    card.dataset.stage = normalizeStageKey(state.settings.stages[index]);
+  });
+  const activity = document.getElementById("dashboardActivityPanel");
+  if (!activity.querySelector(".admin-v3-movement-heading")) {
+    const heading = document.createElement("h2");
+    heading.className = "admin-v3-movement-heading";
+    heading.innerHTML = 'Account <em class="crm-title-accent">movement</em>';
+    activity.prepend(heading);
+  }
+  if (els.dashboardActivityFeed.querySelector(".empty-copy")) {
+    els.dashboardActivityFeed.innerHTML = '<div class="admin-v3-empty"><i class="admin-v3-icon" aria-hidden="true"></i><strong>No recent interactions yet</strong><p>Calls, emails and visits appear here as they are logged.</p><button type="button" class="ghost-button" data-admin-open-activity>Open activity log &#8250;</button></div>';
+    els.dashboardActivityFeed.querySelector("button").onclick = () => setView("activity");
+  }
 }
 
 function renderReferenceInteractionTabs() {
@@ -7773,7 +7870,8 @@ function renderReferenceInteractionTabs() {
     tabs.setAttribute("aria-label", "Relationship activity");
     panel.prepend(tabs);
   }
-  tabs.innerHTML = ["latest", "cold"].map(value => `<button type="button" role="tab" aria-selected="${adminReference.interaction === value}" data-admin-interaction="${value}">${value === "latest" ? "Latest interactions" : "Cold relationships"}</button>`).join("");
+  const coldCount = state.leads.filter(lead => lead.health?.label === "RED" || normalizeStageKey(lead.stage) === "DORMANT").length;
+  tabs.innerHTML = ["latest", "cold"].map(value => `<button type="button" role="tab" aria-selected="${adminReference.interaction === value}" data-admin-interaction="${value}">${value === "latest" ? "Latest interactions" : `Cold relationships · ${coldCount}`}</button>`).join("");
   panel.querySelector(":scope > .panel-header")?.classList.add("hidden");
   els.dashboardActivityFeed.hidden = adminReference.interaction !== "latest";
   document.getElementById("relationshipFocusPanel").hidden = adminReference.interaction !== "cold";

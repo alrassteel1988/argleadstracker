@@ -9,7 +9,7 @@ const css = fs.readFileSync(path.join(root, "admin-dashboard-clean.css"), "utf8"
 const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const vercel = fs.readFileSync(path.join(root, "vercel.json"), "utf8");
 
-assert.match(html, /href="\/admin-dashboard-clean\.css\?v=7-reference-screens"/, "the Admin stylesheet must use the reference-screen revision");
+assert.match(html, /href="\/admin-dashboard-clean\.css\?v=8-dashboard-v3"/, "the Admin stylesheet must use the v3 Dashboard revision");
 assert.match(html, /id="adminDashboardOverviewSlot"[^>]*aria-label="Dashboard overview"/, "overview region needs an accessible label");
 assert.match(html, /id="adminDashboardTriageRow"[^>]*aria-label="Attention required"/, "attention region needs an accessible label");
 assert.match(html, /id="adminDashboardAnalyticsRow"[^>]*aria-label="Pipeline analytics"/, "analytics region needs an accessible label");
@@ -72,7 +72,7 @@ assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*?#dashboardStatus\s*\{[^}
 assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/, "dashboard must honor reduced motion");
 assert.doesNotMatch(css, /margin-(?:top|left):\s*-\d/, "dashboard must not use negative positioning fixes");
 
-assert.match(sw, /arg-pwa-v147-admin-reference/, "PWA cache must rotate for the revised presentation assets");
+assert.match(sw, /arg-pwa-v148-admin-dashboard-v3/, "PWA cache must rotate for the revised presentation assets");
 assert.match(client, /title: state\.currentUser\.role === "admin" \? "Team dashboard"/, "Admin dashboard title must match the reference without changing other roles");
 assert.match(client, /const adminHome = currentView === "dashboard" && state\.currentUser\.role === "admin"/, "Admin date must appear only on the dashboard");
 assert.match(sw, /"\/admin-dashboard-clean\.css"/, "PWA shell must cache the dashboard stylesheet");
