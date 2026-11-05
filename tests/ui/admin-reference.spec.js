@@ -63,6 +63,57 @@ test("reference dashboard keeps real counts, drilldowns and responsive shell", a
   expect(errors).toEqual([]);
 });
 
+test("dashboard interaction cards give record text the wide column", async ({ page }, info) => {
+  test.skip(!info.project.name.startsWith("admin"), "Admin dashboard cards only");
+  await page.route(/\/api\/activities\?/, route => route.fulfill({
+    json: Array.from({ length: 5 }, (_, index) => ({
+      id: `ui-dashboard-interaction-${index + 1}`,
+      lead_id: `ui-lead-${index + 1}`,
+      company_name: `Synthetic Steel Company 0${index + 1}`,
+      type: "Reminder",
+      text: "General follow-up: confirm delivery timing and send the updated quotation."
+    }))
+  }));
+  await login(page, info);
+  if (info.project.name.endsWith("mobile")) {
+    await page.setViewportSize({ width: 320, height: 812 });
+  }
+
+  for (const [tab, feed] of [["latest", "#dashboardActivityFeed"], ["cold", "#dashboardFocus"]]) {
+    await page.locator(`[data-admin-interaction="${tab}"]`).click();
+    const card = page.locator(`${feed} > .dashboard-activity-item`).first();
+    await expect(card).toBeVisible();
+    const layout = await card.evaluate(element => {
+      const card = element.getBoundingClientRect();
+      const pin = element.querySelector(".activity-pin").getBoundingClientRect();
+      const copy = element.querySelector("div").getBoundingClientRect();
+      return {
+        pinWidth: pin.width,
+        textBesideIcon: copy.left >= pin.right && Math.abs(copy.top - pin.top) <= 1,
+        copyRatio: copy.width / card.width,
+        copyInsideCard: copy.right <= card.right,
+        pageOverflow: document.documentElement.scrollWidth - innerWidth
+      };
+    });
+    expect(layout.pinWidth).toBeGreaterThan(0);
+    expect(layout.textBesideIcon).toBe(true);
+    expect(layout.copyRatio).toBeGreaterThan(0.65);
+    expect(layout.copyInsideCard).toBe(true);
+    expect(layout.pageOverflow).toBeLessThanOrEqual(1);
+  }
+
+  await page.locator("[data-admin-interaction='latest']").click();
+  if (info.project.name.endsWith("desktop")) {
+    const pipeline = await page.locator("#pipelineHealthPanel").boundingBox();
+    const activity = await page.locator("#dashboardActivityPanel").boundingBox();
+    expect(Math.abs(pipeline.y - activity.y)).toBeLessThanOrEqual(1);
+    expect(pipeline.height).toBeLessThan(activity.height);
+  }
+  await capture(page, info, "admin-dashboard-interaction-cards");
+  await page.locator("#dashboardActivityFeed > .dashboard-activity-item").first().click();
+  await expect(page.locator("#leadDetailView")).toBeVisible();
+});
+
 test("v3 lead previews preserve keyboard access, scoped Pipeline links and narrow layouts", async ({ page }, info) => {
   const role = await login(page, info);
   if (role !== "admin") return;
