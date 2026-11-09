@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v150-company-name-duplicate-matching";
+const CACHE_VERSION = "arg-pwa-v151-al-ras-steel-branding";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -16,7 +16,8 @@ const APP_SHELL = [
   "/crm-dialogs.css",
   "/assets/brand/crm-silk-white-desktop.png",
   "/assets/brand/crm-silk-white-mobile.png",
-  "/assets/brand/al-ras-steel-white-logo.png",
+  "/assets/brand/al-ras-steel-silver-logo.png",
+  "/assets/brand/al-ras-steel-white-wordmark.png",
   "/salesman-dashboard-live-leads.css",
   "/lead-detail-readability.css",
   "/mobile-ui.css",

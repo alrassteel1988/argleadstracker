@@ -25,12 +25,19 @@ assert.doesNotMatch(topbar, /id="(?:logoutButton|openSalesmanForm)"/);
 assert.match(topbar, /id="smartSearchInput"/);
 assert.match(topbar, /id="openPlacesSearch"/);
 assert.match(topbar, /id="openLeadForm"/);
-assert.equal((html.match(/class="crm-brand-image"[^>]*src="\/assets\/brand\/al-ras-steel-white-logo.png"/g) || []).length, 2);
-assert.equal((html.match(/width="2400" height="1511" alt="Al Ras Steel"/g) || []).length, 2);
-assert.match(html, /class="auth-brand">\s*<img[^>]*alt="Al Ras Steel"/);
-assert.match(css, /\.crm-brand-image\s*\{[^}]*clip-path: polygon\(0 0, 100% 0, 100% 58%, 20% 58%, 20% 100%, 0 100%\)/);
-assert.match(css, /body #authScreen \.auth-brand \.crm-brand-image\s*\{[^}]*width: 264px;/);
-assert.match(css, /body #mobileSidebar \.crm-brand-image\s*\{ width: 192px;/);
+const logoAsset = "assets/brand/al-ras-steel-silver-logo.png";
+const wordmarkAsset = "assets/brand/al-ras-steel-white-wordmark.png";
+const brands = [...html.matchAll(/class="crm-brand-lockup">([\s\S]*?<div class="crm-brand-name">[^<]*<img[^>]+>)/g)];
+assert.equal(brands.length, 2);
+for (const [brand] of brands) {
+  assert.ok(brand.includes('src="/' + logoAsset + '" width="3150" height="3150" alt=""'));
+  assert.ok(brand.includes('src="/' + wordmarkAsset + '" width="1608" height="978" alt="Al Ras Steel"'));
+}
+assert.match(css, /\.crm-brand-mark\s*\{[^}]*aspect-ratio:[^}]*overflow:\s*hidden/);
+assert.match(css, /\.crm-brand-name\s*\{[^}]*aspect-ratio:[^}]*overflow:\s*hidden/);
+assert.ok(vercel.builds.some(item => item.src === logoAsset && item.use === "@vercel/static"));
+assert.ok(vercel.routes.some(item => item.src === "/" + logoAsset && item.dest === "/" + logoAsset));
+assert.ok(worker.includes('"/' + logoAsset + '"'));
 assert.match(client, /els\.openSalesmanForm\.classList\.toggle\("hidden", !admin\)/, "Existing Admin-only control guard stays unchanged");
 assert.match(client, /els\.logoutButton\.addEventListener\("click"/, "Keep the existing sign-out handler");
 
@@ -71,7 +78,7 @@ assert.ok(html.indexOf('/mobile-ui.css?v=') > html.indexOf('/crm-shell.css?v='))
 assert.ok(vercel.builds.some(item => item.src === "crm-shell.css" && item.use === "@vercel/static"));
 assert.ok(vercel.routes.some(item => item.src === "/crm-shell.css" && item.dest === "/crm-shell.css"));
 assert.ok(worker.includes('"/crm-shell.css"'));
-assert.match(html, /class="auth-brand-caption">Structural steel supplier &middot; <strong>since 1988<\/strong>/);
+assert.doesNotMatch(html.match(/<main class="auth-screen"[\s\S]*?<\/main>/)[0], /1988|trusted since/i);
 assert.match(html, /href="mailto:glory@alrassteel.com"/);
 assert.match(html, /id="loginPasswordToggle" type="button" aria-label="Show password"/);
 assert.match(html, /<label for="loginEmail">Work email<\/label>/);

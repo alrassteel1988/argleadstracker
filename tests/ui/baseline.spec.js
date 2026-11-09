@@ -18,7 +18,7 @@ test("sign-in validation, role routes, Pipeline filters and lead tabs", async ({
     expect(signInPresentation.foreground).toBe("rgb(8, 61, 119)");
     expect(signInPresentation.background).toBe("rgb(255, 177, 0)");
     await expect(page.locator("#loginForm")).toHaveCSS("background-color", "rgb(255, 255, 255)");
-    if (info.project.name.endsWith("mobile")) await expect(page.locator(".auth-brand-caption")).toBeVisible();
+    if (info.project.name.endsWith("mobile")) await expect(page.locator(".auth-brand").getByRole("img", {name: "Al Ras Steel"})).toBeVisible();
     else await expect(page.locator(".auth-hero-kicker")).toBeVisible();
     await expect(page.locator(".auth-hero h1 em")).toHaveCSS("color", "rgb(255, 177, 0)");
     await expect(page.locator(".auth-card h2 em")).toHaveCSS("color", "rgb(184, 122, 0)");

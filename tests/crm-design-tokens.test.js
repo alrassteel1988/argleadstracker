@@ -52,7 +52,8 @@ assert.doesNotMatch(css, /body\.(?:admin|salesman|salesperson)[^{]*\{/i, "Both r
 const assets = {
   "assets/brand/crm-silk-white-desktop.png": "701c12d03cbf49733a6236c1b723aba50bb1078c340ca7bc818027898ac643cc",
   "assets/brand/crm-silk-white-mobile.png": "ab182a144e6624c25bd30253b8a01ea50e6c28a4dc0d6ee19ae821775f3de181",
-  "assets/brand/al-ras-steel-white-logo.png": "51a19082381c3b09bac131c95112828ed0d132bd812f4973d495f3b9e2c3e536"
+  "assets/brand/al-ras-steel-silver-logo.png": "e5e0ddd6ddc2d52b4682691217cee2d4e6739f5dcaee3770b53607bc7c51d7db",
+  "assets/brand/al-ras-steel-white-wordmark.png": "896fb5c9d8ca5af406adaaa53e6498bd08ad62fb3fe7defb2fd8930a18b9675f"
 };
 for (const [file, hash] of Object.entries(assets)) {
   assert.equal(crypto.createHash("sha256").update(fs.readFileSync(path.join(root, file))).digest("hex"), hash, `Preserve original ${file}`);

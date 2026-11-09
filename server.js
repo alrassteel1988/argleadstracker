@@ -264,6 +264,8 @@ const PUBLIC_STATIC_FILES = new Map([
   ["/assets/brand/crm-silk-white-desktop.png", "assets/brand/crm-silk-white-desktop.png"],
   ["/assets/brand/crm-silk-white-mobile.png", "assets/brand/crm-silk-white-mobile.png"],
   ["/assets/brand/al-ras-steel-white-logo.png", "assets/brand/al-ras-steel-white-logo.png"],
+  ["/assets/brand/al-ras-steel-silver-logo.png", "assets/brand/al-ras-steel-silver-logo.png"],
+  ["/assets/brand/al-ras-steel-white-wordmark.png", "assets/brand/al-ras-steel-white-wordmark.png"],
   ["/activity-modal.css", "activity-modal.css"],
   ["/activity-dashboard-latest.css", "activity-dashboard-latest.css"],
   ["/activity-readability.css", "activity-readability.css"],
