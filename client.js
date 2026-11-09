@@ -4293,6 +4293,19 @@ function clientJaroWinkler(leftInput, rightInput) {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
+function clientCompanyNameSimilarity(left, right, warnThreshold) {
+  const score = clientJaroWinkler(left, right);
+  if (score < warnThreshold || left === right) return score;
+  const leftWords = left.split(" ");
+  const rightWords = right.split(" ");
+  // Shared geography or industry terms alone do not establish a match.
+  const shared = new Set(leftWords.filter(word => /^(gulf|piling|foundations?)$/.test(word) && rightWords.includes(word)));
+  if (!shared.size) return score;
+  const leftName = leftWords.filter(word => !shared.has(word)).join(" ");
+  const rightName = rightWords.filter(word => !shared.has(word)).join(" ");
+  return leftName && rightName && clientJaroWinkler(leftName, rightName) >= warnThreshold ? score : 0;
+}
+
 function clientDuplicateCandidates(companyName, leads, duplicateThreshold = 0.85, warnThreshold = 0.75) {
   const input = clientFuzzyNormalise(companyName);
   if (input.length < 4) return [];
@@ -4303,7 +4316,7 @@ function clientDuplicateCandidates(companyName, leads, duplicateThreshold = 0.85
       assigned_salesman: lead.assigned_salesman,
       territory: lead.territory,
       stage: lead.stage,
-      score: clientJaroWinkler(input, clientFuzzyNormalise(lead.company_name))
+      score: clientCompanyNameSimilarity(input, clientFuzzyNormalise(lead.company_name), warnThreshold)
     }))
     .filter(match => match.score >= warnThreshold)
     .sort((a, b) => b.score - a.score)
