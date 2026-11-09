@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v149-admin-interaction-card-layout";
+const CACHE_VERSION = "arg-pwa-v150-company-name-duplicate-matching";
 const APP_SHELL = [
   "/",
   "/index.html",
