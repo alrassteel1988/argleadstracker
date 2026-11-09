@@ -50,13 +50,26 @@ function jaroWinkler(s1, s2) {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
+function companyNameSimilarity(left, right, warnThreshold) {
+  const score = jaroWinkler(left, right);
+  if (score < warnThreshold || left === right) return score;
+  const leftWords = left.split(" ");
+  const rightWords = right.split(" ");
+  // Shared geography or industry terms alone do not establish a match.
+  const shared = new Set(leftWords.filter(word => /^(gulf|piling|foundations?)$/.test(word) && rightWords.includes(word)));
+  if (!shared.size) return score;
+  const leftName = leftWords.filter(word => !shared.has(word)).join(" ");
+  const rightName = rightWords.filter(word => !shared.has(word)).join(" ");
+  return leftName && rightName && jaroWinkler(leftName, rightName) >= warnThreshold ? score : 0;
+}
+
 function findDuplicates(inputName, existingCompanies, duplicateThreshold = 0.85, warnThreshold = 0.75) {
   const normInput = normalise(inputName);
   if (normInput.length < 4) return [];
   return (existingCompanies || [])
     .map(company => ({
       ...company,
-      score: jaroWinkler(normInput, normalise(company.name || company.company_name))
+      score: companyNameSimilarity(normInput, normalise(company.name || company.company_name), warnThreshold)
     }))
     .filter(company => company.score >= warnThreshold)
     .sort((a, b) => b.score - a.score)
