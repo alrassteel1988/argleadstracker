@@ -3,6 +3,16 @@ const { phase, capture, login, blockExternalTraffic } = require("./helpers");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+async function expectBrandWordmark(brand) {
+  const wordmark = brand.getByRole("img", {name: "Al Ras Steel", exact: true});
+  await expect(wordmark).toBeVisible();
+  await expect(wordmark).toHaveAttribute("src", "/assets/brand/al-ras-steel-white-wordmark.png");
+  await expect.poll(() => wordmark.evaluate(image => image.complete && image.naturalWidth === 1608 && image.naturalHeight === 978)).toBe(true);
+  const crop = brand.locator(".crm-brand-name");
+  await expect(crop).toHaveCSS("overflow", "hidden");
+  return crop.boundingBox();
+}
+
 test("all CRM pages share the approved responsive artwork behind clean cards", async ({page}, info) => {
   test.setTimeout(120000);
   const role = await login(page, info);
@@ -32,15 +42,19 @@ test("login displays the approved Al Ras Steel logo on desktop and mobile", asyn
   await expect(page.locator("#loginForm")).toBeVisible();
   const logo = page.locator("#authScreen .auth-brand .crm-brand-image");
   await expect(logo).toBeVisible();
-  await expect(logo).toHaveAttribute("src", "/assets/brand/al-ras-steel-white-logo.png");
-  await expect(logo).toHaveAttribute("alt", "Al Ras Steel");
-  await expect.poll(() => logo.evaluate(image => image.complete && image.naturalWidth === 2400 && image.naturalHeight === 1511)).toBe(true);
-  const bounds = await logo.boundingBox();
+  await expect(logo).toHaveAttribute("src", "/assets/brand/al-ras-steel-silver-logo.png");
+  await expect(logo).toHaveAttribute("alt", "");
+  await expect.poll(() => logo.evaluate(image => image.complete && image.naturalWidth === 3150 && image.naturalHeight === 3150)).toBe(true);
+  const nameBounds = await expectBrandWordmark(page.locator("#authScreen .crm-brand-lockup"));
+  await expect(page.locator("#authScreen")).not.toContainText(/1988|trusted since/i);
+  const mark = page.locator("#authScreen .crm-brand-mark");
+  const bounds = await mark.boundingBox();
+  expect(nameBounds.x).toBeGreaterThan(bounds.x + bounds.width);
   const mobile = info.project.name.endsWith("mobile");
-  expect(bounds.width).toBe(mobile ? 128 : 264);
-  await expect(logo).toHaveCSS("clip-path", "polygon(0px 0px, 100% 0px, 100% 58%, 20% 58%, 20% 100%, 0px 100%)");
+  expect(bounds.width).toBe(mobile ? 16 : 27);
+  await expect(mark).toHaveCSS("overflow", "hidden");
   expect(bounds.height).toBeGreaterThanOrEqual(64);
-  expect(bounds.width / bounds.height).toBeCloseTo(2400 / 1511, 1);
+  expect(bounds.width / bounds.height).toBeCloseTo(370 / 1490, 2);
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.y).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize().width);
@@ -81,15 +95,32 @@ test("login displays the approved Al Ras Steel logo on desktop and mobile", asyn
   await capture(page, info, "00-login-logo", {fullPage:false});
 });
 
-test("shared shell branding, navigation and existing management actions", async ({ page }, info) => {
+test("sidebar displays the Al Ras Steel brand within the menu", async ({ page }, info) => {
+  const role = await login(page, info);
+  if (info.project.name.endsWith("mobile")) {
+    if (role === "salesman") await page.goto("/?view=pipeline");
+    await page.locator("#mobileMenuToggle").click({timeout:10000});
+    await expect.poll(async () => Math.abs((await page.locator("#mobileSidebar").boundingBox()).x)).toBeLessThanOrEqual(1);
+  }
+  const sidebar = page.locator("#mobileSidebar");
+  const menuLogo = sidebar.locator(".crm-brand-lockup");
+  const nameBounds = await expectBrandWordmark(menuLogo);
+  const mark = menuLogo.locator(".crm-brand-mark");
+  const logo = mark.locator("img");
+  await expect(logo).toHaveAttribute("src", "/assets/brand/al-ras-steel-silver-logo.png");
+  await expect.poll(() => logo.evaluate(image => image.complete && image.naturalWidth === 3150)).toBe(true);
+  await expect(mark).toHaveCSS("overflow", "hidden");
+  const markBounds = await mark.boundingBox();
+  const sidebarBounds = await sidebar.boundingBox();
+  expect(markBounds.height).toBeGreaterThan(64);
+  expect(nameBounds.x).toBeGreaterThan(markBounds.x + markBounds.width);
+  expect(nameBounds.x + nameBounds.width).toBeLessThanOrEqual(sidebarBounds.x + sidebarBounds.width);
+  await capture(page, info, "01-sidebar-logo", {fullPage:false});
+});
+
+test("shared shell navigation and existing management actions", async ({ page }, info) => {
   const role = await login(page, info);
   const mobile = info.project.name.endsWith("mobile");
-  const brand = await page.locator('#mobileSidebar .crm-brand-image').evaluate(image => ({
-    loaded: image.complete && image.naturalWidth === 2400,
-    source: image.getAttribute("src")
-  }));
-  expect(brand.loaded).toBe(true);
-  expect(brand.source).toBe("/assets/brand/al-ras-steel-white-logo.png");
   await expect(page.locator('#mobileSidebar .nav-item.active')).toHaveCSS("border-radius", "10px");
   await expect(page.locator('#mobileSidebar .nav-item.active .nav-item-icon')).toBeVisible();
   await expect(page.locator('#openLeadForm')).toHaveCSS("border-radius", "10px");
@@ -120,13 +151,6 @@ test("shared shell branding, navigation and existing management actions", async 
     const width = await page.locator("#mobileSidebar").evaluate(element => element.getBoundingClientRect().width);
     expect(width).toBe(232);
   }
-  const menuLogo = page.locator("#mobileSidebar .crm-brand-image");
-  await expect(menuLogo).toHaveAttribute("alt", "Al Ras Steel");
-  await expect(menuLogo).toHaveCSS("clip-path", "polygon(0px 0px, 100% 0px, 100% 58%, 20% 58%, 20% 100%, 0px 100%)");
-  const menuLogoBounds = await menuLogo.boundingBox();
-  expect(menuLogoBounds.width).toBeGreaterThan(128);
-  const sidebarBounds = await page.locator("#mobileSidebar").boundingBox();
-  expect(menuLogoBounds.x + menuLogoBounds.width).toBeLessThanOrEqual(sidebarBounds.x + sidebarBounds.width);
   if (role === "admin") {
     await expect(page.locator("#configAgentExamples")).not.toContainText(/whats\s*app/i);
     await expect(page.locator("#configAgentExamples")).toContainText("Add Qatar to territories");

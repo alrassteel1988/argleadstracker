@@ -28,6 +28,8 @@ const publicRequests = [
   ["/assets/brand/crm-silk-white-desktop.png", "image/png"],
   ["/assets/brand/crm-silk-white-mobile.png", "image/png"],
   ["/assets/brand/al-ras-steel-white-logo.png", "image/png"],
+  ["/assets/brand/al-ras-steel-silver-logo.png", "image/png"],
+  ["/assets/brand/al-ras-steel-white-wordmark.png", "image/png"],
   ["/mobile-ui.css?v=test", "text/css"],
   ["/manifest.json", "application/json"],
   ["/favicon.svg", "image/svg+xml"],

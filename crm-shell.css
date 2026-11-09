@@ -50,16 +50,47 @@ body #mobileSidebar .brand {
   min-width: 0;
 }
 
-.crm-brand-image {
-  display: block;
-  width: 148px;
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
-  /* Keep the original bars and lettering; omit only the embedded lower tagline. */
-  clip-path: polygon(0 0, 100% 0, 100% 58%, 20% 58%, 20% 100%, 0 100%);
+.crm-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
-body #mobileSidebar .crm-brand-image { width: 192px; }
+
+.crm-brand-mark {
+  position: relative;
+  flex: none;
+  inline-size: 18px;
+  aspect-ratio: 370 / 1490;
+  overflow: hidden;
+}
+
+/* Show only the three bars from the supplied square artwork. */
+.crm-brand-image {
+  position: absolute;
+  width: 851.35%;
+  max-width: none;
+  height: auto;
+  left: -114.86%;
+  top: -39.6%;
+}
+
+.crm-brand-name {
+  position: relative;
+  inline-size: 125px;
+  aspect-ratio: 1254 / 208;
+  overflow: hidden;
+}
+
+/* Show the supplied lettering without the white bars or the tagline. */
+.crm-brand-name img {
+  position: absolute;
+  width: 128.23%;
+  max-width: none;
+  height: auto;
+  left: -28.23%;
+  top: -184.62%;
+}
 
 body #mobileSidebar .nav-item {
   min-height: 40px;
@@ -317,7 +348,6 @@ body #authScreen .auth-brand {
   gap: var(--crm-space-2);
 }
 
-body #authScreen .auth-brand-caption,
 body #authScreen .auth-hero-kicker,
 body #authScreen .auth-stats span {
   color: var(--crm-white) !important;
@@ -349,9 +379,8 @@ body #authScreen .auth-stats strong {
   color: var(--crm-amber) !important;
 }
 
-body #authScreen .auth-brand .crm-brand-image {
-  width: 264px;
-}
+body #authScreen .crm-brand-mark { inline-size: 27px; }
+body #authScreen .crm-brand-name { inline-size: 184px; }
 
 body #authScreen .auth-hero em {
   color: var(--crm-amber) !important;
@@ -417,7 +446,6 @@ body #authScreen .auth-hero {
   box-shadow: none !important;
   background-image: repeating-linear-gradient(115deg, transparent 0 34px, #FFFFFF08 34px 35px), var(--crm-sidebar-background) !important;
 }
-body #authScreen .auth-brand-caption { display: none; }
 body #authScreen .auth-hero h1 { font-size: 48px; line-height: 1.12; }
 body #authScreen .auth-hero-kicker {
   color: var(--crm-amber) !important;
@@ -425,7 +453,7 @@ body #authScreen .auth-hero-kicker {
   font-weight: 700;
   letter-spacing: .14em;
 }
-body #authScreen .auth-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+body #authScreen .auth-stats { grid-template-columns: minmax(0, 1fr); }
 body #authScreen .auth-stats strong { font: 700 24px var(--crm-font-ui); }
 body #authScreen .auth-stats span { font-size: 10px; letter-spacing: .12em; }
 body #authScreen .auth-card {
@@ -569,18 +597,6 @@ body #authScreen .auth-admin-contact { color: var(--crm-navy); font-weight: 600;
   body #authScreen .auth-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   body #authScreen .auth-hero { padding: 48px 24px 36px; gap: 0; }
   body #authScreen .auth-brand { gap: 20px; }
-  body #authScreen .auth-brand .crm-brand-image { width: 128px; }
-  body #authScreen .auth-brand-caption {
-    display: block;
-    font-size: 13px;
-    text-transform: none;
-    letter-spacing: 0;
-  }
-  body #authScreen .auth-brand-caption strong {
-    display: inline;
-    font: 700 13px var(--crm-font-ui);
-    color: var(--crm-amber) !important;
-  }
   body #authScreen :is(.auth-hero-copy, .auth-stats, .auth-secure-badge) { display: none; }
   body #authScreen .auth-card {
     min-height: 590px;
@@ -696,9 +712,8 @@ body #authScreen .auth-admin-contact { color: var(--crm-navy); font-weight: 600;
 }
 
 @media (max-width: 1024px) {
-  body #authScreen .auth-brand .crm-brand-image {
-    width: 128px;
-  }
+  body #authScreen .crm-brand-mark { inline-size: 16px; }
+  body #authScreen .crm-brand-name { inline-size: 125px; }
 
   body #appShell .smart-search-shell {
     flex-basis: 100%;
