@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v152-lead-followup-outcomes";
+const CACHE_VERSION = "arg-pwa-v153-compact-admin-overview";
 const APP_SHELL = [
   "/",
   "/index.html",
