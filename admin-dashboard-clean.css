@@ -1706,8 +1706,8 @@ body.admin-reference-mode.admin-dashboard-mode #appShell .topbar { padding-botto
 .clean-admin-person small { display: block; }
 .clean-admin-table .admin-v3-person-status { display: inline-block; white-space: normal; }
 @media (min-width: 1051px) {
-  .clean-admin-team-content[tabindex] { max-height: 238px; overflow: auto; }
-  .clean-admin-team-content[tabindex] thead { position: sticky; top: 0; z-index: 1; }
+  .clean-admin-toolbar { padding-block: 6px; }
+  .clean-admin-team-content .clean-admin-table td { padding-block: 4px; }
 }
 .clean-admin-empty { color: var(--clean-muted); padding: 20px 14px; }
 .clean-admin-lifecycle { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 14px; }
