@@ -815,6 +815,10 @@ function normalizeStageKey(stage, fallback = "NEW") {
 }
 
 const NEXT_ACTION_PLAN_OPTIONS = ["To Call", "To Send Email", "To Visit"];
+const LEAD_FOLLOWUP_REASONS = {
+  completed: ["Spoke to customer", "Meeting booked", "Quote requested", "Left voicemail", "No answer", "Wrong number"],
+  cancelled: ["Contact has left the company", "Customer asked not to be contacted", "Duplicate activity", "No longer relevant", "Wrong lead or contact details", "Replaced by another activity", "Management instruction", "Other"]
+};
 const ACTIVITY_PURPOSE_OPTIONS = [
   "Company Introductory",
   "New Requirements",
@@ -5321,11 +5325,17 @@ function isCompletedReminder(activity = {}) {
     || String(activity.reminder_status || "").toLowerCase() === "completed";
 }
 
+function followupRetiredReminder(activity, activities) {
+  return activities.some(event => event.followup_resolution && (activity.id ? event.resolved_reminder_id === activity.id
+    : event.resolved_legacy_reminder && event.followup_due_date === (activity.due_date || activity.reminder_due_date)
+      && String(event.followup_action || "").toLowerCase() === String(activity.activity_required || activity.text || "").trim().toLowerCase()));
+}
+
 function overdueReminderItemsForLead(lead) {
   if (!activeLeadForOverdue(lead)) return [];
   return (lead.activities || [])
     .map((activity, activity_index) => ({ activity, activity_index }))
-    .filter(({ activity }) => isReminderActivity(activity) && !isCompletedReminder(activity))
+    .filter(({ activity }) => isReminderActivity(activity) && !isCompletedReminder(activity) && !followupRetiredReminder(activity, lead.activities || []))
     .filter(({ activity }) => {
       const dueDate = activityDueDate(activity);
       return dueDate && dueDate < today();
@@ -6828,7 +6838,7 @@ function leadOriginChipClass(originLabel) {
 }
 
 function completedFollowupActivity(activity) {
-  if (!activity || activity.delete_request || isReminderActivity(activity)) return false;
+  if (!activity || activity.delete_request || activity.followup_resolution === "cancelled" || isReminderActivity(activity)) return false;
   const text = `${activity.type || ""} ${activity.text || ""}`.toLowerCase();
   return /follow|call|email|visit|meeting|quotation|quote|order/.test(text);
 }
@@ -7902,7 +7912,8 @@ function adminReferenceActivityRows() {
     const manager = person => ["admin", "manager", "director"].includes(String(person?.role || "").toLowerCase());
     const origin = manager(creator) || manager(assignedBy) ? "Management" : creator?.role === "salesman" ? "Self" : "Not recorded";
     return { ...activity, origin, actor: activity.created_by_name || creator?.name || activity.logged_by || "Not recorded",
-      closed: activity.transaction_status === "closed", remarks: String(activity.transaction_remarks || "").trim(),
+      closed: activity.transaction_status === "closed", cancelled: activity.followup_resolution === "cancelled",
+      retired: Boolean(activity.followup_retired), remarks: String(activity.transaction_remarks || "").trim(),
       outcome: String(activity.transaction_outcome || ""), date: String(activity.at || activity.created_at || "").slice(0, 10) };
   });
 }
@@ -7918,7 +7929,10 @@ function adminReferenceFilterActivity(rows) {
       && (f.person === "all" || row.actor === f.person)
       && (f.date === "all" || age !== null && (f.date === "7" ? age >= 0 && age <= 7 : f.date === "30" ? age >= 0 && age <= 30 : age > 30))
       && (f.linked === "all" || (f.linked === "quote" ? Boolean(row.quotation_ref) : f.linked === "pmr" ? Boolean(row.pmr_id || row.pmr_ref) : !row.quotation_ref && !row.pmr_id && !row.pmr_ref))
-      && (f.status === "all" || (f.status === "missing" ? !row.remarks : f.status === "pending" ? !row.closed : f.status === "closed" ? row.closed : row.closed && (f.status === "done" ? /^done/i.test(row.outcome) : /^not reached/i.test(row.outcome))));
+      && (f.status === "all" || (f.status === "missing" ? !row.remarks && !row.retired
+        : f.status === "cancelled" ? row.cancelled : f.status === "completed" ? row.followup_resolution === "completed"
+        : f.status === "pending" ? !row.closed && !row.cancelled && !row.retired
+        : f.status === "closed" ? row.closed : row.closed && (f.status === "done" ? /^done/i.test(row.outcome) : /^not reached/i.test(row.outcome))));
   }).sort((a, b) => (f.sort === "oldest" ? 1 : -1) * String(a.at || "").localeCompare(String(b.at || "")));
 }
 
@@ -7937,7 +7951,8 @@ function renderReferenceAdminActivity() {
   const filtered = adminReferenceFilterActivity(all);
   const rows = filtered.slice(0, adminReference.activityLimit || 50);
   const closed = all.filter(row => row.closed).length;
-  const missing = all.filter(row => !row.remarks).length;
+  const pending = all.filter(row => !row.closed && !row.cancelled && !row.retired).length;
+  const missing = all.filter(row => !row.remarks && !row.retired).length;
   const uniqueOptions = key => [["all", `All ${key === "actor" ? "salesmen" : key === "type" ? "types" : "companies"}`], ...[...new Set(all.map(row => row[key]).filter(Boolean))].sort().map(value => [value, value])];
   const definitions = [
     ["date", "Date & time", [["all", "All dates"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["older", "Older than 30 days"]]],
@@ -7945,12 +7960,14 @@ function renderReferenceAdminActivity() {
     ["origin", "Origin", [["all", "Self and management"], ["Management", "Assigned by management"], ["Self", "Self-generated"], ["Not recorded", "Not recorded"]]],
     ["person", "Logged by", uniqueOptions("actor")],
     ["linked", "Quote / PMR", [["all", "All entries"], ["quote", "Has quote reference"], ["pmr", "PMR linked"], ["neither", "Neither"]]],
-    ["status", "Status & remarks", [["all", "All statuses"], ["pending", "Pending"], ["closed", "Closed (all)"], ["done", "Closed - done"], ["not-reached", "Closed - not reached"], ["missing", "No remarks"]]]
+    ["status", "Status & remarks", [["all", "All statuses"], ["pending", "Pending"], ["completed", "Completed"], ["cancelled", "Cancelled"], ["closed", "Closed (all)"], ["done", "Closed - done"], ["not-reached", "Closed - not reached"], ["missing", "No remarks"]]]
   ];
   const tags = definitions.filter(([key]) => adminReference.activity[key] !== "all").map(([key, label, options]) => `<button class="admin-ref-tag" type="button" data-admin-clear-filter="${key}">${label}: ${escapeHtml(options.find(([value]) => value === adminReference.activity[key])?.[1] || adminReference.activity[key])} &times;</button>`).join("");
-  const status = row => `<div class="admin-ref-status"><span class="admin-ref-tag ${row.closed ? "teal" : "warning"}">${row.closed ? "Closed" : "Pending"}</span> <strong>${escapeHtml(row.outcome)}</strong>${row.remarks ? `<p>${escapeHtml(row.remarks)}</p><small>${escapeHtml(row.transaction_updated_by_name || row.actor)}${row.transaction_updated_at ? ` - updated ${escapeHtml(formatDisplayDate(String(row.transaction_updated_at).slice(0, 10)))}` : ""}</small>` : `<p class="admin-ref-danger">No remarks from ${escapeHtml(row.actor)}</p>`}<button class="text-button" type="button" data-admin-activity-history="${escapeHtml(row.lead_id)}" data-activity-id="${escapeHtml(row.id || "")}" data-index="${row.activity_index}">History &amp; details</button></div>`;
+  const statusLabel = row => row.cancelled ? "Cancelled" : row.followup_resolution === "completed" ? "Completed"
+    : row.closed ? "Closed" : row.retired ? "Resolved reminder" : "Pending";
+  const status = row => `<div class="admin-ref-status"><span class="admin-ref-tag ${row.cancelled ? "danger" : row.closed ? "teal" : row.retired ? "" : "warning"}">${statusLabel(row)}</span> <strong>${escapeHtml(row.outcome)}</strong>${row.retired ? "" : row.remarks ? `<p>${escapeHtml(row.remarks)}</p><small>${escapeHtml(row.transaction_updated_by_name || row.actor)}${row.transaction_updated_at ? ` - updated ${escapeHtml(formatDisplayDate(String(row.transaction_updated_at).slice(0, 10)))}` : ""}</small>` : `<p class="admin-ref-danger">No remarks from ${escapeHtml(row.actor)}</p>`}<button class="text-button" type="button" data-admin-activity-history="${escapeHtml(row.lead_id)}" data-activity-id="${escapeHtml(row.id || "")}" data-index="${row.activity_index}">History &amp; details</button></div>`;
   const people = [...new Set(all.map(row => row.actor))];
-  host.innerHTML = `<div class="admin-ref-heading-actions"><button class="ghost-button" type="button" data-admin-activity-export>Export</button><button class="primary-button" type="button" data-admin-log-activity>+ Log activity</button></div><div class="admin-ref-activity-stats">${adminReferenceCard("Activities closed", `${closed} / ${all.length}`, `${all.filter(row => row.closed && /^done/i.test(row.outcome)).length} done - ${all.filter(row => row.closed && /^not reached/i.test(row.outcome)).length} not reached`, "teal")}${adminReferenceCard("Still pending", all.length - closed, "Awaiting the next step", "warning")}${adminReferenceCard("No remarks", missing, "Unexplained activities", "danger")}<article class="admin-ref-by-person"><span>By salesman</span>${people.map(person => { const own = all.filter(row => row.actor === person); const n = own.filter(row => row.closed).length; return `<div><strong>${escapeHtml(person)}</strong>${adminReferenceProgress(n, own.length)}<small>${n}/${own.length} closed</small></div>`; }).join("") || "No activities recorded"}</article></div><div class="admin-ref-lock">Append-only view. Past entries cannot be edited or deleted here. Status history remains with each activity.</div><section class="admin-ref-table-panel"><div class="admin-ref-toolbar"><input type="search" data-admin-activity-search aria-label="Search notes and remarks" placeholder="Search notes and remarks" value="${escapeHtml(adminReference.activity.search)}"><div class="admin-ref-filter-tags">${tags}<span>Showing ${rows.length} of ${all.length}</span>${tags || adminReference.activity.search || adminReference.activity.sort !== "newest" ? '<button class="text-button admin-ref-danger" type="button" data-admin-clear-all>Clear all</button>' : ""}</div></div><div class="admin-ref-mobile-filters">${definitions.map(args => adminReferenceFilterMenu(...args)).join("")}</div><div class="admin-ref-table-scroll"><table class="admin-ref-table admin-ref-activity-table"><thead><tr>${definitions.slice(0, 5).map(args => `<th>${adminReferenceFilterMenu(...args)}</th>`).join("")}<th>Notes</th>${definitions.slice(5).map(args => `<th>${adminReferenceFilterMenu(...args)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr${!row.remarks ? ' class="is-unexplained"' : ""}><td data-label="Date & time">${escapeHtml(formatDisplayDate(row.date))}<small>${escapeHtml(activityDisplayTime(row))}</small></td><td data-label="Company"><button class="text-button" type="button" data-admin-open-lead="${escapeHtml(row.lead_id)}">${escapeHtml(row.company_name)}</button></td><td data-label="Type">${escapeHtml(row.type || "Note")}</td><td data-label="Origin"><span class="admin-ref-tag ${row.origin === "Management" ? "navy" : ""}">${escapeHtml(row.origin)}</span></td><td data-label="Logged by">${escapeHtml(row.actor)}</td><td data-label="Notes">${escapeHtml(row.note || row.text || "No notes")}</td><td data-label="Quote / PMR">${escapeHtml(row.quotation_ref || (row.pmr_id || row.pmr_ref ? "PMR linked" : "--"))}</td><td data-label="Status & remarks">${status(row)}</td></tr>`).join("") || '<tr><td colspan="8" class="empty-copy">No activities match these filters.</td></tr>'}</tbody></table></div><footer class="admin-ref-table-footer">Pending = next step open. Closed = done, or could not be reached. Only the assigned salesman updates transaction status.</footer></section><details class="admin-ref-calendar"><summary>Calendar, reminders &amp; review requests</summary><div class="admin-ref-existing-activity"></div></details>`;
+  host.innerHTML = `<div class="admin-ref-heading-actions"><button class="ghost-button" type="button" data-admin-activity-export>Export</button><button class="primary-button" type="button" data-admin-log-activity>+ Log activity</button></div><div class="admin-ref-activity-stats">${adminReferenceCard("Activities closed", `${closed} / ${all.length}`, `${all.filter(row => row.closed && /^done/i.test(row.outcome)).length} done - ${all.filter(row => row.closed && /^not reached/i.test(row.outcome)).length} not reached`, "teal")}${adminReferenceCard("Still pending", pending, "Awaiting the next step", "warning")}${adminReferenceCard("No remarks", missing, "Unexplained activities", "danger")}<article class="admin-ref-by-person"><span>By salesman</span>${people.map(person => { const own = all.filter(row => row.actor === person); const n = own.filter(row => row.closed).length; return `<div><strong>${escapeHtml(person)}</strong>${adminReferenceProgress(n, own.length)}<small>${n}/${own.length} closed</small></div>`; }).join("") || "No activities recorded"}</article></div><div class="admin-ref-lock">Append-only view. Past entries cannot be edited or deleted here. Status history remains with each activity.</div><section class="admin-ref-table-panel"><div class="admin-ref-toolbar"><input type="search" data-admin-activity-search aria-label="Search notes and remarks" placeholder="Search notes and remarks" value="${escapeHtml(adminReference.activity.search)}"><div class="admin-ref-filter-tags">${tags}<span>Showing ${rows.length} of ${all.length}</span>${tags || adminReference.activity.search || adminReference.activity.sort !== "newest" ? '<button class="text-button admin-ref-danger" type="button" data-admin-clear-all>Clear all</button>' : ""}</div></div><div class="admin-ref-mobile-filters">${definitions.map(args => adminReferenceFilterMenu(...args)).join("")}</div><div class="admin-ref-table-scroll"><table class="admin-ref-table admin-ref-activity-table"><thead><tr>${definitions.slice(0, 5).map(args => `<th>${adminReferenceFilterMenu(...args)}</th>`).join("")}<th>Notes</th>${definitions.slice(5).map(args => `<th>${adminReferenceFilterMenu(...args)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr${!row.remarks && !row.retired ? ' class="is-unexplained"' : ""}><td data-label="Date & time">${escapeHtml(formatDisplayDate(row.date))}<small>${escapeHtml(activityDisplayTime(row))}</small></td><td data-label="Company"><button class="text-button" type="button" data-admin-open-lead="${escapeHtml(row.lead_id)}">${escapeHtml(row.company_name)}</button></td><td data-label="Type">${escapeHtml(row.type || "Note")}</td><td data-label="Origin"><span class="admin-ref-tag ${row.origin === "Management" ? "navy" : ""}">${escapeHtml(row.origin)}</span></td><td data-label="Logged by">${escapeHtml(row.actor)}</td><td data-label="Notes">${escapeHtml(row.note || row.text || "No notes")}</td><td data-label="Quote / PMR">${escapeHtml(row.quotation_ref || (row.pmr_id || row.pmr_ref ? "PMR linked" : "--"))}</td><td data-label="Status & remarks">${status(row)}</td></tr>`).join("") || '<tr><td colspan="8" class="empty-copy">No activities match these filters.</td></tr>'}</tbody></table></div><footer class="admin-ref-table-footer">Cancelled activities are kept in history and are not counted as completed.</footer></section><details class="admin-ref-calendar"><summary>Calendar, reminders &amp; review requests</summary><div class="admin-ref-existing-activity"></div></details>`;
   if (legacy) host.querySelector(".admin-ref-existing-activity").appendChild(legacy);
   if (els.openActivityDeletionQueue) host.querySelector(".admin-ref-existing-activity").appendChild(els.openActivityDeletionQueue);
   host.querySelector(".admin-ref-stat").insertAdjacentHTML("beforeend", adminReferenceProgress(closed, all.length));
@@ -7968,7 +7985,7 @@ function renderReferenceAdminActivity() {
   host.querySelectorAll("[data-admin-activity-sort]").forEach(select => select.onchange = () => { adminReference.activity.sort = select.value; renderReferenceAdminActivity(); });
   host.querySelector("[data-admin-activity-search]").oninput = event => { const position = event.target.selectionStart; adminReference.activity.search = event.target.value; renderReferenceAdminActivity(); const input = host.querySelector("[data-admin-activity-search]"); input.focus(); if (input.type === "text") input.setSelectionRange(position, position); };
   host.querySelector("[data-admin-log-activity]").onclick = () => els.openActivityCreate.click();
-  host.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, row.closed ? "Closed" : "Pending", row.outcome, row.remarks]));
+  host.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, statusLabel(row), row.outcome, row.remarks]));
   host.querySelectorAll("[data-admin-activity-history]").forEach(button => button.onclick = () => {
     openActivityDetails(button.dataset.adminActivityHistory, Number(button.dataset.index), button.dataset.activityId);
     // This read-only entry point must not expose amendment or deletion controls.
@@ -10516,6 +10533,7 @@ function recordRelationshipHealth(lead) {
   const known = !closed && days !== null && Number.isFinite(cadence) && cadence > 0;
   const tone = !known ? "unknown" : days > cadence * 1.6 ? "red" : days > cadence ? "amber" : "green";
   const recent = (lead.activities || []).filter(activity => {
+    if (activity.followup_resolution === "cancelled") return false;
     const elapsed = recordDaysSince(activity.at);
     return elapsed !== null && elapsed <= 60;
   });
@@ -10589,14 +10607,15 @@ function desktopLeadOverviewMarkup(lead) {
   return `<div class="record-desktop-overview">
     <div class="record-main-column">
       <section class="drawer-section record-next-step">
+        ${recordFollowupConfirmation(lead)}
         <div class="record-next-content"><div><span class="record-eyebrow">Next step</span><h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3><p>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong> ` : ""}${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p></div>
-        <div class="record-action-row"><button class="ghost-button" type="button" data-drawer-edit-lead="${id}" title="Edit the lead's next action and due date">Reschedule</button><button class="primary-button" type="button" data-drawer-log-activity="${id}">Log outcome</button></div></div>
+        <div class="record-action-row">${recordFollowupActions(lead)}</div></div>
         <div class="record-next-guidance" aria-live="polite"><div><span class="record-guidance-badge">${escapeHtml(guidance ? source : "Guidance")}</span><button class="ghost-button" type="button" data-refresh-lead-ai-summary="${id}" ${summary?.loading ? "disabled" : ""}>Ask again</button></div><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable. Ask again to retry."))}</p></div>
         ${recordProfileFollowupMarkup(lead)}
       </section>
       ${companyAiActionsMarkup(lead, {overview:true})}
       <section class="drawer-section record-recent-activity"><div class="drawer-tab-heading"><h3>Recent activity</h3><button class="record-text-action" type="button" data-drawer-tab="activities">View all</button></div>
-        <div>${activities.map(activity => `<article class="record-activity-row"><span class="record-activity-icon ${escapeHtml(activityTypeClass(activity.type))}" aria-hidden="true"></span><div><strong>${escapeHtml(activity.type || "Activity")}</strong><p>${escapeHtml(activity.text || activity.note || "No note added.")}</p></div><time>${escapeHtml(activity.at ? formatDisplayDate(activity.at) : "Date not recorded")}</time></article>`).join("") || '<p class="empty-copy">No activity recorded yet.</p>'}</div>
+        <div>${activities.map(activity => `<article class="record-activity-row"><span class="record-activity-icon ${escapeHtml(activityTypeClass(activity.type))}" aria-hidden="true"></span><div><strong>${escapeHtml(recordFollowupTitle(activity))}</strong><p>${escapeHtml(activity.text || activity.note || "No note added.")}</p></div><div>${recordFollowupStatus(activity)}<time>${escapeHtml(activity.at ? formatDisplayDate(activity.at) : "Date not recorded")}</time></div></article>`).join("") || '<p class="empty-copy">No activity recorded yet.</p>'}</div>
         <button class="record-text-action" type="button" data-drawer-tab="activities">View all activity</button>
       </section>
       <div class="record-overview-notes">${renderDrawerNotes(lead)}</div>
@@ -10626,17 +10645,168 @@ function primaryContactMarkup(lead) {
   return contact ? `<p class="record-primary-contact">${escapeHtml(contact)}</p>` : "";
 }
 
+function canResolveLeadNextStep(lead) {
+  const user = state.currentUser;
+  if (!lead.next_action || !lead.next_action_date || lead.pending_sync || !user) return false;
+  if (user.role === "admin") return true;
+  return user.role === "salesman" && (lead.assigned_to ? String(lead.assigned_to) === String(user.id)
+    : Boolean(user.name && String(lead.assigned_salesman || "").trim().toLowerCase() === user.name.trim().toLowerCase()));
+}
+
+function recordFollowupActions(lead) {
+  const id = escapeHtml(lead.id);
+  return `<button class="ghost-button" type="button" data-drawer-edit-lead="${id}">${lead.next_action ? "Reschedule" : "Set next step"}</button>${
+    canResolveLeadNextStep(lead) ? `<button class="ghost-button record-cancel-followup" type="button" data-lead-followup="cancelled" data-followup-lead="${id}">Cancel activity</button>
+      <button class="primary-button" type="button" data-lead-followup="completed" data-followup-lead="${id}">Log outcome</button>` : ""
+  }`;
+}
+
+function recordFollowupStatus(activity) {
+  const status = activity.followup_resolution;
+  if (status !== "completed" && status !== "cancelled") return "";
+  return `<span class="record-followup-status is-${status}">${status === "completed" ? "Completed" : "Cancelled"}</span>`;
+}
+
+function recordFollowupTitle(activity) {
+  return [activity.followup_action || activity.type || "Activity", activity.followup_resolution && activity.transaction_outcome]
+    .filter(Boolean).join(" · ");
+}
+
+function recordFollowupConfirmation(lead) {
+  const event = (lead.activities || []).find(activity => activity.followup_resolution);
+  if (!event || (lead.next_action_date || "") !== (event.replacement_due_date || "")) return "";
+  if (event.replacement_id && !(lead.activities || []).some(activity =>
+    activity.id === event.replacement_id && activity.activity_required === lead.next_action && activity.due_date === lead.next_action_date)) return "";
+  return `<div class="record-followup-confirmation is-${event.followup_resolution === "completed" ? "completed" : "cancelled"}" role="status">
+    <strong>${recordFollowupStatus(event)} ${escapeHtml(event.transaction_outcome)}</strong>
+    <p>${escapeHtml(event.transaction_remarks)}</p>
+    ${event.replacement_due_date ? `<small>Next step: ${escapeHtml(event.replacement_label)} · due ${escapeHtml(formatDisplayDate(event.replacement_due_date))}</small>` : ""}
+  </div>`;
+}
+
+function openLeadFollowupDialog(lead, status) {
+  if (!canResolveLeadNextStep(lead) || !Object.hasOwn(LEAD_FOLLOWUP_REASONS, status)) return;
+  const dialog = document.getElementById("leadFollowupDialog");
+  if (dialog.open) return;
+  const cancelled = status === "cancelled";
+  const min = cancelled ? 15 : 10;
+  const now = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+  let lastSubmission = "";
+  let requestId = "";
+  const userId = state.currentUser.id;
+  const expected = { expected_action: lead.next_action, expected_due: lead.next_action_date,
+    expected_revision: (lead.activities || []).find(activity => activity.followup_resolution)?.id || "",
+    expected_updated_at: lead.updated_at || "" };
+  const contact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ");
+  const subtitle = [normalizeNextActionPlan(lead.next_action), contact, `due ${formatDisplayDate(lead.next_action_date)}`].filter(Boolean).join(" · ");
+  dialog.dataset.resolution = status;
+  dialog.innerHTML = `<form class="lead-followup-form">
+    <header>
+      <div>${cancelled ? "" : '<span class="record-followup-status is-completed">Will be marked completed</span>'}
+        <h2 id="leadFollowupTitle">${cancelled ? 'Cancel this <em>activity?</em>' : 'Log <em>outcome</em>'}</h2>
+        <p>${escapeHtml(subtitle)}</p>
+      </div><button class="ghost-button lead-followup-close" type="button" data-followup-dismiss aria-label="Close dialog" title="Close dialog">&times;</button>
+    </header>
+    <div class="lead-followup-fields">
+      <fieldset><legend>${cancelled ? "Why are you cancelling it?" : "What happened?"} <span>*</span></legend>
+        <div class="lead-followup-options">${LEAD_FOLLOWUP_REASONS[status].map(reason =>
+          `<label><input type="radio" name="reason" value="${escapeHtml(reason)}" required><span>${escapeHtml(reason)}</span></label>`).join("")}</div>
+      </fieldset>
+      ${cancelled ? "" : `<div class="lead-followup-contact">
+        <label>Done on (UAE time)<input name="done_at" type="datetime-local" value="${now.slice(0, 16)}" max="${now.slice(0, 16)}" required></label>
+        <label>Spoke with<input name="spoke_with" type="text" maxlength="200" value="${escapeHtml(contact)}"></label>
+      </div>`}
+      <label>${cancelled ? "Justification for management" : "Notes / summary"} <span>*</span>
+        <textarea name="remarks" maxlength="4000" rows="3" required aria-describedby="leadFollowupCount" placeholder="${cancelled ? "Explain why this activity should not go ahead." : "What happened during this follow-up?"}"></textarea>
+      </label>
+      <small id="leadFollowupCount" class="lead-followup-count"></small>
+      <div class="lead-followup-next">
+        <label class="lead-followup-check"><input type="checkbox" name="schedule"> ${cancelled ? "Schedule a replacement activity" : "Schedule the next step"}</label>
+        <div class="lead-followup-next-fields" hidden>
+          <label>Type<select name="next_type" disabled required><option value="">Choose type</option><option>Send quotation</option><option value="To Call">Call</option><option value="To Send Email">Email</option><option value="To Visit">Site visit</option></select></label>
+          <label>Due date<input name="next_date" type="date" min="${now.slice(0, 10)}" disabled required></label>
+          <label>Note<input name="next_note" type="text" maxlength="500" disabled></label>
+        </div>
+      </div>
+      ${cancelled ? '<p class="lead-followup-notice">Cancellation stays in lead history and the Admin Activity log. It is not counted as completed.</p>' : ""}
+      <p class="lead-followup-error" role="alert" hidden></p>
+    </div>
+    <footer><button class="ghost-button" type="button" data-followup-dismiss>${cancelled ? "Keep activity" : "Back"}</button>
+      <button class="primary-button lead-followup-save" type="submit" disabled>${cancelled ? "Cancel activity" : "Save &amp; mark completed"}</button></footer>
+  </form>`;
+  const form = dialog.querySelector("form");
+  const fields = form.elements;
+  const save = dialog.querySelector(".lead-followup-save");
+  const error = dialog.querySelector(".lead-followup-error");
+  const schedule = dialog.querySelector(".lead-followup-next-fields");
+  const count = dialog.querySelector(".lead-followup-count");
+  let saving = false;
+  let stale = false;
+  function validate() {
+    schedule.hidden = !fields.schedule.checked;
+    schedule.querySelectorAll("input, select").forEach(field => { field.disabled = schedule.hidden; });
+    const length = [...fields.remarks.value.trim()].length;
+    count.textContent = length >= min ? `${length} characters` : `At least ${min} characters required (${length}/${min})`;
+    count.classList.toggle("is-valid", length >= min);
+    save.disabled = saving || stale || length < min || !form.checkValidity();
+  }
+  form.oninput = validate;
+  form.onchange = validate;
+  dialog.oncancel = event => { if (saving) event.preventDefault(); };
+  dialog.querySelectorAll("[data-followup-dismiss]").forEach(button => { button.onclick = () => { if (!saving) dialog.close(); }; });
+  form.onsubmit = async event => {
+    event.preventDefault();
+    validate();
+    if (save.disabled || state.currentUser?.id !== userId) return;
+    saving = true;
+    error.hidden = true;
+    const data = new FormData(form);
+    validate();
+    try {
+      const values = {
+        status, ...expected, reason: data.get("reason"), remarks: data.get("remarks"),
+        done_at: cancelled ? "" : `${data.get("done_at")}+04:00`, spoke_with: data.get("spoke_with"),
+        next_step: data.has("schedule") ? { type: data.get("next_type"), date: data.get("next_date"), note: data.get("next_note") } : null
+      };
+      const submission = JSON.stringify(values);
+      if (submission !== lastSubmission) requestId = crypto.randomUUID();
+      lastSubmission = submission;
+      const result = await api(`/api/leads/${encodeURIComponent(lead.id)}/followup-resolution`, {
+        method: "POST", body: JSON.stringify({ ...values, request_id: requestId })
+      });
+      dialog.close();
+      if (state.currentUser?.id !== userId) return;
+      const current = state.leads.find(item => String(item.id) === String(lead.id));
+      if (current) Object.assign(current, result.lead);
+      render();
+      setToast(cancelled ? "Activity cancelled." : "Outcome saved and activity completed.", "success");
+    } catch (cause) {
+      if (state.currentUser?.id !== userId) { dialog.close(); return; }
+      stale = cause.status === 409;
+      error.textContent = cause.message || "Could not save the follow-up. Try again.";
+      error.hidden = false;
+      if (stale && state.currentUser?.id === userId) await loadLeads().catch(() => {});
+    } finally {
+      saving = false;
+      validate();
+    }
+  };
+  validate();
+  dialog.showModal();
+}
+
 function mobileLeadNextStepMarkup(lead) {
   const overdueDays = lead.next_action_date ? Math.max(0, -daysUntil(lead.next_action_date)) : 0;
   const summary = state.selectedId === lead.id ? state.leadAiSummary : null;
   const guidance = !summary?.loading && !summary?.error ? summaryText(summary?.data?.recommended_next_action) : "";
   const guidanceLabel = summary?.cached ? "Cached guidance" : summary?.provider === "fallback" ? "CRM guidance" : "AI guidance";
   return `<section class="drawer-section record-mobile-next" aria-label="Next step">
+    ${recordFollowupConfirmation(lead)}
     <div class="record-mobile-next-heading"><span>Next step</span>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong>` : ""}</div>
     <h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3>
     <div class="record-mobile-guidance" aria-live="polite"><div class="record-mobile-guidance-heading"><span>${escapeHtml(guidance ? guidanceLabel : "Guidance")}</span><button class="ghost-button" type="button" data-refresh-lead-ai-summary="${escapeHtml(lead.id)}" ${summary?.loading ? "disabled" : ""}>Ask again</button></div><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable."))}</p></div>
     <p class="record-mobile-due">${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p>
-    <div class="record-mobile-next-footer"><button class="ghost-button" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}">Reschedule</button><button class="primary-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log outcome</button></div>
+    <div class="record-mobile-next-footer">${recordFollowupActions(lead)}</div>
     ${recordProfileFollowupMarkup(lead)}
   </section>`;
 }
@@ -10763,7 +10933,7 @@ function renderDrawerActivities(lead) {
   const olderActivities = activities.slice(3);
   const activityCard = (activity, index) => `
     <article class="drawer-activity ${activityTypeClass(activity.type)}">
-      <div><span class="activity-type-label"><i>${escapeHtml(ACTIVITY_TYPE_ICONS[activity.type] || "ACT")}</i>${escapeHtml(activity.type || "Note")}</span><span class="meta-label">${escapeHtml(activity.at || "")}</span></div>
+      <div><span class="activity-type-label"><i>${escapeHtml(ACTIVITY_TYPE_ICONS[activity.type] || "ACT")}</i>${escapeHtml(recordFollowupTitle(activity))}</span> ${recordFollowupStatus(activity)}<span class="meta-label">${escapeHtml(activity.at || "")}</span></div>
       <p class="activity-note clamp" data-expand-note>${escapeHtml(activity.text || activity.note || "No note added.")}</p>
       <div class="activity-actions">${activityEditButton(lead.id, index, activity)}${activityDeleteButton(lead.id, index, activity)}</div>
     </article>
@@ -11105,7 +11275,7 @@ function renderLeadDrawer() {
     <nav class="drawer-tabs lead-detail-tabs" aria-label="Lead details sections">${tabs.map(tab => `<button type="button" class="${state.leadDrawerTab === tab ? "active" : ""}" data-drawer-tab="${tab}" aria-current="${state.leadDrawerTab === tab ? "page" : "false"}">${tabLabels[tab]}</button>`).join("")}</nav>
     ${mobileLeadNextStepMarkup(lead)}
     <div class="drawer-body lead-detail-page-body">${body}</div>
-    <div class="record-mobile-actions" aria-label="Lead actions"><button class="primary-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Log outcome</button><button class="ghost-button" type="button" data-record-note>Note</button></div>
+    <div class="record-mobile-actions" aria-label="Lead actions"><button class="primary-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Add activity</button><button class="ghost-button" type="button" data-record-note>Note</button></div>
   `;
   if (assistantLauncher) els.leadDetailPageContent.querySelector(".record-assistant-host")?.appendChild(assistantLauncher);
   renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });
@@ -11273,6 +11443,12 @@ function bindLeadDrawerEvents() {
   });
   document.querySelectorAll("[data-drawer-log-activity]").forEach(button => {
     button.addEventListener("click", () => openActivityModal(button.dataset.drawerLogActivity, button));
+  });
+  document.querySelectorAll("[data-lead-followup]").forEach(button => {
+    button.addEventListener("click", () => {
+      const lead = state.leads.find(item => String(item.id) === button.dataset.followupLead);
+      if (lead) openLeadFollowupDialog(lead, button.dataset.leadFollowup);
+    });
   });
   document.querySelectorAll("[data-drawer-add-reminder]").forEach(button => {
     button.addEventListener("click", () => addDrawerReminder(button.dataset.drawerAddReminder));
@@ -12537,7 +12713,8 @@ function renderActionPlanPanel() {
 }
 
 function allActivities() {
-  return state.leads.flatMap(lead => (lead.activities || []).map((activity, index) => ({ ...activity, company_name: lead.company_name, lead_id: lead.id, activity_index: index })))
+  return state.leads.flatMap(lead => (lead.activities || []).map((activity, index) => ({ ...activity, company_name: lead.company_name, lead_id: lead.id, activity_index: index,
+    followup_retired: isReminderActivity(activity) && followupRetiredReminder(activity, lead.activities) })))
     .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
 
@@ -12670,9 +12847,12 @@ function completedReminderKeys(lead) {
 
 function remindersForLead(lead) {
   const completed = completedReminderKeys(lead);
+  const resolutions = (lead.activities || []).filter(activity => activity.followup_resolution);
   const stored = (lead.activities || [])
     .map((activity, activity_index) => ({ activity, activity_index }))
-    .filter(({ activity }) => isReminderActivity(activity) && activity.reminder_status !== "completed")
+    .filter(({ activity }) => isReminderActivity(activity) && !activity.archived && !activity.delete_request
+      && !["completed", "cancelled"].includes(activity.reminder_status)
+      && !followupRetiredReminder(activity, resolutions))
     .map(({ activity, activity_index }) => ({
       ...activity,
       lead_id: lead.id,
@@ -13004,8 +13184,8 @@ function activityCardMarkup(activity) {
   const admin = state.currentUser?.role === "admin" || state.currentUser?.role === "manager";
   const isReminder = String(type).toLowerCase() === "reminder";
   const dueDate = activity.reminder_due_date || activity.due_date || "";
-  const reminderOverdue = isReminder && dueDate && dueDate.slice(0, 10) < today() && activity.reminder_status !== "completed";
-  const statusLabel = isReminder
+  const reminderOverdue = isReminder && dueDate && dueDate.slice(0, 10) < today() && !activity.followup_retired && activity.reminder_status !== "completed";
+  const statusLabel = activity.followup_retired ? "Resolved reminder" : isReminder
     ? activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled")
     : STAGE_DISPLAY_LABELS[normalizeStageKey(activity.stage, "")] || activity.stage || "Prospect";
   const statusClass = reminderOverdue ? "hot" : "activity-status-neutral";
