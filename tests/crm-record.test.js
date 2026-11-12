@@ -47,7 +47,7 @@ assert.equal(routeContext.parseAppRoute({pathname:"/leads/example/overview",sear
 assert.equal(routeContext.parseAppRoute({pathname:"/leads/example/overview",search:""}).tab,"overview");
 const overviewHelpers = client.slice(client.indexOf("function recordDaysSince("), client.indexOf("function renderDrawerOverview("));
 const context = {
-  state: {selectedId: "other", leadAiSummary: null}, summaryText: String,
+  state: {selectedId: "other", leadAiSummary: null, currentUser: {role: "admin"}}, summaryText: String,
   today: () => "2026-10-27",
   escapeHtml: value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[char])),
   remindersForLead: () => [], daysUntil: () => -5,
@@ -79,7 +79,9 @@ assert.match(mobileExtras, /Contact timing uses the current status and tier cade
 assert.equal((mobileExtras.match(/data-company-ai-action=/g) || []).length, 4);
 assert.match(mobileExtras, /Flag to director/);
 assert.match(mobileNext, /data-refresh-lead-ai-summary=/);
-assert.match(mobileNext, /data-drawer-log-activity=/);
+assert.match(mobileNext, /data-lead-followup="completed"/);
+assert.match(mobileNext, /data-lead-followup="cancelled"/);
+assert.doesNotMatch(emptyOverview, /data-lead-followup=/);
 assert.equal((mobileExtras.match(/Not rated/g) || []).length, 3);
 assert.doesNotMatch(mobileExtras, /At risk|Act now|expected 14|Create quote/);
 const health = lead => vm.runInNewContext(`${overviewHelpers}\nrecordRelationshipHealth(lead)`, {...context, lead});

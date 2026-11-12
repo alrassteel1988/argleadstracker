@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v151-al-ras-steel-branding";
+const CACHE_VERSION = "arg-pwa-v152-lead-followup-outcomes";
 const APP_SHELL = [
   "/",
   "/index.html",

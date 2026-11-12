@@ -13,6 +13,40 @@ const root = path.join(__dirname, "..");
 const serverSource = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const clientSource = fs.readFileSync(path.join(root, "client.js"), "utf8");
 const htmlSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const { validateLeadFollowup, resolveLocalLeadFollowup, isResolvedReminder } = require("../src/services/leadFollowupService");
+
+{
+  const now = "2026-11-12T09:00:00.000Z";
+  const lead = { assigned_to: "rep-a", assigned_salesman: "Rep A", next_action: "To Call", next_action_date: "2026-11-10",
+    last_activity: "2026-11-01", activities: [{ id: "old", type: "Reminder", activity_required: "To Call", due_date: "2026-11-10" }] };
+  const admin = { id: "admin", role: "admin", name: "Admin actor" };
+  const request = { request_id: "efc9db5e-6c62-49cd-bbd9-a8838c830e35", status: "cancelled", reason: "Duplicate activity",
+    remarks: "Duplicate follow-up already assigned elsewhere.", expected_action: lead.next_action, expected_due: lead.next_action_date };
+  const values = validateLeadFollowup(request, now);
+  assert.throws(() => validateLeadFollowup({ ...request, remarks: "   too short  " }, now), /required/);
+  assert.throws(() => validateLeadFollowup({ ...request, next_step: { type: "To Call", date: "2026-11-11" } }, now), /today or later/);
+  assert.throws(() => resolveLocalLeadFollowup(lead, { id: "rep-b", name: "Rep A", role: "salesman" }, values, now), /assigned salesman/);
+  const result = resolveLocalLeadFollowup(lead, admin, values, now);
+  assert.equal(result.activity.cancelled_by, admin.id);
+  assert.equal(result.activity.audit_history[0].actor_id, admin.id);
+  assert.equal(result.activity.transaction_status, "cancelled");
+  assert.equal(result.lead.last_activity, lead.last_activity);
+  assert.equal(result.lead.next_action_date, null);
+  assert.equal(result.lead.activities[1], lead.activities[0]);
+  assert(isResolvedReminder(lead.activities[0], result.lead.activities));
+  assert(resolveLocalLeadFollowup(result.lead, admin, values, now).duplicate);
+  assert.throws(() => resolveLocalLeadFollowup(result.lead, admin, { ...values, request_id: "other" }, now), /next step changed/);
+  const completed = resolveLocalLeadFollowup(lead, { id: "rep-a", role: "salesman", name: "Rep A" }, validateLeadFollowup({
+    ...request, status: "completed", reason: "Quote requested", done_at: "2026-11-12T12:00+04:00",
+    next_step: { type: "Send quotation", date: "2026-11-12", note: "Send synthetic price" }
+  }, now), now);
+  assert.equal(completed.activity.done_by, "rep-a");
+  assert.equal(completed.activity.transaction_status, "closed");
+  assert.equal(completed.lead.last_activity, "2026-11-12");
+  assert.equal(completed.lead.next_action, "To Send Email");
+  assert.equal(completed.lead.activities[1].text, "Send synthetic price");
+  assert(!isResolvedReminder(completed.lead.activities[1], completed.lead.activities));
+}
 
 function attachment(filename, type, buffer) {
   return validateActivityAttachment({ filename, contentType: type, buffer });
