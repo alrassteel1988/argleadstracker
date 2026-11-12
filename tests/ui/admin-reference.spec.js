@@ -33,7 +33,7 @@ test("reference dashboard keeps real counts, drilldowns and responsive shell", a
   await expect(page.locator(".admin-ref-attention-card")).toHaveCount(4);
   await expect(page.locator("#metricValue")).toHaveText("9");
   await expect(page.locator("#adminReferenceInsights > details")).not.toHaveAttribute("open");
-  const order = await page.evaluate(() => ["adminDashboardTriageRow", "metricsShell", "actionPlanPanel", "adminDashboardAnalyticsRow"].map(id => document.getElementById(id).getBoundingClientRect().top));
+  const order = await page.evaluate(() => ["adminDashboardTriageRow", "metricsShell", "adminDashboardAnalyticsRow", "actionPlanPanel"].map(id => document.getElementById(id).getBoundingClientRect().top));
   expect(order).toEqual([...order].sort((a, b) => a - b));
   await page.locator(".action-plan-toggle").first().click();
   await expect(page.locator(".salesman-plan-table-region").first()).toBeVisible();
@@ -77,12 +77,30 @@ test("dashboard interaction cards give record text the wide column", async ({ pa
   await login(page, info);
   if (info.project.name.endsWith("mobile")) {
     await page.setViewportSize({ width: 320, height: 812 });
+  } else {
+    for (const viewport of [{ width: 1512, height: 730 }, { width: 1280, height: 720 }]) {
+      await page.setViewportSize(viewport);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      for (const panel of ["#pipelineHealthPanel", "#dashboardActivityPanel"]) {
+        const bounds = await page.locator(panel).boundingBox();
+        expect(bounds.y, panel).toBeGreaterThanOrEqual(0);
+        expect(bounds.y + bounds.height, panel).toBeLessThanOrEqual(viewport.height);
+      }
+      await capture(page, info, `admin-dashboard-${viewport.width}x${viewport.height}`, { fullPage: false });
+    }
   }
 
   for (const [tab, feed] of [["latest", "#dashboardActivityFeed"], ["cold", "#dashboardFocus"]]) {
     await page.locator(`[data-admin-interaction="${tab}"]`).click();
     const card = page.locator(`${feed} > .dashboard-activity-item`).first();
     await expect(card).toBeVisible();
+    const more = page.locator(`${feed} .admin-ref-movement-more`);
+    await expect(more.locator("summary")).toHaveText("Show 4 more");
+    await expect(more.locator(".dashboard-activity-item").last()).toBeHidden();
+    await more.locator("summary").press("Enter");
+    await expect(more.locator(".dashboard-activity-item").last()).toBeVisible();
+    await more.locator("summary").press("Enter");
+    await expect(more.locator(".dashboard-activity-item").last()).toBeHidden();
     const layout = await card.evaluate(element => {
       const card = element.getBoundingClientRect();
       const pin = element.querySelector(".activity-pin").getBoundingClientRect();
@@ -107,7 +125,6 @@ test("dashboard interaction cards give record text the wide column", async ({ pa
     const pipeline = await page.locator("#pipelineHealthPanel").boundingBox();
     const activity = await page.locator("#dashboardActivityPanel").boundingBox();
     expect(Math.abs(pipeline.y - activity.y)).toBeLessThanOrEqual(1);
-    expect(pipeline.height).toBeLessThan(activity.height);
   }
   await capture(page, info, "admin-dashboard-interaction-cards");
   await page.locator("#dashboardActivityFeed > .dashboard-activity-item").first().click();

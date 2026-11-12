@@ -1540,6 +1540,8 @@ body.admin-reference-mode.admin-dashboard-mode .admin-ref-interaction-tabs butto
 body.admin-reference-mode.admin-dashboard-mode .admin-v3-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 30px 18px; background: #f6f8fb; border-radius: 10px; }
 body.admin-reference-mode.admin-dashboard-mode .admin-v3-empty .admin-v3-icon { background: #e5eef7; color: var(--v3-navy); }
 body.admin-reference-mode.admin-dashboard-mode .admin-v3-empty p { margin: 0; color: var(--admin-ref-muted); font-size: 13px; line-height: 1.6; }
+body.admin-reference-mode.admin-dashboard-mode .admin-ref-movement-more > summary { padding: 6px 4px; color: var(--v3-navy); font-size: 13px; font-weight: 600; cursor: pointer; }
+body.admin-reference-mode.admin-dashboard-mode .admin-ref-movement-more[open] { display: grid; gap: 8px; }
 body.admin-reference-mode.admin-dashboard-mode #adminReferenceInsights summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px; list-style: none; }
 body.admin-reference-mode.admin-dashboard-mode #adminReferenceInsights summary::-webkit-details-marker { display: none; }
 body.admin-reference-mode.admin-dashboard-mode #adminReferenceInsights summary > span:first-child { font-size: 18px; }
@@ -1547,6 +1549,42 @@ body.admin-reference-mode.admin-dashboard-mode #adminReferenceInsights summary s
 body.admin-reference-mode.admin-dashboard-mode .admin-v3-disclosure::after { content: "Show \2304"; font-size: 13px; }
 body.admin-reference-mode.admin-dashboard-mode details[open] .admin-v3-disclosure::after { content: "Hide \2303"; }
 body.admin-reference-mode.admin-dashboard-mode :is(button, [role="button"], summary):focus-visible { outline: 3px solid #3c82c8; outline-offset: 3px; }
+@media (min-width: 1101px) {
+  body.admin-reference-mode.admin-dashboard-mode #appShell .main { padding-top: 20px !important; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell .topbar { padding-bottom: 12px !important; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell #dashboardView { gap: 14px !important; }
+  body.admin-reference-mode.admin-dashboard-mode #adminDashboardTriageRow h2 { margin-bottom: 8px; }
+  body.admin-reference-mode.admin-dashboard-mode .admin-ref-attention-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 12px 14px;
+  }
+  body.admin-reference-mode.admin-dashboard-mode .admin-ref-attention-card > :is(span, button) { grid-column: 1 / -1; }
+  body.admin-reference-mode.admin-dashboard-mode .admin-ref-attention-card > strong { font-size: 28px; margin-top: 0; }
+  body.admin-reference-mode.admin-dashboard-mode .admin-ref-attention-card p { margin: 0; line-height: 1.35; }
+  body.admin-reference-mode.admin-dashboard-mode .admin-ref-attention-card .admin-v3-icon { top: 10px; right: 12px; width: 30px; height: 30px; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell .admin-ref-attention-card button { min-height: 34px; padding: 5px 10px; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell #metricsPanel article { min-height: 108px; padding: 12px 14px !important; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell #metricsPanel article > strong { margin: 4px 4px 2px 0; font-size: 28px !important; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell #metricsPanel .admin-v3-icon { top: 10px; right: 12px; width: 28px; height: 28px; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell #metricsPanel .admin-v3-metric-meter { margin-top: 7px; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell #pipelineHealthPanel > .panel-header { padding: 12px 14px !important; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell #dashboardStatus { gap: 8px; padding: 12px !important; }
+  body.admin-reference-mode.admin-dashboard-mode #appShell #dashboardStatus .status-card { min-height: 60px !important; padding: 8px 10px !important; }
+  body.admin-reference-mode.admin-dashboard-mode .admin-v3-movement-heading { padding: 12px 14px 0; }
+  body.admin-reference-mode.admin-dashboard-mode .admin-ref-interaction-tabs { margin: 8px 14px 4px; padding: 4px; }
+  body.admin-reference-mode.admin-dashboard-mode .admin-ref-interaction-tabs button { min-height: 34px; padding: 6px 8px; }
+  body.admin-reference-mode.admin-dashboard-mode .admin-v3-empty { padding: 14px 12px; gap: 6px; }
+  body.admin-reference-mode.admin-dashboard-mode #dashboardActivityPanel :is(#dashboardActivityFeed, #dashboardFocus) > .dashboard-activity-item :is(strong, p) {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+}
 @media (min-width: 701px) and (max-width: 1150px) {
   body.admin-reference-mode.admin-dashboard-mode #appShell #actionPlanList .salesman-plan-head { grid-template-columns: minmax(180px, 1fr) minmax(200px, 1fr) !important; }
   body.admin-reference-mode.admin-dashboard-mode #actionPlanList .salesman-plan-head-meta { grid-column: 1 / -1; }

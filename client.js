@@ -7700,9 +7700,8 @@ function arrangeReferenceAdminDashboard() {
   triage.className = "admin-ref-attention";
   overview.appendChild(els.metricsShell);
   triage.after(overview);
-  overview.after(work);
+  overview.after(analytics, work);
   work.prepend(els.actionPlanPanel);
-  work.after(analytics);
   const insights = adminReferencePanel("adminReferenceInsights", "admin-ref-insights", root,
     '<details><summary><span>More <em class="crm-title-accent">insights</em><small>Market snapshot · Intel overview · Pipeline funnel · Salesman comparison</small></span><span class="admin-v3-disclosure" aria-hidden="true"></span></summary><div class="admin-ref-insights-grid"></div></details>');
   const insightBody = insights.querySelector(".admin-ref-insights-grid");
@@ -7869,6 +7868,19 @@ function decorateAdminDashboardV3() {
   if (els.dashboardActivityFeed.querySelector(".empty-copy")) {
     els.dashboardActivityFeed.innerHTML = '<div class="admin-v3-empty"><i class="admin-v3-icon" aria-hidden="true"></i><strong>No recent interactions yet</strong><p>Calls, emails and visits appear here as they are logged.</p><button type="button" class="ghost-button" data-admin-open-activity>Open activity log &#8250;</button></div>';
     els.dashboardActivityFeed.querySelector("button").onclick = () => setView("activity");
+  }
+  for (const feed of [els.dashboardActivityFeed, els.dashboardFocus]) {
+    const [, ...more] = feed.querySelectorAll(":scope > .dashboard-activity-item");
+    if (!more.length) continue;
+    const details = document.createElement("details");
+    details.className = "admin-ref-movement-more";
+    const summary = document.createElement("summary");
+    summary.textContent = `Show ${more.length} more`;
+    details.addEventListener("toggle", () => {
+      summary.textContent = details.open ? "Show fewer" : `Show ${more.length} more`;
+    });
+    details.append(summary, ...more);
+    feed.appendChild(details);
   }
 }
 
