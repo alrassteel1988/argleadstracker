@@ -1,3 +1,5 @@
+const { isResolvedReminder } = require("./leadFollowupService");
+
 const OUTCOMES = Object.freeze({
   pending: Object.freeze([
     "Call back requested",
@@ -75,7 +77,8 @@ function overdueActivityRows(leads, asOf) {
   if (!isDate(asOf)) throw new Error("A valid reference date is required.");
   return (Array.isArray(leads) ? leads : []).flatMap(lead =>
     (Array.isArray(lead.activities) ? lead.activities : [])
-      .filter(activity => activity && !activity.archived && !activity.delete_request && activity.deletion_status !== "pending")
+      .filter(activity => activity && !activity.archived && !activity.delete_request && activity.deletion_status !== "pending"
+        && !activity.followup_resolution && !isResolvedReminder(activity, lead.activities))
       .map(activity => {
         const due = String(activity.next_action_date || activity.reminder_due_date || (activity.reminder ? activity.due_date : "") || "").slice(0, 10);
         return { lead_id: lead.id, activity_id: activity.id || "", due_date: due, status: activityTransactionStatus(activity), activity };

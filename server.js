@@ -50,6 +50,7 @@ const {
 } = require("./src/services/activityWorkflowService");
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
 const { canReadManagementTask, validateManagementTask, saveLocalManagementTask } = require("./src/services/managementTaskService");
+const { canResolveLeadFollowup, isResolvedReminder, validateLeadFollowup, resolveLocalLeadFollowup } = require("./src/services/leadFollowupService");
 const {
   enrichCompanyFromGoogle,
   enrichHunter,
@@ -1862,7 +1863,9 @@ function flattenedActivitiesForUser(leads, user, filters = {}) {
       activity_time: activityTimeOnly(activity),
       reminder_due_date: activity.reminder_due_date || activity.due_date || "",
       reminder_status: activity.reminder_status || (activity.followup_completed ? "completed" : ""),
-      transaction_status: activityTransactionStatus(activity),
+      transaction_status: activity.followup_resolution === "cancelled" ? "cancelled" : activityTransactionStatus(activity),
+      followup_resolution: activity.followup_resolution || "",
+      followup_retired: isResolvedReminder(lead.activities?.[index] || activity, lead.activities || []),
       transaction_outcome: activity.transaction_outcome || "",
       transaction_remarks: activity.transaction_remarks || "",
       transaction_next_attempt: activity.transaction_next_attempt || "",
@@ -3758,7 +3761,8 @@ async function queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled) 
 }
 async function persistActivityCollection(db, user, lead, activities, supabaseEnabled) {
   const normalized = ensureActivityIds(activities);
-  const lastActivity = normalized.find(activity => !activity.delete_request && !activity.archived)?.at
+  const lastActivity = normalized.find(activity => !activity.delete_request && !activity.archived
+    && activity.followup_resolution !== "cancelled" && !activity.followup_label)?.at
     || lead.last_activity
     || "";
   return persistLeadPatch(db, user, lead.id, { activities: normalized, last_activity: lastActivity }, supabaseEnabled);
@@ -7552,6 +7556,43 @@ async function handleApi(req, res, url) {
     }
     const body = fs.readFileSync(localPath);
     return sendDownload(res, attachment.content_type || "application/octet-stream", safeOriginalFilename(attachment.original_filename), body);
+  }
+
+  const leadFollowupMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/followup-resolution$/);
+  if (req.method === "POST" && leadFollowupMatch) {
+    if (!["admin", "salesman"].includes(user.role)) return sendJson(res, 403, { error: "Admin or salesman access is required." });
+    const input = await readBody(req);
+    const now = new Date().toISOString();
+    let values;
+    try { values = validateLeadFollowup(input || {}, now); }
+    catch (error) { return sendJson(res, 400, { error: error.message }); }
+    const leadId = decodeURIComponent(leadFollowupMatch[1]);
+    const freshDb = supabaseEnabled ? null : readDb();
+    const lead = await accessibleLeadById(freshDb, user, leadId, supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    if (!canResolveLeadFollowup(user, lead)) return sendJson(res, 403, { error: "Only an Admin or the assigned salesman can resolve this follow-up." });
+    try {
+      if (supabaseEnabled) {
+        const result = await rest("rpc/resolve_lead_followup", {
+          method: "POST", ...supabaseDataOptions(user.token),
+          body: { p_lead_id: leadId, p_input: values }
+        });
+        return sendJson(res, result.duplicate ? 200 : 201, { ...result, lead: fromSupabaseLead(result.lead) });
+      }
+      const result = resolveLocalLeadFollowup(lead, user, values, now);
+      if (!result.duplicate) {
+        Object.assign(lead, result.lead);
+        writeDb(freshDb);
+      }
+      return sendJson(res, result.duplicate ? 200 : 201, { ...result, lead: leadWithDerivedFields(result.lead) });
+    } catch (error) {
+      if (/next step (changed|has already)|More than one reminder|request already used/i.test(error.message)) {
+        return sendJson(res, 409, { error: error.message });
+      }
+      if (error.status === 404 && supabaseEnabled) return sendJson(res, 503, { error: "Follow-up saving is not configured in this environment." });
+      if ([400, 403, 409].includes(error.status)) return sendJson(res, error.status, { error: error.message });
+      throw error;
+    }
   }
 
   const activityTransactionMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activities\/([^/]+)\/transaction$/);

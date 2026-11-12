@@ -4,6 +4,72 @@ const { inspectPresentation } = require("./presentation-audit");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("scheduled outcome and cancellation save real history and a replacement", async ({ page }, info) => {
+  const role = await login(page, info);
+  const mobile = info.project.name.endsWith("mobile");
+  // Admin deliberately acts on a lead owned by a different salesman.
+  const leadId = role === "admin" ? "ui-lead-14" : "ui-lead-2";
+  await page.goto(`/leads/${leadId}/overview`);
+  const next = page.locator(mobile ? ".record-mobile-next" : ".record-next-step");
+  await next.getByRole("button", { name: "Log outcome" }).click();
+  const dialog = page.locator("#leadFollowupDialog");
+  const complete = dialog.getByRole("button", { name: "Save & mark completed" });
+  await expect(complete).toBeDisabled();
+  await dialog.getByText("Spoke to customer", { exact: true }).click();
+  await dialog.getByLabel("Notes / summary").fill("Discussed synthetic stock requirements and agreed on a quotation.");
+  await dialog.getByLabel("Schedule the next step").check();
+  await expect(complete).toBeDisabled();
+  await dialog.getByRole("combobox", { name: "Type", exact: true }).selectOption("Send quotation", { timeout: 5000 });
+  const due = await dialog.locator('[name="next_date"]').getAttribute("min");
+  await dialog.getByLabel("Due date").fill(due);
+  await dialog.getByLabel("Note", { exact: true }).fill("Send the synthetic quotation");
+  expect(await dialog.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  const bounds = await complete.boundingBox();
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(page.viewportSize().height);
+  await capture(page, info, "lead-log-outcome", { fullPage: false });
+  const requests = [];
+  const intercept = async route => {
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1) return route.fulfill({ status: 503, json: { error: "Synthetic connection error" } });
+    return route.continue();
+  };
+  const route = `**/api/leads/${leadId}/followup-resolution`;
+  await page.route(route, intercept);
+  await complete.click();
+  await expect(dialog.getByRole("alert")).toHaveText("Synthetic connection error");
+  await expect(dialog.getByLabel("Notes / summary")).toHaveValue(/Discussed synthetic/);
+  await complete.click();
+  await expect(dialog).toBeHidden();
+  expect(requests[0].request_id).toBe(requests[1].request_id);
+  await page.unroute(route, intercept);
+  await expect(next.locator(".record-followup-confirmation")).toContainText("Completed");
+  await expect(next.locator(".record-followup-confirmation")).toContainText("Next step: Send quotation");
+  await capture(page, info, "lead-after-log-outcome", { fullPage: false });
+
+  await next.getByRole("button", { name: "Cancel activity" }).click();
+  const cancel = dialog.getByRole("button", { name: "Cancel activity", exact: true });
+  await dialog.getByText("Duplicate activity", { exact: true }).click();
+  await dialog.getByLabel("Justification for management").fill("Too short");
+  await expect(cancel).toBeDisabled();
+  await dialog.getByLabel("Justification for management").fill("The synthetic quotation has already been assigned to another task.");
+  await capture(page, info, "lead-cancel-activity", { fullPage: false });
+  await cancel.click();
+  await expect(dialog).toBeHidden();
+  await expect(next.locator(".record-followup-confirmation")).toContainText("Cancelled");
+  await expect(next.getByRole("button", { name: "Log outcome" })).toHaveCount(0);
+  await page.reload();
+  await expect(next.locator(".record-followup-confirmation")).toContainText("Cancelled");
+  await page.locator('.lead-detail-tabs [data-drawer-tab="activities"]').click();
+  await expect(page.locator(".drawer-activity .record-followup-status.is-completed")).toContainText("Completed");
+  await expect(page.locator(".drawer-activity .record-followup-status.is-cancelled")).toContainText("Cancelled");
+  if (role === "admin") {
+    await page.goto("/?view=activity");
+    const row = page.locator("#adminReferenceActivity .admin-ref-activity-table tbody tr").filter({ hasText: "The synthetic quotation has already been assigned" });
+    await expect(row).toContainText("Cancelled");
+    await expect(row).toContainText("Demo Admin");
+  }
+});
+
 test("Overview keeps organized company details without duplicate AI panels", async ({page}, info) => {
   await login(page,info);
   await page.goto('/leads/ui-lead-1/overview');

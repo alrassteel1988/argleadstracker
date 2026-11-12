@@ -1,3 +1,94 @@
+.lead-followup-dialog {
+  width: min(700px, calc(100% - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border: 1px solid #dbe3ed;
+  border-radius: 14px;
+  background: #fff;
+  color: #0b2545;
+  box-shadow: 0 18px 48px #0b254533;
+}
+#leadFollowupDialog::backdrop { background: #0b254580 !important; }
+.lead-followup-form { display: flex; flex-direction: column; max-height: inherit; margin: 0; }
+.lead-followup-form > :is(header, footer) { display: flex; flex-shrink: 0; gap: 12px; padding: 16px 22px; }
+.lead-followup-form > header { justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e3e8ef; }
+.lead-followup-form h2 { margin: 4px 0; font-size: 24px; color: #0b3b75; }
+.lead-followup-form h2 em { font-family: Georgia, serif; font-weight: 400; color: #82560e; }
+.lead-followup-form header p { margin: 0; color: #4a5568; overflow-wrap: anywhere; }
+.lead-followup-form .lead-followup-close { flex: 0 0 40px; min-height: 40px; padding: 0; font-size: 23px; }
+.lead-followup-form > footer { border-top: 1px solid #e3e8ef; background: #f6f8fb; }
+.lead-followup-form > footer button { min-height: 42px; }
+.lead-followup-fields { display: grid; align-content: start; gap: 12px; min-height: 0; overflow-y: auto; padding: 16px 22px; }
+.lead-followup-fields fieldset { padding: 0; border: 0; margin: 0; min-width: 0; }
+.lead-followup-fields legend { padding: 0; margin-bottom: 8px; font-weight: 700; }
+.lead-followup-fields legend > span, .lead-followup-fields > label > span { color: #b42318; }
+.lead-followup-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.lead-followup-options label { position: relative; cursor: pointer; }
+.lead-followup-options input[type="radio"] { position: absolute; opacity: 0; }
+.lead-followup-options label > span { display: flex; align-items: center; min-height: 40px; padding: 8px 12px; border: 1px solid #c6d1df; border-radius: 24px; }
+.lead-followup-options input:checked + span { background: #0b3b75; border-color: #0b3b75; color: #fff; }
+.lead-followup-options input:focus-visible + span { outline: 2px solid #347ac2; outline-offset: 2px; }
+.lead-followup-contact, .lead-followup-next-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lead-followup-fields label { min-width: 0; font-weight: 600; }
+.lead-followup-fields :is(input:not([type="radio"], [type="checkbox"]), select, textarea) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid #c6d1df;
+  border-radius: 8px;
+  background: #fff;
+  color: #0b2545;
+  font: inherit;
+  font-weight: 400;
+}
+.lead-followup-fields textarea { resize: vertical; }
+.lead-followup-count { margin-top: -8px; color: #a32119; }
+.lead-followup-count.is-valid { color: #1f6f6a; }
+.lead-followup-next { padding: 10px 12px; border: 1px solid #d5e2ef; border-radius: 8px; background: #f3f7fb; }
+.lead-followup-check { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.lead-followup-check input { width: 18px; height: 18px; accent-color: #1f6f6a; }
+.lead-followup-next-fields { grid-template-columns: 1fr 1fr 1.3fr; margin-top: 8px; }
+.lead-followup-next-fields[hidden], .lead-followup-error[hidden] { display: none; }
+.lead-followup-notice, .lead-followup-error { margin: 0; padding: 10px 12px; border-radius: 8px; }
+.lead-followup-notice { background: #fff6e4; color: #684505; }
+.lead-followup-error { background: #fdecec; color: #9b1c1c; }
+#leadFollowupDialog .lead-followup-save { background: #1f6f6a !important; color: #fff !important; border-color: #1f6f6a !important; }
+#leadFollowupDialog[data-resolution="cancelled"] .lead-followup-save { background: #b42318 !important; border-color: #b42318 !important; }
+#leadFollowupDialog .lead-followup-save:disabled { opacity: .5; cursor: not-allowed; }
+#leadFollowupDialog[data-resolution="cancelled"] header { background: #fff6f5; }
+#leadFollowupDialog[data-resolution="cancelled"] h2, #leadFollowupDialog[data-resolution="cancelled"] h2 em { color: #a32119; }
+[data-resolution="cancelled"] .lead-followup-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-resolution="cancelled"] .lead-followup-options label > span { height: 100%; border-radius: 8px; }
+[data-resolution="cancelled"] .lead-followup-options label > span::before { content: ""; flex: 0 0 14px; height: 14px; margin-right: 8px; border: 2px solid #8294ab; border-radius: 50%; }
+[data-resolution="cancelled"] .lead-followup-options input:checked + span { background: #fdecec; color: #9b1c1c; border-color: #b42318; }
+[data-resolution="cancelled"] .lead-followup-options input:checked + span::before { border: 4px solid #b42318; }
+#appShell #leadDetailView .record-cancel-followup { color: #a32119 !important; border-color: #e8aaa6 !important; }
+#appShell #leadDetailView .record-action-row { flex-wrap: wrap; }
+.record-followup-status { display: inline-block; border-radius: 20px; padding: 3px 8px; font-size: 11px; font-weight: 700; }
+.record-followup-status.is-completed { background: #e3f1e5; color: #286334; }
+.record-followup-status.is-cancelled { background: #fdecec; color: #9b1c1c; }
+.record-followup-confirmation { margin-bottom: 10px; border: 1px solid #c4e2c9; border-radius: 8px; padding: 12px; background: #f1f8f2; overflow-wrap: anywhere; }
+.record-followup-confirmation.is-cancelled { background: #fff5f4; border-color: #e8aaa6; }
+.record-followup-confirmation p { margin: 6px 0; }
+.record-activity-row time { display: block; }
+@media (max-width: 700px) {
+  .lead-followup-dialog { width: calc(100% - 16px); max-height: calc(100dvh - 16px); }
+  .lead-followup-fields, .lead-followup-form > :is(header, footer) { padding: 14px; }
+  .lead-followup-fields :is(input:not([type="radio"], [type="checkbox"]), select, textarea) { font-size: 16px; }
+  .lead-followup-contact, .lead-followup-next-fields, [data-resolution="cancelled"] .lead-followup-options { grid-template-columns: minmax(0, 1fr); }
+  .lead-followup-options label > span, .lead-followup-form > footer button { min-height: 44px; }
+  .lead-followup-form > footer { flex-wrap: wrap; }
+  .lead-followup-form > footer button { flex: 1 1 auto; }
+  #appShell #leadDetailView .record-mobile-next-footer { flex-wrap: wrap; }
+  #appShell #leadDetailView .record-mobile-next-footer [data-lead-followup="completed"] { grid-column: 1 / -1; }
+}
+
 .activity-entry-dialog {
   width: min(860px, calc(100vw - 32px));
   max-width: none;
