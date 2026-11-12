@@ -8582,7 +8582,7 @@ function renderSalesmanSimplifiedDashboard() {
         </span>
         <span class="salesman-summary-card-chevron" aria-hidden="true">&rsaquo;</span>
       </button>
-    `).join("") + `<div class="salesman-simplified-metric management-metric"><span class="salesman-summary-card-copy"><span class="salesman-summary-card-label">Management tasks</span><strong>Not available</strong><small>Task totals not recorded</small></span></div>`;
+    `).join("") + '<div id="managementTasksMetric"></div>';
   }
 
   if (els.salesmanSimplifiedActions) {
@@ -14770,6 +14770,362 @@ function renderWeeklyReviewView() {
   bindWeeklyReviewEvents();
 }
 
+const MG_TASK_LABELS = { not_started: "Not started", in_progress: "In progress", completed: "Completed" };
+const MG_TASK_FILTERS = { all: "All", pending: "Pending", overdue: "Overdue", completed: "Completed" };
+const newManagementTaskState = () => ({ rows: [], ready: false, loading: false, error: "", tab: "weekly", adminFilter: "all",
+  drawerFilter: "pending", assignee: "", openRows: new Set(), update: null, message: "", pending: false, generation: 0 });
+let managementTasks = newManagementTaskState();
+
+function managementTaskDate() {
+  return new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
+}
+
+function managementTaskDateTime(date) {
+  return date ? formatDisplayDate(new Date(Date.parse(date) + 4 * 3600_000).toISOString().slice(0, 10)) : "";
+}
+
+function managementTaskCounts(rows) {
+  const today = managementTaskDate();
+  const completed = rows.filter(task => task.status === "completed").length;
+  return { all: rows.length, pending: rows.length - completed, completed,
+    overdue: rows.filter(task => task.status !== "completed" && task.due_date < today).length };
+}
+
+function managementTaskOrder(rows) {
+  return [...rows].sort((a, b) => Number(a.status === "completed") - Number(b.status === "completed")
+    || a.due_date.localeCompare(b.due_date) || a.title.localeCompare(b.title));
+}
+
+function managementTaskFilter(rows, filter) {
+  const today = managementTaskDate();
+  return managementTaskOrder(rows).filter(task => filter === "all"
+    || (filter === "completed" ? task.status === "completed" : task.status !== "completed" && (filter !== "overdue" || task.due_date < today)));
+}
+
+function managementTaskTiming(task) {
+  if (task.status === "completed") return ["done", `Completed ${managementTaskDateTime(task.completed_at)}`];
+  const days = Math.round((Date.parse(task.due_date) - Date.parse(managementTaskDate())) / 86400000);
+  const span = `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`;
+  return days < 0 ? ["danger", `Overdue ${span}`] : days === 0 ? ["warning", "Due today"]
+    : [days <= 2 ? "warning" : "info", `Due in ${span}`];
+}
+
+function managementTaskTag(text, tone = "") {
+  return `<span class="mg-task-tag tone-${tone}">${escapeHtml(text)}</span>`;
+}
+
+function managementTaskStatus(task) {
+  return managementTaskTag(MG_TASK_LABELS[task.status] || "Unknown", task.status === "completed" ? "done" : task.status === "in_progress" ? "info" : "neutral");
+}
+
+function managementTaskPriority(task) {
+  return managementTaskTag((task.priority || "medium").replace(/^./, value => value.toUpperCase()), task.priority === "high" ? "danger" : task.priority === "medium" ? "warning" : "neutral");
+}
+
+function managementTaskFilters(rows, active, drawer = false) {
+  const counts = managementTaskCounts(rows);
+  const keys = drawer ? ["pending", "overdue", "completed", "all"] : Object.keys(MG_TASK_FILTERS);
+  return `<div class="mg-task-filters" role="group" aria-label="Filter management tasks">${keys.map(key => `<button type="button" class="ghost-button" data-mg-filter="${key}" aria-pressed="${key === active}">${MG_TASK_FILTERS[key]} <span>${counts[key]}</span></button>`).join("")}</div>`;
+}
+
+function managementTaskStateMessage() {
+  if (managementTasks.error) return '<p role="status" class="mg-task-empty">Management tasks unavailable. <button type="button" class="ghost-button" data-mg-refresh>Retry</button></p>';
+  if (!managementTasks.ready) return '<p role="status" class="mg-task-empty">Loading management tasks...</p>';
+  return "";
+}
+
+function renderManagementTaskDashboard() {
+  const metric = document.querySelector("#managementTasksMetric");
+  const panel = document.querySelector("#managementTasksDashboard");
+  if (!metric || !panel || state.currentUser?.role !== "salesman") return;
+  const { rows, ready } = managementTasks;
+  const counts = managementTaskCounts(rows);
+  const unseen = rows.filter(task => !task.seen_at).length;
+  metric.innerHTML = `<button type="button" class="salesman-simplified-metric mg-task-metric" data-mg-open aria-haspopup="dialog">
+    <span class="salesman-summary-card-copy"><span class="salesman-summary-card-label">Management tasks${unseen ? ` <b class="mg-task-unread">${unseen} new</b>` : ""}</span>
+    <strong>${ready ? counts.pending : "--"}</strong><small>${ready ? `pending of ${counts.all} &middot; ${counts.overdue} overdue` : managementTasks.error ? "Unavailable" : "Loading"}</small>
+    <span class="salesman-summary-card-action">Open tasks <span aria-hidden="true">&rsaquo;</span></span></span></button>`;
+  panel.innerHTML = `<div class="mg-task-heading"><h2>Management <em class="crm-title-accent">tasks</em></h2>${counts.overdue ? managementTaskTag(`${counts.overdue} overdue`, "danger") : ""}</div>
+    ${managementTaskStateMessage() || `<ul class="mg-task-preview">${managementTaskFilter(rows, "pending").slice(0, 5).map(task => {
+      const [tone, timing] = managementTaskTiming(task);
+      return `<li><button class="text-button" type="button" data-mg-open="${escapeHtml(task.id)}">${escapeHtml(task.title)}</button>${managementTaskTag(timing, tone)}</li>`;
+    }).join("") || "<li>No pending tasks.</li>"}</ul>`}
+    <button type="button" class="ghost-button" data-mg-open aria-haspopup="dialog">Open management tasks</button>`;
+}
+
+function renderManagementTaskWorkspace() {
+  const tabs = document.querySelector("#managementTasksTabs");
+  const pane = document.querySelector("#managementTasksWorkspace");
+  const weekly = document.querySelector("#weeklyTasksWorkspace");
+  if (!tabs || !pane || !weekly) return;
+  const admin = state.currentUser?.role === "admin";
+  const selected = admin && managementTasks.tab === "management";
+  if (admin && currentView === "tasks") {
+    els.topbarPageTitle.innerHTML = pageTitleMarkup(selected ? "Management tasks" : "Weekly sales reports");
+    els.topbarContext.textContent = selected
+      ? "Assign work and track completion across the sales team."
+      : "Weekly sales reporting, review discipline, and missing-submission control";
+  }
+  tabs.classList.toggle("hidden", !admin && state.currentUser?.role !== "salesman");
+  tabs.querySelectorAll("[data-mg-tab]").forEach(button => button.setAttribute("aria-pressed", String((button.dataset.mgTab === "management") === selected)));
+  pane.classList.toggle("hidden", !selected);
+  weekly.classList.toggle("hidden", selected);
+  if (!selected) { pane.replaceChildren(); return; }
+  const { rows, adminFilter, assignee, ready, message } = managementTasks;
+  const counts = managementTaskCounts(rows);
+  const rate = counts.all ? Math.round(counts.completed * 100 / counts.all) : 0;
+  const assigned = new Map();
+  rows.forEach(task => {
+    if (!assigned.has(task.assignee_id)) assigned.set(task.assignee_id, []);
+    assigned.get(task.assignee_id).push(task);
+  });
+  const scope = assignee ? (assigned.get(assignee) || []) : rows;
+  const visible = managementTaskFilter(scope, adminFilter);
+  pane.innerHTML = `<header class="mg-task-heading"><h2 id="managementTasksTitle">Assigned by management</h2>
+    <div class="mg-task-heading-actions">${ready ? '<button type="button" class="ghost-button" data-mg-refresh>Refresh</button>' : ""}<button type="button" class="primary-button" data-mg-assign ${ready ? "" : "disabled"}>+ Assign task</button></div></header>
+    ${managementTaskStateMessage() || `<dl class="mg-task-metrics">${[["Assigned", counts.all, "total"], ["Pending", counts.pending, "pending"],
+      ["Overdue", counts.overdue, "danger"], ["Completed", counts.completed, "done"], ["Completion rate", counts.all ? rate + "%" : "--", "rate"]]
+      .map(([label, value, tone]) => `<div class="tone-${tone}"><dt>${label}</dt><dd>${value}${tone === "done" ? `<span class="mg-task-mobile-total">/${counts.all}</span>` : ""}</dd></div>`).join("")}</dl>
+    ${assigned.size ? `<div class="mg-task-people">${[...assigned.entries()].sort((a, b) => a[1][0].assignee_name.localeCompare(b[1][0].assignee_name)).map(([id, tasks]) => {
+      const totals = managementTaskCounts(tasks), name = tasks[0].assignee_name;
+      return `<button type="button" data-mg-assignee="${escapeHtml(id)}" aria-pressed="${id === assignee}"><span><strong>${escapeHtml(name)}</strong><span>${totals.pending} pending &middot; <b>${totals.overdue} overdue</b></span></span>
+        <progress value="${totals.completed}" max="${totals.all}" aria-label="${escapeHtml(name + " task completion")}"></progress></button>`;
+    }).join("")}</div>` : ""}
+    <section class="mg-task-table" aria-label="Assigned tasks">
+      <div class="mg-task-toolbar">${managementTaskFilters(scope, adminFilter)}<span>${assignee ? `<button type="button" class="text-button" data-mg-assignee="">Clear salesman filter</button> &middot; ` : ""}${visible.length} shown</span></div>
+      <p class="mg-task-message" role="status" ${message ? "" : "hidden"}>${escapeHtml(message)}</p>
+      <div class="mg-task-row mg-task-table-head" aria-hidden="true"><span>Task</span><span>Salesman</span><span>Deadline</span><span>Timing</span><span>Priority</span><span>Status</span><span></span></div>
+      ${visible.map(renderManagementTaskRow).join("") || '<p class="mg-task-empty">No tasks match this view.</p>'}
+    </section>`}`;
+  pane.querySelectorAll("details[data-mg-row]").forEach(row => row.addEventListener("toggle", () => {
+    if (row.open) managementTasks.openRows.add(row.dataset.mgRow);
+    else managementTasks.openRows.delete(row.dataset.mgRow);
+  }));
+}
+
+function renderManagementTaskRow(task) {
+  const id = escapeHtml(task.id);
+  const [tone, timing] = managementTaskTiming(task);
+  return `<details data-mg-row="${id}" ${managementTasks.openRows.has(task.id) ? "open" : ""}>
+    <summary class="mg-task-row"><span class="mg-task-row-title"><strong>${escapeHtml(task.title)}</strong><small>${task.lead_name ? escapeHtml(task.lead_name) + " &middot; " : ""}Assigned ${escapeHtml(managementTaskDateTime(task.created_at))}</small></span>
+      <span class="mg-task-row-person">${escapeHtml(task.assignee_name)}</span><time class="mg-task-row-date" datetime="${escapeHtml(task.due_date)}">${escapeHtml(formatDisplayDate(task.due_date))}</time>
+      <span class="mg-task-row-timing">${managementTaskTag(timing, tone)}</span><span class="mg-task-row-priority">${managementTaskPriority(task)}</span><span class="mg-task-row-status">${managementTaskStatus(task)}</span><span class="mg-task-chevron" aria-hidden="true"></span>
+      ${task.remarks ? `<small class="mg-task-mobile-remarks">${escapeHtml(task.remarks)}</small>` : ""}</summary>
+    <div class="mg-task-details"><div><strong>Management instructions &middot; ${escapeHtml(task.assigned_by_name)}</strong><p>${escapeHtml(task.instructions)}</p>
+      ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">Open linked lead</button>` : ""}</div>
+      <div><strong>Salesman remarks</strong><p>${task.progress_at ? escapeHtml(managementTaskDateTime(task.progress_at)) + " &middot; " : ""}${escapeHtml(task.remarks || "No remarks yet.")}</p></div>
+      ${task.status === "completed" ? "" : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button></div>`}</div>
+  </details>`;
+}
+
+function renderManagementTaskDrawer() {
+  const dialog = document.querySelector("#managementTasksDrawer");
+  if (!dialog?.open || state.currentUser?.role !== "salesman") return;
+  const { rows, drawerFilter, ready, update, message } = managementTasks;
+  const counts = managementTaskCounts(rows);
+  document.querySelector("#managementTasksDrawerSummary").innerHTML = ready ? `<div class="mg-task-drawer-stats">
+    <strong>${counts.pending} pending of ${counts.all} tasks</strong><span>${counts.overdue} overdue &middot; ${counts.completed} completed</span>
+    <progress value="${counts.completed}" max="${Math.max(1, counts.all)}" aria-label="Task completion"></progress></div>${managementTaskFilters(rows, drawerFilter, true)}` : "";
+  document.querySelector("#managementTasksDrawerList").innerHTML = managementTaskStateMessage()
+    || `${message ? `<p class="mg-task-message" role="status">${escapeHtml(message)}${message.includes("Refresh") ? ' <button type="button" class="ghost-button" data-mg-refresh>Refresh tasks</button>' : ""}</p>` : ""}${managementTaskFilter(rows, drawerFilter).map(task => {
+    const id = escapeHtml(task.id), [tone, timing] = managementTaskTiming(task), editing = update?.id === task.id;
+    return `<article class="mg-task-card timing-${tone}" data-mg-card="${id}"><div class="mg-task-heading"><h3>${escapeHtml(task.title)}</h3>${managementTaskTag(timing, tone)}</div>
+      ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">${escapeHtml(task.lead_name || "Linked lead")}</button>` : ""}
+      <div class="mg-task-meta"><span>Deadline <strong>${escapeHtml(formatDisplayDate(task.due_date))}</strong></span><span>Assigned ${escapeHtml(managementTaskDateTime(task.created_at))} by ${escapeHtml(task.assigned_by_name)}</span>${managementTaskPriority(task)}
+      ${task.seen_at ? "" : `<button type="button" class="text-button" data-mg-seen="${id}">Mark notice read</button>`}</div>
+      <p class="mg-task-instructions"><strong>Management</strong> ${escapeHtml(task.instructions)}</p>
+      ${task.remarks ? `<p class="mg-task-remarks"><strong>${task.status === "completed" ? "Completion remarks" : "Your last update"} &middot; ${escapeHtml(managementTaskDateTime(task.progress_at))}:</strong> ${escapeHtml(task.remarks)}</p>` : ""}
+      ${task.status === "completed" ? managementTaskStatus(task) : `<div class="mg-task-status-control"><strong>Status</strong><div role="group" aria-label="Task status">
+        ${Object.entries(MG_TASK_LABELS).map(([key, label]) => `<button type="button" class="ghost-button" data-mg-progress="${id}" data-status="${key}" aria-pressed="${key === task.status}">${label}</button>`).join("")}</div></div>`}
+      ${editing ? `<form class="mg-task-progress-form" data-mg-progress-form="${id}"><label>${update.status === "completed" ? "Completion remarks for management" : "Progress remarks (optional)"}<textarea name="remarks" rows="3" maxlength="4000" ${update.status === "completed" ? "required minlength=10" : ""}>${escapeHtml(update.remarks)}</textarea></label>
+        ${update.status === "completed" ? "<small>At least 10 characters required.</small>" : ""}<div class="mg-task-form-actions"><button type="button" class="ghost-button" data-mg-discard>Not yet</button>
+        <button type="submit" class="primary-button" ${update.status === "completed" && [...update.remarks.trim()].length < 10 ? "disabled" : ""}>${update.status === "completed" ? "Mark completed" : "Save update"}</button></div><p class="mg-task-message" role="status" hidden></p></form>` : ""}
+    </article>`;
+  }).join("") || '<p class="mg-task-empty">No tasks match this filter.</p>'}`;
+}
+
+function renderManagementTasks() {
+  if (!state.currentUser) return;
+  renderManagementTaskDashboard();
+  renderManagementTaskWorkspace();
+  renderManagementTaskDrawer();
+}
+
+async function loadManagementTasks() {
+  const workspace = managementTasks;
+  if (!["admin", "salesman"].includes(state.currentUser?.role) || workspace.loading || workspace.pending) return;
+  const generation = workspace.generation;
+  workspace.loading = true;
+  try {
+    const rows = await api("/api/management-tasks");
+    if (workspace !== managementTasks || workspace.generation !== generation) return;
+    workspace.rows = rows;
+    workspace.ready = true;
+    workspace.error = "";
+  } catch {
+    if (workspace !== managementTasks || workspace.generation !== generation) return;
+    workspace.ready = false;
+    workspace.rows = [];
+    workspace.error = "Unavailable";
+  } finally {
+    workspace.loading = false;
+    if (workspace === managementTasks && workspace.generation === generation) renderManagementTasks();
+  }
+}
+
+function openManagementTaskDrawer(id = "") {
+  if (state.currentUser?.role !== "salesman") return;
+  const dialog = document.querySelector("#managementTasksDrawer");
+  managementTasks.drawerFilter = id ? "all" : "pending";
+  managementTasks.update = null;
+  managementTasks.message = "";
+  if (!dialog.open) dialog.showModal();
+  renderManagementTaskDrawer();
+  loadManagementTasks().then(() => {
+    if (id && dialog.open) document.querySelector(`[data-mg-card="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" });
+  });
+}
+
+function openManagementTaskForm(task) {
+  if (state.currentUser?.role !== "admin") return;
+  const dialog = document.querySelector("#managementTaskFormDialog");
+  const form = document.querySelector("#managementTaskForm");
+  const reps = state.userAccounts.filter(user => user.status === "active" && user.role === "salesman");
+  const editing = Boolean(task);
+  form.dataset.taskId = task?.id || crypto.randomUUID();
+  form.dataset.version = task?.version || "";
+  form.innerHTML = `<header class="mg-task-dialog-header"><h2 id="managementTaskFormTitle">${editing ? "Edit" : "Assign a"} <em class="crm-title-accent">task</em></h2><button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close task form" title="Close">&times;</button></header>
+    <div class="mg-task-form-fields">
+      ${editing ? `<p>Assigned to <strong>${escapeHtml(task.assignee_name)}</strong>${task.lead_name ? " &middot; " + escapeHtml(task.lead_name) : ""}</p>` : `<div class="mg-task-field-pair">
+        <label>Salesman<select name="assignee_id" required><option value="">Choose a salesman</option>${reps.map(rep => `<option value="${escapeHtml(rep.id)}">${escapeHtml(rep.name)}</option>`).join("")}</select></label>
+        <label>Lead / account (optional)<select name="lead_id" disabled><option value="">No linked lead</option></select></label></div>`}
+      <label>Task<input name="title" required maxlength="200" value="${escapeHtml(task?.title || "")}"></label>
+      <label>Instructions / remarks<textarea name="instructions" required rows="4" maxlength="4000">${escapeHtml(task?.instructions || "")}</textarea></label>
+      <div class="mg-task-field-pair"><label>Deadline<input name="due_date" type="date" required ${editing ? "" : `min="${managementTaskDate()}"`} value="${escapeHtml(task?.due_date || "")}"></label>
+        <fieldset><legend>Priority</legend><div class="mg-task-priorities">${["high", "medium", "low"].map(key => `<label><input type="radio" name="priority" value="${key}" ${(task?.priority || "medium") === key ? "checked" : ""}><span>${key.replace(/^./, char => char.toUpperCase())}</span></label>`).join("")}</div></fieldset></div>
+      <p role="status" class="mg-task-message" hidden></p>
+    </div>
+    <footer class="mg-task-form-actions"><span>The assigned salesman will see a notice in the CRM.</span><button type="button" class="ghost-button" data-mg-close>Cancel</button><button type="submit" class="primary-button" ${!editing && !reps.length ? "disabled" : ""}>${editing ? "Save changes" : "Assign task"}</button></footer>`;
+  if (!editing && !reps.length) form.querySelector(".mg-task-form-fields").insertAdjacentHTML("beforeend", "<p>No active salesman accounts are available.</p>");
+  dialog.showModal();
+}
+
+async function saveManagementTask(action, id, values, errorHost) {
+  const workspace = managementTasks;
+  if (workspace.pending) return false;
+  workspace.generation += 1;
+  workspace.pending = true;
+  try {
+    const saved = await api(`/api/management-tasks/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify(values) });
+    if (workspace !== managementTasks) return false;
+    workspace.rows = [...workspace.rows.filter(task => task.id !== saved.id), saved];
+    workspace.update = null;
+    workspace.message = { assign: "Task assigned.", edit: "Task updated.", remind: "Reminder sent in the CRM.", progress: "Task status saved.", seen: "Notice marked as read." }[action];
+    renderManagementTasks();
+    return true;
+  } catch (error) {
+    if (workspace !== managementTasks) return false;
+    if (errorHost) {
+      errorHost.textContent = error.message;
+      errorHost.hidden = false;
+      if (action === "progress" && error.message.includes("Refresh")) {
+        const refresh = document.createElement("button");
+        refresh.type = "button";
+        refresh.className = "ghost-button";
+        refresh.dataset.mgRefresh = "";
+        refresh.textContent = "Discard draft and refresh";
+        errorHost.append(" ", refresh);
+      }
+    } else {
+      workspace.message = error.message;
+      renderManagementTasks();
+    }
+    return false;
+  } finally {
+    workspace.pending = false;
+  }
+}
+
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remind],[data-mg-progress],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
+  if (!button) return;
+  const data = button.dataset, drawer = document.querySelector("#managementTasksDrawer");
+  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemind, data.mgProgress, data.mgSeen].includes(item.id));
+  if ("mgClose" in data) { button.closest("dialog")?.close(); return; }
+  if (managementTasks.pending) return;
+  if ("mgOpen" in data) openManagementTaskDrawer(data.mgOpen);
+  else if (data.mgTab) {
+    if (state.currentUser?.role === "salesman" && data.mgTab === "management") openManagementTaskDrawer();
+    else if (state.currentUser?.role === "admin") { managementTasks.tab = data.mgTab; renderManagementTaskWorkspace(); if (data.mgTab === "management") loadManagementTasks(); }
+  } else if ("mgRefresh" in data) { managementTasks.update = null; managementTasks.message = ""; loadManagementTasks(); }
+  else if (data.mgFilter) {
+    const inDrawer = Boolean(button.closest("dialog"));
+    managementTasks[inDrawer ? "drawerFilter" : "adminFilter"] = data.mgFilter;
+    managementTasks.update = null;
+    const scope = inDrawer ? drawer : document.querySelector("#managementTasksWorkspace");
+    if (inDrawer) renderManagementTaskDrawer(); else renderManagementTaskWorkspace();
+    scope.querySelector(`[data-mg-filter="${data.mgFilter}"]`)?.focus();
+  } else if ("mgAssignee" in data) {
+    managementTasks.assignee = managementTasks.assignee === data.mgAssignee ? "" : data.mgAssignee;
+    renderManagementTaskWorkspace();
+  } else if ("mgAssign" in data || data.mgEdit && task) openManagementTaskForm(task);
+  else if ((data.mgRemind || data.mgSeen) && task) {
+    button.disabled = true;
+    saveManagementTask(data.mgRemind ? "remind" : "seen", task.id, { expected_version: task.version });
+  } else if (data.mgProgress && task) {
+    managementTasks.update = { id: task.id, status: data.status, version: task.version, remarks: data.status === "completed" ? "" : task.remarks };
+    renderManagementTaskDrawer();
+    drawer.querySelector("textarea")?.focus();
+  } else if ("mgDiscard" in data) {
+    const id = managementTasks.update?.id;
+    managementTasks.update = null;
+    renderManagementTaskDrawer();
+    if (id) drawer.querySelector(`[data-mg-progress="${CSS.escape(id)}"][aria-pressed="true"]`)?.focus();
+  } else if (data.mgLead) {
+    if (drawer.open) drawer.close();
+    openLeadDrawer(data.mgLead);
+  }
+});
+
+document.querySelector("#managementTaskForm")?.addEventListener("change", event => {
+  if (event.target.name !== "assignee_id") return;
+  const select = event.currentTarget.elements.lead_id;
+  select.replaceChildren(new Option("No linked lead", ""));
+  select.disabled = !event.target.value;
+  state.leads.filter(lead => String(lead.assigned_to || "") === event.target.value)
+    .sort((a, b) => (a.company_name || "").localeCompare(b.company_name || ""))
+    .forEach(lead => select.add(new Option(lead.company_name || "Unnamed lead", lead.id)));
+});
+
+document.querySelector("#managementTaskForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form));
+  if (form.dataset.version) values.expected_version = Number(form.dataset.version);
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  const saved = await saveManagementTask(form.dataset.version ? "edit" : "assign", form.dataset.taskId, values, form.querySelector(".mg-task-message"));
+  button.disabled = false;
+  if (saved) form.closest("dialog").close();
+});
+
+document.querySelector("#managementTasksDrawer")?.addEventListener("input", event => {
+  if (event.target.name !== "remarks" || !managementTasks.update) return;
+  const update = managementTasks.update;
+  update.remarks = event.target.value;
+  event.target.form.querySelector('[type="submit"]').disabled = update.status === "completed" && [...update.remarks.trim()].length < 10;
+});
+
+document.querySelector("#managementTasksDrawer")?.addEventListener("submit", async event => {
+  const form = event.target, update = managementTasks.update;
+  if (!update || form.dataset.mgProgressForm !== update.id) return;
+  event.preventDefault();
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  const saved = await saveManagementTask("progress", update.id, { expected_version: update.version, status: update.status, remarks: update.remarks }, form.querySelector(".mg-task-message"));
+  if (!saved) button.disabled = false;
+});
+
 function renderTasksView() {
   if (!els.tasksPrimary || !els.tasksSidebar) return;
   const admin = isAdminOrManager();
@@ -15459,6 +15815,7 @@ function render() {
   renderSalesmenView();
   renderSalesmanLeadsViewer();
   renderTasksView();
+  renderManagementTasks();
   renderActivityView();
   renderAiWorkspace();
   renderPipelineFilterNotice();
@@ -15698,6 +16055,14 @@ async function fetchSalesmanAccounts() {
 }
 
 function showLogin(message = "") {
+  managementTasks = newManagementTaskState();
+  for (const id of ["managementTasksDrawer", "managementTaskFormDialog"]) {
+    const dialog = document.getElementById(id);
+    if (dialog?.open) dialog.close();
+  }
+  for (const id of ["managementTasksWorkspace", "managementTasksDrawerSummary", "managementTasksDrawerList", "managementTaskForm", "managementTasksDashboard", "managementTasksMetric"]) {
+    document.getElementById(id)?.replaceChildren();
+  }
   document.body.classList.remove("admin-reference-mode");
   adminReference.owner = "";
   adminReference.dashboard.owner = "";
@@ -15823,10 +16188,12 @@ function startOverdueRefresh() {
   overdueRefreshTimer = setInterval(() => {
     if (!state.currentUser || !sessionStorage.getItem(SESSION_KEY)) return;
     loadLeads().catch(error => setToast(error.message, "error"));
+    if (["dashboard", "tasks"].includes(currentView) && !managementTasks.update && !document.querySelector("#managementTaskFormDialog")?.open) loadManagementTasks();
   }, 60_000);
 }
 
 async function loadWorkspace() {
+  loadManagementTasks();
   await loadIntegrationStatus();
   state.settings = await api("/api/settings");
   await fetchSalesmanAccounts();
