@@ -5,7 +5,8 @@
   "description": "Shared web and mobile CRM platform for ARG Leads Tracker.",
   "scripts": {
     "build": "node -e \"console.log('No asset compilation required for ARG Leads Tracker')\"",
-    "verify": "npm run check && npm run test:sales-lead-summary-auth-loading && npm test && npm run test:ui:tokens && npm run build",
+    "verify": "npm run check && npm run test:sales-lead-summary-auth-loading && npm test && npm run test:management-tasks && npm run test:ui:tokens && npm run build",
+    "test:management-tasks": "node --test tests/management-tasks.test.cjs",
     "start": "node server.js",
     "test:ui:baseline": "playwright test --config=playwright.ui.config.js",
     "test:ui:meeting": "node -e \"process.env.CRM_UI_SUITE='meeting'; require('child_process').execFileSync(process.execPath, ['node_modules/playwright/cli.js', 'test', '--config=playwright.ui.config.js'], { stdio: 'inherit' })\"",

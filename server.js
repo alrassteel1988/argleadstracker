@@ -49,6 +49,7 @@ const {
   workflowId
 } = require("./src/services/activityWorkflowService");
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
+const { canReadManagementTask, validateManagementTask, saveLocalManagementTask } = require("./src/services/managementTaskService");
 const {
   enrichCompanyFromGoogle,
   enrichHunter,
@@ -281,6 +282,7 @@ const PUBLIC_STATIC_FILES = new Map([
   ["/salesman-dashboard-summaries.css", "salesman-dashboard-summaries.css"],
   ["/salesmen-directory.css", "salesmen-directory.css"],
   ["/tasks-bauhaus-flat.css", "tasks-bauhaus-flat.css"],
+  ["/management-tasks.css", "management-tasks.css"],
   ["/tasks-contrast.css", "tasks-contrast.css"],
   ["/sw.js", "sw.js"],
   ["/favicon.svg", "favicon.svg"],
@@ -399,6 +401,8 @@ function readDb() {
   db.ai_action_log = Array.isArray(db.ai_action_log) ? db.ai_action_log : [];
   db.attention_flags = Array.isArray(db.attention_flags) ? db.attention_flags : [];
   db.notifications = Array.isArray(db.notifications) ? db.notifications : [];
+  db.management_tasks = Array.isArray(db.management_tasks) ? db.management_tasks : [];
+  db.management_task_events = Array.isArray(db.management_task_events) ? db.management_task_events : [];
   db.weekly_reports = Array.isArray(db.weekly_reports) ? db.weekly_reports : [];
   db.weekly_report_versions = Array.isArray(db.weekly_report_versions) ? db.weekly_report_versions : [];
   db.weekly_report_reviews = Array.isArray(db.weekly_report_reviews) ? db.weekly_report_reviews : [];
@@ -5210,6 +5214,58 @@ async function handleApi(req, res, url) {
   const user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
   if (!await enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)) return;
+
+  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen)$/i);
+  if ((req.method === "GET" && url.pathname === "/api/management-tasks") || (req.method === "POST" && managementTaskAction)) {
+    if (!["admin", "salesman"].includes(user.role)) return sendJson(res, 403, { error: "Management tasks are not available to your role." });
+    try {
+      if (req.method === "GET") {
+        if (!supabaseEnabled) {
+          return sendJson(res, 200, db.management_tasks.filter(task => canReadManagementTask(db, user, task)));
+        }
+        const tasks = [];
+        for (let offset = 0; ; offset += 250) {
+          const rows = await rest(`management_tasks?select=*&order=due_date.asc,id.asc&limit=250&offset=${offset}`, supabaseDataOptions(user.token));
+          tasks.push(...rows);
+          if (rows.length < 250) break;
+        }
+        return sendJson(res, 200, tasks);
+      }
+      const [, id, action] = managementTaskAction;
+      if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) return sendJson(res, 400, { error: "Invalid task ID." });
+      if ((["assign", "edit", "remind"].includes(action) ? "admin" : "salesman") !== user.role) {
+        return sendJson(res, 403, { error: "This task action is not available to your role." });
+      }
+      const input = await readBody(req);
+      const now = new Date();
+      const todayInDubai = new Date(+now + 4 * 3600_000).toISOString().slice(0, 10);
+      const values = validateManagementTask(action, input, todayInDubai);
+      if (supabaseEnabled) {
+        const task = await rest("rpc/save_management_task", {
+          method: "POST", ...supabaseDataOptions(user.token),
+          body: { p_action: action, p_id: id, p_input: values }
+        });
+        return sendJson(res, 200, task);
+      }
+      const freshDb = readDb();
+      const freshUser = currentUser(req, freshDb);
+      if (!freshUser) return sendJson(res, 401, { error: "Authentication required." });
+      const task = saveLocalManagementTask(freshDb, freshUser, action, id, values, now.toISOString());
+      writeDb(freshDb);
+      return sendJson(res, 200, task);
+    } catch (error) {
+      const message = String(error.message || "");
+      if (/^Task not found\.?$/.test(message)) return sendJson(res, 404, { error: "Task not found." });
+      if (/^This task changed|^Completed tasks are read-only|^A task notice was sent recently|^The salesman no longer has access|^This task request has already been used/.test(message)) {
+        return sendJson(res, 409, { error: message });
+      }
+      if ([400, 403, 409].includes(error.status)) {
+        const safeMessage = /^(Enter|Choose|This task action|A valid task)/.test(message) ? message : "The task could not be saved.";
+        return sendJson(res, error.status, { error: safeMessage });
+      }
+      return sendJson(res, 503, { error: "Management tasks are temporarily unavailable." });
+    }
+  }
 
   const emailProfileMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/email-profile$/);
   if (req.method === "GET" && emailProfileMatch) {
