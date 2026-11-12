@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v152-lead-followup-outcomes";
+const CACHE_VERSION = "arg-pwa-v153-management-tasks-followup-outcomes";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -24,6 +24,7 @@ const APP_SHELL = [
   "/activity-readability.css",
   "/activity-dashboard-latest.css",
   "/tasks-bauhaus-flat.css",
+  "/management-tasks.css",
   "/salesmen-directory.css",
   "/salesman-dashboard-summaries.css",
   "/pipeline-live-leads.css",

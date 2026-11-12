@@ -42,6 +42,7 @@
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
   <link rel="stylesheet" href="/admin-dashboard-clean.css?v=9-interaction-card-layout">
+  <link rel="stylesheet" href="/management-tasks.css?v=1">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
   <body>
@@ -236,6 +237,7 @@
               </section>
             </div>
             <div class="salesperson-dashboard-secondary">
+            <section id="managementTasksDashboard" class="mg-task-dashboard" aria-label="Management tasks"></section>
             <section class="salesperson-followup-card" aria-labelledby="salespersonFollowupTitle">
             <h2 id="salespersonFollowupTitle">Follow-ups by <em class="crm-title-accent">origin</em></h2>
             <div class="salesperson-origin" id="salespersonOrigin"></div>
@@ -840,7 +842,12 @@
         </dialog>
 
         <section class="view-panel hidden" id="tasksView">
-          <div class="tasks-dashboard">
+          <nav class="mg-task-tabs hidden" id="managementTasksTabs" aria-label="Task workspaces">
+            <button type="button" class="ghost-button" data-mg-tab="weekly" aria-pressed="true">Weekly reports</button>
+            <button type="button" class="ghost-button" data-mg-tab="management" aria-pressed="false">Management tasks</button>
+          </nav>
+          <section class="mg-task-workspace hidden" id="managementTasksWorkspace" aria-labelledby="managementTasksTitle"></section>
+          <div class="tasks-dashboard" id="weeklyTasksWorkspace">
             <section class="panel tasks-shell">
               <div class="panel-header tasks-header">
                 <div>
@@ -1793,10 +1800,21 @@
       </form>
     </dialog>
 
+    <dialog class="mg-task-dialog mg-task-drawer" id="managementTasksDrawer" aria-labelledby="managementTasksDrawerTitle">
+      <header class="mg-task-dialog-header">
+        <div><span class="mg-task-label">Assigned to you by management</span><h2 id="managementTasksDrawerTitle">Management <em class="crm-title-accent">tasks</em></h2></div>
+        <button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close management tasks" title="Close">&times;</button>
+      </header>
+      <div id="managementTasksDrawerSummary"></div>
+      <div class="mg-task-drawer-list" id="managementTasksDrawerList"></div>
+    </dialog>
+    <dialog class="mg-task-dialog mg-task-form-dialog" id="managementTaskFormDialog" aria-labelledby="managementTaskFormTitle">
+      <form id="managementTaskForm"></form>
+    </dialog>
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=lead-followup-outcomes"></script>
+  <script src="/client.js?v=management-tasks-followup-outcomes"></script>
   </body>
 </html>
 
