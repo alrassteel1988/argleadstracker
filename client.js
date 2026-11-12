@@ -7798,7 +7798,7 @@ function renderCleanAdminDashboard() {
           <div role="group" aria-label="Dashboard views">${buttons([["team", "Sales team"], ["lifecycle", "Activity lifecycle"], ["log", "Activity log"]], "tab")}</div>
           <div role="group" aria-label="Activity period">${buttons([["week", "This week"], ["month", "This month"]], "period")}</div>
         </div>
-        <div class="clean-admin-team-content"${view.tab === "team" && reps.length > 4 && loaded ? ' tabindex="0" role="region" aria-label="Sales team results"' : ""}>${content}</div>
+        <div class="clean-admin-team-content">${content}</div>
       </section>
       <section class="clean-admin-card clean-admin-pipeline" aria-label="Pipeline at a glance">
         <header><h2>Pipeline <em class="crm-title-accent">at a glance</em>${loaded ? ` <small>${pipelineTotal} leads by stage</small>` : ""}</h2><button type="button" class="text-button" data-clean-action="pipeline">Open pipeline &#8250;</button></header>

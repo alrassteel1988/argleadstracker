@@ -21,9 +21,10 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("reference dashboard keeps a full sales roster and pipeline summary accessible", async ({ page }, info) => {
-  test.skip(info.project.name !== "admin-desktop", "Desktop admin layout");
-  await page.setViewportSize({ width: 1366, height: 768 });
+test("reference dashboard keeps all seven sales reps visible without scrolling the card", async ({ page }, info) => {
+  test.skip(!info.project.name.startsWith("admin"), "Admin layout only");
+  const desktop = info.project.name === "admin-desktop";
+  if (desktop) await page.setViewportSize({ width: 1366, height: 768 });
   await page.route("**/api/users", async route => {
     const response = await route.fetch();
     const accounts = await response.json();
@@ -33,14 +34,21 @@ test("reference dashboard keeps a full sales roster and pipeline summary accessi
   });
   await login(page, info);
   const overview = page.locator("#cleanAdminDashboard");
-  const roster = overview.getByRole("region", { name: "Sales team results" });
+  const roster = overview.locator(".clean-admin-team-content");
   await expect(roster.locator("tbody tr")).toHaveCount(7);
-  expect(await roster.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
-  await expect(overview.locator(".clean-admin-pipeline")).toBeInViewport({ ratio: 1 });
-  await expect(overview.locator(".clean-admin-management")).toBeInViewport({ ratio: 1 });
-  await roster.focus();
-  await page.keyboard.press("End");
-  await expect.poll(() => roster.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  const layout = await roster.evaluate(element => ({
+    hiddenHeight: element.scrollHeight - element.clientHeight,
+    horizontalOverflow: document.documentElement.scrollWidth - innerWidth
+  }));
+  expect(layout.hiddenHeight).toBeLessThanOrEqual(1);
+  expect(layout.horizontalOverflow).toBeLessThanOrEqual(1);
+  await expect(roster).not.toHaveAttribute("tabindex");
+  if (desktop) {
+    await expect(roster.locator("tbody tr").last()).toBeInViewport({ ratio: 1 });
+    await expect(overview.locator(".clean-admin-pipeline")).toBeInViewport({ ratio: 1 });
+    await expect(overview.locator(".clean-admin-management")).toBeInViewport({ ratio: 1 });
+  }
+  await capture(page, info, "admin-dashboard-full-roster", { fullPage: !desktop });
 });
 
 test("reference dashboard keeps real counts, drilldowns and responsive shell", async ({ page }, info) => {
