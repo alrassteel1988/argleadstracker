@@ -21,15 +21,59 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test("reference dashboard keeps a full sales roster and pipeline summary accessible", async ({ page }, info) => {
+  test.skip(info.project.name !== "admin-desktop", "Desktop admin layout");
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.route("**/api/users", async route => {
+    const response = await route.fetch();
+    const accounts = await response.json();
+    await route.fulfill({ response, json: [...accounts, ...Array.from({ length: 5 }, (_, index) => ({
+      id: `ui-extra-${index}`, full_name: `Synthetic Rep ${index + 1}`, role: "salesman", status: "active", territory: "Dubai"
+    }))] });
+  });
+  await login(page, info);
+  const overview = page.locator("#cleanAdminDashboard");
+  const roster = overview.getByRole("region", { name: "Sales team results" });
+  await expect(roster.locator("tbody tr")).toHaveCount(7);
+  expect(await roster.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expect(overview.locator(".clean-admin-pipeline")).toBeInViewport({ ratio: 1 });
+  await expect(overview.locator(".clean-admin-management")).toBeInViewport({ ratio: 1 });
+  await roster.focus();
+  await page.keyboard.press("End");
+  await expect.poll(() => roster.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+});
+
 test("reference dashboard keeps real counts, drilldowns and responsive shell", async ({ page }, info) => {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   const role = await login(page, info);
   if (role !== "admin") {
     await expect(page.locator("body")).not.toHaveClass(/admin-reference-mode/);
+    await expect(page.locator("#cleanAdminDashboard")).toHaveCount(0);
     await expect(page.locator("#salesmanSimplifiedDashboard")).toBeVisible();
     return;
   }
+  const overview = page.locator("#cleanAdminDashboard");
+  await expect(overview.locator(".clean-admin-metrics > *")).toHaveCount(4);
+  await expect(overview.locator('[data-clean-action="pipeline"]').first().locator("strong")).toHaveText("9");
+  await expect(overview.locator(".clean-admin-person")).toHaveCount(2);
+  await expect(overview.locator(".clean-admin-avatar").first()).toHaveCSS("position", "static");
+  expect(await overview.locator('[data-clean-action="overdue"]').first().evaluate(button => getComputedStyle(button, "::before").content)).toBe("none");
+  await expect(page.locator("#cleanAdminDetails")).not.toHaveAttribute("open");
+  if (!info.project.name.endsWith("mobile")) {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await expect(overview.locator(".clean-admin-pipeline")).toBeInViewport({ ratio: 1 });
+    await expect(overview.locator(".clean-admin-management")).toBeInViewport({ ratio: 1 });
+  }
+  await capture(page, info, "admin-dashboard-clean");
+  await overview.getByRole("button", { name: "Activity lifecycle" }).click();
+  await expect(overview).toContainText("Completed in period");
+  await overview.getByRole("button", { name: "This month" }).click();
+  await expect(overview.getByRole("button", { name: "This month" })).toHaveAttribute("aria-pressed", "true");
+  await overview.getByRole("button", { name: "Activity log", exact: true }).click();
+  await expect(overview.getByRole("button", { name: /Open activity log/ })).toBeVisible();
+  await overview.getByRole("button", { name: "Sales team" }).click();
+  await page.locator("#cleanAdminDetails > summary").click();
   await expect(page.locator(".admin-ref-attention-card")).toHaveCount(4);
   await expect(page.locator("#metricValue")).toHaveText("9");
   await expect(page.locator("#adminReferenceInsights > details")).not.toHaveAttribute("open");
@@ -75,6 +119,7 @@ test("dashboard interaction cards give record text the wide column", async ({ pa
     }))
   }));
   await login(page, info);
+  await page.locator("#cleanAdminDetails > summary").click();
   if (info.project.name.endsWith("mobile")) {
     await page.setViewportSize({ width: 320, height: 812 });
   }
@@ -117,6 +162,7 @@ test("dashboard interaction cards give record text the wide column", async ({ pa
 test("v3 lead previews preserve keyboard access, scoped Pipeline links and narrow layouts", async ({ page }, info) => {
   const role = await login(page, info);
   if (role !== "admin") return;
+  await page.locator("#cleanAdminDetails > summary").click();
   await page.locator("[data-action-plan-bulk='expand']").click();
   await expect(page.locator(".salesman-plan-table-region:visible")).toHaveCount(2);
   const row = page.locator(".salesman-plan-row:visible").first();
@@ -124,6 +170,7 @@ test("v3 lead previews preserve keyboard access, scoped Pipeline links and narro
   await page.keyboard.press("Enter");
   await expect(page.locator("#leadDetailView")).toBeVisible();
   await page.goto("/?view=dashboard");
+  await page.locator("#cleanAdminDetails > summary").click();
   await page.locator(".action-plan-toggle").first().click();
   await page.locator(".admin-ref-more-leads").first().click();
   await expect(page.locator("#pipelineView")).toBeVisible();
@@ -131,6 +178,7 @@ test("v3 lead previews preserve keyboard access, scoped Pipeline links and narro
   await expect(page.locator(".admin-v3-header-avatar")).toBeHidden();
   await expect(page.locator(".admin-v3-metric-unit").first()).toBeHidden();
   await page.goto("/?view=dashboard");
+  await page.locator("#cleanAdminDetails > summary").click();
   await page.locator("#adminReferenceInsights summary").click();
   await expect(page.locator("#adminReferenceInsights > details")).toHaveAttribute("open");
   await page.locator("#adminReferenceInsights summary").click();

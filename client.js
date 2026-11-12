@@ -7664,6 +7664,7 @@ function renderSalesmanDashboard() {
 // Reference screens are a presentation of the existing, role-scoped CRM records.
 const adminReference = {
   owner: "", reportsOwner: "", reportsReady: false, reportsError: "", interaction: "latest",
+  dashboard: { owner: "", tab: "team", period: "week" },
   activity: { search: "", date: "all", company: "all", type: "all", origin: "all", person: "all", linked: "all", status: "all", sort: "newest" },
   records: { search: "", stage: "all", person: "all", tier: "all", territory: "all", page: 1 }
 };
@@ -7698,6 +7699,156 @@ function adminReferenceReportLabel(person) {
   return row ? weeklyReportStatusMeta((row.report || row).status).label : "Not submitted";
 }
 
+function renderCleanAdminDashboard() {
+  if (state.currentUser?.role !== "admin" || currentView !== "dashboard") return;
+  const view = adminReference.dashboard;
+  const owner = String(state.currentUser.id || "");
+  if (view.owner !== owner) Object.assign(view, { owner, tab: "team", period: "week" });
+  const root = els.dashboardView;
+  const host = adminReferencePanel("cleanAdminDashboard", "clean-admin-dashboard", root);
+  root.prepend(host);
+  const previous = host.contains(document.activeElement) ? document.activeElement.dataset : {};
+  const { dateFrom, dateTo } = activityPresetRange(view.period === "month" ? "This Month" : "This Week");
+  const inRange = (date, from = dateFrom) => Boolean(date && date >= from && date <= dateTo);
+  const activity = adminReferenceActivityRows();
+  const recent = activity.filter(row => inRange(row.date));
+  const completed = row => row.followup_resolution === "completed" || row.closed && !row.cancelled && /^done\b/i.test(row.outcome);
+  const done = recent.filter(completed);
+  const isReschedule = row => row.type === "Note" && /^Follow-up rescheduled to /i.test(row.text || "");
+  const groupReschedules = rows => {
+    const counts = new Map();
+    for (const row of rows) {
+      if (!isReschedule(row)) continue;
+      const group = counts.get(row.lead_id) || { row, count: 0 };
+      group.count++;
+      counts.set(row.lead_id, group);
+    }
+    return [...counts.values()].filter(group => group.count >= 3).sort((a, b) => b.count - a.count);
+  };
+  const repeated = groupReschedules(activity);
+  const repeatedInPeriod = groupReschedules(recent);
+  const overdue = overdueItems();
+  const open = dashboardSummaryDatasets().openPipeline;
+  const quotes = adminReferenceQuoteRows(state.leads).filter(quote => quote.sent && quote.status !== "Won");
+  const firstOrders = state.leads.filter(lead => inRange(String(lead.first_order_date || "").slice(0, 10), dateTo.slice(0, 7) + "-01"));
+  const requests = allActivities().filter(row => row.delete_request && row.request_status === "pending");
+  const loaded = state.leadsLoaded && !state.leadsError;
+  const number = value => loaded ? String(value) : "&mdash;";
+  const buttons = (entries, key) => entries.map(([value, label]) =>
+    `<button type="button" data-clean-${key}="${value}" aria-pressed="${view[key] === value}">${label}</button>`).join("");
+  const leadLink = row => `<button class="text-button" type="button" data-admin-open-lead="${escapeHtml(row.lead_id)}">${escapeHtml(row.company_name || "Unnamed account")}</button>`;
+  const stages = [...new Map((state.settings.stages || []).map(stage => [normalizeStageKey(stage), stage])).entries()];
+  const pipeline = stages.map(([key, stage], index) => ({
+    label: stageDisplayLabel(stage), count: state.leads.filter(lead => normalizeStageKey(lead.stage) === key).length, color: index % 6
+  }));
+  const pipelineTotal = pipeline.reduce((sum, stage) => sum + stage.count, 0);
+  const reps = salesmenDirectoryRows().sort((a, b) => b.overdueFollowups - a.overdueFollowups || a.name.localeCompare(b.name));
+  const leadById = new Map(state.leads.map(lead => [lead.id, lead]));
+  const matchesActor = (row, rep) => row.created_by
+    ? String(row.created_by) === String(rep.person?.id || rep.person?.user_id || "")
+    : row.actor.toLowerCase() === rep.name.toLowerCase();
+  const table = (headers, rows) => `<table class="clean-admin-table"><thead><tr>${headers.map(label => `<th scope="col">${label}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${row.map((value, index) => `<td data-label="${headers[index]}">${value}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const empty = message => `<p class="clean-admin-empty">${message}</p>`;
+  const dateLabel = value => value ? escapeHtml(formatDisplayDate(String(value).slice(0, 10))) : "Not recorded";
+  const action = (id, label, count, tone = "") => {
+    const value = count == null ? "&mdash;" : number(count);
+    const content = `<span>${label}</span><strong class="${tone}">${value}</strong>`;
+    return id ? `<button type="button" data-clean-action="${id}">${content}<span aria-hidden="true">&#8250;</span></button>`
+      : `<div aria-label="${label}: not tracked">${content}</div>`;
+  };
+  const metric = (label, count, unit, note, id, tone = "") => {
+    const content = `<span>${label}</span><div><strong>${number(count)}</strong> ${unit}</div><small>${loaded ? escapeHtml(note) : "CRM figures unavailable"}</small>`;
+    return id ? `<button class="${tone}" type="button" data-clean-action="${id}">${content}</button>` : `<article class="${tone}">${content}</article>`;
+  };
+  let content;
+  if (!loaded) {
+    content = empty(state.leadsError ? "CRM records could not be loaded." : "Loading CRM records...");
+    if (state.leadsError) content += '<button class="text-button clean-admin-retry" type="button" data-clean-action="retry">Retry</button>';
+  } else if (view.tab === "team") {
+    content = reps.length ? table(["Sales rep", "Leads", "Overdue", "Done", "Resched. 3+", "Last active", "Status"], reps.map(rep => [
+      `<div class="clean-admin-person"><span class="clean-admin-avatar" aria-hidden="true">${escapeHtml(adminDashboardInitials(rep.name))}</span><div><strong>${escapeHtml(rep.name)}</strong><small>${escapeHtml(rep.territory || "Territory not set")}</small></div></div>`,
+      rep.totalAssigned, `<strong class="clean-admin-danger">${rep.overdueFollowups}</strong>`,
+      done.filter(row => matchesActor(row, rep)).length,
+      repeatedInPeriod.filter(({ row }) => leadById.has(row.lead_id) && leadMatchesSalesman(leadById.get(row.lead_id), rep.person)).length,
+      dateLabel(rep.lastActivity),
+      `<span class="admin-v3-person-status" data-status="${escapeHtml(rep.statusKey)}">${escapeHtml(rep.statusLabel)}</span>`
+    ])) : empty("No salesmen to show.");
+  } else if (view.tab === "lifecycle") {
+    content = `<div class="clean-admin-lifecycle">${[
+      ["Overdue now", overdue.length], ["Completed in period", done.length],
+      ["Cancelled in period", recent.filter(row => row.cancelled).length], ["Leads rescheduled 3+ times in period", repeatedInPeriod.length]
+    ].map(([label, count]) => `<div><span>${label}</span><strong>${count}</strong></div>`).join("")}</div>
+    ${repeated.length ? table(["Repeated reschedules (all dates)", "Reschedules"], repeated.map(({ row, count }) => [leadLink(row), count])) : empty("No leads have three or more recorded reschedules.")}`;
+  } else {
+    content = recent.length ? table(["Date", "Company", "Activity", "Logged by"], recent.slice(0, 7).map(row => [
+      dateLabel(row.date), leadLink(row), escapeHtml(row.type || "Note"), escapeHtml(row.actor)
+    ])) : empty("No activities in this period.");
+    content += '<div class="clean-admin-table-link"><button type="button" class="text-button" data-clean-action="activity">Open activity log &#8250;</button></div>';
+  }
+  host.innerHTML = `<section class="clean-admin-metrics" aria-label="Dashboard summary">
+    ${metric("Open pipeline", open.length, "leads", `${money.format(open.reduce((sum, lead) => sum + (Number(lead.estimated_value) || 0), 0))} pipeline value`, "pipeline")}
+    ${metric("Overdue activities", overdue.length, "open", overdue.length ? `Oldest ${daysOverdue(overdue[0].due_date)} days / ${Object.keys(overdueBreakdown(overdue)).filter(name => name !== "Unassigned").length} reps` : "No overdue follow-ups", "overdue", "clean-admin-danger")}
+    ${metric("Quotations out", quotes.length, "shared", "Recorded as sent, no linked order", "quotes")}
+    ${metric("Won this month", firstOrders.length, `of ${loaded ? state.leads.length : "--"}`, "Recorded first orders in CRM")}
+  </section>
+  <div class="clean-admin-columns">
+    <div class="clean-admin-stack">
+      <section class="clean-admin-card" aria-label="Team activity">
+        <div class="clean-admin-toolbar">
+          <div role="group" aria-label="Dashboard views">${buttons([["team", "Sales team"], ["lifecycle", "Activity lifecycle"], ["log", "Activity log"]], "tab")}</div>
+          <div role="group" aria-label="Activity period">${buttons([["week", "This week"], ["month", "This month"]], "period")}</div>
+        </div>
+        <div class="clean-admin-team-content"${view.tab === "team" && reps.length > 4 && loaded ? ' tabindex="0" role="region" aria-label="Sales team results"' : ""}>${content}</div>
+      </section>
+      <section class="clean-admin-card clean-admin-pipeline" aria-label="Pipeline at a glance">
+        <header><h2>Pipeline <em class="crm-title-accent">at a glance</em>${loaded ? ` <small>${pipelineTotal} leads by stage</small>` : ""}</h2><button type="button" class="text-button" data-clean-action="pipeline">Open pipeline &#8250;</button></header>
+        <div class="clean-admin-stage-bar" aria-hidden="true">${pipeline.filter(stage => stage.count > 0).map(stage => `<span data-color="${stage.color}" style="flex-grow:${stage.count}"></span>`).join("")}</div>
+        <dl class="clean-admin-stage-legend">${pipeline.map(stage => `<div><dt>${escapeHtml(stage.label)}</dt><dd>${number(stage.count)}</dd></div>`).join("")}</dl>
+      </section>
+    </div>
+    <div class="clean-admin-stack">
+      <section class="clean-admin-card clean-admin-actions">
+        <h2>Needs your <em class="crm-title-accent">action</em></h2>
+        ${action("overdue", "Overdue activities to chase", overdue.length, "clean-admin-danger")}
+        ${action("reschedules", "Leads rescheduled 3+ times", repeated.length)}
+        ${action("", "Quotations waiting for approval", null)}
+        ${action("deletions", "Activity deletion requests", requests.length)}
+        ${action("", "Records waiting for ERP sync", null)}
+        ${action("tasks", "Weekly reports missing", adminReference.reportsReady ? state.weeklyReports.missing.length : null)}
+      </section>
+      <section class="clean-admin-card clean-admin-management">
+        <header><h2>Management <em class="crm-title-accent">tasks</em></h2><button type="button" class="text-button" data-clean-action="tasks">Open Tasks &#8250;</button></header>
+        <p>Assignment totals are unavailable in this version.</p>
+      </section>
+    </div>
+  </div>`;
+  bindReferenceLeadLinks(host);
+  for (const key of ["tab", "period"]) {
+    host.querySelectorAll(`[data-clean-${key}]`).forEach(button => button.onclick = () => {
+      view[key] = button.getAttribute(`data-clean-${key}`);
+      renderCleanAdminDashboard();
+    });
+  }
+  for (const [key, value] of Object.entries({ tab: previous.cleanTab, period: previous.cleanPeriod })) {
+    if (value) host.querySelector(`[data-clean-${key}="${CSS.escape(value)}"]`)?.focus({ preventScroll: true });
+  }
+  host.querySelectorAll("[data-clean-action]").forEach(button => button.onclick = () => {
+    const id = button.dataset.cleanAction;
+    if (id === "retry") { loadLeads().catch(error => setToast(error.message, "error")); return; }
+    if (id === "reschedules") {
+      view.tab = "lifecycle";
+      renderCleanAdminDashboard();
+      host.querySelector('[data-clean-tab="lifecycle"]').focus();
+      return;
+    }
+    if (id === "overdue") { openOverduePipeline(); return; }
+    if (id === "deletions") { els.openActivityDeletionQueue.click(); return; }
+    if (id === "pipeline") resetPipelineFilters();
+    if (id === "quotes") Object.assign(adminReference.records, { search: "", stage: "all", person: "all", tier: "all", territory: "all", page: 1 });
+    setView(id);
+  });
+}
+
 function arrangeReferenceAdminDashboard() {
   if (currentView !== "dashboard") return;
   const root = els.dashboardView;
@@ -7706,7 +7857,15 @@ function arrangeReferenceAdminDashboard() {
   const work = els.adminDashboardWorkRow;
   const analytics = els.adminDashboardAnalyticsRow;
   work.classList.remove("hidden");
-  root.prepend(triage);
+  let details = document.getElementById("cleanAdminDetails");
+  if (!details) {
+    details = document.createElement("details");
+    details.id = "cleanAdminDetails";
+    details.innerHTML = '<summary>Detailed dashboard reports</summary><div class="clean-admin-detail-grid"></div>';
+    root.appendChild(details);
+  }
+  const detailBody = details.lastElementChild;
+  detailBody.prepend(triage);
   triage.className = "admin-ref-attention";
   overview.appendChild(els.metricsShell);
   triage.after(overview);
@@ -7716,6 +7875,7 @@ function arrangeReferenceAdminDashboard() {
   const insights = adminReferencePanel("adminReferenceInsights", "admin-ref-insights", root,
     '<details><summary><span>More <em class="crm-title-accent">insights</em><small>Market snapshot · Intel overview · Pipeline funnel · Salesman comparison</small></span><span class="admin-v3-disclosure" aria-hidden="true"></span></summary><div class="admin-ref-insights-grid"></div></details>');
   const insightBody = insights.querySelector(".admin-ref-insights-grid");
+  insights.classList.remove("hidden");
   [els.marketIntelPanel, els.needsAttentionPanel, els.adminTaskPanel, els.marketSnapshotPanel,
     els.dashboardPipelineFunnelPanel, els.lossReasonsPanel, els.agentPanel, els.configAgentPanel].filter(Boolean)
     .forEach(panel => insightBody.appendChild(panel));
@@ -7812,7 +7972,8 @@ function arrangeReferenceAdminDashboard() {
   });
   renderReferenceInteractionTabs();
   decorateAdminDashboardV3();
-  root.appendChild(insights);
+  detailBody.appendChild(insights);
+  renderCleanAdminDashboard();
 }
 
 function adminDashboardInitials(name) {
@@ -8121,6 +8282,8 @@ function renderReferenceAdminShell() {
     if (button.dataset.adminTools === "import") { els.sidebarToolsMenu.open = true; els.sidebarToolsMenu.scrollIntoView({ block: "nearest" }); return; }
     setView("dashboard");
     const insights = document.querySelector("#adminReferenceInsights details");
+    const details = document.getElementById("cleanAdminDetails");
+    if (details) details.open = true;
     if (insights) insights.open = true;
     setDashboardSectionCollapsed(els.configAgentPanel, false, { force: true });
     els.configAgentPanel.scrollIntoView({ block: "start" });
@@ -8158,6 +8321,16 @@ function arrangeAdminDashboardLayout() {
   if (state.currentUser?.role === "admin") {
     arrangeReferenceAdminDashboard();
     return;
+  }
+  document.getElementById("cleanAdminDashboard")?.remove();
+  const details = document.getElementById("cleanAdminDetails");
+  if (details) {
+    details.replaceWith(...details.lastElementChild.children);
+    document.getElementById("adminReferenceInsights")?.classList.add("hidden");
+    if (els.adminDashboardTriageRow.classList.contains("admin-ref-attention")) {
+      els.adminDashboardTriageRow.className = "admin-dashboard-triage-row";
+      els.adminDashboardTriageRow.replaceChildren();
+    }
   }
   if (!els.dashboardView || !els.metricsShell || !els.overdueBanner) return;
   const isAdminDashboard = currentView === "dashboard" && !isSalesmanRole();
@@ -15809,6 +15982,7 @@ async function loadLeads(options = {}) {
   } finally {
     state.leadsLoading = false;
     if (state.currentUser?.role === "admin") renderReferenceAdminRecords();
+    if (state.leadsError) renderCleanAdminDashboard();
     if (currentView === "pipeline") renderLeadList();
     if (els.summaryCardDetailsDialog?.open) renderSummaryCardDetailsResults();
   }
@@ -15891,6 +16065,8 @@ function showLogin(message = "") {
   }
   document.body.classList.remove("admin-reference-mode");
   adminReference.owner = "";
+  adminReference.dashboard.owner = "";
+  document.getElementById("cleanAdminDashboard")?.remove();
   adminReference.reportsOwner = "";
   adminReference.reportsReady = false;
   adminReference.reportsError = "";
