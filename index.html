@@ -42,7 +42,7 @@
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
   <link rel="stylesheet" href="/admin-dashboard-clean.css?v=12-activity-compact">
-  <link rel="stylesheet" href="/management-tasks.css?v=1">
+  <link rel="stylesheet" href="/management-tasks.css?v=2">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
   <body>
@@ -1811,6 +1811,7 @@
       </header>
       <div id="managementTasksDrawerSummary"></div>
       <div class="mg-task-drawer-list" id="managementTasksDrawerList"></div>
+      <footer class="mg-drawer-footer" id="managementTasksDrawerCount" aria-live="polite" hidden></footer>
     </dialog>
     <dialog class="mg-task-dialog mg-task-form-dialog" id="managementTaskFormDialog" aria-labelledby="managementTaskFormTitle">
       <form id="managementTaskForm"></form>
@@ -1818,7 +1819,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=admin-activity-compact"></script>
+  <script src="/client.js?v=management-tasks-drawer"></script>
   </body>
 </html>
 
