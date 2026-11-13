@@ -17,8 +17,9 @@ test("Neglected follow-up activity rows are responsive and management is read-on
   });
   await page.goto("/?view=neglected");
   await expect(page.locator(".neglected-v2-row")).toHaveCount(2);
-  await expect(page.locator(".neglected-v2-stats")).toContainText("1 / 2");
+  await expect(page.locator(".neglected-v2-stats")).toContainText("0 / 2");
   if (role === "salesman") {
+    await expect(page.locator('[data-neglected-status="cancelled"]')).toHaveText("Cancel");
     await expect(page.locator("[data-neglected-export]")).toHaveCount(0);
     expect(await page.evaluate(async () => (await authenticatedFetch("/api/management/overdue-activities.csv")).status)).toBe(403);
     await page.locator("[data-neglected-edit]").first().click();
@@ -29,6 +30,7 @@ test("Neglected follow-up activity rows are responsive and management is read-on
     await page.locator("[data-neglected-form] input[type=date]").fill("2026-11-01");
     await expect(page.locator("[data-neglected-save]")).toBeEnabled();
   } else {
+    await expect(page.locator('[data-neglected-status="cancelled"]')).toHaveCount(0);
     await expect(page.locator("[data-neglected-export]")).toBeVisible();
     await expect(page.locator("[data-neglected-edit]")).toHaveCount(0);
     expect(await page.evaluate(async () => (await authenticatedFetch("/api/leads/ui-lead-1/activities/demo-one/transaction", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({})})).status)).toBe(403);
@@ -59,6 +61,34 @@ test("Neglected follow-up update persists in the isolated local database", async
   await expect(page.locator(".neglected-v2-row").filter({hasText:"2020-01-01"}).first()).toContainText("Synthetic saved remark");
   const persisted = await page.evaluate(async leadId => (await api("/api/leads")).find(item => item.id === leadId), lead.id);
   expect(persisted.activities.find(item => item.id === created.activity.id).transaction_remarks).toBe("Synthetic saved remark");
+});
+
+test("Neglected cancellation retires only the selected activity and keeps its history", async ({page}, info) => {
+  const role = await login(page, info);
+  test.skip(role !== "salesman", "This workspace is read-only for management.");
+  const lead = await page.evaluate(async () => (await api("/api/leads"))[0]);
+  const created = await page.evaluate(async leadId => api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+    method: "POST", body: JSON.stringify({type:"Reminder", reminder:true, due_date:"2020-01-05", activity_required:"Synthetic cancellation target"})
+  }), lead.id);
+  await page.goto("/?view=neglected");
+  const target = page.locator(".neglected-v2-row").filter({hasText:"2020-01-05"});
+  await target.locator('[data-neglected-status="cancelled"]').click();
+  const dialog = page.locator("#leadFollowupDialog");
+  await dialog.getByText("Duplicate activity", {exact:true}).click();
+  const submit = dialog.getByRole("button", {name:"Cancel activity", exact:true});
+  await expect(submit).toBeDisabled();
+  await dialog.locator('textarea[name="remarks"]').fill("This synthetic reminder duplicates another task.");
+  await submit.click();
+  await expect(dialog).not.toBeVisible();
+  await expect(target).toContainText("Cancelled");
+  await page.reload();
+  await expect(target).toContainText("This synthetic reminder duplicates another task.");
+  const persisted = await page.evaluate(async leadId => (await api("/api/leads")).find(item => item.id === leadId), lead.id);
+  expect(persisted.next_action_date).toBe(lead.next_action_date);
+  expect(persisted.activities.find(item => item.id === created.activity.id)).toEqual(created.activity);
+  const events = persisted.activities.filter(item => item.resolved_activity_id === created.activity.id);
+  expect(events).toHaveLength(1);
+  expect(events[0].followup_resolution).toBe("cancelled");
 });
 
 test("Neglected activity loading errors, retry, empty results and responsive actions", async ({page}, info) => {

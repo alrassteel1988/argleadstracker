@@ -7573,7 +7573,7 @@ async function handleApi(req, res, url) {
     if (!canResolveLeadFollowup(user, lead)) return sendJson(res, 403, { error: "Only an Admin or the assigned salesman can resolve this follow-up." });
     try {
       if (supabaseEnabled) {
-        const result = await rest("rpc/resolve_lead_followup", {
+        const result = await rest(values.activity_id ? "rpc/resolve_lead_activity_cancellation" : "rpc/resolve_lead_followup", {
           method: "POST", ...supabaseDataOptions(user.token),
           body: { p_lead_id: leadId, p_input: values }
         });
@@ -7586,7 +7586,7 @@ async function handleApi(req, res, url) {
       }
       return sendJson(res, result.duplicate ? 200 : 201, { ...result, lead: leadWithDerivedFields(result.lead) });
     } catch (error) {
-      if (/next step (changed|has already)|More than one reminder|request already used/i.test(error.message)) {
+      if (/next step (changed|has already)|More than one reminder|request already used|activity changed/i.test(error.message)) {
         return sendJson(res, 409, { error: error.message });
       }
       if (error.status === 404 && supabaseEnabled) return sendJson(res, 503, { error: "Follow-up saving is not configured in this environment." });
@@ -7615,6 +7615,9 @@ async function handleApi(req, res, url) {
     const activity = matches[0];
     if (activity.archived || activity.delete_request || activity.deletion_status === "pending") return sendJson(res, 409, { error: "This activity cannot be updated." });
     if (!canManageActivity(user, lead, activity)) return sendJson(res, 403, { error: "You cannot edit this activity." });
+    if (activity.followup_resolution || isResolvedReminder(activity, activities) || activity.transaction_status === "cancelled" || activity.reminder_status === "cancelled") {
+      return sendJson(res, 409, { error: "This activity has already been resolved. Refresh before saving." });
+    }
     let updated;
     try { updated = updateActivityTransaction(activity, values, user, version); }
     catch (error) { return sendJson(res, error.status || 400, { error: error.message }); }
@@ -7628,6 +7631,7 @@ async function handleApi(req, res, url) {
         });
       } catch (error) {
         if (/Activity changed; refresh/.test(error.message || "")) return sendJson(res, 409, { error: "This activity changed. Refresh before saving." });
+        if (error.status === 404) return sendJson(res, 503, { error: "Activity updates are not configured in this environment." });
         throw error;
       }
     } else {
