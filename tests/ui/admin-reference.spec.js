@@ -1,7 +1,7 @@
 const { test, expect } = require("@playwright/test");
 const { login, capture, blockExternalTraffic } = require("./helpers");
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, info) => {
   page.on("pageerror", error => console.log(`Admin UI runtime error: ${error.message}`));
   await blockExternalTraffic(page);
   await page.route("**/api/leads", async route => {
@@ -10,7 +10,9 @@ test.beforeEach(async ({ page }) => {
     const leads = await response.json();
     await route.fulfill({ response, json: leads.map((lead, i) => ({ ...lead,
       quotation_ref: i < 3 ? `TEST-Q-${i}` : "",
-      activities: (lead.activities || []).map(activity => ({ ...activity,
+      activities: [...(lead.activities || []), ...(i === 17 && info.title.includes("paginates") ? Array.from({ length: 37 }, (_, index) => ({
+        ...lead.activities[0], id: `compact-fixture-${index}`, note: `Extra synthetic entry ${index}`
+      })) : [])].map(activity => ({ ...activity,
         created_by: i === 0 ? "ui-admin" : activity.created_by,
         created_by_name: i === 0 ? "Demo Admin" : lead.assigned_salesman,
         transaction_status: i === 1 ? "closed" : "pending",
@@ -219,12 +221,46 @@ test("Admin activity filters origin, notes and status without mutation controls"
   await expect(host.locator("tbody")).toContainText("Closed");
   await host.locator("[data-admin-activity-history]").click();
   await expect(page.locator("#activityDetailsDialog")).toBeVisible();
+  await expect(page.locator("#activityDetailsBody")).toContainText("Synthetic customer requirements confirmed.");
   await expect(page.locator("#editActivityFromDetails")).toBeHidden();
   await expect(page.locator("#requestActivityDeletionFromDetails")).toBeHidden();
   await page.keyboard.press("Escape");
   await host.locator("[data-admin-clear-all]").click();
+  await host.locator(".admin-activity-missing").click();
+  await expect(host.locator(".admin-ref-activity-table tbody tr")).toHaveCount(17);
+  await host.locator("[data-admin-clear-all]").click();
   expect(await host.locator(".activity-dashboard").count()).toBe(1);
-  await capture(page, info, "admin-reference-activity");
+  await expect(page.locator("#adminActivityHeaderActions").getByRole("button", { name: "Export" })).toBeVisible();
+  await expect(page.locator("#adminActivityHeaderActions").getByRole("button", { name: "Log activity" })).toBeVisible();
+  if (info.project.name === "admin-desktop") {
+    for (const [width, height] of [[1366, 768], [1440, 900]]) {
+      await page.setViewportSize({ width, height });
+      await expect(host.locator(".admin-ref-table-footer")).toBeInViewport({ ratio: 1 });
+      const firstRow = await host.locator("tbody tr").first().boundingBox();
+      expect(firstRow.height).toBeLessThanOrEqual(35);
+      await capture(page, info, `admin-activity-compact-${width}x${height}`, { fullPage: false });
+    }
+  } else {
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await capture(page, info, "admin-activity-compact-mobile");
+  }
+});
+
+test("Admin activity paginates records without changing summary totals", async ({ page }, info) => {
+  test.skip(info.project.name !== "admin-desktop", "Pagination uses the same renderer on mobile");
+  await login(page, info);
+  await page.goto("/?view=activity");
+  const host = page.locator("#adminReferenceActivity");
+  const rows = host.locator("tbody tr");
+  await expect(rows).toHaveCount(50);
+  await expect(host.locator(".admin-activity-count")).toContainText("55");
+  await host.getByRole("button", { name: "Next page" }).click();
+  await expect(rows).toHaveCount(5);
+  await expect(host.getByRole("button", { name: "Next page" })).toBeDisabled();
+  await host.getByLabel("Rows per page").selectOption("25");
+  await expect(rows).toHaveCount(25);
+  await expect(host.locator(".admin-activity-pagination")).toContainText("Page 1 of 3");
+  await expect(host.locator(".admin-ref-activity-stats")).toContainText("/ 55");
 });
 
 test("accounts and quotes use records, filters, pagination and existing lead page", async ({ page }, info) => {

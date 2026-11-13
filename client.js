@@ -2128,6 +2128,7 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
   els.activityDetailsTitle.innerHTML = pageTitleMarkup(`${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`);
   const attachments = (activity.attachments || []).filter(item => !item.removed_at);
   const history = activity.audit_history || [];
+  const readOnlyLog = state.currentUser?.role === "admin" && currentView === "activity";
   els.activityDetailsBody.innerHTML = `
     <div class="activity-detail-grid">
       <div class="activity-detail-field"><span>Company</span><strong>${escapeHtml(lead.company_name)}</strong></div>
@@ -2137,7 +2138,8 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
       <div class="activity-detail-field"><span>Purpose</span><strong>${escapeHtml(activity.activity_purpose || activity.type || "Activity")}</strong></div>
       <div class="activity-detail-field"><span>Version</span><strong>${escapeHtml(activity.version || 1)}</strong></div>
     </div>
-    <section class="activity-detail-section"><h3>Notes</h3><p>${escapeHtml(activity.notes || activity.text || "No notes added.")}</p></section>
+    <section class="activity-detail-section"><h3>Notes</h3><p>${escapeHtml(activity.note || activity.notes || activity.text || "No notes added.")}</p></section>
+    ${readOnlyLog ? `<section class="activity-detail-section"><h3>Outcome &amp; remarks</h3>${activity.transaction_outcome ? `<strong>${escapeHtml(activity.transaction_outcome)}</strong>` : ""}<p>${escapeHtml(activity.transaction_remarks || "No remarks recorded.")}</p>${activity.transaction_updated_at ? `<small>${escapeHtml([activity.transaction_updated_by_name, formatDateTime(activity.transaction_updated_at)].filter(Boolean).join(" - "))}</small>` : ""}</section>` : ""}
     <section class="activity-detail-section">
       <h3>Attachments (${attachments.length})</h3>
       <div class="activity-attachment-list">
@@ -2155,7 +2157,6 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
     button.addEventListener("click", () => downloadActivityAttachment(button.dataset.detailsDownloadAttachment));
   });
   els.editActivityFromDetails.disabled = activity.deletion_status === "pending";
-  const readOnlyLog = state.currentUser?.role === "admin" && currentView === "activity";
   els.editActivityFromDetails.classList.toggle("hidden", readOnlyLog);
   els.requestActivityDeletionFromDetails.classList.toggle("hidden", readOnlyLog);
   els.requestActivityDeletionFromDetails.disabled = activity.deletion_status === "pending";
@@ -8097,10 +8098,24 @@ function adminReferenceFilterActivity(rows) {
   }).sort((a, b) => (f.sort === "oldest" ? 1 : -1) * String(a.at || "").localeCompare(String(b.at || "")));
 }
 
+function adminActivityIcon(name) {
+  const paths = {
+    filter: '<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
+    lock: '<rect x="6" y="10" width="12" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+    history: '<path d="M3 4v5h5m-5 0a9 9 0 1 1 1 9m8-11v5l3 2"/>',
+    management: '<path d="M3 21h18M5 21V8l7-5 7 5v13m-9 0v-7h4v7"/>',
+    self: '<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
+    export: '<path d="M12 3v12m-4-4 4 4 4-4M5 20h14"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>'
+  };
+  return `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
+}
+
 function adminReferenceFilterMenu(key, label, options) {
   const f = adminReference.activity;
-  const active = f[key] !== "all";
-  return `<details class="admin-ref-filter ${active ? "is-active" : ""}"><summary>${label} <span aria-hidden="true">&#9663;</span></summary><div role="group" aria-label="${label} filter">${options.map(([value, text]) => `<button type="button" data-admin-activity-filter="${key}" data-value="${escapeHtml(value)}" aria-pressed="${f[key] === value}">${escapeHtml(text)}</button>`).join("")}${key === "date" ? `<label>Sort<select data-admin-activity-sort><option value="newest" ${f.sort === "newest" ? "selected" : ""}>Newest first</option><option value="oldest" ${f.sort === "oldest" ? "selected" : ""}>Oldest first</option></select></label>` : ""}</div></details>`;
+  const active = f[key] !== "all" || key === "date" && f.sort !== "newest";
+  return `<details class="admin-ref-filter ${active ? "is-active" : ""}"><summary aria-label="${label} filter">${label} ${adminActivityIcon("filter")}</summary><div role="group" aria-label="${label} filter">${options.map(([value, text]) => `<button type="button" data-admin-activity-filter="${key}" data-value="${escapeHtml(value)}" aria-pressed="${f[key] === value}">${escapeHtml(text)}</button>`).join("")}${key === "date" ? `<label>Sort<select data-admin-activity-sort><option value="newest" ${f.sort === "newest" ? "selected" : ""}>Newest first</option><option value="oldest" ${f.sort === "oldest" ? "selected" : ""}>Oldest first</option></select></label>` : ""}</div></details>`;
 }
 
 function renderReferenceAdminActivity() {
@@ -8108,45 +8123,146 @@ function renderReferenceAdminActivity() {
   const legacy = root.querySelector(".activity-dashboard");
   legacy?.remove();
   const host = adminReferencePanel("adminReferenceActivity", "admin-ref-activity", root);
+  const calendarOpen = Boolean(host.querySelector(".admin-ref-calendar")?.open);
+  const f = adminReference.activity;
   const all = adminReferenceActivityRows();
   const filtered = adminReferenceFilterActivity(all);
-  const rows = filtered.slice(0, adminReference.activityLimit || 50);
-  const closed = all.filter(row => row.closed).length;
-  const pending = all.filter(row => !row.closed && !row.cancelled && !row.retired).length;
-  const missing = all.filter(row => !row.remarks && !row.retired).length;
+  const size = adminReference.activityPageSize || 50;
+  const pages = Math.max(1, Math.ceil(filtered.length / size));
+  const page = adminReference.activityPage = Math.min(adminReference.activityPage || 1, pages);
+  const offset = (page - 1) * size;
+  const rows = filtered.slice(offset, offset + size);
+  const people = new Map();
+  let closed = 0, pending = 0, missing = 0, done = 0, notReached = 0;
+  for (const row of all) {
+    const person = people.get(row.actor) || { total: 0, closed: 0 };
+    person.total++;
+    if (row.closed) {
+      person.closed++;
+      closed++;
+      if (/^done/i.test(row.outcome)) done++;
+      if (/^not reached/i.test(row.outcome)) notReached++;
+    } else if (!row.cancelled && !row.retired) pending++;
+    if (!row.remarks && !row.retired) missing++;
+    people.set(row.actor, person);
+  }
   const uniqueOptions = key => [["all", `All ${key === "actor" ? "salesmen" : key === "type" ? "types" : "companies"}`], ...[...new Set(all.map(row => row[key]).filter(Boolean))].sort().map(value => [value, value])];
   const definitions = [
     ["date", "Date & time", [["all", "All dates"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["older", "Older than 30 days"]]],
     ["company", "Company", uniqueOptions("company_name")], ["type", "Type", uniqueOptions("type")],
-    ["origin", "Origin", [["all", "Self and management"], ["Management", "Assigned by management"], ["Self", "Self-generated"], ["Not recorded", "Not recorded"]]],
+    ["origin", "Origin", [["all", "All origins"], ["Management", "Assigned by management"], ["Self", "Self-generated"], ["Not recorded", "Not recorded"]]],
     ["person", "Logged by", uniqueOptions("actor")],
-    ["linked", "Quote / PMR", [["all", "All entries"], ["quote", "Has quote reference"], ["pmr", "PMR linked"], ["neither", "Neither"]]],
+    ["linked", "Quote &middot; PMR", [["all", "All entries"], ["quote", "Has quote reference"], ["pmr", "PMR linked"], ["neither", "Neither"]]],
     ["status", "Status & remarks", [["all", "All statuses"], ["pending", "Pending"], ["completed", "Completed"], ["cancelled", "Cancelled"], ["closed", "Closed (all)"], ["done", "Closed - done"], ["not-reached", "Closed - not reached"], ["missing", "No remarks"]]]
   ];
-  const tags = definitions.filter(([key]) => adminReference.activity[key] !== "all").map(([key, label, options]) => `<button class="admin-ref-tag" type="button" data-admin-clear-filter="${key}">${label}: ${escapeHtml(options.find(([value]) => value === adminReference.activity[key])?.[1] || adminReference.activity[key])} &times;</button>`).join("");
+  const tags = definitions.filter(([key]) => f[key] !== "all").map(([key, label, options]) => `<button class="admin-ref-tag" type="button" data-admin-clear-filter="${key}">${label}: ${escapeHtml(options.find(([value]) => value === f[key])?.[1] || f[key])} &times;</button>`).join("")
+    + (f.sort === "oldest" ? '<button class="admin-ref-tag" type="button" data-admin-clear-filter="sort">Sort: Oldest first &times;</button>' : "");
   const statusLabel = row => row.cancelled ? "Cancelled" : row.followup_resolution === "completed" ? "Completed"
     : row.closed ? "Closed" : row.retired ? "Resolved reminder" : "Pending";
-  const status = row => `<div class="admin-ref-status"><span class="admin-ref-tag ${row.cancelled ? "danger" : row.closed ? "teal" : row.retired ? "" : "warning"}">${statusLabel(row)}</span> <strong>${escapeHtml(row.outcome)}</strong>${row.retired ? "" : row.remarks ? `<p>${escapeHtml(row.remarks)}</p><small>${escapeHtml(row.transaction_updated_by_name || row.actor)}${row.transaction_updated_at ? ` - updated ${escapeHtml(formatDisplayDate(String(row.transaction_updated_at).slice(0, 10)))}` : ""}</small>` : `<p class="admin-ref-danger">No remarks from ${escapeHtml(row.actor)}</p>`}<button class="text-button" type="button" data-admin-activity-history="${escapeHtml(row.lead_id)}" data-activity-id="${escapeHtml(row.id || "")}" data-index="${row.activity_index}">History &amp; details</button></div>`;
-  const people = [...new Set(all.map(row => row.actor))];
-  host.innerHTML = `<div class="admin-ref-heading-actions"><button class="ghost-button" type="button" data-admin-activity-export>Export</button><button class="primary-button" type="button" data-admin-log-activity>+ Log activity</button></div><div class="admin-ref-activity-stats">${adminReferenceCard("Activities closed", `${closed} / ${all.length}`, `${all.filter(row => row.closed && /^done/i.test(row.outcome)).length} done - ${all.filter(row => row.closed && /^not reached/i.test(row.outcome)).length} not reached`, "teal")}${adminReferenceCard("Still pending", pending, "Awaiting the next step", "warning")}${adminReferenceCard("No remarks", missing, "Unexplained activities", "danger")}<article class="admin-ref-by-person"><span>By salesman</span>${people.map(person => { const own = all.filter(row => row.actor === person); const n = own.filter(row => row.closed).length; return `<div><strong>${escapeHtml(person)}</strong>${adminReferenceProgress(n, own.length)}<small>${n}/${own.length} closed</small></div>`; }).join("") || "No activities recorded"}</article></div><div class="admin-ref-lock">Append-only view. Past entries cannot be edited or deleted here. Status history remains with each activity.</div><section class="admin-ref-table-panel"><div class="admin-ref-toolbar"><input type="search" data-admin-activity-search aria-label="Search notes and remarks" placeholder="Search notes and remarks" value="${escapeHtml(adminReference.activity.search)}"><div class="admin-ref-filter-tags">${tags}<span>Showing ${rows.length} of ${all.length}</span>${tags || adminReference.activity.search || adminReference.activity.sort !== "newest" ? '<button class="text-button admin-ref-danger" type="button" data-admin-clear-all>Clear all</button>' : ""}</div></div><div class="admin-ref-mobile-filters">${definitions.map(args => adminReferenceFilterMenu(...args)).join("")}</div><div class="admin-ref-table-scroll"><table class="admin-ref-table admin-ref-activity-table"><thead><tr>${definitions.slice(0, 5).map(args => `<th>${adminReferenceFilterMenu(...args)}</th>`).join("")}<th>Notes</th>${definitions.slice(5).map(args => `<th>${adminReferenceFilterMenu(...args)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr${!row.remarks && !row.retired ? ' class="is-unexplained"' : ""}><td data-label="Date & time">${escapeHtml(formatDisplayDate(row.date))}<small>${escapeHtml(activityDisplayTime(row))}</small></td><td data-label="Company"><button class="text-button" type="button" data-admin-open-lead="${escapeHtml(row.lead_id)}">${escapeHtml(row.company_name)}</button></td><td data-label="Type">${escapeHtml(row.type || "Note")}</td><td data-label="Origin"><span class="admin-ref-tag ${row.origin === "Management" ? "navy" : ""}">${escapeHtml(row.origin)}</span></td><td data-label="Logged by">${escapeHtml(row.actor)}</td><td data-label="Notes">${escapeHtml(row.note || row.text || "No notes")}</td><td data-label="Quote / PMR">${escapeHtml(row.quotation_ref || (row.pmr_id || row.pmr_ref ? "PMR linked" : "--"))}</td><td data-label="Status & remarks">${status(row)}</td></tr>`).join("") || '<tr><td colspan="8" class="empty-copy">No activities match these filters.</td></tr>'}</tbody></table></div><footer class="admin-ref-table-footer">Cancelled activities are kept in history and are not counted as completed.</footer></section><details class="admin-ref-calendar"><summary>Calendar, reminders &amp; review requests</summary><div class="admin-ref-existing-activity"></div></details>`;
+  const preview = (value, className = "") => `<span class="admin-activity-preview ${className}" title="${escapeHtml(value)}">${escapeHtml(value)}</span>`;
+  const renderRow = row => {
+    const noRemarks = !row.remarks && !row.retired;
+    const tone = row.cancelled || /^not reached/i.test(row.outcome) ? "danger" : row.closed || row.followup_resolution === "completed" ? "teal" : row.retired ? "" : "warning";
+    const note = row.note || row.text || "No notes";
+    const date = formatDisplayDate(row.date);
+    const time = activityDisplayTime(row);
+    const company = escapeHtml(row.company_name || "Unnamed company");
+    return `<tr${noRemarks ? ' class="is-unexplained"' : ""}>
+      <td data-label="Date & time"><span class="admin-activity-date" title="${escapeHtml(date)}"><b>${escapeHtml(date.replace(/ \d{4}$/, ""))}</b>${time ? `<span> &middot; ${escapeHtml(time)}</span>` : ""}</span></td>
+      <td data-label="Company"><button class="text-button admin-activity-preview" type="button" title="${company}" data-admin-open-lead="${escapeHtml(row.lead_id)}">${company}</button></td>
+      <td data-label="Type">${preview(row.type || "Note")}</td>
+      <td data-label="Origin"><span class="admin-ref-tag ${row.origin === "Management" ? "navy" : row.origin === "Self" ? "teal" : ""}">${row.origin === "Not recorded" ? "" : adminActivityIcon(row.origin === "Management" ? "management" : "self")}${escapeHtml(row.origin)}</span></td>
+      <td data-label="Logged by">${preview(row.actor, row.actor === "Not recorded" ? "admin-activity-unknown" : "")}</td>
+      <td data-label="Notes">${preview(note)}</td>
+      <td data-label="Quote &middot; PMR"><div class="admin-activity-links">${row.quotation_ref ? preview(row.quotation_ref, "admin-activity-quote") : ""}${row.pmr_id || row.pmr_ref ? '<span class="admin-ref-tag teal">PMR linked</span>' : ""}${!row.quotation_ref && !row.pmr_id && !row.pmr_ref ? "&mdash;" : ""}</div></td>
+      <td data-label="Status & remarks"><div class="admin-ref-status"><span class="admin-ref-tag ${row.cancelled ? "danger" : row.closed || row.followup_resolution === "completed" ? "teal" : row.retired ? "" : "warning"}">${statusLabel(row)}</span><span class="admin-activity-preview admin-activity-remarks" title="${escapeHtml([row.outcome, row.remarks].filter(Boolean).join(" - ") || (noRemarks ? "No remarks" : ""))}">${row.outcome ? `<strong class="${tone}">${escapeHtml(row.outcome)}</strong>` : ""}${row.remarks ? `${row.outcome ? " &mdash; " : ""}${escapeHtml(row.remarks)}` : noRemarks ? '<strong class="danger">No remarks</strong>' : ""}</span><button class="text-button admin-activity-history" type="button" aria-label="History and details" title="History and details" data-admin-activity-history="${escapeHtml(row.lead_id)}" data-activity-id="${escapeHtml(row.id || "")}" data-index="${row.activity_index}">${adminActivityIcon("history")}</button></div></td>
+    </tr>`;
+  };
+  const showing = pages > 1 ? `${offset + 1}&ndash;${offset + rows.length} of ${filtered.length}${filtered.length === all.length ? "" : ` (${all.length} total)`}` : `${filtered.length} of ${all.length}`;
+  const emptyMessage = state.leadsLoading ? "Loading activities..." : state.leadsError && !state.leadsLoaded ? escapeHtml(state.leadsError) : all.length ? "No activities match these filters." : "No activities recorded.";
+  host.innerHTML = `<section class="admin-ref-activity-stats" aria-label="Activity summary">
+    <article class="admin-ref-stat teal"><span>Activities closed</span><div><strong>${closed}</strong> <b>/ ${all.length}</b> <small>${done} done &middot; ${notReached} not reached</small></div>${adminReferenceProgress(closed, all.length)}</article>
+    <article class="admin-ref-stat warning"><span>Still pending</span><div><strong>${pending}</strong> <small>Awaiting next step</small></div></article>
+    <button class="admin-ref-stat danger admin-activity-missing" type="button" data-admin-activity-filter="status" data-value="${f.status === "missing" ? "all" : "missing"}" aria-pressed="${f.status === "missing"}"><span>No remarks</span><div><strong>${missing}</strong> <small>Unexplained &rsaquo;</small></div></button>
+    <article class="admin-ref-by-person"><span>By salesman &middot; closed</span><div class="admin-activity-people">${[...people].map(([person, counts]) => `<div><span>${preview(person, person === "Not recorded" ? "admin-activity-unknown" : "")}<b>${counts.closed}/${counts.total}</b></span>${adminReferenceProgress(counts.closed, counts.total)}</div>`).join("") || "No activities recorded"}</div></article>
+  </section>
+  <section class="admin-ref-table-panel" aria-label="Activity log">
+    <div class="admin-ref-toolbar">
+      <label class="admin-activity-search">${adminActivityIcon("search")}<input type="text" data-admin-activity-search aria-label="Search notes and remarks" placeholder="Search notes and remarks" value="${escapeHtml(f.search)}"></label>
+      <p class="admin-activity-lock">${adminActivityIcon("lock")}<strong>Append-only</strong> <span>&middot; Entries cannot be edited or deleted here.</span></p>
+      <span class="admin-activity-count" aria-live="polite">Showing ${showing}</span>
+      ${tags || f.search ? `<div class="admin-ref-filter-tags">${tags}<button class="text-button admin-ref-danger" type="button" data-admin-clear-all>Clear all</button></div>` : ""}
+    </div>
+    <div class="admin-ref-mobile-filters">${definitions.map(args => adminReferenceFilterMenu(...args)).join("")}</div>
+    <div class="admin-ref-table-scroll" tabindex="0" role="region" aria-label="Activity entries">
+      <table class="admin-ref-table admin-ref-activity-table"><thead><tr>${definitions.slice(0, 5).map(args => `<th scope="col">${adminReferenceFilterMenu(...args)}</th>`).join("")}<th scope="col">Notes</th>${definitions.slice(5).map(args => `<th scope="col">${adminReferenceFilterMenu(...args)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(renderRow).join("") || `<tr><td colspan="8" class="empty-copy">${emptyMessage}</td></tr>`}</tbody></table>
+    </div>
+    <footer class="admin-ref-table-footer"><span><b>Pending</b> = next step open &middot; <b>Closed</b> = follow-up ended &middot; cancellations stay in history.</span><div class="admin-activity-pagination"><label>Rows per page <select data-admin-activity-size>${[25, 50, 100].map(value => `<option ${value === size ? "selected" : ""}>${value}</option>`).join("")}</select></label><button type="button" class="ghost-button" data-admin-activity-page="${page - 1}" aria-label="Previous page" ${page === 1 ? "disabled" : ""}>&lsaquo;</button><span>Page <b>${page}</b> of ${pages}</span><button type="button" class="ghost-button" data-admin-activity-page="${page + 1}" aria-label="Next page" ${page === pages ? "disabled" : ""}>&rsaquo;</button></div></footer>
+  </section>
+  <details class="admin-ref-calendar" ${calendarOpen ? "open" : ""}><summary>Calendar, reminders &amp; review requests</summary><div class="admin-ref-existing-activity"></div></details>`;
   if (legacy) host.querySelector(".admin-ref-existing-activity").appendChild(legacy);
   if (els.openActivityDeletionQueue) host.querySelector(".admin-ref-existing-activity").appendChild(els.openActivityDeletionQueue);
-  host.querySelector(".admin-ref-stat").insertAdjacentHTML("beforeend", adminReferenceProgress(closed, all.length));
-  if (filtered.length > rows.length) {
-    const more = document.createElement("button");
-    more.type = "button";
-    more.className = "ghost-button";
-    more.textContent = `Show more (${filtered.length - rows.length} remaining)`;
-    more.onclick = () => { adminReference.activityLimit = rows.length + 50; renderReferenceAdminActivity(); };
-    host.querySelector(".admin-ref-table-footer").appendChild(more);
-  }
-  host.querySelectorAll("[data-admin-activity-filter]").forEach(button => button.onclick = () => { adminReference.activity[button.dataset.adminActivityFilter] = button.dataset.value; renderReferenceAdminActivity(); });
-  host.querySelectorAll("[data-admin-clear-filter]").forEach(button => button.onclick = () => { adminReference.activity[button.dataset.adminClearFilter] = "all"; renderReferenceAdminActivity(); });
-  host.querySelector("[data-admin-clear-all]")?.addEventListener("click", () => { Object.keys(adminReference.activity).forEach(key => adminReference.activity[key] = key === "search" ? "" : key === "sort" ? "newest" : "all"); renderReferenceAdminActivity(); });
-  host.querySelectorAll("[data-admin-activity-sort]").forEach(select => select.onchange = () => { adminReference.activity.sort = select.value; renderReferenceAdminActivity(); });
-  host.querySelector("[data-admin-activity-search]").oninput = event => { const position = event.target.selectionStart; adminReference.activity.search = event.target.value; renderReferenceAdminActivity(); const input = host.querySelector("[data-admin-activity-search]"); input.focus(); if (input.type === "text") input.setSelectionRange(position, position); };
-  host.querySelector("[data-admin-log-activity]").onclick = () => els.openActivityCreate.click();
-  host.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, statusLabel(row), row.outcome, row.remarks]));
+  const resetPage = () => { adminReference.activityPage = 1; renderReferenceAdminActivity(); };
+  host.querySelectorAll("[data-admin-activity-filter]").forEach(button => button.onclick = () => {
+    f[button.dataset.adminActivityFilter] = button.dataset.value;
+    const summary = button.closest("details")?.querySelector("summary");
+    const summaryLabel = summary?.getAttribute("aria-label");
+    const isMobile = summary?.closest(".admin-ref-mobile-filters");
+    resetPage();
+    if (summaryLabel) {
+      const filterArea = host.querySelector(isMobile ? ".admin-ref-mobile-filters" : "thead");
+      [...filterArea.querySelectorAll("summary")].find(item => item.getAttribute("aria-label") === summaryLabel)?.focus();
+    } else host.querySelector(".admin-activity-missing")?.focus();
+  });
+  host.querySelectorAll("[data-admin-clear-filter]").forEach(button => button.onclick = () => { const key = button.dataset.adminClearFilter; f[key] = key === "sort" ? "newest" : "all"; resetPage(); });
+  host.querySelector("[data-admin-clear-all]")?.addEventListener("click", () => { Object.keys(f).forEach(key => f[key] = key === "search" ? "" : key === "sort" ? "newest" : "all"); resetPage(); });
+  host.querySelectorAll("[data-admin-activity-sort]").forEach(select => select.onchange = () => { f.sort = select.value; resetPage(); });
+  host.querySelector("[data-admin-activity-search]").oninput = event => {
+    const input = event.target;
+    f.search = input.value;
+    const position = input.selectionStart;
+    resetPage();
+    const replacement = host.querySelector("[data-admin-activity-search]");
+    replacement.focus({ preventScroll: true });
+    replacement.setSelectionRange(position, position);
+  };
+  host.querySelector("[data-admin-activity-size]").onchange = event => { adminReference.activityPageSize = Number(event.target.value); resetPage(); host.querySelector("[data-admin-activity-size]").focus(); };
+  host.querySelectorAll("[data-admin-activity-page]").forEach(button => button.onclick = () => {
+    adminReference.activityPage = Number(button.dataset.adminActivityPage);
+    const label = button.getAttribute("aria-label");
+    renderReferenceAdminActivity();
+    const same = host.querySelector(`[aria-label="${label}"]:enabled`);
+    (same || host.querySelector("[data-admin-activity-page]:enabled"))?.focus({ preventScroll: true });
+  });
+  const filters = host.querySelectorAll(".admin-ref-filter");
+  filters.forEach(filter => {
+    filter.addEventListener("toggle", () => {
+      if (!filter.open) return;
+      filters.forEach(other => { if (other !== filter) other.open = false; });
+      const rect = filter.querySelector("summary").getBoundingClientRect();
+      const menu = filter.querySelector("div");
+      const width = Math.min(248, window.innerWidth - 24);
+      const roomBelow = window.innerHeight - rect.bottom - 12;
+      const roomAbove = rect.top - 12;
+      const opensAbove = roomBelow < 210 && roomAbove > roomBelow;
+      menu.style.width = `${width}px`;
+      menu.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`;
+      menu.style.top = opensAbove ? "auto" : `${rect.bottom + 4}px`;
+      menu.style.bottom = opensAbove ? `${window.innerHeight - rect.top + 4}px` : "auto";
+      menu.style.maxHeight = `${Math.max(64, Math.min(320, (opensAbove ? roomAbove : roomBelow) - 4))}px`;
+    });
+    filter.addEventListener("focusout", event => { if (!filter.contains(event.relatedTarget)) filter.open = false; });
+    filter.addEventListener("keydown", event => {
+      if (event.key !== "Escape" || !filter.open) return;
+      event.stopPropagation();
+      filter.open = false;
+      filter.querySelector("summary").focus();
+    });
+  });
+  host.querySelector(".admin-ref-table-scroll").onscroll = () => filters.forEach(filter => { filter.open = false; });
+  document.querySelector("[data-admin-log-activity]").onclick = event => openActivityModal("", event.currentTarget);
+  document.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, statusLabel(row), row.outcome, row.remarks]));
   host.querySelectorAll("[data-admin-activity-history]").forEach(button => button.onclick = () => {
     openActivityDetails(button.dataset.adminActivityHistory, Number(button.dataset.index), button.dataset.activityId);
     // This read-only entry point must not expose amendment or deletion controls.
@@ -8229,6 +8345,14 @@ function renderReferenceAdminRecords() {
 function renderReferenceAdminShell() {
   const admin = state.currentUser?.role === "admin";
   document.body.classList.toggle("admin-reference-mode", admin);
+  const activityMode = admin && currentView === "activity";
+  document.body.classList.toggle("admin-activity-mode", activityMode);
+  const activityActions = document.getElementById("adminActivityHeaderActions");
+  activityActions?.classList.toggle("hidden", !activityMode);
+  if (activityMode && activityActions && !activityActions.firstElementChild.firstElementChild) {
+    activityActions.querySelector("[data-admin-activity-export]").insertAdjacentHTML("afterbegin", adminActivityIcon("export"));
+    activityActions.querySelector("[data-admin-log-activity]").insertAdjacentHTML("afterbegin", adminActivityIcon("plus"));
+  }
   document.querySelectorAll("[data-records-view]").forEach(button => {
     button.classList.toggle("active", admin && button.dataset.recordsView === currentView);
     button.onclick = () => {
@@ -8249,6 +8373,8 @@ function renderReferenceAdminShell() {
   const owner = String(state.currentUser.id || "");
   if (adminReference.owner !== owner) {
     adminReference.owner = owner;
+    adminReference.activityPage = 1;
+    adminReference.activityPageSize = 50;
     Object.keys(adminReference.activity).forEach(key => adminReference.activity[key] = key === "search" ? "" : key === "sort" ? "newest" : "all");
   }
   if (adminReference.reportsOwner !== owner) {
@@ -8263,7 +8389,12 @@ function renderReferenceAdminShell() {
   }
   const titles = { activity: "Activity log", quotes: "Quotes tracker", accounts: "All accounts", tasks: "Weekly sales reports" };
   if (titles[currentView]) els.topbarPageTitle.innerHTML = pageTitleMarkup(titles[currentView]);
-  if (currentView === "activity") els.topbarContext.textContent = "Every entry is tied to its creator. Transaction status and remarks stay with the activity.";
+  if (activityMode) {
+    const date = document.getElementById("salespersonDashboardDate");
+    date.textContent = `Activity · ${new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Dubai" }).format(new Date())}`;
+    date.classList.remove("hidden");
+    els.topbarContext.textContent = "Every entry is tied to its creator. Status and remarks stay with the activity.";
+  }
   if (["quotes", "accounts"].includes(currentView)) els.topbarContext.textContent = `${state.leads.length} visible CRM accounts - all territories`;
   const launcher = document.getElementById("aiAssistantLauncher");
   const topbar = document.querySelector("#appShell .topbar-actions");

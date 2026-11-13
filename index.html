@@ -41,7 +41,7 @@
   <link rel="stylesheet" href="/crm-team.css?v=1">
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
-  <link rel="stylesheet" href="/admin-dashboard-clean.css?v=11-full-roster">
+  <link rel="stylesheet" href="/admin-dashboard-clean.css?v=12-activity-compact">
   <link rel="stylesheet" href="/management-tasks.css?v=1">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
@@ -171,6 +171,10 @@
             </div>
             <button class="ghost-button" id="openPlacesSearch">Search places</button>
             <button class="primary-button" id="openLeadForm">Add lead</button>
+            <div class="admin-activity-header-actions hidden" id="adminActivityHeaderActions">
+              <button class="ghost-button" type="button" data-admin-activity-export>Export</button>
+              <button class="primary-button" type="button" data-admin-log-activity>Log activity</button>
+            </div>
           </div>
         </header>
 
@@ -1814,7 +1818,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=admin-full-roster"></script>
+  <script src="/client.js?v=admin-activity-compact"></script>
   </body>
 </html>
 
