@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v155-admin-full-roster";
+const CACHE_VERSION = "arg-pwa-v156-admin-activity-compact";
 const APP_SHELL = [
   "/",
   "/index.html",

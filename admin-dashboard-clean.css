@@ -1776,3 +1776,138 @@ body.admin-reference-mode.admin-dashboard-mode #appShell .topbar { padding-botto
   .clean-admin-table td:not(:first-child)::before { content: attr(data-label); display: block; color: var(--clean-muted); font-size: 10px; }
   .clean-admin-toolbar button, .clean-admin-actions > button { min-height: 44px; }
 }
+
+body.admin-activity-mode #appShell .topbar { padding: 0 0 12px !important; margin-bottom: 0 !important; gap: 12px; background: transparent !important; }
+body.admin-activity-mode #appShell .topbar h1 { font-size: 26px !important; line-height: 1.12 !important; }
+body.admin-activity-mode #appShell .topbar-copy p { font-size: 12px !important; line-height: 1.35 !important; }
+body.admin-activity-mode #appShell #salespersonDashboardDate { font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 3px; }
+body.admin-activity-mode #appShell #openLeadForm { display: none !important; }
+body.admin-activity-mode #appShell .topbar-actions { gap: 8px; min-width: 0; }
+body.admin-activity-mode #appShell .topbar-actions .smart-search-shell { width: clamp(160px, 19vw, 250px); min-width: 0; }
+.admin-activity-header-actions:not(.hidden) { display: flex; gap: 8px; }
+body.admin-activity-mode #appShell :is(.admin-activity-header-actions button, #aiAssistantLauncher, .smart-search-field) { min-height: 34px; }
+.admin-activity-header-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+:is(.admin-activity-header-actions, #adminReferenceActivity) svg { display: inline-block; width: 14px; height: 14px; flex: 0 0 auto; vertical-align: middle; }
+#adminReferenceActivity { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+body.admin-activity-mode #appShell .admin-ref-activity-stats {
+  grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, .94fr)) minmax(0, 2.2fr);
+  gap: 0; border: 1px solid #dfe5ee; border-radius: 14px; background: #fff; overflow: hidden;
+}
+body.admin-activity-mode #appShell .admin-ref-activity-stats > * {
+  border: 0 !important; border-inline-end: 1px solid #e3e8ef !important; border-radius: 0; padding: 10px 14px; gap: 4px;
+}
+body.admin-activity-mode #appShell .admin-ref-activity-stats > :last-child { border-inline-end: 0 !important; grid-column: auto; }
+#adminReferenceActivity .admin-ref-activity-stats > * > span { font-size: 10px; font-weight: 750; text-transform: uppercase; color: #475569; }
+#adminReferenceActivity .admin-ref-stat strong { font-size: 23px; line-height: 1.15; }
+#adminReferenceActivity .admin-ref-stat small { font-size: 11px; margin-left: 3px; }
+#adminReferenceActivity .admin-ref-stat progress { margin-top: 2px; }
+#adminReferenceActivity .admin-activity-missing { width: 100%; text-align: left; cursor: pointer; }
+#adminReferenceActivity .admin-activity-missing::before, #adminReferenceActivity .admin-activity-pagination button::before { content: none !important; }
+body.admin-activity-mode #appShell #activityView #adminReferenceActivity .admin-activity-missing {
+  border-radius: 0 !important; background: #fdf0ef !important;
+}
+#adminReferenceActivity .admin-activity-missing[aria-pressed="true"] { box-shadow: inset 0 0 0 2px #b42318 !important; }
+#adminReferenceActivity .admin-ref-by-person > .admin-activity-people { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 12px; align-items: start; }
+.admin-activity-people > div { min-width: 0; }
+.admin-activity-people > div > span { display: flex; justify-content: space-between; gap: 4px; font-size: 11px; font-weight: 700; }
+#adminReferenceActivity .admin-activity-people progress { height: 3px; margin-top: 2px; }
+#adminReferenceActivity .admin-ref-table-panel { display: flex; flex-direction: column; min-height: 0; }
+#adminReferenceActivity .admin-ref-toolbar { flex: 0 0 auto; gap: 8px 12px; padding: 8px 14px; }
+.admin-activity-search { display: flex; align-items: center; gap: 7px; flex: 0 1 240px; min-width: 0; border: 1px solid #c9d1dc; border-radius: 8px; padding: 0 8px; color: #566579; background: #fff; }
+body.admin-activity-mode #appShell #adminReferenceActivity .admin-activity-search input { width: 100%; min-width: 0; border: 0 !important; background: transparent !important; min-height: 30px !important; padding: 4px 0 !important; font-size: 12px; box-shadow: none !important; }
+.admin-activity-search:focus-within { outline: 2px solid var(--crm-focus); outline-offset: 2px; }
+.admin-activity-lock { display: flex; align-items: center; gap: 5px; margin: 0; color: #475569; font-size: 11px; }
+.admin-activity-lock svg { color: #946314; }
+.admin-activity-lock strong { color: #0b2545; white-space: nowrap; }
+.admin-activity-count { margin-inline-start: auto; color: #475569; white-space: nowrap; font-size: 11px; }
+#adminReferenceActivity .admin-ref-filter-tags { flex-basis: 100%; justify-content: start; }
+#adminReferenceActivity .admin-ref-filter > div { position: fixed; inset: auto; min-width: 0; overflow-wrap: anywhere; text-transform: none; }
+#adminReferenceActivity .admin-ref-filter > div select { display: block; width: 100%; margin-top: 4px; }
+#adminReferenceActivity .admin-ref-filter.is-active svg { fill: currentColor; }
+#adminReferenceActivity .admin-ref-filter summary { align-items: center; gap: 3px; }
+#adminReferenceActivity .admin-ref-filter summary svg { width: 11px; height: 11px; }
+#adminReferenceActivity .admin-ref-table-footer { flex: 0 0 auto; gap: 6px 12px; border-top: 1px solid #e3e8ef; border-radius: 0 0 14px 14px; padding: 6px 14px; background: #f8fafc; font-size: 11px; }
+.admin-activity-pagination, .admin-activity-pagination label { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.admin-activity-pagination label { margin-inline-end: 4px; }
+#adminReferenceActivity .admin-activity-pagination :is(button, select) { min-height: 27px; padding: 2px 7px; font-size: 11px; }
+#adminReferenceActivity .admin-ref-status { display: flex; align-items: center; gap: 5px; min-width: 0; }
+#adminReferenceActivity .admin-ref-status strong.teal { color: #176864; }
+#adminReferenceActivity .admin-ref-status strong.warning { color: #80570e; }
+#adminReferenceActivity .admin-ref-status strong.danger, #adminReferenceActivity .admin-activity-unknown { color: #a6221a; }
+.admin-activity-unknown { font-style: italic; }
+.admin-activity-date span { color: #526175; }
+.admin-activity-quote { color: #0b3b75; font-weight: 650; }
+.admin-activity-links { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; min-width: 0; }
+#adminReferenceActivity .admin-ref-tag { padding: 1px 6px; font-size: 11px; font-weight: 650; align-items: center; gap: 3px; }
+#adminReferenceActivity .admin-ref-tag svg { width: 11px; height: 11px; }
+#adminReferenceActivity .admin-ref-tag.danger { color: #a6221a; background: #fcebea; }
+#adminReferenceActivity .admin-activity-history { display: inline-grid; place-items: center; width: 24px; min-width: 24px; height: 24px; min-height: 24px; margin-inline-start: auto; flex: 0 0 auto; }
+#adminReferenceActivity .admin-ref-calendar { margin-top: 0; font-size: 12px; }
+
+@media (min-width: 701px) {
+  body.admin-activity-mode #appShell .main { padding: 16px 24px 10px !important; }
+  body.admin-activity-mode #appShell .topbar-actions { flex: 0 1 auto; }
+  body.admin-activity-mode #appShell .topbar-actions .smart-search-shell { flex: 0 1 250px; max-width: 250px !important; }
+  body.admin-activity-mode #appShell #activityView #adminReferenceActivity .admin-activity-pagination :is(button, select) { width: auto !important; min-height: 25px !important; padding: 2px 7px !important; font-size: 11px !important; }
+  #adminReferenceActivity .admin-activity-pagination label { flex-direction: row; }
+  #adminReferenceActivity .admin-ref-calendar > summary { padding: 8px 14px; }
+  #adminReferenceActivity .admin-ref-table-scroll { min-height: 95px; overflow: auto; }
+  #adminReferenceActivity .admin-ref-activity-table { min-width: 820px; border-collapse: separate; border-spacing: 0; }
+  #adminReferenceActivity .admin-ref-activity-table thead { position: sticky; top: 0; z-index: 2; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table :is(th, td) { padding: 2px 7px !important; vertical-align: middle; font-size: 12px; line-height: 1.25; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th { height: 31px; font-size: 10px; text-transform: uppercase; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th:nth-child(1) { width: 10%; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th:nth-child(2) { width: 16%; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th:nth-child(3) { width: 9%; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th:nth-child(4) { width: 10%; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th:nth-child(5) { width: 10%; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th:nth-child(6) { width: 14%; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th:nth-child(7) { width: 9%; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table th:nth-child(8) { width: 22%; }
+  body.admin-activity-mode #appShell #activityView #adminReferenceActivity .admin-ref-activity-table :is(.admin-activity-preview, .admin-activity-history) {
+    min-height: 24px !important;
+    padding: 0 !important;
+    white-space: nowrap !important;
+  }
+  #appShell #adminReferenceActivity .admin-ref-activity-table :is(th, td):first-child { padding-inline-start: 14px !important; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table :is(th, td):last-child { padding-inline-end: 14px !important; }
+  #adminReferenceActivity .admin-ref-filter summary { font-size: 10px; padding: 5px 0; }
+  #adminReferenceActivity .admin-ref-filter.is-active summary { padding-inline: 3px; }
+  #adminReferenceActivity .admin-activity-date { white-space: nowrap; }
+  #adminReferenceActivity :is(.admin-activity-preview, .admin-ref-table .text-button.admin-activity-preview) { display: block; min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #adminReferenceActivity .admin-ref-activity-table .admin-ref-tag { flex: 0 0 auto; white-space: nowrap; }
+}
+
+@media (min-width: 1025px) and (min-height: 600px) {
+  body.admin-activity-mode #appShell { height: auto; min-height: 100dvh; overflow: visible; }
+  body.admin-activity-mode #appShell .main:not(:has(.admin-ref-calendar[open])) { display: flex; flex-direction: column; height: 100dvh !important; }
+  body.admin-activity-mode #appShell #activityView { overflow: visible; }
+  #adminReferenceActivity:not(:has(.admin-ref-calendar[open])) { height: 100%; }
+  #adminReferenceActivity:not(:has(.admin-ref-calendar[open])) .admin-ref-table-panel { flex: 1; }
+  #adminReferenceActivity:has(.admin-ref-calendar[open]) .admin-ref-table-scroll { max-height: 65dvh; }
+}
+
+@media (min-width: 701px) and (max-width: 1100px) {
+  #adminReferenceActivity .admin-ref-by-person > .admin-activity-people { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  body.admin-activity-mode #appShell .topbar-actions { grid-template-columns: minmax(0, 1fr) 44px !important; }
+  .admin-activity-header-actions { grid-column: 1; }
+  .admin-activity-header-actions button { flex: 1 1 auto; min-height: 44px !important; }
+  body.admin-activity-mode #appShell .admin-ref-activity-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  body.admin-activity-mode #appShell .admin-ref-activity-stats > * { padding: 8px; }
+  body.admin-activity-mode #appShell .admin-ref-activity-stats > :nth-child(3) { border-inline-end: 0 !important; }
+  #adminReferenceActivity .admin-ref-stat small { display: block; margin: 2px 0 0; }
+  #adminReferenceActivity .admin-activity-search { flex: 1 1 100%; }
+  body.admin-activity-mode #appShell #adminReferenceActivity .admin-activity-search input { min-height: 44px !important; font-size: 16px !important; }
+  #adminReferenceActivity .admin-activity-history { min-height: 44px; }
+  #adminReferenceActivity .admin-activity-history { min-width: 44px; }
+  #adminReferenceActivity .admin-ref-status { flex-wrap: wrap; }
+  #adminReferenceActivity .admin-activity-remarks { flex: 1 1 120px; }
+  #adminReferenceActivity .admin-ref-mobile-filters { padding: 8px; }
+  #adminReferenceActivity .admin-ref-mobile-filters summary { min-height: 44px; padding: 4px 8px; }
+  #adminReferenceActivity .admin-ref-table-scroll { padding: 0 8px 8px; }
+  #appShell #adminReferenceActivity .admin-ref-activity-table :is(th, td) { padding: 5px !important; }
+  #adminReferenceActivity .admin-activity-pagination :is(button, select) { min-height: 44px; min-width: 44px; }
+}
