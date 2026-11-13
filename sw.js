@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v156-admin-activity-compact";
+const CACHE_VERSION = "arg-pwa-v157-management-tasks-drawer";
 const APP_SHELL = [
   "/",
   "/index.html",

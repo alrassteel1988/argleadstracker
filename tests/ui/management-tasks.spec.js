@@ -41,18 +41,33 @@ test("assign, progress and complete a management task across roles", async ({ pa
     await expect(card).toContainText("Demo Admin");
     await expect(card).toContainText("Synthetic Steel Company 01");
     await expect(card).toContainText("Ask for dates and tonnage.");
+    await expect(drawer.locator(".mg-drawer-total-today")).toContainText("1");
+    const search = drawer.getByRole("searchbox", { name: "Search management tasks" });
+    await search.fill("an unmatched search");
+    await expect(drawer).toContainText("No tasks match your search or filter.");
+    await search.fill("tonnage");
+    await expect(card).toBeVisible();
+    await search.clear();
     await capture(sales, info, "salesman-management-tasks", { fullPage: false });
-    await card.getByRole("button", { name: "In progress", exact: true }).click();
+    await card.getByRole("button", { name: "Start", exact: true }).click();
     await card.getByLabel("Progress remarks").fill("Waiting for the buyer to call back.");
     await card.locator('button[type="submit"]').click();
-    await expect(card.getByRole("button", { name: "In progress", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await card.getByRole("button", { name: "Completed", exact: true }).click();
+    await expect(card).toContainText("Waiting for the buyer to call back.");
+    const status = card.getByRole("combobox", { name: `Status for ${title}` });
+    await expect(status).toHaveValue("in_progress");
+    await status.selectOption("completed");
     const complete = card.getByRole("button", { name: "Mark completed" });
     await expect(complete).toBeDisabled();
     await card.getByLabel("Completion remarks for management").fill("Short");
     await expect(complete).toBeDisabled();
     await card.getByLabel("Completion remarks for management").fill(remarks);
     await capture(sales, info, "salesman-task-completion", { fullPage: false });
+    await sales.route("**/api/management-tasks/*/progress", route => route.fulfill({
+      status: 503, json: { error: "Temporary test failure" }
+    }), { times: 1 });
+    await complete.click();
+    await expect(card.getByRole("status")).toContainText("Temporary test failure");
+    await expect(card.getByLabel("Completion remarks for management")).toHaveValue(remarks);
     await complete.click();
     await expect(drawer).toContainText("0 pending of 1");
     await drawer.getByRole("button", { name: "Completed 1" }).click();
