@@ -2964,22 +2964,22 @@ let neglectedWorkspace = null;
 let neglectedToolsOpen = false;
 let neglectedActivityFilter = "all";
 let neglectedActivityEditor = null;
-const neglectedOutcomes = {
-  pending: ["Call back requested", "Meeting or visit scheduled", "Will try again", "Waiting for customer reply"],
-  closed: ["Done - spoke to customer", "Done - visit or meeting held", "Not reached - no answer", "Not reached - wrong or invalid number", "Not interested", "Company closed or moved"]
-};
+const neglectedOutcomes = ["Call back requested", "Meeting or visit scheduled", "Will try again", "Waiting for customer reply"];
 
 function neglectedActivityRows(leads, referenceDate) {
   const rows = [];
   for (const lead of leads || []) {
     const activities = Array.isArray(lead.activities) ? lead.activities : [];
     for (const activity of activities) {
-      if (!activity || activity.archived || activity.delete_request || activity.deletion_status === "pending") continue;
-      const due = String(activity.next_action_date || activity.reminder_due_date || (activity.reminder ? activity.due_date : "") || "").slice(0, 10);
+      if (!activity || activity.followup_resolution || activity.archived || activity.delete_request || activity.deletion_status === "pending") continue;
+      const due = String(activity.next_action_date || activity.reminder_due_date || (isReminderActivity(activity) ? activity.due_date : "") || "").slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(`${due}T00:00:00Z`)) || new Date(`${due}T00:00:00Z`).toISOString().slice(0, 10) !== due || due >= referenceDate) continue;
       const id = String(activity.id || "").trim();
       const stable = Boolean(id && activities.filter(item => item && String(item.id || "") === id).length === 1);
-      rows.push({ lead, activity, due, stable, status: activity.transaction_status === "closed" ? "closed" : "pending" });
+      const resolution = activityFollowupResolution(activity, activities);
+      const status = resolution?.followup_resolution === "cancelled" || activity.transaction_status === "cancelled" || activity.reminder_status === "cancelled" ? "cancelled"
+        : resolution || activity.transaction_status === "closed" || isCompletedReminder(activity) ? "closed" : "pending";
+      rows.push({ lead, activity, resolution, due, stable, status });
     }
   }
   return rows.sort((a, b) => a.due.localeCompare(b.due));
@@ -2991,23 +2991,25 @@ function renderNeglectedActivities(workspace) {
   const referenceDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const unavailable = !state.leadsLoaded;
   const rows = unavailable ? [] : neglectedActivityRows(state.leads, referenceDate);
-  const closed = rows.filter(row => row.status === "closed").length;
-  const done = rows.filter(row => row.status === "closed" && String(row.activity.transaction_outcome || "").startsWith("Done -")).length;
-  const notReached = rows.filter(row => row.status === "closed" && String(row.activity.transaction_outcome || "").startsWith("Not reached -")).length;
-  const missing = rows.filter(row => !String(row.activity.transaction_remarks || "").trim()).length;
+  const counts = { all: rows.length, pending: 0, cancelled: 0, closed: 0 };
+  for (const row of rows) counts[row.status]++;
+  const missing = rows.filter(row => !String((row.resolution || row.activity).transaction_remarks || "").trim()).length;
+  const filters = ["all", "pending", "cancelled", ...(counts.closed ? ["closed"] : [])];
+  if (!filters.includes(neglectedActivityFilter)) neglectedActivityFilter = "all";
   const visible = rows.map((row, index) => ({ ...row, index })).filter(row => neglectedActivityFilter === "all" || row.status === neglectedActivityFilter);
-  const outcomeLabel = status => status === "pending" ? "Where does it stand?" : "Why is it closed?";
   workspace.innerHTML = `
     <div class="neglected-v2-head"><div><button type="button" data-workspace-view="dashboard" class="neglected-v2-back">Dashboard</button><span> / Neglected accounts</span><h2>Who have I <em>neglected?</em></h2><p>Overdue activity follow-ups, based on their scheduled dates.</p></div>${manager ? `<button type="button" class="ghost-button" data-neglected-export>Export for management</button>` : ""}</div>
-    <div class="neglected-v2-stats"><article><span>Overdue activities</span><strong>${unavailable ? "—" : rows.length}</strong></article><article><span>Follow-ups closed</span><strong>${unavailable ? "—" : `${closed} / ${rows.length}`}</strong>${unavailable ? "" : `<progress max="${Math.max(1, rows.length)}" value="${closed}" aria-label="Follow-ups closed"></progress>`}</article><article><span>Still pending</span><strong>${unavailable ? "—" : rows.length - closed}</strong>${unavailable ? "" : `<small>Closed: ${done} done · ${notReached} not reached</small>`}</article><article><span>Missing remarks</span><strong>${unavailable ? "—" : missing}</strong></article></div>
-    <section class="neglected-v2-list" aria-label="Overdue follow-ups"><div class="neglected-v2-filters">${["all", "pending", "closed"].map(filter => `<button type="button" data-neglected-filter="${filter}" aria-pressed="${neglectedActivityFilter === filter}" ${unavailable ? "disabled" : ""}>${filter[0].toUpperCase() + filter.slice(1)} · ${unavailable ? "—" : filter === "all" ? rows.length : filter === "closed" ? closed : rows.length - closed}</button>`).join("")}</div>
+    <div class="neglected-v2-stats"><article><span>Overdue activities</span><strong>${unavailable ? "—" : rows.length}</strong></article><article><span>Follow-ups cancelled</span><strong>${unavailable ? "—" : `${counts.cancelled} / ${rows.length}`}</strong>${unavailable ? "" : `<progress max="${Math.max(1, rows.length)}" value="${counts.cancelled}" aria-label="Follow-ups cancelled"></progress>`}</article><article><span>Still pending</span><strong>${unavailable ? "—" : counts.pending}</strong></article><article><span>Missing remarks</span><strong>${unavailable ? "—" : missing}</strong></article></div>
+    <section class="neglected-v2-list" aria-label="Overdue follow-ups"><div class="neglected-v2-filters">${filters.map(filter => `<button type="button" data-neglected-filter="${filter}" aria-pressed="${neglectedActivityFilter === filter}" ${unavailable ? "disabled" : ""}>${filter[0].toUpperCase() + filter.slice(1)} · ${unavailable ? "—" : counts[filter]}</button>`).join("")}</div>
     ${state.leadsLoading && !state.leadsLoaded ? `<p role="status">Loading follow-ups...</p>` : state.leadsError && !state.leadsLoaded ? `<p role="alert">${escapeHtml(state.leadsError)}</p><button type="button" data-neglected-retry>Retry</button>` : !visible.length ? `<p class="neglected-v2-empty">No overdue activities match this filter.</p>` : visible.map(row => {
       const a = row.activity;
+      const details = row.resolution || a;
+      const canUpdate = !manager && row.stable && row.status === "pending" && canResolveLeadActivity(row.lead);
       const editing = neglectedActivityEditor && neglectedActivityEditor.leadId === String(row.lead.id) && neglectedActivityEditor.activityId === String(a.id);
       const editor = editing ? neglectedActivityEditor : null;
       const days = Math.floor((Date.parse(`${referenceDate}T00:00:00Z`) - Date.parse(`${row.due}T00:00:00Z`)) / 86400000);
-      return `<article class="neglected-v2-row"><div class="neglected-v2-row-main"><div><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(row.lead.id)}">${escapeHtml(row.lead.company_name || "Unnamed company")}</button><p>${escapeHtml(a.activity_purpose || a.type || "Activity")} · due ${escapeHtml(row.due)}</p></div><strong class="neglected-v2-overdue">${days} d overdue</strong><div class="neglected-v2-switch" aria-label="Follow-up status">${["pending", "closed"].map(status => `<button type="button" data-neglected-status="${status}" data-neglected-index="${row.index}" aria-pressed="${row.status === status}" ${manager || !row.stable ? "disabled" : ""}>${status === "pending" ? "Pending" : "Closed"}</button>`).join("")}</div><div class="neglected-v2-remark">${a.transaction_remarks ? `<strong>${escapeHtml(a.transaction_outcome || "Update")}</strong><p>${escapeHtml(a.transaction_remarks)}</p><small>${escapeHtml(a.transaction_updated_by_name || "User")} · ${escapeHtml(String(a.transaction_updated_at || "").slice(0, 10))}${a.transaction_next_attempt ? ` · next attempt ${escapeHtml(a.transaction_next_attempt)}` : ""}</small>` : `<span>No remarks</span>`}${!row.stable ? `<small>Activity needs a permanent ID before editing.</small>` : ""}</div>${!manager ? `<div class="neglected-v2-actions">${row.lead.phone ? `<a class="primary-button" href="tel:${escapeHtml(String(row.lead.phone).replace(/[^+\d*#,;]/g, ""))}" aria-label="Call ${escapeHtml(row.lead.company_name || "company")}">Call</a>` : `<button type="button" disabled title="No phone number saved">Call</button>`}<button type="button" class="ghost-button" data-neglected-task="${escapeHtml(row.lead.id)}">Task</button>${row.stable ? `<button type="button" class="ghost-button" data-neglected-edit="${row.index}">${a.transaction_remarks ? "Edit remarks" : "Add remarks"}</button>` : ""}</div>` : ""}</div>
-      ${editor ? `<form class="neglected-v2-editor" data-neglected-form><label>${outcomeLabel(editor.status)}<select name="outcome" required><option value="">Choose...</option>${neglectedOutcomes[editor.status].map(outcome => `<option value="${escapeHtml(outcome)}" ${editor.outcome === outcome ? "selected" : ""}>${escapeHtml(outcome)}</option>`).join("")}</select></label>${editor.status === "pending" ? `<label>Next attempt<input type="date" name="next_attempt" value="${escapeHtml(editor.nextAttempt)}" required></label>` : ""}<label>Remarks <span>required</span><textarea name="remarks" maxlength="4000" required placeholder="Add a note for management">${escapeHtml(editor.remarks)}</textarea></label><div><button type="submit" class="primary-button" data-neglected-save disabled>Save update</button><button type="button" class="ghost-button" data-neglected-cancel>Cancel</button><p role="alert">${escapeHtml(editor.error || "")}</p></div></form>` : ""}</article>`;
+      return `<article class="neglected-v2-row"><div class="neglected-v2-row-main"><div><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(row.lead.id)}">${escapeHtml(row.lead.company_name || "Unnamed company")}</button><p>${escapeHtml(a.activity_purpose || a.type || "Activity")} · due ${escapeHtml(row.due)}</p></div><strong class="neglected-v2-overdue">${days} d overdue</strong><div class="neglected-v2-switch" aria-label="Follow-up status">${canUpdate ? `<button type="button" data-neglected-status="pending" data-neglected-index="${row.index}" aria-pressed="true">Pending</button><button type="button" class="record-cancel-followup" data-neglected-status="cancelled" data-neglected-index="${row.index}">Cancel</button>` : `<span>${row.status === "cancelled" ? "Cancelled" : row.status === "closed" ? "Closed" : "Pending"}</span>`}</div><div class="neglected-v2-remark">${details.transaction_remarks ? `<strong>${escapeHtml(details.transaction_outcome || "Update")}</strong><p>${escapeHtml(details.transaction_remarks)}</p><small>${escapeHtml(details.transaction_updated_by_name || "User")} · ${escapeHtml(String(details.transaction_updated_at || "").slice(0, 10))}${details.transaction_next_attempt ? ` · next attempt ${escapeHtml(details.transaction_next_attempt)}` : ""}</small>` : `<span>No remarks</span>`}${!row.stable ? `<small>Activity needs a permanent ID before editing.</small>` : ""}</div>${!manager ? `<div class="neglected-v2-actions">${row.lead.phone ? `<a class="primary-button" href="tel:${escapeHtml(String(row.lead.phone).replace(/[^+\d*#,;]/g, ""))}" aria-label="Call ${escapeHtml(row.lead.company_name || "company")}">Call</a>` : `<button type="button" disabled title="No phone number saved">Call</button>`}<button type="button" class="ghost-button" data-neglected-task="${escapeHtml(row.lead.id)}">Task</button>${canUpdate ? `<button type="button" class="ghost-button" data-neglected-edit="${row.index}">${a.transaction_remarks ? "Edit remarks" : "Add remarks"}</button>` : ""}</div>` : ""}</div>
+      ${editor ? `<form class="neglected-v2-editor" data-neglected-form><label>Where does it stand?<select name="outcome" required><option value="">Choose...</option>${neglectedOutcomes.map(outcome => `<option value="${escapeHtml(outcome)}" ${editor.outcome === outcome ? "selected" : ""}>${escapeHtml(outcome)}</option>`).join("")}</select></label>${editor.status === "pending" ? `<label>Next attempt<input type="date" name="next_attempt" value="${escapeHtml(editor.nextAttempt)}" required></label>` : ""}<label>Remarks <span>required</span><textarea name="remarks" maxlength="4000" required placeholder="Add a note for management">${escapeHtml(editor.remarks)}</textarea></label><div><button type="submit" class="primary-button" data-neglected-save disabled>Save update</button><button type="button" class="ghost-button" data-neglected-cancel>Discard</button><p role="alert">${escapeHtml(editor.error || "")}</p></div></form>` : ""}</article>`;
     }).join("")}</section><form class="neglected-v2-assistant"><label class="sr-only" for="neglectedQuestion">Ask the AI Assistant</label><input id="neglectedQuestion" placeholder="Ask the AI Assistant about these accounts" maxlength="4000"><span class="neglected-assistant-host"></span></form>`;
   const form = workspace.querySelector("[data-neglected-form]");
   if (form) updateNeglectedSaveButton(form);
@@ -5326,10 +5328,14 @@ function isCompletedReminder(activity = {}) {
     || String(activity.reminder_status || "").toLowerCase() === "completed";
 }
 
-function followupRetiredReminder(activity, activities) {
-  return activities.some(event => event.followup_resolution && (activity.id ? event.resolved_reminder_id === activity.id
-    : event.resolved_legacy_reminder && event.followup_due_date === (activity.due_date || activity.reminder_due_date)
+function activityFollowupResolution(activity, activities) {
+  return activities.find(event => event?.followup_resolution && (activity.id ? event.resolved_activity_id === activity.id || event.resolved_reminder_id === activity.id
+    : isReminderActivity(activity) && event.resolved_legacy_reminder && event.followup_due_date === (activity.due_date || activity.reminder_due_date)
       && String(event.followup_action || "").toLowerCase() === String(activity.activity_required || activity.text || "").trim().toLowerCase()));
+}
+
+function followupRetiredReminder(activity, activities) {
+  return Boolean(activityFollowupResolution(activity, activities));
 }
 
 function overdueReminderItemsForLead(lead) {
@@ -10949,12 +10955,16 @@ function primaryContactMarkup(lead) {
   return contact ? `<p class="record-primary-contact">${escapeHtml(contact)}</p>` : "";
 }
 
-function canResolveLeadNextStep(lead) {
+function canResolveLeadActivity(lead) {
   const user = state.currentUser;
-  if (!lead.next_action || !lead.next_action_date || lead.pending_sync || !user) return false;
+  if (lead.pending_sync || !user) return false;
   if (user.role === "admin") return true;
   return user.role === "salesman" && (lead.assigned_to ? String(lead.assigned_to) === String(user.id)
     : Boolean(user.name && String(lead.assigned_salesman || "").trim().toLowerCase() === user.name.trim().toLowerCase()));
+}
+
+function canResolveLeadNextStep(lead) {
+  return Boolean(lead.next_action && lead.next_action_date && canResolveLeadActivity(lead));
 }
 
 function recordFollowupActions(lead) {
@@ -10977,7 +10987,7 @@ function recordFollowupTitle(activity) {
 }
 
 function recordFollowupConfirmation(lead) {
-  const event = (lead.activities || []).find(activity => activity.followup_resolution);
+  const event = (lead.activities || []).find(activity => activity.followup_resolution && activity.followup_scope !== "activity");
   if (!event || (lead.next_action_date || "") !== (event.replacement_due_date || "")) return "";
   if (event.replacement_id && !(lead.activities || []).some(activity =>
     activity.id === event.replacement_id && activity.activity_required === lead.next_action && activity.due_date === lead.next_action_date)) return "";
@@ -10988,8 +10998,8 @@ function recordFollowupConfirmation(lead) {
   </div>`;
 }
 
-function openLeadFollowupDialog(lead, status) {
-  if (!canResolveLeadNextStep(lead) || !Object.hasOwn(LEAD_FOLLOWUP_REASONS, status)) return;
+function openLeadFollowupDialog(lead, status, target = null) {
+  if (!(target ? status === "cancelled" && canResolveLeadActivity(lead) : canResolveLeadNextStep(lead)) || !Object.hasOwn(LEAD_FOLLOWUP_REASONS, status)) return;
   const dialog = document.getElementById("leadFollowupDialog");
   if (dialog.open) return;
   const cancelled = status === "cancelled";
@@ -10998,11 +11008,15 @@ function openLeadFollowupDialog(lead, status) {
   let lastSubmission = "";
   let requestId = "";
   const userId = state.currentUser.id;
-  const expected = { expected_action: lead.next_action, expected_due: lead.next_action_date,
+  const activity = target?.activity;
+  const action = activity ? activity.activity_required || activity.followup_action || (isReminderActivity(activity) && activity.text) || activity.activity_purpose || activity.type || "Activity" : lead.next_action;
+  const due = target?.due || lead.next_action_date;
+  const expected = { expected_action: action, expected_due: due,
+    ...(activity ? { activity_id: activity.id, expected_activity_version: Number(activity.version || 1) } : {}),
     expected_revision: (lead.activities || []).find(activity => activity.followup_resolution)?.id || "",
     expected_updated_at: lead.updated_at || "" };
   const contact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ");
-  const subtitle = [normalizeNextActionPlan(lead.next_action), contact, `due ${formatDisplayDate(lead.next_action_date)}`].filter(Boolean).join(" · ");
+  const subtitle = [normalizeNextActionPlan(action), contact, `due ${formatDisplayDate(due)}`].filter(Boolean).join(" · ");
   dialog.dataset.resolution = status;
   dialog.innerHTML = `<form class="lead-followup-form">
     <header>
@@ -13018,7 +13032,7 @@ function renderActionPlanPanel() {
 
 function allActivities() {
   return state.leads.flatMap(lead => (lead.activities || []).map((activity, index) => ({ ...activity, company_name: lead.company_name, lead_id: lead.id, activity_index: index,
-    followup_retired: isReminderActivity(activity) && followupRetiredReminder(activity, lead.activities) })))
+    followup_retired: followupRetiredReminder(activity, lead.activities) })))
     .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
 
@@ -13489,7 +13503,7 @@ function activityCardMarkup(activity) {
   const isReminder = String(type).toLowerCase() === "reminder";
   const dueDate = activity.reminder_due_date || activity.due_date || "";
   const reminderOverdue = isReminder && dueDate && dueDate.slice(0, 10) < today() && !activity.followup_retired && activity.reminder_status !== "completed";
-  const statusLabel = activity.followup_retired ? "Resolved reminder" : isReminder
+  const statusLabel = activity.followup_retired ? (isReminder ? "Resolved reminder" : "Resolved follow-up") : isReminder
     ? activity.reminder_status || (reminderOverdue ? "Overdue" : "Scheduled")
     : STAGE_DISPLAY_LABELS[normalizeStageKey(activity.stage, "")] || activity.stage || "Prospect";
   const statusClass = reminderOverdue ? "hot" : "activity-status-neutral";
@@ -17435,8 +17449,12 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
   if (currentView === "neglected" && isSalesmanRole() && (button.dataset.neglectedStatus || button.hasAttribute("data-neglected-edit"))) {
     const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
     const row = neglectedActivityRows(state.leads, date)[Number(button.dataset.neglectedIndex ?? button.dataset.neglectedEdit)];
-    if (!row || !row.stable) return;
-    const status = button.dataset.neglectedStatus || row.status;
+    if (!row || !row.stable || row.status !== "pending" || !canResolveLeadActivity(row.lead)) return;
+    if (button.dataset.neglectedStatus === "cancelled") {
+      openLeadFollowupDialog(row.lead, "cancelled", row);
+      return;
+    }
+    const status = "pending";
     neglectedActivityEditor = { owner: String(state.currentUser.id), leadId: String(row.lead.id), activityId: String(row.activity.id), version: Number(row.activity.version || 1), status, outcome: status === row.status ? row.activity.transaction_outcome || "" : "", remarks: row.activity.transaction_remarks || "", nextAttempt: status === "pending" ? row.activity.transaction_next_attempt || "" : "", error: "" };
     renderAiWorkspace();
     return;
