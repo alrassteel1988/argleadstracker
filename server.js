@@ -49,7 +49,7 @@ const {
   workflowId
 } = require("./src/services/activityWorkflowService");
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
-const { canReadManagementTask, validateManagementTask, saveLocalManagementTask } = require("./src/services/managementTaskService");
+const { adminActions: managementTaskAdminActions, canReadManagementTask, validateManagementTask, saveLocalManagementTask } = require("./src/services/managementTaskService");
 const { canResolveLeadFollowup, isResolvedReminder, validateLeadFollowup, resolveLocalLeadFollowup } = require("./src/services/leadFollowupService");
 const {
   enrichCompanyFromGoogle,
@@ -5219,11 +5219,25 @@ async function handleApi(req, res, url) {
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
   if (!await enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)) return;
 
-  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen)$/i);
-  if ((req.method === "GET" && url.pathname === "/api/management-tasks") || (req.method === "POST" && managementTaskAction)) {
+  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})\/(assign|edit|remind|progress|seen|reassign|cancel|review|history)$/);
+  const managementTaskHistory = managementTaskAction?.[2] === "history";
+  if ((req.method === "GET" && (url.pathname === "/api/management-tasks" || managementTaskHistory))
+      || (req.method === "POST" && managementTaskAction && !managementTaskHistory)) {
     if (!["admin", "salesman"].includes(user.role)) return sendJson(res, 403, { error: "Management tasks are not available to your role." });
     try {
       if (req.method === "GET") {
+        if (managementTaskHistory) {
+          if (user.role !== "admin") return sendJson(res, 403, { error: "Task history is only available to admins." });
+          const id = managementTaskAction[1];
+          if (!supabaseEnabled) {
+            if (!db.management_tasks.some(task => task.id === id)) return sendJson(res, 404, { error: "Task not found." });
+            return sendJson(res, 200, db.management_task_events.filter(event => event.task_id === id));
+          }
+          const history = await rest("rpc/management_task_history", {
+            method: "POST", ...supabaseDataOptions(user.token), body: { p_id: id }
+          });
+          return sendJson(res, 200, history);
+        }
         if (!supabaseEnabled) {
           return sendJson(res, 200, db.management_tasks.filter(task => canReadManagementTask(db, user, task)));
         }
@@ -5237,7 +5251,7 @@ async function handleApi(req, res, url) {
       }
       const [, id, action] = managementTaskAction;
       if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) return sendJson(res, 400, { error: "Invalid task ID." });
-      if ((["assign", "edit", "remind"].includes(action) ? "admin" : "salesman") !== user.role) {
+      if ((managementTaskAdminActions.includes(action) ? "admin" : "salesman") !== user.role) {
         return sendJson(res, 403, { error: "This task action is not available to your role." });
       }
       const input = await readBody(req);
@@ -5259,8 +5273,8 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, task);
     } catch (error) {
       const message = String(error.message || "");
-      if (/^Task not found\.?$/.test(message)) return sendJson(res, 404, { error: "Task not found." });
-      if (/^This task changed|^Completed tasks are read-only|^A task notice was sent recently|^The salesman no longer has access|^This task request has already been used/.test(message)) {
+      if (/^(Task|Lead) not found\.?$/.test(message)) return sendJson(res, 404, { error: message });
+      if (/^This task changed|^Completed (and cancelled )?tasks are read-only|^Only completed tasks can be reviewed|^Reassign the lead first|^A task notice was sent recently|^The salesman no longer has access|^This task request has already been used/.test(message)) {
         return sendJson(res, 409, { error: message });
       }
       if ([400, 403, 409].includes(error.status)) {

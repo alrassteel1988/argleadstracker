@@ -45,6 +45,10 @@ body #appShell #managementTasksWorkspace button[data-mg-assign] { background: #f
 .mg-task-people button b { color: var(--mg-red); }
 .mg-task-people button[aria-pressed="true"] { border-color: var(--mg-blue); background: #edf4fb; }
 .mg-task-people progress { display: block; width: 100%; height: 7px; accent-color: var(--mg-green); }
+.mg-task-people button > .mg-task-person-bar { flex-wrap: nowrap; gap: 0; min-height: 6px; overflow: hidden; border-radius: 6px; background: #e8edf4; }
+.mg-task-person-bar i:nth-child(1) { background: var(--mg-green); }
+.mg-task-person-bar i:nth-child(2) { background: #537ca8; }
+.mg-task-person-bar i:nth-child(3) { background: var(--mg-red); }
 .mg-task-table { border: 1px solid var(--mg-line); border-radius: 8px; background: var(--mg-paper); }
 .mg-task-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px; gap: 8px; }
 .mg-task-toolbar > span { font-size: 13px; color: #46556a; }
@@ -56,6 +60,15 @@ body #appShell #managementTasksWorkspace button[data-mg-assign] { background: #f
 .mg-task-row::marker { content: ""; }
 summary.mg-task-row { cursor: pointer; }
 .mg-task-table-head { background: var(--mg-muted); font-size: 11px; color: #46556a; text-transform: uppercase; font-weight: 700; }
+.mg-task-admin-row { display: grid; grid-template-columns: minmax(85px, .9fr) minmax(0, 1.2fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(64px, .65fr) minmax(80px, .8fr) minmax(0, 1.2fr) minmax(125px, 1fr); align-items: center; gap: 10px; padding: 10px 12px; overflow-wrap: anywhere; }
+.mg-task-admin-row + .mg-task-admin-row { border-top: 1px solid var(--mg-line); }
+.mg-task-admin-row.mg-task-new { background: #edf7ef; box-shadow: inset 3px 0 var(--mg-green); }
+.mg-task-admin-controls, .mg-task-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mg-task-admin-controls input { width: min(100%, 215px); }
+.mg-task-admin-controls :is(input, select) { min-height: 36px; }
+.mg-task-detail-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mg-task-history { margin: 8px 0 0; padding-inline-start: 20px; }
+.mg-task-history li { padding-block: 8px; border-top: 1px solid var(--mg-line); overflow-wrap: anywhere; }
 .mg-task-row-title { display: grid; gap: 2px; }
 .mg-task-row-title small, .mg-task-mobile-remarks { color: #46556a; }
 .mg-task-mobile-remarks { display: none; }
@@ -85,6 +98,7 @@ details[open] > summary .mg-task-chevron::before { transform: translateY(2px) ro
 body dialog.mg-task-dialog { padding: 0 !important; border: 1px solid #dce4ee !important; background: #fff !important; max-width: calc(100vw - 24px); border-radius: 8px !important; }
 body dialog.mg-task-dialog::backdrop { background: rgba(11, 37, 69, .52) !important; }
 body dialog.mg-task-form-dialog { width: 610px; max-height: calc(100dvh - 24px); }
+body dialog.mg-task-form-dialog:has(form[data-action="view"]) { position: fixed; inset: 0 0 0 auto; margin: 0 !important; width: min(610px, 100%); height: 100dvh; max-width: 100%; max-height: 100dvh; border-radius: 0 !important; }
 .mg-task-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--mg-line); }
 .mg-task-dialog-header h2 { font-size: 24px; color: var(--mg-blue); }
 .mg-task-close { flex: 0 0 40px; height: 40px; padding: 0 !important; }
@@ -163,6 +177,13 @@ body dialog.mg-task-dialog .mg-task-progress-form button.primary-button { backgr
 @media (max-width: 1050px) {
   .mg-task-table { background: transparent; border: 0; }
   .mg-task-table-head { display: none; }
+  .mg-task-admin-row:not(.mg-task-table-head) { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; background: #fff; border: 1px solid var(--mg-line); border-radius: 8px; margin-bottom: 8px; }
+  .mg-task-admin-row > [data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; font-size: 11px; font-weight: 700; color: #46556a; }
+  .mg-task-admin-row > [data-label="Task"] { grid-row: 1; grid-column: 1 / -1; }
+  .mg-task-admin-row > :is([data-label="Actions"], [data-label="Remarks / update"]) { grid-column: 1 / -1; }
+  .mg-task-admin-row > [data-label="Actions"]::before { flex-basis: 100%; }
+  .mg-task-actions button { min-height: 44px; }
+  .mg-task-admin-row.mg-task-new:not(.mg-task-table-head) { background: #edf7ef; }
   .mg-task-table details { background: #fff; border: 1px solid var(--mg-line); border-radius: 8px; margin-bottom: 8px; }
   .mg-task-row { grid-template-columns: repeat(2, minmax(0, 1fr)) 32px; gap: 6px 8px; }
   .mg-task-row-title { grid-column: 1 / 3; }
@@ -176,7 +197,6 @@ body dialog.mg-task-dialog .mg-task-progress-form button.primary-button { backgr
   .mg-task-mobile-total { display: inline; }
   .mg-task-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mg-task-metrics > div { padding: 9px; }
-  .mg-task-metrics :is(.tone-total,.tone-rate) { display: none; }
   .mg-task-metrics dd { font-size: 21px; }
   .mg-task-details { grid-template-columns: minmax(0, 1fr); }
   .mg-task-row-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }

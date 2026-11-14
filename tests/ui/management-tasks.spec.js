@@ -13,8 +13,8 @@ test("assign, progress and complete a management task across roles", async ({ pa
   const workspace = page.locator("#managementTasksWorkspace");
   await workspace.getByRole("button", { name: "Assign task" }).click();
   const form = page.locator("#managementTaskFormDialog");
-  await form.getByRole("combobox", { name: "Salesman", exact: true }).selectOption("ui-salesman", { timeout: 8000 });
   await form.getByRole("combobox", { name: "Lead / account (optional)", exact: true }).selectOption("ui-lead-1", { timeout: 8000 });
+  await expect(form.getByRole("combobox", { name: "Salesman", exact: true })).toHaveValue("ui-salesman");
   await form.getByLabel("Task", { exact: true }).fill(title);
   await form.getByLabel("Instructions / remarks").fill("Ask for dates and tonnage. Record the confirmed schedule.");
   const deadline = form.getByLabel("Deadline");
@@ -82,8 +82,12 @@ test("assign, progress and complete a management task across roles", async ({ pa
   await page.reload();
   await page.locator('[data-mg-tab="management"]').click();
   await expect(row).toContainText("Completed");
-  await row.locator("summary").click();
-  await expect(row).toContainText(remarks);
+  await row.getByRole("button", { name: "View", exact: true }).click();
+  await expect(form).toContainText(remarks);
+  await expect(form).toContainText("History");
+  await form.getByRole("button", { name: "Close task details" }).click();
+  await row.getByRole("button", { name: "Mark remarks reviewed" }).click();
+  await expect(row).toContainText("Reviewed");
   await expect(row.getByRole("button", { name: "Edit task" })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(info.project.use.viewport.width);
 
