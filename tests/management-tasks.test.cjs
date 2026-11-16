@@ -171,7 +171,7 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
       id uuid primary key default gen_random_uuid(), created_by uuid not null, company_name text not null,
       legal_name text, year_established integer, industry text, location text, address text, phone text,
       website text, google_place_id text, google_maps_url text, google_rating numeric,
-      google_review_count integer, latitude numeric, longitude numeric, business_category text,
+      google_review_count integer, business_category text,
       opening_hours jsonb, enrichment_source text, enrichment_status text,
       enriched_at timestamptz, enrichment_updated_at timestamptz);
       alter table public.companies enable row level security;
@@ -183,6 +183,7 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
       grant select on public.profiles to authenticated;
       alter table public.leads alter column id set default gen_random_uuid(),
         add column company_id uuid references public.companies(id),
+        add column latitude numeric, add column longitude numeric,
         add column lead_status text not null default 'PROSPECT',
         add constraint leads_status_blueprint_check check (lead_status in ('PROSPECT', 'DORMANT'));`);
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261116124651_atomic_initial_management_lead.sql"), "utf8"));
@@ -203,11 +204,12 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     await assert.rejects(() => atomic("Task collision fixture", { initial_management_task_id: taskId }), { code: "23505" });
     assert.equal((await db.query("select count(*)::int as count from public.companies")).rows[0].count, 0,
       "Rejected leads and task failures must not leave company records");
-    const prospect = await atomic("Atomic Prospect fixture");
+    const prospect = await atomic("Atomic Prospect fixture", { latitude: 25.2, longitude: 55.3 });
     assert.equal(prospect.lead_status, "PROSPECT");
     assert.equal(prospect.initial_management_task_id, task3);
     assert.ok(prospect.company_id);
     assert.equal(prospect.next_action_date, null);
+    assert.equal(Number(prospect.latitude), 25.2);
     assert.equal((await list()).filter(task => task.lead_id === prospect.id).length, 1);
 
     await db.exec("reset role; alter table public.leads drop constraint leads_status_blueprint_check");

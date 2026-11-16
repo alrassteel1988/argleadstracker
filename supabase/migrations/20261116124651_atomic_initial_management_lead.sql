@@ -7,7 +7,7 @@ as $$
 declare
   actor_id uuid := auth.uid();
   company_id uuid;
-  input_company public.companies%rowtype;
+  company_columns text;
   lead_columns text;
   insert_lead text;
   saved_id uuid;
@@ -30,21 +30,18 @@ begin
 
   company_id := (p_lead->>'company_id')::uuid;
   if company_id is null then
-    input_company := jsonb_populate_record(null::public.companies, p_lead);
-    insert into public.companies (
-      company_name, legal_name, year_established, industry, location, address, phone, website,
-      google_place_id, google_maps_url, google_rating, google_review_count, latitude, longitude,
-      business_category, opening_hours, enrichment_source, enrichment_status, enriched_at,
-      enrichment_updated_at, created_by
-    ) values (
-      input_company.company_name, input_company.legal_name, input_company.year_established,
-      input_company.industry, input_company.location, input_company.address, input_company.phone,
-      input_company.website, input_company.google_place_id, input_company.google_maps_url,
-      input_company.google_rating, input_company.google_review_count, input_company.latitude,
-      input_company.longitude, input_company.business_category, input_company.opening_hours,
-      input_company.enrichment_source, input_company.enrichment_status, input_company.enriched_at,
-      input_company.enriched_at, actor_id
-    ) returning id into company_id;
+    -- Older CRM databases do not have all optional company enrichment columns.
+    select string_agg(format('%I', a.attname), ', ' order by a.attnum) into company_columns
+      from pg_attribute a
+      where a.attrelid = 'public.companies'::regclass and a.attnum > 0 and not a.attisdropped
+        and a.attname in (
+          'company_name', 'legal_name', 'year_established', 'industry', 'location', 'address', 'phone', 'website',
+          'google_place_id', 'google_maps_url', 'google_rating', 'google_review_count', 'latitude', 'longitude',
+          'business_category', 'opening_hours', 'enrichment_source', 'enrichment_status', 'enriched_at',
+          'enrichment_updated_at', 'created_by'
+        ) and (p_lead ? a.attname::text or a.attname in ('created_by', 'enrichment_updated_at'));
+    execute format('insert into public.companies (%1$s) select %1$s from jsonb_populate_record(null::public.companies, $1) returning id', company_columns)
+      into strict company_id using p_lead || jsonb_build_object('created_by', actor_id, 'enrichment_updated_at', p_lead->'enriched_at');
   end if;
 
   -- Insert only supplied fields so PostgreSQL still applies defaults for omitted fields.
