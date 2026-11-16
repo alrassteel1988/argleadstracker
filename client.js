@@ -193,6 +193,7 @@ const els = {
   authScreen: document.querySelector("#authScreen"),
   appShell: document.querySelector("#appShell"),
   mobileMenuToggle: document.querySelector("#mobileMenuToggle"),
+  salespersonMobileMenu: document.querySelector("#salespersonMobileMenu"),
   closeMobileSidebar: document.querySelector("#closeMobileSidebar"),
   menuBackdrop: document.querySelector("#menuBackdrop"),
   loginForm: document.querySelector("#loginForm"),
@@ -2128,7 +2129,7 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
   els.activityDetailsTitle.innerHTML = pageTitleMarkup(`${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`);
   const attachments = (activity.attachments || []).filter(item => !item.removed_at);
   const history = activity.audit_history || [];
-  const readOnlyLog = state.currentUser?.role === "admin" && currentView === "activity";
+  const readOnlyLog = currentView === "activity" && (state.currentUser?.role === "admin" || isSalesmanRole());
   els.activityDetailsBody.innerHTML = `
     <div class="activity-detail-grid">
       <div class="activity-detail-field"><span>Company</span><strong>${escapeHtml(lead.company_name)}</strong></div>
@@ -2161,7 +2162,7 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
   els.requestActivityDeletionFromDetails.classList.toggle("hidden", readOnlyLog);
   els.requestActivityDeletionFromDetails.disabled = activity.deletion_status === "pending";
   els.requestActivityDeletionFromDetails.textContent = activity.deletion_status === "pending" ? "Deletion Pending" : "Request Deletion";
-  const canCancel = pendingRequest && (
+  const canCancel = !readOnlyLog && pendingRequest && (
     String(pendingRequest.requested_by) === String(state.currentUser?.id)
     || ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase())
   );
@@ -7664,7 +7665,7 @@ function renderSalesmanDashboard() {
 
 // Reference screens are a presentation of the existing, role-scoped CRM records.
 const adminReference = {
-  owner: "", reportsOwner: "", reportsReady: false, reportsError: "", interaction: "latest",
+  activityOwner: "", reportsOwner: "", reportsReady: false, reportsError: "", interaction: "latest",
   dashboard: { owner: "", tab: "team", period: "week" },
   activity: { search: "", date: "all", company: "all", type: "all", origin: "all", person: "all", linked: "all", status: "all", sort: "newest" },
   records: { search: "", stage: "all", person: "all", tier: "all", territory: "all", page: 1 }
@@ -8067,8 +8068,12 @@ function renderReferenceInteractionTabs() {
 }
 
 function adminReferenceActivityRows() {
+  const user = state.currentUser;
+  const personal = user?.role === "salesman";
+  const leads = personal ? state.leads.filter(lead => lead.assigned_to && String(lead.assigned_to) === String(user.id)) : state.leads;
   const people = [state.currentUser, ...(state.userAccounts || []), ...(state.settings.salesmen || []).filter(item => typeof item === "object")].filter(Boolean);
-  return allActivities().filter(item => !item.archived && !item.delete_request).map(activity => {
+  return allActivities(leads).filter(item => !item.archived && !item.delete_request &&
+    (!personal || (!item.pending_sync && item.created_by && String(item.created_by) === String(user.id)))).map(activity => {
     const creator = people.find(person => String(person.id || person.user_id) === String(activity.created_by || ""));
     const assignedBy = people.find(person => String(person.id || person.user_id) === String(activity.assigned_by || activity.task_created_by || ""));
     const manager = person => ["admin", "manager", "director"].includes(String(person?.role || "").toLowerCase());
@@ -8119,13 +8124,22 @@ function adminReferenceFilterMenu(key, label, options) {
 }
 
 function renderReferenceAdminActivity() {
+  const personal = isSalesmanRole();
+  const owner = `${state.currentUser.role}:${state.currentUser.id}`;
+  if (adminReference.activityOwner !== owner) {
+    adminReference.activityOwner = owner;
+    adminReference.activityPage = 1;
+    adminReference.activityPageSize = 50;
+    Object.keys(adminReference.activity).forEach(key => adminReference.activity[key] = key === "search" ? "" : key === "sort" ? "newest" : "all");
+  }
   const root = els.activityView;
   const legacy = root.querySelector(".activity-dashboard");
   legacy?.remove();
   const host = adminReferencePanel("adminReferenceActivity", "admin-ref-activity", root);
+  host.classList.toggle("is-personal", personal);
   const calendarOpen = Boolean(host.querySelector(".admin-ref-calendar")?.open);
   const f = adminReference.activity;
-  const all = adminReferenceActivityRows();
+  const all = personal && !state.leadsLoaded ? [] : adminReferenceActivityRows();
   const filtered = adminReferenceFilterActivity(all);
   const size = adminReference.activityPageSize || 50;
   const pages = Math.max(1, Math.ceil(filtered.length / size));
@@ -8179,30 +8193,40 @@ function renderReferenceAdminActivity() {
     </tr>`;
   };
   const showing = pages > 1 ? `${offset + 1}&ndash;${offset + rows.length} of ${filtered.length}${filtered.length === all.length ? "" : ` (${all.length} total)`}` : `${filtered.length} of ${all.length}`;
-  const emptyMessage = state.leadsLoading ? "Loading activities..." : state.leadsError && !state.leadsLoaded ? escapeHtml(state.leadsError) : all.length ? "No activities match these filters." : "No activities recorded.";
+  const loading = state.leadsLoading || (personal && !state.leadsLoaded && !state.leadsError);
+  const unavailable = Boolean(state.leadsError && !state.leadsLoaded);
+  const emptyMessage = loading ? "Loading activities..." : unavailable ? escapeHtml(state.leadsError) : all.length ? "No activities match these filters." : personal ? "No activity logged on your assigned leads." : "No activities recorded.";
+  const count = n => personal && (loading || unavailable) ? "&mdash;" : n;
+  const cancelled = all.filter(row => row.cancelled).length;
   host.innerHTML = `<section class="admin-ref-activity-stats" aria-label="Activity summary">
-    <article class="admin-ref-stat teal"><span>Activities closed</span><div><strong>${closed}</strong> <b>/ ${all.length}</b> <small>${done} done &middot; ${notReached} not reached</small></div>${adminReferenceProgress(closed, all.length)}</article>
-    <article class="admin-ref-stat warning"><span>Still pending</span><div><strong>${pending}</strong> <small>Awaiting next step</small></div></article>
-    <button class="admin-ref-stat danger admin-activity-missing" type="button" data-admin-activity-filter="status" data-value="${f.status === "missing" ? "all" : "missing"}" aria-pressed="${f.status === "missing"}"><span>No remarks</span><div><strong>${missing}</strong> <small>Unexplained &rsaquo;</small></div></button>
-    <article class="admin-ref-by-person"><span>By salesman &middot; closed</span><div class="admin-activity-people">${[...people].map(([person, counts]) => `<div><span>${preview(person, person === "Not recorded" ? "admin-activity-unknown" : "")}<b>${counts.closed}/${counts.total}</b></span>${adminReferenceProgress(counts.closed, counts.total)}</div>`).join("") || "No activities recorded"}</div></article>
+    <article class="admin-ref-stat teal"><span>Activities closed</span><div><strong>${count(closed)}</strong> <b>/ ${count(all.length)}</b>${personal ? "" : ` <small>${done} done &middot; ${notReached} not reached</small>`}</div>${personal && (loading || unavailable) ? "" : adminReferenceProgress(closed, all.length)}</article>
+    <article class="admin-ref-stat warning"><span>Still pending</span><div><strong>${count(pending)}</strong> <small>Awaiting next step</small></div></article>
+    <button class="admin-ref-stat danger admin-activity-missing" type="button" data-admin-activity-filter="status" data-value="${f.status === "missing" ? "all" : "missing"}" aria-pressed="${f.status === "missing"}"><span>No remarks</span><div><strong>${count(missing)}</strong> <small>Unexplained &rsaquo;</small></div></button>
+    ${personal ? `<article class="admin-ref-stat"><span>Cancelled</span><strong>${count(cancelled)}</strong></article>`
+      : `<article class="admin-ref-by-person"><span>By salesman &middot; closed</span><div class="admin-activity-people">${[...people].map(([person, counts]) => `<div><span>${preview(person, person === "Not recorded" ? "admin-activity-unknown" : "")}<b>${counts.closed}/${counts.total}</b></span>${adminReferenceProgress(counts.closed, counts.total)}</div>`).join("") || "No activities recorded"}</div></article>`}
   </section>
   <section class="admin-ref-table-panel" aria-label="Activity log">
     <div class="admin-ref-toolbar">
       <label class="admin-activity-search">${adminActivityIcon("search")}<input type="text" data-admin-activity-search aria-label="Search notes and remarks" placeholder="Search notes and remarks" value="${escapeHtml(f.search)}"></label>
       <p class="admin-activity-lock">${adminActivityIcon("lock")}<strong>Append-only</strong> <span>&middot; Entries cannot be edited or deleted here.</span></p>
-      <span class="admin-activity-count" aria-live="polite">Showing ${showing}</span>
+      <span class="admin-activity-count" aria-live="polite">${personal && (loading || unavailable) ? "" : `Showing ${showing}`}</span>
       ${tags || f.search ? `<div class="admin-ref-filter-tags">${tags}<button class="text-button admin-ref-danger" type="button" data-admin-clear-all>Clear all</button></div>` : ""}
     </div>
-    <div class="admin-ref-mobile-filters">${definitions.map(args => adminReferenceFilterMenu(...args)).join("")}</div>
+    <div class="admin-ref-mobile-filters">${definitions.filter(([key]) => !personal || key !== "person").map(args => adminReferenceFilterMenu(...args)).join("")}</div>
     <div class="admin-ref-table-scroll" tabindex="0" role="region" aria-label="Activity entries">
-      <table class="admin-ref-table admin-ref-activity-table"><thead><tr>${definitions.slice(0, 5).map(args => `<th scope="col">${adminReferenceFilterMenu(...args)}</th>`).join("")}<th scope="col">Notes</th>${definitions.slice(5).map(args => `<th scope="col">${adminReferenceFilterMenu(...args)}</th>`).join("")}</tr></thead>
-      <tbody>${rows.map(renderRow).join("") || `<tr><td colspan="8" class="empty-copy">${emptyMessage}</td></tr>`}</tbody></table>
+      <table class="admin-ref-table admin-ref-activity-table"><thead><tr>${definitions.slice(0, 5).map(args => `<th scope="col">${personal && args[0] === "person" ? "Logged by" : adminReferenceFilterMenu(...args)}</th>`).join("")}<th scope="col">Notes</th>${definitions.slice(5).map(args => `<th scope="col">${adminReferenceFilterMenu(...args)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(renderRow).join("") || `<tr><td colspan="8" class="empty-copy">${emptyMessage}${personal && unavailable && !loading ? ' <button type="button" class="ghost-button" data-personal-activity-retry>Retry</button>' : ""}</td></tr>`}</tbody></table>
     </div>
     <footer class="admin-ref-table-footer"><span><b>Pending</b> = next step open &middot; <b>Closed</b> = follow-up ended &middot; cancellations stay in history.</span><div class="admin-activity-pagination"><label>Rows per page <select data-admin-activity-size>${[25, 50, 100].map(value => `<option ${value === size ? "selected" : ""}>${value}</option>`).join("")}</select></label><button type="button" class="ghost-button" data-admin-activity-page="${page - 1}" aria-label="Previous page" ${page === 1 ? "disabled" : ""}>&lsaquo;</button><span>Page <b>${page}</b> of ${pages}</span><button type="button" class="ghost-button" data-admin-activity-page="${page + 1}" aria-label="Next page" ${page === pages ? "disabled" : ""}>&rsaquo;</button></div></footer>
   </section>
-  <details class="admin-ref-calendar" ${calendarOpen ? "open" : ""}><summary>Calendar, reminders &amp; review requests</summary><div class="admin-ref-existing-activity"></div></details>`;
+  ${personal ? '<div class="admin-ref-existing-activity hidden"></div>' : `<details class="admin-ref-calendar" ${calendarOpen ? "open" : ""}><summary>Calendar, reminders &amp; review requests</summary><div class="admin-ref-existing-activity"></div></details>`}`;
   if (legacy) host.querySelector(".admin-ref-existing-activity").appendChild(legacy);
   if (els.openActivityDeletionQueue) host.querySelector(".admin-ref-existing-activity").appendChild(els.openActivityDeletionQueue);
+  host.querySelector("[data-personal-activity-retry]")?.addEventListener("click", async () => {
+    const loading = loadLeads();
+    renderActivityView();
+    try { await loading; } catch { renderActivityView(); }
+  });
   const resetPage = () => { adminReference.activityPage = 1; renderReferenceAdminActivity(); };
   host.querySelectorAll("[data-admin-activity-filter]").forEach(button => button.onclick = () => {
     f[button.dataset.adminActivityFilter] = button.dataset.value;
@@ -8261,8 +8285,10 @@ function renderReferenceAdminActivity() {
     });
   });
   host.querySelector(".admin-ref-table-scroll").onscroll = () => filters.forEach(filter => { filter.open = false; });
-  document.querySelector("[data-admin-log-activity]").onclick = event => openActivityModal("", event.currentTarget);
-  document.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, statusLabel(row), row.outcome, row.remarks]));
+  if (!personal) {
+    document.querySelector("[data-admin-log-activity]").onclick = event => openActivityModal("", event.currentTarget);
+    document.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, statusLabel(row), row.outcome, row.remarks]));
+  }
   host.querySelectorAll("[data-admin-activity-history]").forEach(button => button.onclick = () => {
     openActivityDetails(button.dataset.adminActivityHistory, Number(button.dataset.index), button.dataset.activityId);
     // This read-only entry point must not expose amendment or deletion controls.
@@ -8346,7 +8372,8 @@ function renderReferenceAdminShell() {
   const admin = state.currentUser?.role === "admin";
   document.body.classList.toggle("admin-reference-mode", admin);
   const activityMode = admin && currentView === "activity";
-  document.body.classList.toggle("admin-activity-mode", activityMode);
+  const personalActivityMode = isSalesmanRole() && currentView === "activity";
+  document.body.classList.toggle("admin-activity-mode", activityMode || personalActivityMode);
   const activityActions = document.getElementById("adminActivityHeaderActions");
   activityActions?.classList.toggle("hidden", !activityMode);
   if (activityMode && activityActions && !activityActions.firstElementChild.firstElementChild) {
@@ -8363,7 +8390,7 @@ function renderReferenceAdminShell() {
   const activityHost = document.getElementById("adminReferenceActivity");
   if (!admin) {
     document.getElementById("adminReferenceNavigation")?.classList.add("hidden");
-    if (activityHost) {
+    if (activityHost && !personalActivityMode) {
       const legacy = activityHost.querySelector(".activity-dashboard");
       if (legacy) els.activityView.prepend(legacy);
       activityHost.remove();
@@ -8371,12 +8398,6 @@ function renderReferenceAdminShell() {
     return;
   }
   const owner = String(state.currentUser.id || "");
-  if (adminReference.owner !== owner) {
-    adminReference.owner = owner;
-    adminReference.activityPage = 1;
-    adminReference.activityPageSize = 50;
-    Object.keys(adminReference.activity).forEach(key => adminReference.activity[key] = key === "search" ? "" : key === "sort" ? "newest" : "all");
-  }
   if (adminReference.reportsOwner !== owner) {
     adminReference.reportsOwner = owner;
     adminReference.reportsReady = false;
@@ -10317,8 +10338,8 @@ function renderTopbar() {
         : "Confirm the week, explain exceptions, and submit one clean report."
     },
     activity: {
-      title: "Activity",
-      context: `${weekRangeLabel()} · ${currentWeekItems.length} scheduled move${currentWeekItems.length === 1 ? "" : "s"}`
+      title: isSalesmanRole() ? "My activity" : "Activity",
+      context: isSalesmanRole() ? "Your logged activities on leads currently assigned to you." : `${weekRangeLabel()} · ${currentWeekItems.length} scheduled move${currentWeekItems.length === 1 ? "" : "s"}`
     },
     lead: {
       title: selectedLead?.company_name || "Lead Detail",
@@ -13016,8 +13037,8 @@ function renderActionPlanPanel() {
   if (state.currentUser?.role === "admin" && currentView === "dashboard") arrangeReferenceAdminDashboard();
 }
 
-function allActivities() {
-  return state.leads.flatMap(lead => (lead.activities || []).map((activity, index) => ({ ...activity, company_name: lead.company_name, lead_id: lead.id, activity_index: index,
+function allActivities(leads = state.leads) {
+  return leads.flatMap(lead => (lead.activities || []).map((activity, index) => ({ ...activity, company_name: lead.company_name, lead_id: lead.id, activity_index: index,
     followup_retired: isReminderActivity(activity) && followupRetiredReminder(activity, lead.activities) })))
     .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
@@ -15641,7 +15662,7 @@ function renderActivityCalendarVisibility() {
 function renderActivityView() {
   renderActivityCalendarVisibility();
   renderLegacyActivityView();
-  if (state.currentUser?.role === "admin" && currentView === "activity") {
+  if (currentView === "activity" && (state.currentUser?.role === "admin" || isSalesmanRole())) {
     renderReferenceAdminActivity();
   }
 }
@@ -16061,7 +16082,7 @@ function arrangeLeadRecordControls() {
 function applyView() {
   arrangeLeadRecordControls();
   if (state.currentUser && state.currentUser.role !== "admin" && ["quotes", "accounts"].includes(currentView)) currentView = "pipeline";
-  if (isSalesmanRole() && ["salesmen", "activity"].includes(currentView)) {
+  if (isSalesmanRole() && currentView === "salesmen") {
     currentView = "dashboard";
   }
   if (!isSalesmanRole() && (currentView === "focus" || currentView === "neglected" && !isPrivilegedDashboardRole())) currentView = "ai-actions";
@@ -16124,6 +16145,7 @@ function closeMobileMenu() {
   document.body.classList.remove("menu-open");
   els.menuBackdrop?.classList.add("hidden");
   els.mobileMenuToggle?.setAttribute("aria-expanded", "false");
+  els.salespersonMobileMenu?.setAttribute("aria-expanded", "false");
 }
 
 function toggleMobileMenu() {
@@ -16131,13 +16153,14 @@ function toggleMobileMenu() {
   document.body.classList.toggle("menu-open", open);
   els.menuBackdrop?.classList.toggle("hidden", !open);
   els.mobileMenuToggle?.setAttribute("aria-expanded", String(open));
+  els.salespersonMobileMenu?.setAttribute("aria-expanded", String(open));
 }
 
 function setView(view) {
   if (["quotes", "accounts"].includes(view) && state.currentUser?.role !== "admin") view = "pipeline";
   if (view !== "draft-email") state.emailRouteLeadId = "";
   if (view !== "meeting-prep") state.meetingRouteLeadId = "";
-  if (isSalesmanRole() && ["salesmen", "activity"].includes(view)) view = "dashboard";
+  if (isSalesmanRole() && view === "salesmen") view = "dashboard";
   if (!isSalesmanRole() && (view === "focus" || view === "neglected" && !isPrivilegedDashboardRole())) view = "ai-actions";
   if (view !== "lead" && !(view === "draft-email" && state.emailRouteLeadId) && !(view === "meeting-prep" && state.meetingRouteLeadId)) state.lastNonLeadView = view;
   currentView = view;
@@ -16268,8 +16291,15 @@ function showLogin(message = "") {
   for (const id of ["managementTasksWorkspace", "managementTasksDrawerSummary", "managementTasksDrawerList", "managementTasksDrawerCount", "managementTaskForm", "managementTasksDashboard", "managementTasksMetric"]) {
     document.getElementById(id)?.replaceChildren();
   }
-  document.body.classList.remove("admin-reference-mode");
-  adminReference.owner = "";
+  document.body.classList.remove("admin-reference-mode", "admin-activity-mode");
+  adminReference.activityOwner = "";
+  const activityHost = document.getElementById("adminReferenceActivity");
+  const legacyActivity = activityHost?.querySelector(".activity-dashboard");
+  if (legacyActivity) els.activityView.prepend(legacyActivity);
+  activityHost?.remove();
+  if (els.activityDetailsDialog?.open) els.activityDetailsDialog.close();
+  els.activityDetailsBody?.replaceChildren();
+  activityDetailsSelection = null;
   adminReference.dashboard.owner = "";
   document.getElementById("cleanAdminDashboard")?.remove();
   adminReference.reportsOwner = "";
@@ -16335,9 +16365,6 @@ function configureRoleUi(user) {
   document.querySelectorAll('.sidebar [data-view="salesmen"]').forEach(item => {
     item.classList.toggle("hidden", !privileged);
   });
-  document.querySelectorAll('.sidebar [data-view="activity"]').forEach(item => {
-    item.classList.toggle("hidden", salesman);
-  });
   els.sidebarToolsMenu?.classList.toggle("hidden", salesman);
   els.sidebarSearchPlaces?.classList.toggle("hidden", salesman);
   els.openPlacesSearch?.classList.toggle("hidden", salesman);
@@ -16370,7 +16397,7 @@ function configureRoleUi(user) {
   renderConfigAgentPanel();
   if (salesman) {
     state.filters.salesman = "all";
-    if (["salesmen", "activity"].includes(currentView)) currentView = "dashboard";
+    if (currentView === "salesmen") currentView = "dashboard";
   }
 }
 
@@ -17184,6 +17211,7 @@ els.logoutButton.addEventListener("click", async () => {
 });
 
 els.mobileMenuToggle?.addEventListener("click", toggleMobileMenu);
+els.salespersonMobileMenu?.addEventListener("click", toggleMobileMenu);
 els.closeMobileSidebar?.addEventListener("click", closeMobileMenu);
 els.menuBackdrop?.addEventListener("click", closeMobileMenu);
 window.addEventListener("resize", () => {

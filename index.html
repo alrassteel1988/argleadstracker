@@ -34,14 +34,14 @@
   <link rel="stylesheet" href="/crm-icons.css?v=1">
   <link rel="stylesheet" href="/crm-controls.css?v=1">
   <link rel="stylesheet" href="/crm-shell.css?v=3-branding">
-  <link rel="stylesheet" href="/crm-dashboard.css?v=17-neglected-activities">
+  <link rel="stylesheet" href="/crm-dashboard.css?v=20-salesman-activity-only">
   <link rel="stylesheet" href="/crm-data.css?v=1">
   <link rel="stylesheet" href="/crm-record.css?v=9-lead-sidebar-height">
   <link rel="stylesheet" href="/crm-activity.css?v=1">
   <link rel="stylesheet" href="/crm-team.css?v=1">
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
-  <link rel="stylesheet" href="/admin-dashboard-clean.css?v=12-activity-compact">
+  <link rel="stylesheet" href="/admin-dashboard-clean.css?v=13-personal-activity">
   <link rel="stylesheet" href="/management-tasks.css?v=2">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
@@ -225,7 +225,10 @@
           <div class="panel salesman-simplified-dashboard dashboard-grid hidden" id="salesmanSimplifiedDashboard">
             <header class="salesperson-mobile-header">
               <div><p id="salespersonMobileDate"></p><h1 id="salespersonMobileGreeting"></h1></div>
-              <button type="button" class="ghost-button salesperson-mobile-search" data-dashboard-search aria-label="Search CRM" title="Search CRM" aria-expanded="false" aria-controls="salespersonDashboardSearchTools"></button>
+              <div class="salesperson-mobile-header-actions">
+                <button type="button" class="ghost-button salesperson-mobile-search" data-dashboard-search aria-label="Search CRM" title="Search CRM" aria-expanded="false" aria-controls="salespersonDashboardSearchTools"></button>
+                <button type="button" class="ghost-button salesperson-mobile-menu" id="salespersonMobileMenu" aria-label="Menu" title="Menu" aria-expanded="false" aria-controls="mobileSidebar"></button>
+              </div>
             </header>
             <div class="salesman-simplified-metrics" id="salesmanSimplifiedMetrics"></div>
             <div class="salesperson-dashboard-layout">
@@ -1819,7 +1822,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=management-tasks-drawer"></script>
+  <script src="/client.js?v=salesman-activity-only"></script>
   </body>
 </html>
 
