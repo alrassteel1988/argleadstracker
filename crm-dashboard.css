@@ -1406,8 +1406,11 @@ body.salesman-dashboard-mode #appShell .salesperson-pipeline-breakdown > summary
   body.salesman-dashboard-mode #appShell #salespersonMobileDate { margin: 0 0 3px; color: #4a5568; font-size: 11px; font-weight: 600; text-transform: uppercase; }
   body.salesman-dashboard-mode #appShell #salespersonMobileGreeting { margin: 0; font: 800 24px/1.15 var(--crm-font-ui); color: #0b3b75 !important; overflow-wrap: anywhere; }
   body.salesman-dashboard-mode #appShell #salespersonMobileGreeting em { font-weight: 400; }
-  body.salesman-dashboard-mode #appShell .salesperson-mobile-search { flex: 0 0 44px; width: 44px !important; height: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; border-radius: 10px !important; }
-  body.salesman-dashboard-mode #appShell .salesperson-mobile-search::before { content: ""; display: block; position: static; width: 18px; height: 18px; background: currentColor; mask: var(--crm-icon-search) center / contain no-repeat; }
+  body.salesman-dashboard-mode #appShell .salesperson-mobile-header-actions { display: flex; gap: 6px; }
+  body.salesman-dashboard-mode #appShell :is(.salesperson-mobile-search, .salesperson-mobile-menu) { flex: 0 0 44px; width: 44px !important; height: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; border-radius: 10px !important; }
+  body.salesman-dashboard-mode #appShell :is(.salesperson-mobile-search, .salesperson-mobile-menu)::before { content: ""; display: block; position: static; width: 18px; height: 18px; background: currentColor; mask: var(--crm-icon-search) center / contain no-repeat; }
+  body.salesman-dashboard-mode #appShell .salesperson-mobile-menu::before { mask-image: var(--crm-icon-menu); }
+  body.salesman-dashboard-mode.salesperson-dashboard-search-open #appShell .salesperson-mobile-menu { display: none; }
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard :is(.salesperson-dashboard-layout, .salesperson-dashboard-primary, .salesperson-dashboard-secondary) { display: contents; }
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-mobile-header { order: 0; }
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-followup-card { order: 1; display: grid; gap: 12px; padding: 0; border: 0 !important; background: none !important; }

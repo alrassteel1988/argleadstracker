@@ -1256,57 +1256,57 @@ body.admin-reference-mode #tasksView .tasks-grid { gap: 20px; }
 body.admin-reference-mode #tasksView :is(.tasks-section-card, .tasks-card, .tasks-workspace-header, .tasks-review-shell, .tasks-sidebar-card) { border-color: var(--admin-ref-border); border-radius: 14px; box-shadow: none; background: #fff; }
 body.admin-reference-mode #tasksView :is(h2, h3) { letter-spacing: 0; }
 body.admin-reference-mode #tasksView .tasks-workspace-header { padding: 20px; }
-body.admin-reference-mode .admin-ref-activity-stats { display: grid; grid-template-columns: 1.2fr .8fr .8fr 1.4fr; gap: 14px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-activity-stats { display: grid; grid-template-columns: 1.2fr .8fr .8fr 1.4fr; gap: 14px; }
 body.admin-reference-mode .admin-ref-quote-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
-body.admin-reference-mode .admin-ref-stat, body.admin-reference-mode .admin-ref-by-person { background: #fff; border: 1px solid var(--admin-ref-border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-body.admin-reference-mode .admin-ref-stat strong { font-size: 28px; }
-body.admin-reference-mode .admin-ref-stat small { color: var(--admin-ref-muted); font-size: 12px; }
-body.admin-reference-mode .admin-ref-stat.danger { background: #fdf0ef; border-color: #facac7; }
-body.admin-reference-mode .danger strong, body.admin-reference-mode .admin-ref-danger { color: #b42318; }
-body.admin-reference-mode .teal strong { color: var(--admin-ref-teal); }
-body.admin-reference-mode .warning strong { color: #80570e; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-stat, body.admin-reference-mode .admin-ref-by-person { background: #fff; border: 1px solid var(--admin-ref-border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-stat strong { font-size: 28px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-stat small { color: var(--admin-ref-muted); font-size: 12px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-stat.danger { background: #fdf0ef; border-color: #facac7; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .danger strong, :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-danger { color: #b42318; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .teal strong { color: var(--admin-ref-teal); }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .warning strong { color: #80570e; }
 body.admin-reference-mode .admin-ref-by-person > div { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: center; font-size: 12px; }
-body.admin-reference-mode progress { display: block; appearance: none; height: 6px; width: 100%; border: 0; border-radius: 99px; background: #edf1f5; }
-body.admin-reference-mode progress::-webkit-progress-bar { background: #edf1f5; border-radius: 99px; }
-body.admin-reference-mode progress::-webkit-progress-value { background: var(--admin-ref-teal); border-radius: 99px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) progress { display: block; appearance: none; height: 6px; width: 100%; border: 0; border-radius: 99px; background: #edf1f5; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) progress::-webkit-progress-bar { background: #edf1f5; border-radius: 99px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) progress::-webkit-progress-value { background: var(--admin-ref-teal); border-radius: 99px; }
 body.admin-reference-mode .admin-ref-lock { padding: 12px 18px; margin: 20px 0; background: var(--admin-ref-navy); color: #fff; border-radius: 8px; font-size: 13px; }
-body.admin-reference-mode .admin-ref-table-panel { border: 1px solid #bfe3e0; background: #fff; border-radius: 14px; overflow: visible; }
-body.admin-reference-mode .admin-ref-table-scroll { width: 100%; overflow-x: auto; }
-body.admin-reference-mode .admin-ref-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-body.admin-reference-mode .admin-ref-table :is(th, td) { padding: 16px; border-bottom: 1px solid var(--admin-ref-border); font-size: 13px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-body.admin-reference-mode .admin-ref-table th { font-size: 10px; color: var(--admin-ref-muted); background: #f8fafc; font-weight: 700; }
-body.admin-reference-mode .admin-ref-table td small { display: block; font-size: 11px; color: var(--admin-ref-muted); margin-top: 5px; }
-body.admin-reference-mode .admin-ref-table .text-button { padding: 0; text-align: left; font-size: inherit; white-space: normal; }
-body.admin-reference-mode .admin-ref-activity-table th:nth-child(6) { width: 15%; }
-body.admin-reference-mode .admin-ref-activity-table th:last-child { width: 25%; }
-body.admin-reference-mode .admin-ref-activity-table th:nth-child(3) { width: 8%; }
-body.admin-reference-mode .admin-ref-table td .admin-ref-status p { margin: 8px 0; line-height: 1.6; }
-body.admin-reference-mode .admin-ref-table .is-unexplained { background: #fffbf4; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table-panel { border: 1px solid #bfe3e0; background: #fff; border-radius: 14px; overflow: visible; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table-scroll { width: 100%; overflow-x: auto; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table :is(th, td) { padding: 16px; border-bottom: 1px solid var(--admin-ref-border); font-size: 13px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table th { font-size: 10px; color: var(--admin-ref-muted); background: #f8fafc; font-weight: 700; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table td small { display: block; font-size: 11px; color: var(--admin-ref-muted); margin-top: 5px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table .text-button { padding: 0; text-align: left; font-size: inherit; white-space: normal; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-activity-table th:nth-child(6) { width: 15%; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-activity-table th:last-child { width: 25%; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-activity-table th:nth-child(3) { width: 8%; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table td .admin-ref-status p { margin: 8px 0; line-height: 1.6; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table .is-unexplained { background: #fffbf4; }
 body.admin-reference-mode .admin-ref-heading-actions { display: flex; justify-content: end; gap: 8px; margin-bottom: 16px; }
-body.admin-reference-mode .admin-ref-toolbar { padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border-bottom: 1px solid var(--admin-ref-border); }
-body.admin-reference-mode .admin-ref-toolbar > input { flex: 1 1 240px; width: auto; max-width: 400px; }
-body.admin-reference-mode .admin-ref-toolbar :is(input, select) { border: 1px solid #c9d1dc; border-radius: 8px; min-height: 40px; background: #fff; color: #0b2545; }
-body.admin-reference-mode .admin-ref-filter-tags { display: flex; flex: 1; flex-wrap: wrap; align-items: center; justify-content: end; gap: 8px; font-size: 12px; color: var(--admin-ref-muted); }
-body.admin-reference-mode .admin-ref-tag { display: inline-flex; align-items: center; border: 0; border-radius: 99px; padding: 4px 9px; font-size: 11px; line-height: 1.4; background: #edf1f5; color: #4a5568; }
-body.admin-reference-mode .admin-ref-tag.navy { color: #0b3b75; background: #e5eef7; }
-body.admin-reference-mode .admin-ref-tag.teal { color: #1f6f6a; background: #dff2ef; }
-body.admin-reference-mode .admin-ref-tag.warning { color: #80570e; background: #fff3db; }
-body.admin-reference-mode .admin-ref-filter { position: relative; display: inline-block; font-size: 11px; }
-body.admin-reference-mode .admin-ref-filter summary { list-style: none; display: flex; gap: 6px; cursor: pointer; border-radius: 6px; padding: 7px; }
-body.admin-reference-mode .admin-ref-filter summary::-webkit-details-marker { display: none; }
-body.admin-reference-mode .admin-ref-filter.is-active summary { color: #0b3b75; background: #e5eef7; }
-body.admin-reference-mode .admin-ref-filter > div { position: absolute; z-index: 30; top: 100%; left: 0; min-width: 230px; max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid var(--admin-ref-border); border-radius: 8px; box-shadow: 0 10px 25px #0b254526; padding: 8px; }
-body.admin-reference-mode .admin-ref-filter > div button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 6px; padding: 12px; color: #0b2545; white-space: normal; }
-body.admin-reference-mode .admin-ref-filter > div button[aria-pressed="true"] { background: #edf4fb; font-weight: 700; }
-body.admin-reference-mode .admin-ref-activity-table th:nth-last-child(-n+2) .admin-ref-filter > div { left: auto; right: 0; }
-body.admin-reference-mode .admin-ref-mobile-filters { display: none; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-toolbar { padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border-bottom: 1px solid var(--admin-ref-border); }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-toolbar > input { flex: 1 1 240px; width: auto; max-width: 400px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-toolbar :is(input, select) { border: 1px solid #c9d1dc; border-radius: 8px; min-height: 40px; background: #fff; color: #0b2545; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter-tags { display: flex; flex: 1; flex-wrap: wrap; align-items: center; justify-content: end; gap: 8px; font-size: 12px; color: var(--admin-ref-muted); }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-tag { display: inline-flex; align-items: center; border: 0; border-radius: 99px; padding: 4px 9px; font-size: 11px; line-height: 1.4; background: #edf1f5; color: #4a5568; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-tag.navy { color: #0b3b75; background: #e5eef7; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-tag.teal { color: #1f6f6a; background: #dff2ef; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-tag.warning { color: #80570e; background: #fff3db; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter { position: relative; display: inline-block; font-size: 11px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter summary { list-style: none; display: flex; gap: 6px; cursor: pointer; border-radius: 6px; padding: 7px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter summary::-webkit-details-marker { display: none; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter.is-active summary { color: #0b3b75; background: #e5eef7; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter > div { position: absolute; z-index: 30; top: 100%; left: 0; min-width: 230px; max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid var(--admin-ref-border); border-radius: 8px; box-shadow: 0 10px 25px #0b254526; padding: 8px; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter > div button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 6px; padding: 12px; color: #0b2545; white-space: normal; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter > div button[aria-pressed="true"] { background: #edf4fb; font-weight: 700; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-activity-table th:nth-last-child(-n+2) .admin-ref-filter > div { left: auto; right: 0; }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-mobile-filters { display: none; }
 body.admin-reference-mode .admin-ref-record-tabs { display: flex; flex-wrap: wrap; padding: 16px; gap: 8px; }
 body.admin-reference-mode .admin-ref-record-tabs button { background: #fff; border: 1px solid #c9d1dc; border-radius: 99px; min-height: 38px; padding: 8px 14px; color: #0b3b75; }
 body.admin-reference-mode .admin-ref-record-tabs button[aria-pressed="true"] { background: #0b3b75; color: #fff; border-color: #0b3b75; }
 body.admin-reference-mode .admin-ref-record-tabs b { margin-left: 6px; font-size: 11px; }
 body.admin-reference-mode .admin-ref-row-actions { display: flex; gap: 6px; }
 body.admin-reference-mode .admin-ref-row-actions > * { display: inline-flex; justify-content: center; align-items: center; width: 34px; height: 34px; padding: 6px; min-width: 34px; text-decoration: none; }
-body.admin-reference-mode .admin-ref-table-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 16px; font-size: 12px; color: var(--admin-ref-muted); }
+:is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 16px; font-size: 12px; color: var(--admin-ref-muted); }
 body.admin-reference-mode .admin-ref-record-note { font-size: 12px; color: var(--admin-ref-muted); margin-top: 16px; }
 body.admin-reference-mode .admin-ref-calendar { margin-top: 20px; }
 body.admin-reference-mode #adminReferenceActivity .activity-log-panel, body.admin-reference-mode #adminReferenceActivity .activity-kpi-grid { display: none; }
@@ -1340,27 +1340,27 @@ body.admin-reference-mode #adminReferenceActivity .activity-dashboard { padding:
   body.admin-reference-mode #salesmenView .salesmen-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body.admin-reference-mode #salesmenView .salesmen-filter-grid > label { flex: 1 1 130px; }
   body.admin-reference-mode #salesmenView .salesmen-directory-table { min-width: 0; }
-  body.admin-reference-mode .admin-ref-stat { padding: 12px; }
-  body.admin-reference-mode .admin-ref-stat strong { font-size: 23px; }
-  body.admin-reference-mode .admin-ref-stat small { font-size: 10px; }
-  body.admin-reference-mode .admin-ref-stat > span { font-size: 9px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-stat { padding: 12px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-stat strong { font-size: 23px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-stat small { font-size: 10px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-stat > span { font-size: 9px; }
   body.admin-reference-mode .admin-ref-by-person { display: none; }
-  body.admin-reference-mode .admin-ref-table { display: block; min-width: 0; }
-  body.admin-reference-mode .admin-ref-table thead { display: none; }
-  body.admin-reference-mode .admin-ref-table tbody { display: grid; gap: 12px; }
-  body.admin-reference-mode .admin-ref-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; border: 1px solid var(--admin-ref-border); border-radius: 12px; background: #fff; }
-  body.admin-reference-mode .admin-ref-table tbody td { display: block; border: 0; padding: 7px; font-size: 12px; }
-  body.admin-reference-mode .admin-ref-table tbody td::before { content: attr(data-label); display: block; font-size: 10px; color: var(--admin-ref-muted); margin-bottom: 6px; }
-  body.admin-reference-mode .admin-ref-table tbody td:first-child, body.admin-reference-mode .admin-ref-table tbody td:last-child,
-  body.admin-reference-mode .admin-ref-activity-table tbody td:nth-child(2), body.admin-reference-mode .admin-ref-activity-table tbody td:nth-child(6) { grid-column: 1 / -1; }
-  body.admin-reference-mode .admin-ref-table-panel { background: transparent; border: 0; }
-  body.admin-reference-mode .admin-ref-toolbar { padding: 0 0 12px; border: 0; }
-  body.admin-reference-mode .admin-ref-filter-tags { justify-content: start; flex-basis: 100%; }
-  body.admin-reference-mode .admin-ref-toolbar > input, body.admin-reference-mode .admin-ref-toolbar > select { width: 100%; max-width: none; flex: 1 1 130px; }
-  body.admin-reference-mode .admin-ref-mobile-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 12px; }
-  body.admin-reference-mode .admin-ref-mobile-filters .admin-ref-filter summary { border: 1px solid #c9d1dc; background: #fff; min-height: 38px; align-items: center; }
-  body.admin-reference-mode .admin-ref-mobile-filters .admin-ref-filter:nth-child(even) > div { left: auto; right: 0; }
-  body.admin-reference-mode .admin-ref-table-footer { padding: 12px 0; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table { display: block; min-width: 0; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table thead { display: none; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table tbody { display: grid; gap: 12px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; border: 1px solid var(--admin-ref-border); border-radius: 12px; background: #fff; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table tbody td { display: block; border: 0; padding: 7px; font-size: 12px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table tbody td::before { content: attr(data-label); display: block; font-size: 10px; color: var(--admin-ref-muted); margin-bottom: 6px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table tbody td:first-child, :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table tbody td:last-child,
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-activity-table tbody td:nth-child(2), :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-activity-table tbody td:nth-child(6) { grid-column: 1 / -1; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table-panel { background: transparent; border: 0; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-toolbar { padding: 0 0 12px; border: 0; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-filter-tags { justify-content: start; flex-basis: 100%; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-toolbar > input, :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-toolbar > select { width: 100%; max-width: none; flex: 1 1 130px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-mobile-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 12px; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-mobile-filters .admin-ref-filter summary { border: 1px solid #c9d1dc; background: #fff; min-height: 38px; align-items: center; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-mobile-filters .admin-ref-filter:nth-child(even) > div { left: auto; right: 0; }
+  :is(body.admin-reference-mode, body.admin-activity-mode :where(#adminReferenceActivity)) .admin-ref-table-footer { padding: 12px 0; }
   body.admin-reference-mode .admin-ref-record-tabs { padding: 0 0 12px; }
   body.admin-reference-mode .admin-ref-row-actions > * { width: 44px; height: 44px; }
   body.admin-reference-mode #appShell button { min-height: 40px; }
@@ -1789,6 +1789,11 @@ body.admin-activity-mode #appShell :is(.admin-activity-header-actions button, #a
 .admin-activity-header-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 :is(.admin-activity-header-actions, #adminReferenceActivity) svg { display: inline-block; width: 14px; height: 14px; flex: 0 0 auto; vertical-align: middle; }
 #adminReferenceActivity { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+#adminReferenceActivity.is-personal {
+  --admin-ref-border: #e3e8ef;
+  --admin-ref-muted: #596579;
+  --admin-ref-teal: #1f6f6a;
+}
 body.admin-activity-mode #appShell .admin-ref-activity-stats {
   grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, .94fr)) minmax(0, 2.2fr);
   gap: 0; border: 1px solid #dfe5ee; border-radius: 14px; background: #fff; overflow: hidden;
@@ -1797,6 +1802,9 @@ body.admin-activity-mode #appShell .admin-ref-activity-stats > * {
   border: 0 !important; border-inline-end: 1px solid #e3e8ef !important; border-radius: 0; padding: 10px 14px; gap: 4px;
 }
 body.admin-activity-mode #appShell .admin-ref-activity-stats > :last-child { border-inline-end: 0 !important; grid-column: auto; }
+body.admin-activity-mode #appShell #adminReferenceActivity.is-personal .admin-ref-activity-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 #adminReferenceActivity .admin-ref-activity-stats > * > span { font-size: 10px; font-weight: 750; text-transform: uppercase; color: #475569; }
 #adminReferenceActivity .admin-ref-stat strong { font-size: 23px; line-height: 1.15; }
 #adminReferenceActivity .admin-ref-stat small { font-size: 11px; margin-left: 3px; }
@@ -1893,6 +1901,9 @@ body.admin-activity-mode #appShell #adminReferenceActivity .admin-activity-searc
 
 @media (max-width: 700px) {
   body.admin-activity-mode #appShell .topbar-actions { grid-template-columns: minmax(0, 1fr) 44px !important; }
+  body.admin-activity-mode #appShell #adminReferenceActivity.is-personal .admin-ref-activity-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .admin-activity-header-actions { grid-column: 1; }
   .admin-activity-header-actions button { flex: 1 1 auto; min-height: 44px !important; }
   body.admin-activity-mode #appShell .admin-ref-activity-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }

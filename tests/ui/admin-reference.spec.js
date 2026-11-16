@@ -204,9 +204,9 @@ test("v3 lead previews preserve keyboard access, scoped Pipeline links and narro
 });
 
 test("Admin activity filters origin, notes and status without mutation controls", async ({ page }, info) => {
-  const role = await login(page, info);
+  test.skip(!info.project.name.startsWith("admin"), "Admin layout only");
+  await login(page, info);
   await page.goto("/?view=activity");
-  if (role !== "admin") { await expect(page.locator("#activityView")).toBeHidden(); return; }
   const host = page.locator("#adminReferenceActivity");
   await expect(host.locator(".admin-ref-activity-table tbody tr")).toHaveCount(18);
   const menu = host.locator(info.project.name.endsWith("mobile") ? ".admin-ref-mobile-filters" : "thead");
@@ -244,6 +244,41 @@ test("Admin activity filters origin, notes and status without mutation controls"
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await capture(page, info, "admin-activity-compact-mobile");
   }
+});
+
+test("Salesman activity sidebar opens a personal read-only log", async ({ page }, info) => {
+  test.skip(!info.project.name.startsWith("salesman"), "Salesman layout only");
+  await login(page, info);
+  if (info.project.name.endsWith("mobile")) await page.locator("#salespersonMobileMenu").click();
+  const nav = page.locator('#mobileSidebar [data-view="activity"]');
+  await expect(nav).toBeVisible();
+  await nav.click();
+  await expect(page).toHaveURL(/\?view=activity$/);
+  await expect(page.locator("#topbarPageTitle")).toHaveText("My activity");
+  const host = page.locator("#adminReferenceActivity.is-personal");
+  await expect(host.locator(".admin-activity-count")).toHaveText("Showing 11 of 11");
+  await expect(host.locator("tbody")).not.toContainText(/Steel Company (01|13)|Demo Admin/);
+  await expect(host.locator("tbody")).toContainText("Steel Company 02");
+  await expect(host.locator("tbody")).toContainText("Steel Company 12");
+  await expect(host.locator(".admin-ref-by-person, .admin-ref-calendar")).toHaveCount(0);
+  await expect(page.locator("#adminActivityHeaderActions")).toBeHidden();
+  const serverLeads = await page.evaluate(async () => (await api("/api/leads")).map(({id, assigned_to}) => ({id, assigned_to})));
+  expect(serverLeads).toHaveLength(12);
+  expect(serverLeads.every(lead => lead.assigned_to === "ui-salesman")).toBe(true);
+  await host.getByRole("textbox", { name: "Search notes and remarks" }).fill("requirements confirmed");
+  await expect(host.locator(".admin-activity-count")).toContainText("Showing 1 of 11");
+  await host.getByRole("button", { name: "History and details" }).click();
+  await expect(page.locator("#activityDetailsDialog")).toBeVisible();
+  await expect(page.locator("#activityDetailsBody")).toContainText("Synthetic customer requirements confirmed.");
+  await expect(page.locator("#editActivityFromDetails")).toBeHidden();
+  await expect(page.locator("#requestActivityDeletionFromDetails")).toBeHidden();
+  await page.keyboard.press("Escape");
+  await host.getByRole("button", { name: "Clear all" }).click();
+  await expect(host.locator("tbody tr")).toHaveCount(11);
+  await page.reload();
+  await expect(host.locator("tbody tr")).toHaveCount(11);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  await capture(page, info, "salesman-activity", { fullPage: false });
 });
 
 test("Admin activity paginates records without changing summary totals", async ({ page }, info) => {
