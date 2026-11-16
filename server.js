@@ -51,6 +51,9 @@ const {
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
 const { canReadManagementTask, validateManagementTask, saveLocalManagementTask } = require("./src/services/managementTaskService");
 const { canResolveLeadFollowup, isResolvedReminder, validateLeadFollowup, resolveLocalLeadFollowup } = require("./src/services/leadFollowupService");
+const { PROTECTED: SCHEDULE_PROTECTED, activeSchedule, scheduleState, initialSchedule, requestScheduleChange,
+  scheduleEditDeadline, schedulePatchChanges, outcomeScheduleEvent, activityScheduleReport, isPendingReminder,
+  matchesActiveStep } = require("./src/services/activityScheduleService");
 const {
   enrichCompanyFromGoogle,
   enrichHunter,
@@ -404,6 +407,7 @@ function readDb() {
   db.notifications = Array.isArray(db.notifications) ? db.notifications : [];
   db.management_tasks = Array.isArray(db.management_tasks) ? db.management_tasks : [];
   db.management_task_events = Array.isArray(db.management_task_events) ? db.management_task_events : [];
+  db.activity_schedule_events = Array.isArray(db.activity_schedule_events) ? db.activity_schedule_events : [];
   db.weekly_reports = Array.isArray(db.weekly_reports) ? db.weekly_reports : [];
   db.weekly_report_versions = Array.isArray(db.weekly_report_versions) ? db.weekly_report_versions : [];
   db.weekly_report_reviews = Array.isArray(db.weekly_report_reviews) ? db.weekly_report_reviews : [];
@@ -1428,6 +1432,8 @@ function normalizeReminderActivity(input, lead, user) {
     due_time: String(input.due_time || "09:00").trim(),
     reminder_status: "scheduled",
     transaction_status: "pending",
+    ...(user?.id ? { created_by: user.id, created_by_name: user.name || user.email || "",
+      created_at: new Date().toISOString() } : {}),
     google_calendar_url: googleCalendarUrl({
       title,
       details,
@@ -3768,6 +3774,15 @@ async function persistActivityCollection(db, user, lead, activities, supabaseEna
   return persistLeadPatch(db, user, lead.id, { activities: normalized, last_activity: lastActivity }, supabaseEnabled);
 }
 
+async function scheduleReportPages(resource, parameters, token) {
+  const rows = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = await rest(`${resource}?${parameters}&limit=500&offset=${offset}`, supabaseDataOptions(token));
+    rows.push(...page);
+    if (page.length < 500) return rows;
+  }
+}
+
 function activityById(lead, activityId) {
   const activities = ensureActivityIds(lead?.activities);
   const index = activities.findIndex(activity => String(activity.id) === String(activityId));
@@ -5573,9 +5588,12 @@ async function handleApi(req, res, url) {
       last_activity: activity.at
     };
     if (audit.intent !== "add_note") {
-      patch.next_action = activity.next_action_plan;
-      patch.next_action_date = activity.next_action_date;
-      patch.activity_purpose = activity.activity_purpose;
+      if (!activeSchedule(lead)) {
+        patch.next_action = activity.next_action_plan;
+        patch.next_action_date = activity.next_action_date;
+        patch.activity_purpose = activity.activity_purpose;
+        if (!supabaseEnabled) patch.activity_schedule = initialSchedule({ ...lead, ...patch }, new Date().toISOString());
+      }
     }
     const updatedLead = await persistLeadPatch(db, user, lead.id, patch, supabaseEnabled);
     let draft = null;
@@ -6761,6 +6779,7 @@ async function handleApi(req, res, url) {
     const lead = withAutomaticReminder(normalizeLead(payload), user);
     lead.created_by = user.id;
     lead.created_by_name = user.name || user.email || "User";
+    lead.activity_schedule = initialSchedule(lead, new Date().toISOString());
     if (!isDirectorOrAdmin(user)) {
       lead.assigned_to = user.id;
       lead.assigned_salesman = user.name || user.email || lead.assigned_salesman;
@@ -7018,6 +7037,73 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, updated || result.lead);
   }
 
+  if (req.method === "GET" && url.pathname === "/api/activity-schedule-report") {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const now = new Date().toISOString();
+    let leads = db?.leads;
+    let events = db?.activity_schedule_events;
+    if (supabaseEnabled) {
+      const { week_start: start } = activityScheduleReport([], [], now);
+      try {
+        leads = await scheduleReportPages("leads", "select=id,company_name,assigned_to,assigned_salesman,updated_at,next_action,next_action_date,activity_schedule,activities&order=id.asc", user.token);
+        const weekFilter = encodeURIComponent(`${start}T00:00:00+04:00`);
+        events = (await scheduleReportPages("activity_schedule_events",
+          `select=*&or=(recorded_at.gte.${weekFilter},original_due_date.gte.${start})&order=recorded_at.desc,id.asc`, user.token))
+          .map(({ details, ...metadata }) => ({ ...details, ...metadata }));
+      } catch (error) {
+        if (error.status === 404 || /schema cache|does not exist/i.test(error.message)) {
+          return sendJson(res, 503, { error: "Activity schedule controls are not configured for this database." });
+        }
+        throw error;
+      }
+    }
+    return sendJson(res, 200, activityScheduleReport(leads, events, now));
+  }
+
+  const scheduleMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activity-schedule$/);
+  if (scheduleMatch && ["GET", "POST"].includes(req.method)) {
+    const input = req.method === "POST" ? await readBody(req) : null;
+    const freshDb = supabaseEnabled ? null : readDb();
+    const lead = await accessibleLeadById(freshDb, user, decodeURIComponent(scheduleMatch[1]), supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    if (!isAdmin(user) && (user.role !== "salesman" || !lead.assigned_to || String(lead.assigned_to) !== String(user.id))) {
+      return sendJson(res, 403, { error: "Only the current assigned salesman or an Admin can change this schedule." });
+    }
+    if (supabaseEnabled && !Object.hasOwn(lead, "activity_schedule")) {
+      return sendJson(res, 503, { error: "Activity schedule controls are not configured for this database." });
+    }
+    const now = new Date().toISOString();
+    if (req.method === "GET") {
+      const plan = scheduleState(lead, now);
+      if (!plan) return sendJson(res, 409, { error: "There is no open follow-up to reschedule." });
+      return sendJson(res, 200, { plan, action: lead.next_action, date: lead.next_action_date, updated_at: lead.updated_at || "",
+        needs_review: !isAdmin(user) && !(Date.parse(now) < scheduleEditDeadline(lead, plan)) });
+    }
+    const result = requestScheduleChange(lead, user, input || {}, now);
+    let saved;
+    if (supabaseEnabled) {
+      try {
+        saved = await serviceRest("workflow.activity_schedule", "rpc/commit_activity_schedule", {
+          method: "POST", body: { p_lead_id: lead.id, p_version: lead.updated_at, p_event: result.event,
+            p_patch: { next_action_date: result.lead.next_action_date, activities: result.lead.activities,
+              activity_schedule: result.lead.activity_schedule } }
+        });
+      } catch (error) {
+        if (error.status === 404) return sendJson(res, 503, { error: "Activity schedule controls are not configured for this database." });
+        if (/needs a reschedule request/i.test(error.message)) return sendJson(res, 409, { error: "The edit window closed. Reload and submit a reschedule request." });
+        throw error;
+      }
+      if (!saved?.id) return sendJson(res, 409, { error: "The activity changed. Refresh before saving." });
+    } else {
+      Object.assign(lead, result.lead);
+      freshDb.activity_schedule_events.unshift(result.event);
+      writeDb(freshDb);
+      saved = lead;
+    }
+    return sendJson(res, result.status === "pending" ? 202 : 200, { status: result.status,
+      lead: supabaseEnabled ? fromSupabaseLead(saved) : leadWithDerivedFields(saved) });
+  }
+
   const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
   if (req.method === "PATCH" && leadMatch) {
     let payload = await readBody(req);
@@ -7028,6 +7114,8 @@ async function handleApi(req, res, url) {
         return sendJson(res, 403, { error: "Only management can reassign a lead." });
       }
       payload = prepareLeadPayloadForUser(payload, user, existing);
+      delete payload.activities;
+      if (activeSchedule(existing) && schedulePatchChanges(existing, payload)) return sendJson(res, 409, { error: SCHEDULE_PROTECTED });
       const stageProvided = Boolean(payload.stage || payload.lead_status);
       if (payload.stage || payload.lead_status) {
         payload.lead_status = normalizeStageValue(payload.stage || payload.lead_status, existing.stage);
@@ -7098,6 +7186,13 @@ async function handleApi(req, res, url) {
       return sendJson(res, 403, { error: "Only management can reassign a lead." });
     }
     payload = prepareLeadPayloadForUser(payload, user, lead);
+    delete payload.activities;
+    if (activeSchedule(lead) && schedulePatchChanges(lead, payload)) return sendJson(res, 409, { error: SCHEDULE_PROTECTED });
+    if (!activeSchedule(lead) && schedulePatchChanges(lead, payload)) {
+      payload.activity_schedule = initialSchedule({ ...lead, ...payload }, new Date().toISOString());
+    } else {
+      delete payload.activity_schedule;
+    }
     const stageProvided = Boolean(payload.stage || payload.lead_status);
     if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
       payload = await googleEnrichPayload({ ...lead, ...payload, google_place_id: "" }, req);
@@ -7581,6 +7676,8 @@ async function handleApi(req, res, url) {
       }
       const result = resolveLocalLeadFollowup(lead, user, values, now);
       if (!result.duplicate) {
+        freshDb.activity_schedule_events.unshift(outcomeScheduleEvent(lead, user, result.activity, now));
+        result.lead.activity_schedule = initialSchedule(result.lead, now);
         Object.assign(lead, result.lead);
         writeDb(freshDb);
       }
@@ -7614,6 +7711,13 @@ async function handleApi(req, res, url) {
     if (matches.length !== 1 || !activityId) return sendJson(res, 409, { error: "This activity needs a unique, permanent ID before it can be updated." });
     const activity = matches[0];
     if (activity.archived || activity.delete_request || activity.deletion_status === "pending") return sendJson(res, 409, { error: "This activity cannot be updated." });
+    if (["closed", "cancelled", "completed"].includes(activity.transaction_status) || activity.followup_resolution
+      || ["completed", "cancelled"].includes(activity.reminder_status)) {
+      return sendJson(res, 409, { error: "This outcome is read-only; add a correction instead." });
+    }
+    if (isPendingReminder(activity) && values.next_attempt && values.next_attempt !== (activity.transaction_next_attempt || "")) {
+      return sendJson(res, 409, { error: SCHEDULE_PROTECTED });
+    }
     if (!canManageActivity(user, lead, activity)) return sendJson(res, 403, { error: "You cannot edit this activity." });
     let updated;
     try { updated = updateActivityTransaction(activity, values, user, version); }
@@ -7660,35 +7764,31 @@ async function handleApi(req, res, url) {
       notes: payload.notes,
       structured_activity: true
     }, user);
-    let updated = updateWorkflowActivity(found.activity, {
+    const corrected = updateWorkflowActivity(found.activity, {
       next_action_plan: normalized.next_action_plan,
       next_action_date: normalized.next_action_date,
       activity_purpose: normalized.activity_purpose,
       notes: normalized.notes
     }, user, payload.version);
-    const removeIds = new Set(Array.isArray(payload.remove_attachment_ids) ? payload.remove_attachment_ids.map(String) : []);
-    if (removeIds.size) {
-      const removedAt = new Date().toISOString();
-      const removed = [];
-      updated.attachments = (updated.attachments || []).map(attachment => {
-        if (!removeIds.has(String(attachment.id)) || attachment.removed_at) return attachment;
-        removed.push(attachment);
-        return { ...attachment, removed_at: removedAt, removed_by: user.id };
-      });
-      if (removed.length) {
-        updated.updated_at = removedAt;
-        updated.version += 1;
-        updated.audit_history = [
-          activityAuditEvent("attachment_removed", user, {
-            attachments: removed.map(item => ({ id: item.id, filename: item.original_filename }))
-          }),
-          ...(updated.audit_history || [])
-        ];
-      }
+    if (Array.isArray(payload.remove_attachment_ids) && payload.remove_attachment_ids.length) {
+      return sendJson(res, 409, { error: "Original attachments are read-only. Add a correction with any supporting files." });
     }
-    found.activities[found.index] = updated;
-    const persisted = await persistActivityCollection(db, user, lead, found.activities, supabaseEnabled);
-    return sendJson(res, 200, { lead: persisted, activity: updated });
+    const fields = ["next_action_plan", "next_action_date", "activity_purpose", "notes"];
+    const changed = fields.filter(field => String(found.activity[field] ?? "") !== String(corrected[field] ?? ""));
+    if (!changed.length) return sendJson(res, 200, { lead, activity: found.activity });
+    if (isPendingReminder(found.activity)) return sendJson(res, 409, { error: SCHEDULE_PROTECTED });
+    const reason = String(payload.correction_reason || "").trim();
+    if (reason.length < 10 || reason.length > 500) return sendJson(res, 400, { error: "Enter a correction reason of 10 to 500 characters." });
+    const correction = normalizeWorkflowActivity({
+      ...activityCorrection(found.activity, { text: reason }, lead, user), created_by: user.id,
+      created_by_name: user.name || user.email || "User",
+      audit_history: [activityAuditEvent("activity_correction", user, { reason,
+        before: Object.fromEntries(changed.map(field => [field, found.activity[field] ?? ""])),
+        after: Object.fromEntries(changed.map(field => [field, corrected[field] ?? ""]))
+      })]
+    }, user);
+    const persisted = await persistActivityCollection(db, user, lead, [correction, ...found.activities], supabaseEnabled);
+    return sendJson(res, 201, { lead: persisted, activity: correction, correction: true });
   }
 
   const deleteRequestCancelMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/delete-requests\/([^/]+)\/cancel$/);
@@ -7758,6 +7858,9 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const lead = await getSupabaseLead(user.token, activityMatch[1], user);
       if (!lead) return leadNotFound(res);
+      if (payload.followup_completed && matchesActiveStep(lead, payload.completed_due_date, payload.completed_activity_required)) {
+        return sendJson(res, 409, { error: "Use Log outcome to complete the current next step." });
+      }
       const duplicate = (lead.activities || []).find(activity => String(activity.id) === String(payload.id || ""));
       if (duplicate) return sendJson(res, 200, { lead, activity: duplicate, duplicate: true });
       const isReminder = String(payload.type || "").toLowerCase() === "reminder" || payload.reminder || Boolean(payload.due_date);
@@ -7765,16 +7868,20 @@ async function handleApi(req, res, url) {
         ? normalizeReminderActivity(payload, lead, user)
         : normalizePlainActivity(payload, user);
       const updates = { last_activity: activity.at, activities: [activity, ...(lead.activities || [])] };
-      if (payload.structured_activity) {
+      const preserveSchedule = Boolean(payload.structured_activity && activeSchedule(lead));
+      if (payload.structured_activity && !preserveSchedule) {
         updates.next_action = activity.next_action_plan;
         updates.next_action_date = activity.next_action_date;
         updates.activity_purpose = activity.activity_purpose;
       }
       const leads = await patchSupabaseLeadWithOptionalFallback(user.token, activityMatch[1], updates);
-      return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), activity });
+      return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), activity, schedule_unchanged: preserveSchedule });
     }
     const lead = db.leads.find(item => item.id === activityMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    if (payload.followup_completed && matchesActiveStep(lead, payload.completed_due_date, payload.completed_activity_required)) {
+      return sendJson(res, 409, { error: "Use Log outcome to complete the current next step." });
+    }
     const duplicate = (lead.activities || []).find(activity => String(activity.id) === String(payload.id || ""));
     if (duplicate) return sendJson(res, 200, { lead, activity: duplicate, duplicate: true });
     const isReminder = String(payload.type || "").toLowerCase() === "reminder" || payload.reminder || Boolean(payload.due_date);
@@ -7783,13 +7890,15 @@ async function handleApi(req, res, url) {
       : normalizePlainActivity(payload, user);
     lead.activities.unshift(activity);
     lead.last_activity = activity.at;
-    if (payload.structured_activity) {
+    const preserveSchedule = Boolean(payload.structured_activity && activeSchedule(lead));
+    if (payload.structured_activity && !preserveSchedule) {
       lead.next_action = activity.next_action_plan;
       lead.next_action_date = activity.next_action_date;
       lead.activity_purpose = activity.activity_purpose;
+      lead.activity_schedule = initialSchedule(lead, new Date().toISOString());
     }
     writeDb(db);
-    return sendJson(res, 201, { lead, activity });
+    return sendJson(res, 201, { lead, activity, schedule_unchanged: preserveSchedule });
   }
 
   const pmrMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/pmrs$/);

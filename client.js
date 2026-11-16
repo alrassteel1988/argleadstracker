@@ -2332,6 +2332,11 @@ async function markFollowupComplete(button) {
   const activityIndex = button.dataset.followupIndex;
   const text = button.dataset.followupText || "Follow up with customer";
   const dueDate = button.dataset.followupDate || "";
+  const activeLead = state.leads.find(item => String(item.id) === leadId);
+  if (activeLead && activeLead.next_action_date === dueDate && normalizeNextActionPlan(text) === activeLead.next_action) {
+    openLeadFollowupDialog(activeLead, "completed");
+    return;
+  }
   const reminderType = button.dataset.followupType || "General follow-up";
   if (activityIndex !== "") {
     const lead = state.leads.find(item => item.id === leadId);
@@ -2366,38 +2371,13 @@ async function markFollowupComplete(button) {
 
 async function rescheduleFollowup(button) {
   const leadId = button.dataset.followupReschedule;
-  const activityIndex = button.dataset.followupIndex;
   const text = button.dataset.followupText || "Follow up with customer";
-  const date = window.prompt("New follow-up date (YYYY-MM-DD):", today());
-  if (!date) return;
-  const time = window.prompt("New follow-up time (HH:MM):", "09:00") || "09:00";
-  if (activityIndex !== "") {
-    const lead = state.leads.find(item => item.id === leadId);
-    const activity = lead?.activities?.[Number(activityIndex)];
-    await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityIndex)}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        ...activity,
-        type: "Reminder",
-        text: activity?.text || text,
-        reminder_status: "scheduled",
-        activity_required: activity?.activity_required || text,
-        due_date: date,
-        due_time: time
-      })
-    });
-  } else {
-    const normalizedAction = normalizeNextActionPlan(text);
-    await api(`/api/leads/${encodeURIComponent(leadId)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ next_action: normalizedAction, next_action_date: date })
-    });
-    await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
-      method: "POST",
-      body: JSON.stringify({ type: "Note", text: `Follow-up rescheduled to ${date} ${time}: ${normalizedAction}` })
-    });
+  const lead = state.leads.find(item => String(item.id) === leadId);
+  const reminder = button.dataset.followupIndex ? lead?.activities?.[Number(button.dataset.followupIndex)] : null;
+  if (!lead || normalizeNextActionPlan(text) !== lead.next_action || (reminder && reminder.due_date !== lead.next_action_date)) {
+    throw new Error("Only the current next step can be rescheduled. Other reminders stay in history.");
   }
-  await loadLeads();
+  await openActivitySchedule(leadId);
 }
 
 async function addFollowupNote(leadId) {
@@ -3765,6 +3745,10 @@ async function setAiOutputAsNextAction() {
   const lead = aiLead();
   if (!lead.id || !state.aiAction.output) return;
   const defaultAction = state.aiAction.output.split(/\r?\n/).map(line => line.replace(/^#+\s*/, "").trim()).find(line => line && !["Next action", "Why this action", "Watch out for"].includes(line)) || "";
+  if (lead.next_action && lead.next_action_date) {
+    await openActivitySchedule(lead.id, null, defaultAction.slice(0, 500));
+    return;
+  }
   const nextAction = window.prompt("Confirm next action:", defaultAction.slice(0, 220));
   if (!nextAction?.trim()) return;
   const nextDate = window.prompt("Due date (YYYY-MM-DD):", lead.next_action_date || today()) || lead.next_action_date || today();
@@ -3902,6 +3886,8 @@ function resetLeadWizardState() {
 }
 
 function setLeadFormMode(mode = "create") {
+  els.leadForm.elements.next_action.disabled = false;
+  els.leadForm.elements.next_action_date.disabled = false;
   const title = document.querySelector("#leadFormTitle");
   const subtitle = document.querySelector("#leadFormSubtitle");
   if (title) {
@@ -10959,10 +10945,84 @@ function canResolveLeadNextStep(lead) {
 
 function recordFollowupActions(lead) {
   const id = escapeHtml(lead.id);
-  return `<button class="ghost-button" type="button" data-drawer-edit-lead="${id}">${lead.next_action ? "Reschedule" : "Set next step"}</button>${
+  const scheduled = Boolean(lead.next_action && lead.next_action_date);
+  const canSchedule = !lead.pending_sync && (state.currentUser?.role === "admin" ||
+    (state.currentUser?.role === "salesman" && lead.assigned_to && String(lead.assigned_to) === String(state.currentUser.id)));
+  return `${scheduled
+    ? canSchedule ? `<button class="ghost-button" type="button" data-activity-schedule="${id}">${lead.activity_schedule?.request ? "Schedule request" : "Reschedule"}</button>` : ""
+    : `<button class="ghost-button" type="button" data-drawer-edit-lead="${id}">Set next step</button>`}${
     canResolveLeadNextStep(lead) ? `<button class="ghost-button record-cancel-followup" type="button" data-lead-followup="cancelled" data-followup-lead="${id}">Cancel activity</button>
       <button class="primary-button" type="button" data-lead-followup="completed" data-followup-lead="${id}">Log outcome</button>` : ""
   }`;
+}
+
+async function openActivitySchedule(leadId, review = null, suggestedAgenda = "") {
+  const path = `/api/leads/${encodeURIComponent(leadId)}/activity-schedule`;
+  const viewer = state.currentUser?.id;
+  const current = await api(path);
+  if (viewer !== state.currentUser?.id) return;
+  const { plan } = current;
+  const pending = plan.request;
+  const canReview = Boolean(review && pending && state.currentUser?.role === "admin");
+  const dialog = document.getElementById("leadFollowupDialog");
+  if (dialog.open) dialog.close();
+  delete dialog.dataset.resolution;
+  dialog.innerHTML = `<form class="lead-followup-form">
+    <header><div><h2 id="leadFollowupTitle">${canReview ? "Review schedule change" : "Activity schedule"}</h2>
+      <p>${escapeHtml(current.action)} &middot; ${escapeHtml(current.date)} ${escapeHtml(plan.due_time)} UAE time</p></div>
+      <button class="ghost-button" type="button" data-schedule-close aria-label="Close schedule dialog">&times;</button></header>
+    <div class="lead-followup-fields">
+      <p>Original deadline: <strong>${escapeHtml(plan.original_due_date)} ${escapeHtml(plan.original_due_time)} UAE time</strong></p>
+      ${pending ? `<p><strong>Awaiting Admin review</strong> &middot; ${escapeHtml(pending.actor_name)}<br>
+        ${escapeHtml(pending.proposed.date)} ${escapeHtml(pending.proposed.time)} &middot; ${escapeHtml(pending.proposed.priority)}<br>
+        ${escapeHtml(pending.reason)}</p>
+        ${pending.proposed.agenda ? `<p>${escapeHtml(pending.proposed.agenda)}</p>` : ""}` : `
+        ${current.needs_review ? '<p class="lead-followup-notice">The edit window is closed. This change needs Admin approval.</p>' : ""}
+        <div class="lead-followup-contact">
+          <label>Due date<input type="date" name="date" value="${escapeHtml(current.date)}" required></label>
+          <label>Time (UAE)<input type="time" name="time" value="${escapeHtml(plan.due_time)}" required></label>
+        </div>
+        <label>Priority<select name="priority">${["Normal","High","Low"].map(priority =>
+          `<option${priority === plan.priority ? " selected" : ""}>${priority}</option>`).join("")}</select></label>
+        <label>Agenda<textarea name="agenda" rows="2" maxlength="500">${escapeHtml(suggestedAgenda || plan.agenda)}</textarea></label>`}
+      ${!pending || canReview ? '<label>Reason<textarea name="reason" rows="2" maxlength="500"></textarea></label>' : ""}
+      <p class="lead-followup-error" role="alert" hidden></p>
+    </div>
+    <footer><button class="ghost-button" type="button" data-schedule-close>Close</button>
+      ${canReview ? '<button class="ghost-button" type="submit" value="reject">Reject</button><button class="primary-button" type="submit" value="approve">Approve change</button>'
+        : pending ? "" : `<button class="primary-button" type="submit" value="submit">${current.needs_review ? "Request change" : "Save schedule"}</button>`}</footer>
+  </form>`;
+  const form = dialog.querySelector("form");
+  const error = form.querySelector("[role=alert]");
+  let saving = false;
+  dialog.oncancel = event => { if (saving) event.preventDefault(); };
+  form.querySelectorAll("[data-schedule-close]").forEach(button => button.onclick = () => { if (!saving) dialog.close(); });
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (saving || !event.submitter || state.currentUser?.id !== viewer) return;
+    saving = true;
+    error.hidden = true;
+    const buttons = form.querySelectorAll("button");
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      const fields = Object.fromEntries(new FormData(form));
+      const result = await api(path, { method: "POST", body: JSON.stringify({
+        ...fields, operation: canReview ? "review" : "submit", decision: canReview ? event.submitter.value : undefined,
+        request_id: canReview ? pending.id : undefined, expected_plan_id: plan.id, expected_updated_at: current.updated_at
+      }) });
+      dialog.close();
+      await loadLeads();
+      if (document.getElementById("activityGovernance")?.open) await loadActivityGovernance();
+      setToast(result.status === "pending" ? "Schedule change requested." : result.status === "rejected" ? "Schedule request rejected." : "Schedule updated.", "success");
+    } catch (problem) {
+      error.textContent = problem.message;
+      error.hidden = false;
+    } finally {
+      saving = false;
+      buttons.forEach(button => { button.disabled = false; });
+    }
+  };
+  dialog.showModal();
 }
 
 function recordFollowupStatus(activity) {
@@ -11754,6 +11814,9 @@ function bindLeadDrawerEvents() {
       if (lead) openLeadFollowupDialog(lead, button.dataset.leadFollowup);
     });
   });
+  document.querySelectorAll("[data-activity-schedule]").forEach(button => {
+    button.onclick = () => openActivitySchedule(button.dataset.activitySchedule).catch(error => setToast(error.message, "error"));
+  });
   document.querySelectorAll("[data-drawer-add-reminder]").forEach(button => {
     button.addEventListener("click", () => addDrawerReminder(button.dataset.drawerAddReminder));
   });
@@ -11928,7 +11991,6 @@ function renderActivityAttachmentList() {
           <small>${escapeHtml(humanFileSize(attachment.size))}${removed ? " · will be removed" : ""}</small>
         </div>
         <button type="button" data-download-activity-attachment="${escapeHtml(attachment.id)}" ${removed ? "disabled" : ""}>Download</button>
-        <button type="button" data-toggle-remove-activity-attachment="${escapeHtml(attachment.id)}">${removed ? "Keep" : "Remove"}</button>
       </div>
     `;
   });
@@ -12069,9 +12131,10 @@ function openActivityModal(leadId = "", trigger = null, activity = null) {
   els.activityForm.elements.lead_id.value = lead.id;
   els.activityForm.elements.activity_id.value = activity?.id || "";
   els.activityForm.elements.activity_version.value = String(activity?.version || 1);
+  document.getElementById("activityCorrectionReason").hidden = !activity;
   els.activityForm.dataset.clientId = activity?.id || activityClientId();
-  els.activityDialogTitle.innerHTML = pageTitleMarkup(activity ? "Edit Activity" : "Add New Activity");
-  els.saveActivity.textContent = activity ? "Save Changes" : "Save Activity";
+  els.activityDialogTitle.innerHTML = pageTitleMarkup(activity ? "Correct Activity" : "Add New Activity");
+  els.saveActivity.textContent = activity ? "Save Correction" : "Save Activity";
   els.closeActivityDialog.setAttribute("aria-label", `Close ${activity ? "Edit Activity" : "Add New Activity"} modal`);
   els.activityLeadName.textContent = lead.company_name || "Selected lead";
   const globalCreate = !leadId && !activity;
@@ -12132,6 +12195,7 @@ async function saveActivityModal() {
         type: activityPurpose,
         text: notes || `${activityPurpose}: ${nextActionPlan} on ${nextActionDate}`,
         notes,
+        correction_reason: String(data.get("correction_reason") || "").trim(),
         next_action_plan: nextActionPlan,
         next_action_date: nextActionDate,
         activity_purpose: activityPurpose,
@@ -12176,7 +12240,8 @@ async function saveActivityModal() {
     activityModalSaving = false;
     closeActivityModal({ force: true });
     if (currentView === "activity") await fetchActivities();
-    setToast(activityModalMode === "edit" ? "Activity updated." : "Activity saved.", "success");
+    setToast(result.correction ? "Correction saved; the original was kept."
+      : result.schedule_unchanged ? "Activity saved; the existing next step was kept." : "Activity saved.", "success");
     openLeadDrawer(leadId, "activities");
   } catch (error) {
     activityModalSaving = false;
@@ -12268,6 +12333,10 @@ function openLeadEdit(leadId) {
   });
   renderLeadProductInterestOptions(lead.product_interest);
   ensureLeadFormSelectValue("next_action", normalizeNextActionPlan(lead.next_action), NEXT_ACTION_PLAN_OPTIONS[0]);
+  if (lead.next_action && lead.next_action_date) {
+    els.leadForm.elements.next_action.disabled = true;
+    els.leadForm.elements.next_action_date.disabled = true;
+  }
   ensureLeadFormSelectValue("activity_purpose", normalizeActivityPurpose(lead.activity_purpose), ACTIVITY_PURPOSE_OPTIONS[0]);
   syncLeadWizardDetailsFromValues();
   leadCompanyInputKey = leadCompanyOnlyKey(lead.company_name);
@@ -15641,10 +15710,56 @@ function renderActivityCalendarVisibility() {
 function renderActivityView() {
   renderActivityCalendarVisibility();
   renderLegacyActivityView();
+  const governance = document.getElementById("activityGovernance");
+  const applicable = state.currentUser?.role === "admin" && currentView === "activity";
+  governance.hidden = !applicable;
+  if (!applicable) {
+    governance.open = false;
+    document.getElementById("activityGovernanceBody").replaceChildren();
+  }
   if (state.currentUser?.role === "admin" && currentView === "activity") {
     renderReferenceAdminActivity();
   }
 }
+
+let activityGovernanceRequest = 0;
+async function loadActivityGovernance() {
+  const panel = document.getElementById("activityGovernance");
+  const host = document.getElementById("activityGovernanceBody");
+  if (state.currentUser?.role !== "admin" || currentView !== "activity" || !panel.open) return;
+  const viewer = state.currentUser.id;
+  const request = ++activityGovernanceRequest;
+  const current = () => request === activityGovernanceRequest && state.currentUser?.id === viewer
+    && state.currentUser.role === "admin" && currentView === "activity" && panel.open;
+  host.innerHTML = '<p role="status">Loading activity schedule review...</p>';
+  try {
+    const data = await api("/api/activity-schedule-report");
+    if (!current()) return;
+    const list = items => items.length ? `<ul>${items.join("")}</ul>` : "<p>None</p>";
+    host.innerHTML = `<h3>Pending reschedules</h3>${list(data.pending.map(item => `<li>
+      <strong>${escapeHtml(item.company_name)}</strong> &middot; ${escapeHtml(item.actor_name)}:
+      ${escapeHtml(item.current_due)} ${escapeHtml(item.current_time)} &rarr; ${escapeHtml(item.proposed.date)} ${escapeHtml(item.proposed.time)}
+      &middot; ${escapeHtml(item.reason)} <button class="text-button" type="button" data-schedule-review="${escapeHtml(item.lead_id)}">Review</button></li>`))}
+    <h3>Follow-through &middot; week of ${escapeHtml(formatDisplayDate(data.week_start))}</h3>
+    ${data.rows.length ? `<div class="activity-governance-scroll"><table>
+      <thead><tr><th scope="col">Person</th><th scope="col">Due</th><th scope="col">Completed outcomes</th>
+      <th scope="col">On time</th><th scope="col">Still overdue</th><th scope="col">Rescheduled</th><th scope="col">Cancelled</th><th scope="col">Reasons</th></tr></thead>
+      <tbody>${data.rows.map(row => `<tr><th scope="row">${escapeHtml(row.name)}</th><td>${row.due}</td><td>${row.completed}</td>
+        <td>${row.due ? Math.round(row.on_time * 100 / row.due) + "%" : "—"}</td><td>${row.overdue}</td>
+        <td>${row.changed}</td><td>${row.cancelled}</td><td>${row.reasons.map(([reason,count]) => escapeHtml(reason) + " (" + count + ")").join(" · ") || "—"}</td></tr>`).join("")}</tbody>
+    </table></div>` : "<p>No scheduled activity for this period.</p>"}
+    <h3>Needs attention</h3>${list(data.flags.map(item => `<li><strong>${escapeHtml(item.label)}</strong> &middot;
+      ${escapeHtml(item.company_name)} &middot; ${escapeHtml(item.actor)} &middot; ${escapeHtml(item.reason)}</li>`))}`;
+    host.querySelectorAll("[data-schedule-review]").forEach(button => {
+      button.onclick = () => openActivitySchedule(button.dataset.scheduleReview, true).catch(error => setToast(error.message, "error"));
+    });
+  } catch (error) {
+    if (!current()) return;
+    host.innerHTML = `<p role="alert">${escapeHtml(error.message)}</p><button class="ghost-button" type="button">Retry</button>`;
+    host.querySelector("button").onclick = loadActivityGovernance;
+  }
+}
+document.getElementById("activityGovernance").addEventListener("toggle", loadActivityGovernance);
 
 function renderLegacyActivityView() {
   const activities = state.activities || [];

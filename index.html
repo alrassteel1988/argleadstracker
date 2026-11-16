@@ -37,7 +37,7 @@
   <link rel="stylesheet" href="/crm-dashboard.css?v=17-neglected-activities">
   <link rel="stylesheet" href="/crm-data.css?v=1">
   <link rel="stylesheet" href="/crm-record.css?v=9-lead-sidebar-height">
-  <link rel="stylesheet" href="/crm-activity.css?v=1">
+  <link rel="stylesheet" href="/crm-activity.css?v=2">
   <link rel="stylesheet" href="/crm-team.css?v=1">
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
@@ -873,6 +873,10 @@
         </section>
 
         <section class="view-panel hidden" id="activityView">
+          <details id="activityGovernance" class="activity-governance" hidden>
+            <summary>Activity schedule review &amp; weekly follow-through</summary>
+            <div id="activityGovernanceBody"></div>
+          </details>
           <div class="activity-dashboard">
             <div class="activity-main-column">
               <section class="activity-kpi-grid" aria-label="Activity metrics">
@@ -1570,6 +1574,10 @@
             <span>Notes</span>
             <textarea id="activityNotes" name="notes" rows="6" placeholder="Type notes or record a voice note"></textarea>
           </label>
+          <label class="activity-entry-notes" id="activityCorrectionReason" hidden>
+            <span>Correction reason</span>
+            <input name="correction_reason" maxlength="500">
+          </label>
         </div>
 
         <section class="activity-voice-recorder" aria-labelledby="activityVoiceHeading">
@@ -1819,7 +1827,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=management-tasks-drawer"></script>
+  <script src="/client.js?v=activity-schedule-governance"></script>
   </body>
 </html>
 
