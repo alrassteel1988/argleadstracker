@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v157-management-tasks-drawer";
+const CACHE_VERSION = "arg-pwa-v159-admin-deletion-approval-digest";
 const APP_SHELL = [
   "/",
   "/index.html",

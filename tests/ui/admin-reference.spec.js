@@ -64,7 +64,7 @@ test("reference dashboard keeps real counts, drilldowns and responsive shell", a
     return;
   }
   const overview = page.locator("#cleanAdminDashboard");
-  await expect(overview.locator(".clean-admin-metrics > *")).toHaveCount(4);
+  await expect(overview.locator(".clean-admin-metrics > *")).toHaveCount(5);
   await expect(overview.locator('[data-clean-action="pipeline"]').first().locator("strong")).toHaveText("9");
   await expect(overview.locator(".clean-admin-person")).toHaveCount(2);
   await expect(overview.locator(".clean-admin-avatar").first()).toHaveCSS("position", "static");

@@ -351,15 +351,16 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
       method: "POST",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
-      body: { type: "Note", text: "Salesman wants to revise this later" }
+      body: { type: "Phone Call", text: "Salesman wants to revise this later", created_by: adminLogin.data.user.id }
     });
     assert.equal(activity.response.status, 201);
+    assert.equal(activity.data.activity.created_by, salesmanAccount.data.id);
 
     const correction = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/0`, {
       method: "PATCH",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
-      body: { type: "Note", text: "Corrected note appended without changing the original" }
+      body: { type: "Phone Call", text: "Corrected call appended without changing the original" }
     });
     assert.equal(correction.response.status, 201, JSON.stringify(correction.data));
     assert.equal(correction.data.activity.type, "Correction");
@@ -374,14 +375,30 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(directActivityDelete.response.status, 405);
 
-    const activityDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
+    const deletionPath = `/api/leads/${ownLead.data.id}/delete-requests`;
+    const deletionBody = { target_type: "activity", activity_id: activity.data.activity.id, reason: "Duplicate activity entry" };
+    const adminDecision = { method: "POST", token: adminToken, csrfToken: adminCsrfToken, body: { admin_password: "AdminPass123!" } };
+    assert.equal((await request(baseUrl, deletionPath, { ...adminDecision, body: deletionBody })).response.status, 403);
+    assert.equal((await request(baseUrl, deletionPath, {
+      method: "POST", token: salesmanToken, csrfToken: salesmanCsrfToken, body: { ...deletionBody, reason: "Short" }
+    })).response.status, 400);
+
+    const activityDeleteRequest = await request(baseUrl, deletionPath, {
       method: "POST",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
-      body: { target_type: "activity", activity_index: 1, reason: "Duplicate activity entry" }
+      body: deletionBody
     });
     assert.equal(activityDeleteRequest.response.status, 201, JSON.stringify(activityDeleteRequest.data));
     assert.equal(activityDeleteRequest.data.request.request_status, "pending");
+    const decisionPath = `${deletionPath}/${activityDeleteRequest.data.request.id}`;
+    const pendingIndex = activityDeleteRequest.data.lead.activities.findIndex(item => item.id === deletionBody.activity_id);
+    assert.equal((await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/${pendingIndex}`, {
+      method: "PATCH", token: salesmanToken, csrfToken: salesmanCsrfToken, body: { type: "Phone Call", text: "Should be locked" }
+    })).response.status, 409);
+    assert.equal((await request(baseUrl, "/api/activity-deletion-requests", { token: salesmanToken })).response.status, 403);
+    assert.equal((await request(baseUrl, "/api/activity-deletion-requests", { token: adminToken })).response.status, 200);
+    assert.equal((await request(baseUrl, `${decisionPath}/reject`, adminDecision)).response.status, 400);
 
     const approveWithoutPassword = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${activityDeleteRequest.data.request.id}/approve`, {
       method: "POST",
@@ -391,15 +408,20 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(approveWithoutPassword.response.status, 403);
 
-    const approveActivityDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${activityDeleteRequest.data.request.id}/approve`, {
-      method: "POST",
-      token: adminToken,
-      csrfToken: adminCsrfToken,
-      body: { admin_password: "AdminPass123!" }
-    });
-    assert.equal(approveActivityDelete.response.status, 200, JSON.stringify(approveActivityDelete.data));
-    assert(approveActivityDelete.data.lead.activities.some(item => item.id === activity.data.activity.id));
-    assert(approveActivityDelete.data.lead.activities.some(item => item.type === "Activity Review"));
+    const decisions = await Promise.all([
+      request(baseUrl, `${decisionPath}/approve`, adminDecision),
+      request(baseUrl, `${decisionPath}/approve`, adminDecision)
+    ]);
+    assert.deepEqual(decisions.map(result => result.response.status).sort(), [200, 409], JSON.stringify(decisions.map(result => result.data)));
+    const approved = decisions.find(result => result.response.status === 200).data;
+    const archived = approved.lead.activities.find(item => item.id === deletionBody.activity_id);
+    assert.equal(archived.archived, true);
+    assert(archived.audit_history.some(event => event.action === "activity_archived"));
+    const restored = await request(baseUrl, `${decisionPath}/restore`, adminDecision);
+    assert.equal(restored.response.status, 200, JSON.stringify(restored.data));
+    const restoredActivity = restored.data.lead.activities.find(item => item.id === deletionBody.activity_id);
+    assert(!restoredActivity.archived);
+    assert(restoredActivity.audit_history.some(event => event.action === "activity_restored"));
 
     const meetingActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
@@ -447,36 +469,9 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
       csrfToken: salesmanCsrfToken,
       body: { target_type: "lead", reason: "Created during test by mistake" }
     });
-    assert.equal(leadDeleteRequest.response.status, 201);
-
-    const rejectLeadDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${leadDeleteRequest.data.request.id}/reject`, {
-      method: "POST",
-      token: adminToken,
-      csrfToken: adminCsrfToken,
-      body: { admin_password: "AdminPass123!", note: "Keep for follow-up" }
-    });
-    assert.equal(rejectLeadDelete.response.status, 200);
-    assert.equal(rejectLeadDelete.data.request.request_status, "rejected");
-
-    const secondLeadDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
-      method: "POST",
-      token: salesmanToken,
-      csrfToken: salesmanCsrfToken,
-      body: { target_type: "lead", reason: "Confirmed duplicate" }
-    });
-    assert.equal(secondLeadDeleteRequest.response.status, 201);
-
-    const approveLeadDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${secondLeadDeleteRequest.data.request.id}/approve`, {
-      method: "POST",
-      token: adminToken,
-      csrfToken: adminCsrfToken,
-      body: { admin_password: "AdminPass123!" }
-    });
-    assert.equal(approveLeadDelete.response.status, 200);
-    assert.equal(approveLeadDelete.data.deleted, true);
-
-    const deletedLeadHidden = await request(baseUrl, "/api/leads", { token: adminToken });
-    assert(!deletedLeadHidden.data.some(lead => lead.id === ownLead.data.id));
+    assert.equal(leadDeleteRequest.response.status, 400);
+    const retainedLeads = await request(baseUrl, "/api/leads", { token: adminToken });
+    assert(retainedLeads.data.some(lead => lead.id === ownLead.data.id));
 
     console.log("PASS admin/salesman HTTP permission boundaries");
   } finally {

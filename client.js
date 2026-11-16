@@ -571,7 +571,6 @@ const els = {
   activityDeletionMessage: document.querySelector("#activityDeletionMessage"),
   activityDeletionQueueDialog: document.querySelector("#activityDeletionQueueDialog"),
   activityDeletionQueueSearch: document.querySelector("#activityDeletionQueueSearch"),
-  activityDeletionQueueStatus: document.querySelector("#activityDeletionQueueStatus"),
   activityDeletionQueueRequester: document.querySelector("#activityDeletionQueueRequester"),
   activityDeletionQueueSalesman: document.querySelector("#activityDeletionQueueSalesman"),
   activityDeletionQueueFrom: document.querySelector("#activityDeletionQueueFrom"),
@@ -645,7 +644,7 @@ function parseAppRoute(locationLike = window.location) {
   const pathname = locationLike.pathname || "/";
   const search = new URLSearchParams(locationLike.search || "");
   const requestedView = search.get("view") === "dashboard/neglected" ? "neglected" : search.get("view");
-  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "quotes", "accounts", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
+  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "deletion-requests", "tasks", "quotes", "accounts", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
   const emailRoute = pathname.match(/^\/leads\/([^/]+)\/draft-email\/?$/);
   if (emailRoute) return { view: "draft-email", leadId: decodeURIComponent(emailRoute[1]), tab: "overview" };
   const meetingRoute = pathname.match(/^\/leads\/([^/]+)\/prepare-meeting\/?$/);
@@ -2024,12 +2023,18 @@ function activityTranscriptMarkup(activity) {
 }
 
 function activityEditButton(leadId, activityIndex, activity = {}) {
-  if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
+  if (activityIndex == null || activityIndex < 0 || activity.delete_request || activity.archived || activity.deletion_status === "pending") return "";
   return `<button class="small-action" type="button" data-edit-activity-lead="${escapeHtml(leadId)}" data-edit-activity-index="${escapeHtml(activityIndex)}" data-edit-activity-id="${escapeHtml(activity.id || "")}">Edit</button>`;
 }
 
+function canRequestActivityDeletion(activity) {
+  return !activity.delete_request && !activity.archived && !activity.workflow_log
+    && !/^notes?$/i.test(String(activity.type || "").trim())
+    && Boolean(activity.created_by) && String(activity.created_by) === String(state.currentUser?.id);
+}
+
 function activityDeleteButton(leadId, activityIndex, activity = {}) {
-  if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
+  if (activityIndex == null || activityIndex < 0 || !canRequestActivityDeletion(activity)) return "";
   const pending = activity.deletion_status === "pending";
   return `<button class="small-action" type="button" data-delete-activity-lead="${escapeHtml(leadId)}" data-delete-activity-index="${escapeHtml(activityIndex)}" data-delete-activity-id="${escapeHtml(activity.id || "")}" ${pending ? "disabled" : ""}>${pending ? "Deletion Pending" : "Request Deletion"}</button>`;
 }
@@ -2107,7 +2112,7 @@ function resolveActivity(leadId, activityIndex, activityId = "") {
 
 function openActivityEdit(leadId, activityIndex, activityId = "", trigger = null) {
   const { lead, activity } = resolveActivity(leadId, activityIndex, activityId);
-  if (!lead || !activity) return;
+  if (!lead || !activity || activity.archived || activity.deletion_status === "pending") return;
   openActivityModal(leadId, trigger, activity);
 }
 
@@ -2156,15 +2161,13 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
   els.activityDetailsBody.querySelectorAll("[data-details-download-attachment]").forEach(button => {
     button.addEventListener("click", () => downloadActivityAttachment(button.dataset.detailsDownloadAttachment));
   });
-  els.editActivityFromDetails.disabled = activity.deletion_status === "pending";
-  els.editActivityFromDetails.classList.toggle("hidden", readOnlyLog);
-  els.requestActivityDeletionFromDetails.classList.toggle("hidden", readOnlyLog);
-  els.requestActivityDeletionFromDetails.disabled = activity.deletion_status === "pending";
-  els.requestActivityDeletionFromDetails.textContent = activity.deletion_status === "pending" ? "Deletion Pending" : "Request Deletion";
-  const canCancel = pendingRequest && (
-    String(pendingRequest.requested_by) === String(state.currentUser?.id)
-    || ["admin", "manager", "director"].includes(String(state.currentUser?.role || "").toLowerCase())
-  );
+  const deletionPending = Boolean(pendingRequest) || activity.deletion_status === "pending";
+  els.editActivityFromDetails.disabled = deletionPending;
+  els.editActivityFromDetails.classList.toggle("hidden", readOnlyLog || Boolean(activity.archived));
+  els.requestActivityDeletionFromDetails.classList.toggle("hidden", readOnlyLog || !canRequestActivityDeletion(activity));
+  els.requestActivityDeletionFromDetails.disabled = deletionPending;
+  els.requestActivityDeletionFromDetails.textContent = deletionPending ? "Deletion Pending" : "Request Deletion";
+  const canCancel = pendingRequest && String(pendingRequest.requested_by) === String(state.currentUser?.id);
   els.cancelActivityDeletionFromDetails?.classList.toggle("hidden", !canCancel);
   if (els.cancelActivityDeletionFromDetails) {
     els.cancelActivityDeletionFromDetails.dataset.requestId = canCancel ? pendingRequest.id : "";
@@ -2241,73 +2244,118 @@ function activityDeletionStatusLabel(status) {
   return String(status || "pending").replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
-function activityDeletionQueueCard(request) {
-  const selfRequest = String(request.requested_by) === String(state.currentUser?.id);
-  const pending = request.request_status === "pending";
-  const historyCount = Array.isArray(request.audit_history) ? request.audit_history.length : 0;
-  return `
-    <article class="activity-queue-card">
-      <div class="activity-queue-card-head">
-        <div>
-          <span class="request-status ${escapeHtml(request.request_status || "pending")}">${escapeHtml(activityDeletionStatusLabel(request.request_status))}</span>
-          <h3>${escapeHtml(request.company_name || "Lead")}</h3>
-          <p>${escapeHtml(request.activity_type || "Activity")} &middot; ${escapeHtml(formatDisplayDate(request.activity_date || request.requested_at))}</p>
-        </div>
-        <strong>${escapeHtml(formatDateTime(request.requested_at || ""))}</strong>
-      </div>
-      <div class="activity-detail-grid">
-        <div class="activity-detail-field"><span>Requester</span><strong>${escapeHtml(request.requested_by_name || "User")}</strong></div>
-        <div class="activity-detail-field"><span>Salesman / team</span><strong>${escapeHtml(request.assigned_salesman || "Not assigned")}</strong></div>
-        <div class="activity-detail-field"><span>Activity creator</span><strong>${escapeHtml(request.activity_creator || "Not recorded")}</strong></div>
-        <div class="activity-detail-field"><span>Attachments</span><strong>${escapeHtml(request.attachment_count || 0)}</strong></div>
-        <div class="activity-detail-field"><span>Reason</span><strong>${escapeHtml(request.reason || "Not added")}</strong></div>
-        <div class="activity-detail-field"><span>Audit events</span><strong>${escapeHtml(historyCount)}</strong></div>
-      </div>
-      ${request.comments ? `<p><strong>Requester comments:</strong> ${escapeHtml(request.comments)}</p>` : ""}
-      ${request.activity_notes ? `<p><strong>Activity notes:</strong> ${escapeHtml(request.activity_notes)}</p>` : ""}
-      ${request.review_note ? `<p><strong>Management comment:</strong> ${escapeHtml(request.review_note)}</p>` : ""}
-      ${pending ? `
-        <div class="activity-queue-card-actions">
-          <textarea data-activity-review-note="${escapeHtml(request.id)}" aria-label="Management comment for ${escapeHtml(request.company_name || "activity")}"></textarea>
-          <button class="danger-button" type="button" data-activity-request-action="reject" data-request-lead="${escapeHtml(request.lead_id)}" data-request-id="${escapeHtml(request.id)}" ${selfRequest ? "disabled title=\"You cannot review your own request.\"" : ""}>Reject</button>
-          <button class="primary-button" type="button" data-activity-request-action="approve" data-request-lead="${escapeHtml(request.lead_id)}" data-request-id="${escapeHtml(request.id)}" ${selfRequest ? "disabled title=\"You cannot review your own request.\"" : ""}>Approve</button>
-        </div>
-      ` : ""}
-    </article>
-  `;
+const deletionQueue = { tab: "pending", rows: [], checked: new Set(), selected: [], sequence: 0, entered: null, busy: false };
+
+function deletionWaitDays(request) {
+  const age = Math.floor((Date.now() - Date.parse(request.requested_at || request.date)) / 86400000);
+  return Number.isFinite(age) ? Math.max(0, age) : 0;
+}
+
+function renderActivityDeletionQueue() {
+  if (state.currentUser?.role !== "admin") return;
+  const search = els.activityDeletionQueueSearch.value.trim().toLowerCase();
+  const salesman = els.activityDeletionQueueSalesman.value;
+  const type = document.querySelector("#deletionQueueType").value;
+  const pending = deletionQueue.tab === "pending";
+  document.querySelectorAll("[data-deletion-tab]").forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.deletionTab === deletionQueue.tab));
+  });
+  const rows = deletionQueue.rows.filter(row =>
+    (row.request_status === "pending") === pending &&
+    (!salesman || row.requested_by_name === salesman) && (!type || row.entry_type === type) &&
+    (!search || [row.company_name, row.requested_by_name, row.activity_type, row.activity_notes, row.reason, row.comments, row.review_note].some(value => String(value || "").toLowerCase().includes(search)))
+  );
+  const tag = (label, cls = "") => `<span class="request-status ${cls}">${escapeHtml(label)}</span>`;
+  const button = (index, action, label, cls = "ghost-button", title = label) => `<button type="button" class="${cls}" data-deletion-action="${action}" data-deletion-index="${index}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${label}</button>`;
+  const bulk = document.querySelector("#deletionQueueBulk");
+  const visibleSelected = rows.filter(row => row.target_available && deletionQueue.checked.has(row));
+  bulk.disabled = !pending || !visibleSelected.length;
+  bulk.textContent = visibleSelected.length ? `Approve selected (${visibleSelected.length})` : "Approve selected";
+  const totalPending = deletionQueue.rows.filter(row => row.request_status === "pending").length;
+  document.querySelector("#deletionQueueCounts").textContent = `${totalPending} awaiting approval / ${deletionQueue.rows.length - totalPending} decided`;
+  els.activityDeletionQueueBody.innerHTML = rows.length ? rows.map(row => {
+    const index = deletionQueue.rows.indexOf(row);
+    const days = deletionWaitDays(row);
+    const age = days >= 7 ? "late" : days >= 3 ? "waiting" : "";
+    const date = row.requested_at || row.date;
+    return `<article class="deletion-request-row ${pending ? age : ""}">
+      <div>${pending && row.target_available ? `<input type="checkbox" aria-label="Select request for ${escapeHtml(row.company_name)}" data-deletion-select="${index}" ${deletionQueue.checked.has(row) ? "checked" : ""}>` : ""}</div>
+      <div><strong>${escapeHtml(formatDateTime(date || ""))}</strong>${pending ? `<small>${days}d waiting</small>` : ""}</div>
+      <div><strong>${escapeHtml(row.company_name || "Lead")}</strong><small>${escapeHtml(row.requested_by_name || "Requester not recorded")}</small></div>
+      <div><strong>${escapeHtml(row.entry_type)} &middot; ${escapeHtml(row.activity_type || "Entry")}</strong><small>${escapeHtml(row.activity_notes || "No entry notes")}</small></div>
+      <div><strong>${escapeHtml(row.reason || "No reason recorded")}</strong>${row.comments ? `<small>${escapeHtml(row.comments)}</small>` : ""}
+      ${!pending ? `<small>${tag(activityDeletionStatusLabel(row.request_status), escapeHtml(row.request_status))} ${escapeHtml(row.restored_by_name || row.reviewed_by_name || "")} ${escapeHtml(formatDateTime(row.restored_at || row.reviewed_at || ""))}</small><small>${escapeHtml(row.review_note || "")}</small>` : ""}
+      ${pending && !row.target_available ? "<small>Original entry unavailable</small>" : ""}</div>
+      <div class="deletion-row-actions">${button(index, "view", pending ? "Review" : "View")}
+      ${pending && row.target_available ? button(index, "approve", "&#10003;", "ghost-button", "Approve request") : ""}
+      ${row.can_restore ? button(index, "restore", "Restore") : ""}</div>
+    </article>`;
+  }).join("") : '<div class="activity-workflow-empty">No deletion requests match these filters.</div>';
 }
 
 async function loadActivityDeletionQueue() {
-  if (!els.activityDeletionQueueBody) return;
-  els.activityDeletionQueueBody.innerHTML = `<div class="activity-workflow-loading" role="status">Loading deletion requests...</div>`;
-  const params = new URLSearchParams({
-    status: els.activityDeletionQueueStatus?.value || "pending",
-    search: els.activityDeletionQueueSearch?.value || "",
-    requester: els.activityDeletionQueueRequester?.value || "",
-    salesman: els.activityDeletionQueueSalesman?.value || "",
-    from: els.activityDeletionQueueFrom?.value || "",
-    to: els.activityDeletionQueueTo?.value || ""
-  });
+  if (state.currentUser?.role !== "admin" || currentView !== "deletion-requests") return;
+  const sequence = ++deletionQueue.sequence;
+  const userId = state.currentUser.id;
+  deletionQueue.rows = [];
+  deletionQueue.checked.clear();
+  document.querySelector("#deletionQueueBulk").disabled = true;
+  document.querySelector("#deletionQueueCounts").textContent = "";
+  const digestDetails = document.querySelector("#deletionQueueDigest");
+  digestDetails.hidden = true;
+  els.activityDeletionQueueBody.innerHTML = '<div class="activity-workflow-loading" role="status">Loading deletion requests...</div>';
   try {
-    const requests = await api(`/api/activity-deletion-requests?${params.toString()}`);
-    els.activityDeletionQueueBody.innerHTML = requests.length
-      ? `<div class="activity-queue-list">${requests.map(activityDeletionQueueCard).join("")}</div>`
-      : `<div class="activity-workflow-empty"><strong>No deletion requests match these filters.</strong></div>`;
-    els.activityDeletionQueueBody.querySelectorAll("[data-activity-request-action]").forEach(button => {
-      button.addEventListener("click", async () => {
-        const note = els.activityDeletionQueueBody.querySelector(`[data-activity-review-note="${CSS.escape(button.dataset.requestId)}"]`)?.value || "";
-        button.disabled = true;
-        try {
-          await reviewDeleteRequest(button.dataset.requestLead, button.dataset.requestId, button.dataset.activityRequestAction, note);
-        } catch (error) {
-          button.disabled = false;
-          setToast(error.message, "error");
-        }
-      });
-    });
+    const result = await api("/api/activity-deletion-requests?status=all&include_digest=1");
+    if (sequence !== deletionQueue.sequence || userId !== state.currentUser?.id || currentView !== "deletion-requests") return;
+    const rows = Array.isArray(result) ? result : result.requests;
+    deletionQueue.rows = rows;
+    if (result.digest?.requests?.length) {
+      const digest = result.digest;
+      digestDetails.querySelector("summary").textContent =
+        `Latest weekly digest: ${digest.requests.length} awaiting approval on ${formatDisplayDate(digest.created_at)}`;
+      digestDetails.querySelector("ul").innerHTML = digest.requests.map(item =>
+        `<li>${escapeHtml(item.company_name)} &middot; requested ${escapeHtml(formatDisplayDate(item.requested_at || ""))}</li>`
+      ).join("");
+      digestDetails.hidden = false;
+    }
+    const salesman = els.activityDeletionQueueSalesman;
+    const previous = salesman.value;
+    const names = [...new Set(rows.map(row => row.requested_by_name).filter(Boolean))].sort();
+    salesman.innerHTML = '<option value="">All requesters</option>' + names.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+    if (names.includes(previous)) salesman.value = previous;
+    renderActivityDeletionQueue();
   } catch (error) {
-    els.activityDeletionQueueBody.innerHTML = `<div class="activity-workflow-error" role="alert">${escapeHtml(error.message)}</div>`;
+    if (sequence !== deletionQueue.sequence || currentView !== "deletion-requests") return;
+    els.activityDeletionQueueBody.innerHTML = `<div class="activity-workflow-error" role="alert">${escapeHtml(error.message)} <button class="ghost-button" type="button" data-deletion-retry>Retry</button></div>`;
   }
+}
+
+function openDeletionReview(rows, action) {
+  if (!rows.length || state.currentUser?.role !== "admin") return;
+  deletionQueue.selected = rows;
+  const dialog = els.activityDeletionQueueDialog;
+  const form = dialog.querySelector("form");
+  form.reset();
+  dialog.querySelector("#deletionReviewMessage").textContent = "";
+  const single = rows.length === 1 ? rows[0] : null;
+  dialog.querySelector("#activityDeletionQueueTitle").textContent = action === "approve" ? `Approve ${rows.length === 1 ? "request" : rows.length + " requests"}` : action === "restore" ? "Restore entry" : "Review deletion request";
+  dialog.querySelector("#deletionReviewEntry").innerHTML = single ? `
+    <strong>${escapeHtml(single.company_name || "Lead")} &middot; ${escapeHtml(single.entry_type)}</strong>
+    <p>${escapeHtml(single.activity_type || "Entry")} &middot; ${escapeHtml(formatDisplayDate(single.activity_date || single.requested_at || single.date || ""))} &middot; Logged by ${escapeHtml(single.activity_creator || "Not recorded")}</p>
+    <p><strong>Entry:</strong> ${escapeHtml(single.activity_notes || "No notes")}</p>
+    <p><strong>Requested by:</strong> ${escapeHtml(single.requested_by_name || "Not recorded")}</p>
+    <p><strong>Reason:</strong> ${escapeHtml(single.reason || "Not recorded")} ${escapeHtml(single.comments || "")}</p>
+    ${single.review_note ? `<p><strong>Decision note:</strong> ${escapeHtml(single.review_note)}</p>` : ""}
+    ${(single.audit_history || []).length ? `<ul>${single.audit_history.map(event => `<li>${escapeHtml(event.action || event.event || "Update")} &middot; ${escapeHtml(event.actor_name || event.by_name || "")} &middot; ${escapeHtml(formatDateTime(event.at || ""))}</li>`).join("")}</ul>` : ""}
+  ` : `<ul>${rows.map(row => `<li>${escapeHtml(row.company_name)} &middot; ${escapeHtml(row.activity_type || row.entry_type)}</li>`).join("")}</ul>`;
+  const pending = single?.request_status === "pending";
+  const choices = action === "view" ? [...(pending && single.target_available ? ["approve"] : []), ...(pending ? ["reject"] : [])] : [action];
+  dialog.querySelector("#deletionReviewFields").hidden = !choices.length;
+  dialog.querySelector("#deletionReviewHelp").textContent = choices.includes("approve") ? "Approval hides the entry from the lead timeline. The decision remains in history, and an Admin can restore the entry." : "";
+  dialog.querySelector("#deletionReviewButtons").innerHTML = choices.map(choice =>
+    `<button type="submit" class="${choice === "reject" ? "danger-button" : "primary-button"}" value="${choice}">${{approve: "Approve", reject: "Reject", restore: "Restore"}[choice]}</button>`
+  ).join("");
+  dialog.showModal();
 }
 
 async function cancelActivityDeletionRequest() {
@@ -2974,12 +3022,14 @@ function neglectedActivityRows(leads, referenceDate) {
   for (const lead of leads || []) {
     const activities = Array.isArray(lead.activities) ? lead.activities : [];
     for (const activity of activities) {
-      if (!activity || activity.archived || activity.delete_request || activity.deletion_status === "pending") continue;
+      if (!activity || activity.archived || activity.delete_request) continue;
       const due = String(activity.next_action_date || activity.reminder_due_date || (activity.reminder ? activity.due_date : "") || "").slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(`${due}T00:00:00Z`)) || new Date(`${due}T00:00:00Z`).toISOString().slice(0, 10) !== due || due >= referenceDate) continue;
       const id = String(activity.id || "").trim();
       const stable = Boolean(id && activities.filter(item => item && String(item.id || "") === id).length === 1);
-      rows.push({ lead, activity, due, stable, status: activity.transaction_status === "closed" ? "closed" : "pending" });
+      const locked = activity.deletion_status === "pending" || Boolean(id && activities.some(item =>
+        item?.delete_request && item.request_status === "pending" && String(item.target_activity_id) === id));
+      rows.push({ lead, activity, due, stable, locked, status: activity.transaction_status === "closed" ? "closed" : "pending" });
     }
   }
   return rows.sort((a, b) => a.due.localeCompare(b.due));
@@ -3003,10 +3053,10 @@ function renderNeglectedActivities(workspace) {
     <section class="neglected-v2-list" aria-label="Overdue follow-ups"><div class="neglected-v2-filters">${["all", "pending", "closed"].map(filter => `<button type="button" data-neglected-filter="${filter}" aria-pressed="${neglectedActivityFilter === filter}" ${unavailable ? "disabled" : ""}>${filter[0].toUpperCase() + filter.slice(1)} · ${unavailable ? "—" : filter === "all" ? rows.length : filter === "closed" ? closed : rows.length - closed}</button>`).join("")}</div>
     ${state.leadsLoading && !state.leadsLoaded ? `<p role="status">Loading follow-ups...</p>` : state.leadsError && !state.leadsLoaded ? `<p role="alert">${escapeHtml(state.leadsError)}</p><button type="button" data-neglected-retry>Retry</button>` : !visible.length ? `<p class="neglected-v2-empty">No overdue activities match this filter.</p>` : visible.map(row => {
       const a = row.activity;
-      const editing = neglectedActivityEditor && neglectedActivityEditor.leadId === String(row.lead.id) && neglectedActivityEditor.activityId === String(a.id);
+      const editing = !row.locked && neglectedActivityEditor && neglectedActivityEditor.leadId === String(row.lead.id) && neglectedActivityEditor.activityId === String(a.id);
       const editor = editing ? neglectedActivityEditor : null;
       const days = Math.floor((Date.parse(`${referenceDate}T00:00:00Z`) - Date.parse(`${row.due}T00:00:00Z`)) / 86400000);
-      return `<article class="neglected-v2-row"><div class="neglected-v2-row-main"><div><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(row.lead.id)}">${escapeHtml(row.lead.company_name || "Unnamed company")}</button><p>${escapeHtml(a.activity_purpose || a.type || "Activity")} · due ${escapeHtml(row.due)}</p></div><strong class="neglected-v2-overdue">${days} d overdue</strong><div class="neglected-v2-switch" aria-label="Follow-up status">${["pending", "closed"].map(status => `<button type="button" data-neglected-status="${status}" data-neglected-index="${row.index}" aria-pressed="${row.status === status}" ${manager || !row.stable ? "disabled" : ""}>${status === "pending" ? "Pending" : "Closed"}</button>`).join("")}</div><div class="neglected-v2-remark">${a.transaction_remarks ? `<strong>${escapeHtml(a.transaction_outcome || "Update")}</strong><p>${escapeHtml(a.transaction_remarks)}</p><small>${escapeHtml(a.transaction_updated_by_name || "User")} · ${escapeHtml(String(a.transaction_updated_at || "").slice(0, 10))}${a.transaction_next_attempt ? ` · next attempt ${escapeHtml(a.transaction_next_attempt)}` : ""}</small>` : `<span>No remarks</span>`}${!row.stable ? `<small>Activity needs a permanent ID before editing.</small>` : ""}</div>${!manager ? `<div class="neglected-v2-actions">${row.lead.phone ? `<a class="primary-button" href="tel:${escapeHtml(String(row.lead.phone).replace(/[^+\d*#,;]/g, ""))}" aria-label="Call ${escapeHtml(row.lead.company_name || "company")}">Call</a>` : `<button type="button" disabled title="No phone number saved">Call</button>`}<button type="button" class="ghost-button" data-neglected-task="${escapeHtml(row.lead.id)}">Task</button>${row.stable ? `<button type="button" class="ghost-button" data-neglected-edit="${row.index}">${a.transaction_remarks ? "Edit remarks" : "Add remarks"}</button>` : ""}</div>` : ""}</div>
+      return `<article class="neglected-v2-row"><div class="neglected-v2-row-main"><div><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(row.lead.id)}">${escapeHtml(row.lead.company_name || "Unnamed company")}</button><p>${escapeHtml(a.activity_purpose || a.type || "Activity")} · due ${escapeHtml(row.due)}</p></div><strong class="neglected-v2-overdue">${days} d overdue</strong><div class="neglected-v2-switch" aria-label="Follow-up status">${["pending", "closed"].map(status => `<button type="button" data-neglected-status="${status}" data-neglected-index="${row.index}" aria-pressed="${row.status === status}" ${manager || !row.stable || row.locked ? "disabled" : ""}>${status === "pending" ? "Pending" : "Closed"}</button>`).join("")}</div><div class="neglected-v2-remark">${a.transaction_remarks ? `<strong>${escapeHtml(a.transaction_outcome || "Update")}</strong><p>${escapeHtml(a.transaction_remarks)}</p><small>${escapeHtml(a.transaction_updated_by_name || "User")} · ${escapeHtml(String(a.transaction_updated_at || "").slice(0, 10))}${a.transaction_next_attempt ? ` · next attempt ${escapeHtml(a.transaction_next_attempt)}` : ""}</small>` : `<span>No remarks</span>`}${row.locked ? `<small>Deletion pending approval</small>` : ""}${!row.stable ? `<small>Activity needs a permanent ID before editing.</small>` : ""}</div>${!manager ? `<div class="neglected-v2-actions">${row.lead.phone ? `<a class="primary-button" href="tel:${escapeHtml(String(row.lead.phone).replace(/[^+\d*#,;]/g, ""))}" aria-label="Call ${escapeHtml(row.lead.company_name || "company")}">Call</a>` : `<button type="button" disabled title="No phone number saved">Call</button>`}<button type="button" class="ghost-button" data-neglected-task="${escapeHtml(row.lead.id)}">Task</button>${row.stable && !row.locked ? `<button type="button" class="ghost-button" data-neglected-edit="${row.index}">${a.transaction_remarks ? "Edit remarks" : "Add remarks"}</button>` : ""}</div>` : ""}</div>
       ${editor ? `<form class="neglected-v2-editor" data-neglected-form><label>${outcomeLabel(editor.status)}<select name="outcome" required><option value="">Choose...</option>${neglectedOutcomes[editor.status].map(outcome => `<option value="${escapeHtml(outcome)}" ${editor.outcome === outcome ? "selected" : ""}>${escapeHtml(outcome)}</option>`).join("")}</select></label>${editor.status === "pending" ? `<label>Next attempt<input type="date" name="next_attempt" value="${escapeHtml(editor.nextAttempt)}" required></label>` : ""}<label>Remarks <span>required</span><textarea name="remarks" maxlength="4000" required placeholder="Add a note for management">${escapeHtml(editor.remarks)}</textarea></label><div><button type="submit" class="primary-button" data-neglected-save disabled>Save update</button><button type="button" class="ghost-button" data-neglected-cancel>Cancel</button><p role="alert">${escapeHtml(editor.error || "")}</p></div></form>` : ""}</article>`;
     }).join("")}</section><form class="neglected-v2-assistant"><label class="sr-only" for="neglectedQuestion">Ask the AI Assistant</label><input id="neglectedQuestion" placeholder="Ask the AI Assistant about these accounts" maxlength="4000"><span class="neglected-assistant-host"></span></form>`;
   const form = workspace.querySelector("[data-neglected-form]");
@@ -6093,7 +6143,7 @@ function renderMetrics() {
 }
 
 function hasLeadContactedActivity(lead) {
-  const activities = Array.isArray(lead?.activities) ? lead.activities.filter(activity => !activity?.delete_request && !isReminderActivity(activity)) : [];
+  const activities = Array.isArray(lead?.activities) ? lead.activities.filter(activity => !activity?.delete_request && !activity?.archived && !isReminderActivity(activity)) : [];
   return activities.length > 0 || Boolean(String(lead?.last_activity || "").trim());
 }
 
@@ -6874,7 +6924,7 @@ function salesmanPerformanceRows() {
     const generatedLeads = state.leads.filter(lead => leadGeneratedBySalesman(lead, person));
     const filteredStageLeads = stage === "all" ? assignedLeads : assignedLeads.filter(lead => lead.stage === stage);
     const activities = assignedLeads.flatMap(lead => Array.isArray(lead.activities) ? lead.activities : [])
-      .filter(activity => !activity.delete_request);
+      .filter(activity => !activity.delete_request && !activity.archived);
     const followupsCompleted = activities.filter(completedFollowupActivity).length;
     const upcomingFollowups = assignedLeads.flatMap(remindersForLead)
       .filter(reminder => !reminder.due_date || reminder.due_date >= today()).length;
@@ -7732,7 +7782,7 @@ function renderCleanAdminDashboard() {
   const open = dashboardSummaryDatasets().openPipeline;
   const quotes = adminReferenceQuoteRows(state.leads).filter(quote => quote.sent && quote.status !== "Won");
   const firstOrders = state.leads.filter(lead => inRange(String(lead.first_order_date || "").slice(0, 10), dateTo.slice(0, 7) + "-01"));
-  const requests = allActivities().filter(row => row.delete_request && row.request_status === "pending");
+  const requests = allActivities().filter(row => row.delete_request && row.target_type === "activity" && row.request_status === "pending");
   const loaded = state.leadsLoaded && !state.leadsError;
   const number = value => loaded ? String(value) : "&mdash;";
   const buttons = (entries, key) => entries.map(([value, label]) =>
@@ -7786,11 +7836,13 @@ function renderCleanAdminDashboard() {
     ])) : empty("No activities in this period.");
     content += '<div class="clean-admin-table-link"><button type="button" class="text-button" data-clean-action="activity">Open activity log &#8250;</button></div>';
   }
-  host.innerHTML = `<section class="clean-admin-metrics" aria-label="Dashboard summary">
+  host.innerHTML = `${requests.length ? `<div class="deletion-dashboard-alert"><strong>${requests.length} deletion request${requests.length === 1 ? "" : "s"} awaiting approval &middot; oldest waiting ${Math.max(...requests.map(deletionWaitDays))}d</strong><button class="ghost-button" type="button" data-clean-action="deletions">Review requests</button></div>` : ""}
+  <section class="clean-admin-metrics clean-admin-metrics--deletions" aria-label="Dashboard summary">
     ${metric("Open pipeline", open.length, "leads", `${money.format(open.reduce((sum, lead) => sum + (Number(lead.estimated_value) || 0), 0))} pipeline value`, "pipeline")}
     ${metric("Overdue activities", overdue.length, "open", overdue.length ? `Oldest ${daysOverdue(overdue[0].due_date)} days / ${Object.keys(overdueBreakdown(overdue)).filter(name => name !== "Unassigned").length} reps` : "No overdue follow-ups", "overdue", "clean-admin-danger")}
     ${metric("Quotations out", quotes.length, "shared", "Recorded as sent, no linked order", "quotes")}
     ${metric("Won this month", firstOrders.length, `of ${loaded ? state.leads.length : "--"}`, "Recorded first orders in CRM")}
+    ${metric("Deletion requests", requests.length, "pending", "Awaiting Admin decision", "deletions")}
   </section>
   <div class="clean-admin-columns">
     <div class="clean-admin-stack">
@@ -7951,11 +8003,12 @@ function arrangeReferenceAdminDashboard() {
   const coldLeads = state.leads.filter(lead => lead.health?.label === "RED" || normalizeStageKey(lead.stage) === "DORMANT");
   const overdue = state.leads.filter(leadHasOverdueNextAction);
   const flags = (state.attentionFlags || []).filter(flag => !["resolved", "closed"].includes(String(flag.status || "").toLowerCase()));
+  const deletionsPending = allActivities().filter(row => row.delete_request && row.target_type === "activity" && row.request_status === "pending").length;
   triage.innerHTML = `<h2>Needs your <em class="crm-title-accent">attention</em></h2><div class="admin-ref-attention-grid">${[
     ["Overdue follow-ups", overdue.length, `${new Set(overdue.map(lead => lead.assigned_to || lead.assigned_salesman)).size} salesmen affected`, "View report", "overdue", "danger"],
     ["Cold relationships", coldLeads.length, "At-risk and dormant relationships", "See accounts", "cold", "warning"],
     ["Weekly reports", adminReference.reportsReady ? state.weeklyReports.missing.length : "--", adminReference.reportsError || (adminReference.reportsReady ? "Missing submissions for the selected week" : "Loading report status"), "Open review", "reports", "warning"],
-    ["Director alerts", flags.length, flags.length ? "Open flags awaiting management" : "No open director alerts", "Alert history", "alerts", "teal"]
+    ["Director alerts", flags.length, `${flags.length ? "Open flags awaiting management" : "No open director alerts"} / ${deletionsPending} deletion requests awaiting a decision`, "Alert history", "alerts", "teal"]
   ].map(([label, count, detail, text, action, tone]) => `<article class="admin-ref-attention-card ${tone}"><span>${label}</span><i class="admin-v3-icon attention-${action}" aria-hidden="true"></i><strong>${count}</strong><p>${escapeHtml(detail)}</p><button class="ghost-button" type="button" data-admin-attention="${action}">${text} &#8250;</button></article>`).join("")}</div>`;
   triage.querySelectorAll("[data-admin-attention]").forEach(button => button.onclick = () => {
     const action = button.dataset.adminAttention;
@@ -8262,6 +8315,7 @@ function renderReferenceAdminActivity() {
   });
   host.querySelector(".admin-ref-table-scroll").onscroll = () => filters.forEach(filter => { filter.open = false; });
   document.querySelector("[data-admin-log-activity]").onclick = event => openActivityModal("", event.currentTarget);
+  document.querySelector("[data-admin-deletion-queue]").onclick = () => setView("deletion-requests");
   document.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, statusLabel(row), row.outcome, row.remarks]));
   host.querySelectorAll("[data-admin-activity-history]").forEach(button => button.onclick = () => {
     openActivityDetails(button.dataset.adminActivityHistory, Number(button.dataset.index), button.dataset.activityId);
@@ -10837,13 +10891,14 @@ function recordRelationshipHealth(lead) {
   const known = !closed && days !== null && Number.isFinite(cadence) && cadence > 0;
   const tone = !known ? "unknown" : days > cadence * 1.6 ? "red" : days > cadence ? "amber" : "green";
   const recent = (lead.activities || []).filter(activity => {
-    if (activity.followup_resolution === "cancelled") return false;
+    if (activity.archived || activity.delete_request || activity.followup_resolution === "cancelled") return false;
     const elapsed = recordDaysSince(activity.at);
     return elapsed !== null && elapsed <= 60;
   });
   const visits = recent.filter(activity => /in.person|site visit|meeting/i.test(activity.type || "") && !/pmr filed/i.test(activity.type || ""));
   const pmrsReady = state.selectedId === lead.id && !state.leadDrawerLoading && !state.leadDrawerPmrsError;
-  const pmrs = pmrsReady ? (state.leadDrawerPmrs || []).filter(pmr => String(pmr.company_id) === String(lead.id) && !pmr.pending_sync).sort((a, b) => String(b.meeting_date || "").localeCompare(String(a.meeting_date || ""))).slice(0, 3) : [];
+  const archivedIds = new Set((lead.activities || []).filter(activity => activity.archived).map(activity => activity.id));
+  const pmrs = pmrsReady ? (state.leadDrawerPmrs || []).filter(pmr => String(pmr.company_id) === String(lead.id) && !pmr.pending_sync && !archivedIds.has(pmr.activity_id)).sort((a, b) => String(b.meeting_date || "").localeCompare(String(a.meeting_date || ""))).slice(0, 3) : [];
   const scores = pmrs.map(pmr => Number(pmr.relationship_heat_score)).filter(score => Number.isFinite(score) && score >= 1 && score <= 5);
   return {
     tone,
@@ -12218,7 +12273,8 @@ async function addDrawerReminder(leadId) {
 function pmrLinkableActivities(lead) {
   const meetingTypes = new Set(["in-person meeting", "site visit", "customer meeting", "phone call", "video call", "visit"]);
   return (lead.activities || []).filter(activity => {
-    if (!activity?.id || activity.delete_request || activity.correction || activity.pmr_linked) return false;
+    if (!activity?.id || activity.archived || activity.deletion_status === "pending"
+      || activity.delete_request || activity.correction || activity.pmr_linked) return false;
     const type = String(activity.type || "").trim().toLowerCase();
     const text = String(activity.text || activity.note || "").toLowerCase();
     return meetingTypes.has(type) || text.includes("meeting") || text.includes("visit");
@@ -13019,6 +13075,7 @@ function renderActionPlanPanel() {
 function allActivities() {
   return state.leads.flatMap(lead => (lead.activities || []).map((activity, index) => ({ ...activity, company_name: lead.company_name, lead_id: lead.id, activity_index: index,
     followup_retired: isReminderActivity(activity) && followupRetiredReminder(activity, lead.activities) })))
+    .filter(activity => !activity.archived)
     .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
 
@@ -13140,7 +13197,7 @@ function reminderKey(reminder = {}) {
 
 function completedReminderKeys(lead) {
   return new Set((lead.activities || [])
-    .filter(activity => activity.followup_completed)
+    .filter(activity => activity.followup_completed && !activity.archived)
     .map(activity => reminderKey({
       lead_id: lead.id,
       due_date: activity.completed_due_date,
@@ -13170,7 +13227,11 @@ function remindersForLead(lead) {
     activity.due_date === lead.next_action_date
     && String(activity.activity_required || activity.text || "").includes(String(lead.next_action || ""))
   );
-  if (!hasNextActionReminder && lead.next_action_date && lead.next_action) {
+  const archivedNextAction = (lead.activities || []).some(activity =>
+    activity.archived && isReminderActivity(activity) && (activity.due_date || activity.reminder_due_date) === lead.next_action_date &&
+    String(activity.activity_required || activity.text || "").trim().toLowerCase() === String(lead.next_action || "").trim().toLowerCase()
+  );
+  if (!hasNextActionReminder && !archivedNextAction && lead.next_action_date && lead.next_action) {
     stored.unshift({
       lead_id: lead.id,
       company_name: lead.company_name,
@@ -15787,7 +15848,7 @@ function renderDetail() {
         <button class="ghost-button" id="enrichLead" type="button">Enrich with Hunter</button>
         <button class="ghost-button" id="manualReenrichLead" type="button">Re-enrich Company</button>
         <button class="ghost-button" id="openPmrForm" type="button">File PMR</button>
-        <button class="ghost-button danger" id="deleteLead" type="button">${state.currentUser?.role === "admin" ? "Delete Lead" : "Request Delete Lead"}</button>
+        ${state.currentUser?.role === "admin" ? '<button class="ghost-button danger" id="deleteLead" type="button">Delete Lead</button>' : ""}
         <span class="form-message" id="detailMessage" aria-live="polite"></span>
       </div>
       ${linkedinControls(lead)}
@@ -15976,17 +16037,8 @@ function renderDetail() {
     openPmrForLead(lead.id);
   });
 
-  document.querySelector("#deleteLead").addEventListener("click", async () => {
+  document.querySelector("#deleteLead")?.addEventListener("click", async () => {
     const message = document.querySelector("#detailMessage");
-    if (state.currentUser?.role !== "admin") {
-      try {
-        await submitDeleteRequest(lead.id, "lead");
-        setMessage(message, "Delete request sent to admin.", "success");
-      } catch (error) {
-        setMessage(message, error.message, "error");
-      }
-      return;
-    }
     if (!window.confirm(`Delete ${lead.company_name}? This cannot be undone.`)) return;
     const password = adminPasswordPrompt("delete this lead");
     if (!password) return;
@@ -16060,6 +16112,22 @@ function arrangeLeadRecordControls() {
 
 function applyView() {
   arrangeLeadRecordControls();
+  if (currentView === "deletion-requests" && state.currentUser && state.currentUser.role !== "admin") currentView = "dashboard";
+  const deletionActor = currentView === "deletion-requests" && state.currentUser?.role === "admin" ? state.currentUser.id : null;
+  document.querySelector("#deletionRequestsView").classList.toggle("hidden", !deletionActor);
+  if (deletionQueue.entered !== deletionActor) {
+    deletionQueue.entered = deletionActor;
+    if (deletionActor) void loadActivityDeletionQueue();
+    else {
+      ++deletionQueue.sequence;
+      deletionQueue.rows = [];
+      deletionQueue.checked.clear();
+      deletionQueue.selected = [];
+      els.activityDeletionQueueBody.replaceChildren();
+      els.activityDeletionQueueDialog.querySelector("form").reset();
+      els.activityDeletionQueueDialog.close();
+    }
+  }
   if (state.currentUser && state.currentUser.role !== "admin" && ["quotes", "accounts"].includes(currentView)) currentView = "pipeline";
   if (isSalesmanRole() && ["salesmen", "activity"].includes(currentView)) {
     currentView = "dashboard";
@@ -16092,7 +16160,7 @@ function applyView() {
   document.querySelector('#mobileSidebar [data-view="ai-actions"]')?.classList.remove("hidden");
   els.activityView.classList.toggle("hidden", currentView !== "activity");
   document.querySelectorAll(".nav-item").forEach(item => {
-    const navigationView = currentView === "lead" || currentView === "meeting-prep" && state.meetingRouteLeadId ? "pipeline" : currentView === "neglected" ? "dashboard" : isSalesmanRole() && isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "dashboard"
+    const navigationView = currentView === "deletion-requests" ? "activity" : currentView === "lead" || currentView === "meeting-prep" && state.meetingRouteLeadId ? "pipeline" : currentView === "neglected" ? "dashboard" : isSalesmanRole() && isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "dashboard"
       : isAiWorkspace && !["focus", "neglected"].includes(currentView) ? "ai-actions" : currentView;
     item.classList.toggle("active", item.dataset.view === navigationView && !item.dataset.mobileAction);
   });
@@ -16134,6 +16202,7 @@ function toggleMobileMenu() {
 }
 
 function setView(view) {
+  if (view === "deletion-requests" && state.currentUser?.role !== "admin") view = "dashboard";
   if (["quotes", "accounts"].includes(view) && state.currentUser?.role !== "admin") view = "pipeline";
   if (view !== "draft-email") state.emailRouteLeadId = "";
   if (view !== "meeting-prep") state.meetingRouteLeadId = "";
@@ -17509,7 +17578,7 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
   if (currentView === "neglected" && isSalesmanRole() && (button.dataset.neglectedStatus || button.hasAttribute("data-neglected-edit"))) {
     const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
     const row = neglectedActivityRows(state.leads, date)[Number(button.dataset.neglectedIndex ?? button.dataset.neglectedEdit)];
-    if (!row || !row.stable) return;
+    if (!row || !row.stable || row.locked) return;
     const status = button.dataset.neglectedStatus || row.status;
     neglectedActivityEditor = { owner: String(state.currentUser.id), leadId: String(row.lead.id), activityId: String(row.activity.id), version: Number(row.activity.version || 1), status, outcome: status === row.status ? row.activity.transaction_outcome || "" : "", remarks: row.activity.transaction_remarks || "", nextAttempt: status === "pending" ? row.activity.transaction_next_attempt || "" : "", error: "" };
     renderAiWorkspace();
@@ -17802,34 +17871,75 @@ els.activityDeletionDialog?.addEventListener("cancel", event => {
   event.preventDefault();
   els.activityDeletionDialog.close();
 });
-els.openActivityDeletionQueue?.addEventListener("click", async () => {
-  if (els.activityDeletionQueueSalesman) {
-    const previous = els.activityDeletionQueueSalesman.value;
-    const salesmen = (state.settings.salesmen || [])
-      .map(salesmanName)
-      .filter(Boolean);
-    els.activityDeletionQueueSalesman.innerHTML = [
-      `<option value="">All salesmen</option>`,
-      ...salesmen.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
-    ].join("");
-    els.activityDeletionQueueSalesman.value = previous;
-  }
-  els.activityDeletionQueueDialog?.showModal();
-  await loadActivityDeletionQueue();
-});
-document.querySelectorAll("[data-close-activity-queue]").forEach(button => {
-  button.addEventListener("click", () => els.activityDeletionQueueDialog?.close());
-});
-els.activityDeletionQueueStatus?.addEventListener("change", loadActivityDeletionQueue);
-els.activityDeletionQueueSalesman?.addEventListener("change", loadActivityDeletionQueue);
-els.activityDeletionQueueFrom?.addEventListener("change", loadActivityDeletionQueue);
-els.activityDeletionQueueTo?.addEventListener("change", loadActivityDeletionQueue);
-let activityDeletionQueueSearchTimer = null;
-const queueSearchInputs = [els.activityDeletionQueueSearch, els.activityDeletionQueueRequester].filter(Boolean);
-queueSearchInputs.forEach(input => input.addEventListener("input", () => {
-  clearTimeout(activityDeletionQueueSearchTimer);
-  activityDeletionQueueSearchTimer = setTimeout(loadActivityDeletionQueue, 250);
+els.openActivityDeletionQueue?.addEventListener("click", () => setView("deletion-requests"));
+document.querySelector("#deletionQueueBack").addEventListener("click", () => setView("activity"));
+document.querySelectorAll("[data-close-activity-queue]").forEach(button => button.addEventListener("click", () => {
+  if (!deletionQueue.busy) els.activityDeletionQueueDialog.close();
 }));
+els.activityDeletionQueueDialog.addEventListener("cancel", event => { if (deletionQueue.busy) event.preventDefault(); });
+document.querySelectorAll("[data-deletion-tab]").forEach(button => button.addEventListener("click", () => {
+  deletionQueue.tab = button.dataset.deletionTab;
+  deletionQueue.checked.clear();
+  renderActivityDeletionQueue();
+}));
+for (const input of [els.activityDeletionQueueSearch, els.activityDeletionQueueSalesman, document.querySelector("#deletionQueueType")]) {
+  input.addEventListener(input.type === "search" ? "input" : "change", () => {
+    deletionQueue.checked.clear();
+    renderActivityDeletionQueue();
+  });
+}
+els.activityDeletionQueueBody.addEventListener("change", event => {
+  const index = event.target.dataset.deletionSelect;
+  if (index == null) return;
+  const row = deletionQueue.rows[Number(index)];
+  if (event.target.checked) deletionQueue.checked.add(row);
+  else deletionQueue.checked.delete(row);
+  const bulk = document.querySelector("#deletionQueueBulk");
+  bulk.disabled = !deletionQueue.checked.size;
+  bulk.textContent = deletionQueue.checked.size ? `Approve selected (${deletionQueue.checked.size})` : "Approve selected";
+});
+els.activityDeletionQueueBody.addEventListener("click", event => {
+  if (event.target.closest("[data-deletion-retry]")) return loadActivityDeletionQueue();
+  const button = event.target.closest("[data-deletion-action]");
+  if (button) openDeletionReview([deletionQueue.rows[Number(button.dataset.deletionIndex)]].filter(Boolean), button.dataset.deletionAction);
+});
+document.querySelector("#deletionQueueBulk").addEventListener("click", () => openDeletionReview([...deletionQueue.checked], "approve"));
+document.querySelector("#deletionReviewForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (deletionQueue.busy || state.currentUser?.role !== "admin") return;
+  const form = event.currentTarget;
+  const action = event.submitter?.value;
+  if (!["approve", "reject", "restore"].includes(action)) return;
+  const message = document.querySelector("#deletionReviewMessage");
+  const password = form.elements.admin_password.value;
+  const note = form.elements.note.value.trim();
+  if (!password || action === "reject" && !note) {
+    message.textContent = !password ? "Enter your admin password." : "Enter a reason for rejecting this request.";
+    return;
+  }
+  const rows = [...deletionQueue.selected];
+  const controls = [...form.querySelectorAll("button, input, textarea")];
+  deletionQueue.busy = true;
+  controls.forEach(control => { control.disabled = true; });
+  let saved = 0;
+  try {
+    for (const row of rows) {
+      await api(`/api/leads/${encodeURIComponent(row.lead_id)}/delete-requests/${encodeURIComponent(row.id)}/${action}`, { method: "POST", body: JSON.stringify({ admin_password: password, note }) });
+      saved++;
+    }
+    els.activityDeletionQueueDialog.close();
+    setToast(saved === 1 ? "Deletion request updated." : `${saved} deletion requests updated.`, "success");
+  } catch (error) {
+    message.textContent = `${saved ? `${saved} of ${rows.length} approved. ` : ""}${error.message}`;
+    deletionQueue.selected = rows.slice(saved);
+  } finally {
+    form.elements.admin_password.value = "";
+    deletionQueue.busy = false;
+    controls.forEach(control => { control.disabled = false; });
+    await loadActivityDeletionQueue();
+    if (saved) await loadLeads();
+  }
+});
 
 els.quickLogCompanySearch?.addEventListener("input", renderQuickLogSheet);
 els.quickLogLeadSelect?.addEventListener("change", event => {
