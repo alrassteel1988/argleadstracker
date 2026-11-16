@@ -40,19 +40,44 @@ function validateLeadFollowup(input = {}, now) {
   const nextType = String(next?.type || "");
   const nextDate = String(next?.date || "");
   const nextNote = String(next?.note || "").trim();
+  const activityId = String(input.activity_id ?? "").trim();
+  const activityVersion = Number(input.expected_activity_version);
+  const overdueOnly = input.overdue_only === true || input.activity_id != null;
+  if (input.activity_id != null && (!activityId || activityId.length > 200 || !Number.isSafeInteger(activityVersion)
+    || activityVersion < 1 || activityVersion > 2147483647 || next)) throw followupError(400, "This overdue activity needs a valid identity and version.");
+  if (overdueOnly && due >= dubaiDate(now)) throw followupError(400, "Only overdue activities can be resolved from Neglected accounts.");
   if (next && (!Object.hasOwn(PLANS, nextType) || !validDate(nextDate) || nextDate < dubaiDate(now) || nextNote.length > 500)) throw followupError(400, "Choose a replacement type and a valid date of today or later.");
   return {
     status, reason, remarks, spoke_with: spokeWith, expected_action: action, expected_due: due,
     expected_revision: String(input.expected_revision || ""), expected_updated_at: String(input.expected_updated_at || ""),
-    request_id: request, done_at: doneAt, next_type: nextType, next_date: nextDate, next_note: nextNote
+    request_id: request, done_at: doneAt, next_type: nextType, next_date: nextDate, next_note: nextNote,
+    ...(overdueOnly ? { overdue_only: true } : {}),
+    ...(activityId ? { activity_id: activityId, expected_activity_version: activityVersion } : {})
   };
 }
 
-function canResolveLeadFollowup(user, lead) {
+function canResolveLeadFollowup(user, lead, values = {}) {
   return user.role === "admin" || (user.role === "salesman" && (
     lead.assigned_to ? String(lead.assigned_to) === String(user.id)
-      : Boolean(user.name && String(lead.assigned_salesman || "").trim().toLowerCase() === user.name.trim().toLowerCase())
+      : Boolean(!values.overdue_only && !values.activity_id && user.name && String(lead.assigned_salesman || "").trim().toLowerCase() === user.name.trim().toLowerCase())
   ));
+}
+
+function scheduledActivity(item) {
+  const reminder = item.reminder === true || String(item.type || "").toLowerCase() === "reminder";
+  return {
+    reminder,
+    due: String(item.next_action_date || item.reminder_due_date || (reminder ? item.due_date : "") || "").slice(0, 10),
+    action: String(item.activity_required || item.followup_action || (reminder && item.text) || item.activity_purpose || item.type || "Activity").trim()
+  };
+}
+
+function isPendingScheduledActivity(item) {
+  const terminal = ["closed", "completed", "cancelled"];
+  return item && !item.archived && !item.delete_request && item.deletion_status !== "pending"
+    && !item.followup_resolution && !item.followup_completed && !item.completed_at
+    && !terminal.includes(String(item.reminder_status || "").toLowerCase())
+    && !terminal.includes(String(item.transaction_status || "").toLowerCase());
 }
 
 function matchesScheduledReminder(item, action, due) {
@@ -65,28 +90,50 @@ function matchesScheduledReminder(item, action, due) {
 }
 
 function resolveLocalLeadFollowup(lead, user, values, now) {
-  if (!canResolveLeadFollowup(user, lead)) throw followupError(403, "Only an Admin or the assigned salesman can resolve this follow-up.");
+  if (!canResolveLeadFollowup(user, lead, values)) throw followupError(403, "Only an Admin or the assigned salesman can resolve this follow-up.");
   const activities = Array.isArray(lead.activities) ? lead.activities : [];
   const id = `followup-${values.request_id}`;
   const duplicate = activities.find(item => item?.id === id);
   if (duplicate) {
-    if (duplicate.created_by !== user.id || !duplicate.followup_resolution) throw followupError(409, "This follow-up request has already been used.");
+    if (duplicate.created_by !== user.id || duplicate.followup_resolution !== values.status
+      || (duplicate.resolved_activity_id || "") !== (values.activity_id || "")
+      || (values.activity_id && (duplicate.transaction_outcome !== values.reason || duplicate.transaction_remarks !== values.remarks
+        || duplicate.followup_due_date !== values.expected_due || duplicate.followup_action !== values.expected_action))) {
+      throw followupError(409, "This follow-up request has already been used.");
+    }
     return { lead, activity: duplicate, duplicate: true };
   }
-  if (String(lead.next_action || "").trim() !== values.expected_action
-    || String(lead.next_action_date || "") !== values.expected_due
-    || String(activities.find(item => item?.followup_resolution)?.id || "") !== values.expected_revision
-    || String(lead.updated_at || "") !== values.expected_updated_at) {
-    throw followupError(409, "The next step changed. Refresh the lead before saving.");
+  let original;
+  if (values.activity_id) {
+    const matches = activities.filter(item => item?.id === values.activity_id);
+    original = matches[0];
+    if (matches.length !== 1 || !isPendingScheduledActivity(original) || isResolvedReminder(original, activities)
+      || String(lead.updated_at || "") !== values.expected_updated_at
+      || Number(original.version ?? 1) !== values.expected_activity_version) throw followupError(409, "This activity changed or is no longer pending. Refresh before saving.");
+    const schedule = scheduledActivity(original);
+    if (!schedule.reminder && original.next_action_plan) throw followupError(409, "This activity records a lead plan. Use the next-step controls.");
+    if (schedule.action !== values.expected_action || schedule.due !== values.expected_due
+      || schedule.due >= dubaiDate(now)) throw followupError(409, "This activity changed. Refresh before saving.");
+    if (schedule.reminder && schedule.due === lead.next_action_date
+      && schedule.action.toLowerCase() === String(lead.next_action || "").trim().toLowerCase()) {
+      throw followupError(409, "This activity is the lead's next step. Use the next-step controls.");
+    }
+  } else {
+    if (String(lead.next_action || "").trim() !== values.expected_action
+      || String(lead.next_action_date || "") !== values.expected_due
+      || String(activities.find(item => item?.followup_resolution)?.id || "") !== values.expected_revision
+      || String(lead.updated_at || "") !== values.expected_updated_at) {
+      throw followupError(409, "The next step changed. Refresh the lead before saving.");
+    }
+    const matches = activities.filter(item => matchesScheduledReminder(item, values.expected_action, values.expected_due)
+      && !isResolvedReminder(item, activities));
+    if (!matches.length && activities.some(item => item?.followup_completed && item.completed_due_date === values.expected_due
+      && String(item.completed_activity_required || "").trim().toLowerCase() === values.expected_action.toLowerCase())) {
+      throw followupError(409, "This next step has already been completed.");
+    }
+    if (matches.length > 1) throw followupError(409, "More than one reminder matches this next step. Review the lead's Reminders before saving.");
+    original = matches[0];
   }
-  const matches = activities.filter(item => matchesScheduledReminder(item, values.expected_action, values.expected_due)
-    && !isResolvedReminder(item, activities));
-  if (!matches.length && activities.some(item => item?.followup_completed && item.completed_due_date === values.expected_due
-    && String(item.completed_activity_required || "").trim().toLowerCase() === values.expected_action.toLowerCase())) {
-    throw followupError(409, "This next step has already been completed.");
-  }
-  if (matches.length > 1) throw followupError(409, "More than one reminder matches this next step. Review the lead's Reminders before saving.");
-  const original = matches[0];
   const actor = String(user.name || user.email || "User");
   const completed = values.status === "completed";
   const at = completed ? new Date(values.done_at).toISOString() : now;
@@ -98,14 +145,17 @@ function resolveLocalLeadFollowup(lead, user, values, now) {
   } : null;
   const event = activityAuditEvent(`followup_${values.status}`, user, {
     previous_status: "scheduled", new_status: values.status, reason: values.reason,
-    remarks: values.remarks, original_due_date: values.expected_due, replacement_id: replacement?.id || null
+    remarks: values.remarks, original_due_date: values.expected_due, replacement_id: replacement?.id || null,
+    ...(values.activity_id ? { activity_id: values.activity_id } : {})
   });
   event.at = now;
   const activity = {
     id, type: completed ? (/email/i.test(values.expected_action) ? "Email" : /visit|meeting/i.test(values.expected_action) ? "Meeting" : "Phone Call") : "Follow-up cancelled",
     at, activity_date: dubaiDate(at), created_at: now, updated_at: now, version: 1, created_by: user.id, created_by_name: actor,
     followup_resolution: values.status, followup_action: values.expected_action, followup_due_date: values.expected_due,
-    resolved_reminder_id: original?.id || "", resolved_legacy_reminder: Boolean(original && !original.id),
+    ...(values.activity_id ? { resolved_activity_id: values.activity_id, followup_scope: "activity" } : {
+      resolved_reminder_id: original?.id || "", resolved_legacy_reminder: Boolean(original && !original.id)
+    }),
     transaction_status: completed ? "closed" : "cancelled", transaction_outcome: values.reason,
     transaction_remarks: values.remarks, transaction_updated_at: now, transaction_updated_by: user.id,
     transaction_updated_by_name: actor, text: values.remarks, notes: values.remarks, spoke_with: values.spoke_with,
@@ -115,7 +165,7 @@ function resolveLocalLeadFollowup(lead, user, values, now) {
   };
   const lastActivity = String(lead.last_activity || "").slice(0, 10);
   return {
-    lead: { ...lead, next_action: replacement?.activity_required || "", next_action_date: replacement?.due_date || null,
+    lead: { ...lead, ...(values.activity_id ? {} : { next_action: replacement?.activity_required || "", next_action_date: replacement?.due_date || null }),
       last_activity: completed && dubaiDate(at) > lastActivity ? dubaiDate(at) : lead.last_activity,
       updated_at: now, activities: [activity, ...(replacement ? [replacement] : []), ...activities] },
     activity
@@ -123,10 +173,11 @@ function resolveLocalLeadFollowup(lead, user, values, now) {
 }
 
 function isResolvedReminder(item, activities) {
-  return Boolean(item?.reminder || String(item?.type || "").toLowerCase() === "reminder") && activities.some(event =>
-    event?.followup_resolution && (item.id ? event.resolved_reminder_id === item.id
-      : event.resolved_legacy_reminder && event.followup_due_date === (item.due_date || item.reminder_due_date)
-        && String(event.followup_action || "").toLowerCase() === String(item.activity_required || item.text || "").trim().toLowerCase()));
+  return Boolean(item) && activities.some(event => event?.followup_resolution && (item.id
+    ? event.resolved_activity_id === item.id || event.resolved_reminder_id === item.id
+    : (item.reminder || String(item.type || "").toLowerCase() === "reminder")
+      && event.resolved_legacy_reminder && event.followup_due_date === (item.due_date || item.reminder_due_date)
+      && String(event.followup_action || "").toLowerCase() === String(item.activity_required || item.text || "").trim().toLowerCase()));
 }
 
 module.exports = { canResolveLeadFollowup, isResolvedReminder, validateLeadFollowup, resolveLocalLeadFollowup };

@@ -1069,7 +1069,7 @@ body.neglected-mode .neglected-v2-filters button, body.neglected-mode .neglected
 body.neglected-mode .neglected-v2-filters button[aria-pressed="true"] { background: #0b3b75; color: white; }
 body.neglected-mode .neglected-v2-switch button[aria-pressed="true"] { background: #e0f2f1; color: #146964; font-weight: 700; }
 body.neglected-mode .neglected-v2-row { padding: 16px; border-bottom: 1px solid #e3e8ef; }
-body.neglected-mode .neglected-v2-row-main { display: grid; grid-template-columns: minmax(160px, 1.4fr) auto minmax(145px, auto) minmax(160px, 1fr) auto; align-items: center; gap: 14px; }
+body.neglected-mode .neglected-v2-row-main { display: grid; grid-template-columns: minmax(160px, 1.4fr) auto minmax(150px, 1fr) auto; align-items: center; gap: 14px; }
 body.neglected-mode .neglected-v2-row-main > * { min-width: 0; overflow-wrap: anywhere; }
 body.neglected-mode .neglected-v2-overdue, body.neglected-mode .neglected-v2-editor label span { color: #b91c1c; }
 body.neglected-mode .neglected-v2-switch, body.neglected-mode .neglected-v2-actions { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -1406,8 +1406,11 @@ body.salesman-dashboard-mode #appShell .salesperson-pipeline-breakdown > summary
   body.salesman-dashboard-mode #appShell #salespersonMobileDate { margin: 0 0 3px; color: #4a5568; font-size: 11px; font-weight: 600; text-transform: uppercase; }
   body.salesman-dashboard-mode #appShell #salespersonMobileGreeting { margin: 0; font: 800 24px/1.15 var(--crm-font-ui); color: #0b3b75 !important; overflow-wrap: anywhere; }
   body.salesman-dashboard-mode #appShell #salespersonMobileGreeting em { font-weight: 400; }
-  body.salesman-dashboard-mode #appShell .salesperson-mobile-search { flex: 0 0 44px; width: 44px !important; height: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; border-radius: 10px !important; }
-  body.salesman-dashboard-mode #appShell .salesperson-mobile-search::before { content: ""; display: block; position: static; width: 18px; height: 18px; background: currentColor; mask: var(--crm-icon-search) center / contain no-repeat; }
+  body.salesman-dashboard-mode #appShell .salesperson-mobile-header-actions { display: flex; gap: 6px; }
+  body.salesman-dashboard-mode #appShell :is(.salesperson-mobile-search, .salesperson-mobile-menu) { flex: 0 0 44px; width: 44px !important; height: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; border-radius: 10px !important; }
+  body.salesman-dashboard-mode #appShell :is(.salesperson-mobile-search, .salesperson-mobile-menu)::before { content: ""; display: block; position: static; width: 18px; height: 18px; background: currentColor; mask: var(--crm-icon-search) center / contain no-repeat; }
+  body.salesman-dashboard-mode #appShell .salesperson-mobile-menu::before { mask-image: var(--crm-icon-menu); }
+  body.salesman-dashboard-mode.salesperson-dashboard-search-open #appShell .salesperson-mobile-menu { display: none; }
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard :is(.salesperson-dashboard-layout, .salesperson-dashboard-primary, .salesperson-dashboard-secondary) { display: contents; }
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-mobile-header { order: 0; }
   body.salesman-dashboard-mode #appShell #salesmanSimplifiedDashboard .salesperson-followup-card { order: 1; display: grid; gap: 12px; padding: 0; border: 0 !important; background: none !important; }

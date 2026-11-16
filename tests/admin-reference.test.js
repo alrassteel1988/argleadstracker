@@ -12,7 +12,7 @@ const fn = name => {
 const state = { currentUser: {role:"admin"}, userAccounts: [{id:"admin", name:"Manager", role:"admin"}, {id:"rep", name:"Salesman", role:"salesman"}], settings:{salesmen:[]}, leads:[] };
 const adminReference = {activity:{search:"",date:"all",company:"all",type:"all",origin:"all",person:"all",linked:"all",status:"all",sort:"newest"}};
 const context = vm.createContext({ state, adminReference,
-  allActivities: () => state.leads.flatMap(lead => lead.activities.map(activity => ({...activity, lead_id:lead.id, company_name:lead.company_name}))),
+  allActivities: leads => leads.flatMap(lead => lead.activities.map(activity => ({...activity, lead_id:lead.id, company_name:lead.company_name}))),
   normalizeStageKey: stage => stage, daysSince: date => (Date.parse("2026-11-02") - Date.parse(date)) / 86400000,
   downloadTextFile: (...args) => {context.download = args;}
 });
@@ -47,12 +47,27 @@ context.adminReferenceExport("test.csv", ["Company"], [["=formula"], ['quote"val
 assert.match(context.download[1], /'=formula/);
 assert.match(context.download[1], /quote""value/);
 context.download = null;
-state.currentUser.role = "salesman";
+state.currentUser = {id:"rep", name:"Salesman", role:"salesman"};
 context.adminReferenceExport("test.csv", [], []);
 assert.equal(context.download, null, "Salesmen must not use Admin export");
+state.leads[0].assigned_to = "rep";
+state.leads[0].activities.push(
+  {id:"legacy", created_by_name:"Salesman", type:"Call"},
+  {id:"offline", created_by:"rep", pending_sync:true},
+  {id:"archived", created_by:"rep", archived:true},
+  {id:"request", created_by:"rep", delete_request:true}
+);
+state.leads.push(
+  {id:"reassigned", assigned_to:"other", assigned_salesman:"Salesman", activities:[{id:"reassigned-activity",created_by:"rep"}]},
+  {id:"unverified", assigned_salesman:"Salesman", activities:[{id:"unverified-activity",created_by:"rep"}]}
+);
+assert.deepEqual(Array.from(context.adminReferenceActivityRows(), row => row.id), ["2"],
+  "Personal log requires verified authorship and current assignment, and excludes pending sync and hidden records");
+state.currentUser.id = "other";
+assert.equal(context.adminReferenceActivityRows().length, 0, "Another signed-in Salesman cannot inherit the previous account's log");
 assert.match(source, /renderReferenceAdminShell\(\)/);
 assert.match(source, /data-admin-activity-history/);
-assert.match(source, /readOnlyLog = state\.currentUser\?\.role === "admin" && currentView === "activity"/);
+assert.match(source, /readOnlyLog = currentView === "activity" && \(state\.currentUser\?\.role === "admin" \|\| isSalesmanRole\(\)\)/);
 assert.match(css, /html:has\(body\.admin-reference-mode\)/, "Sticky navigation must not be trapped in a body scroll container");
 assert.match(css, /\.admin-ref-mobile-filters/, "Mobile filter access must not depend on table columns");
 context.percentOf = (count, total) => total ? Math.round(count / total * 100) : 0;
