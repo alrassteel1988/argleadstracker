@@ -118,12 +118,18 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     await db.exec(`alter table public.leads
       add column assigned_salesman text,
       add column created_by uuid,
-      add column next_action text,
+      add column next_action text not null default 'Qualify lead',
       add column next_action_date date,
-      add column activity_purpose text,
       add column notes text,
       add constraint reject_invalid_fixture check (company_name <> 'Rollback fixture');
       grant insert, select, update on public.leads to authenticated;`);
+    const repair = readFileSync(join(__dirname, "../supabase/migrations/20261116131732_restore_lead_activity_purpose.sql"), "utf8");
+    await db.exec(repair);
+    const existingLead = () => db.query("select activity_purpose, next_action from public.leads where id=$1", [lead]);
+    assert.deepEqual((await existingLead()).rows, [{ activity_purpose: "Company Introductory", next_action: "Qualify lead" }]);
+    await db.query("update public.leads set activity_purpose='Existing purpose' where id=$1", [lead]);
+    await db.exec(repair);
+    assert.deepEqual((await existingLead()).rows, [{ activity_purpose: "Existing purpose", next_action: "Qualify lead" }]);
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261116111051_initial_management_task.sql"), "utf8"));
     const lead2 = "a0000000-0000-4000-8000-000000000002";
     const task2 = "b0000000-0000-4000-8000-000000000002";
@@ -225,6 +231,10 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     assert.equal((await list()).length, 0);
     await as(rep);
     assert.equal((await list()).filter(task => task.id === task3 && task.lead_id === prospect.id).length, 1);
+    await db.exec("reset role");
+    const unlinkedLead = await db.query("insert into public.leads (company_name) values ('Ordinary fixture') returning next_action, activity_purpose, initial_management_task_id");
+    assert.deepEqual(unlinkedLead.rows, [{ next_action: "Qualify lead", activity_purpose: "Company Introductory", initial_management_task_id: null }]);
+    assert.equal((await db.query("select count(*)::int as n from public.management_tasks where lead_name='Ordinary fixture'")).rows[0].n, 0);
   } finally {
     await db.close();
   }
