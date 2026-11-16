@@ -8,6 +8,74 @@ const {BASELINE_REF} = require("./fixture-server");
 
 test.beforeEach(async ({page}) => blockExternalTraffic(page));
 
+test("deletion queue filters records and confirms bulk approval and restore", async ({page}, info) => {
+  test.skip(phase !== "after" || !info.project.name.startsWith("admin"), "Current Admin UI only");
+  await login(page, info);
+  const entries = ["Synthetic Reminder", "Synthetic Activity"].map((company, index) => ({
+    id: `delete-${index}`, lead_id: `lead-${index}`, company_name: company,
+    entry_type: index ? "Activity" : "Reminder", activity_type: "Phone Call",
+    activity_notes: "Synthetic review details", reason: "Duplicate test entry",
+    requested_by_name: "Demo Salesman", requested_at: "2025-01-01T12:00:00Z",
+    request_status: "pending", target_available: true, can_approve: true
+  }));
+  entries.push({
+    ...entries[0], id: "delete-2", lead_id: "lead-2", company_name: "Synthetic Legacy",
+    can_approve: false, approval_block_reason: "Approval blocked: the recorded creator is missing or does not match the requester."
+  });
+  const decisions = [];
+  await page.route("**/api/activity-deletion-requests?status=all&include_digest=1", route => route.fulfill({json: {
+    requests: entries,
+    digest: { created_at: "2025-01-06", requests: [{ company_name: "Synthetic Reminder", requested_at: "2025-01-01" }] }
+  }}));
+  await page.route(/\/api\/leads\/lead-\d\/delete-requests\/delete-\d\/(approve|restore)$/, async route => {
+    const [, id, action] = new URL(route.request().url()).pathname.match(/(delete-\d)\/(approve|restore)$/);
+    const row = entries.find(item => item.id === id);
+    decisions.push({id, action, body: route.request().postDataJSON()});
+    row.request_status = action === "approve" ? "approved" : "restored";
+    row.can_restore = action === "approve";
+    row.reviewed_by_name = "Demo Admin";
+    await route.fulfill({json: {request: row}});
+  });
+  await page.goto("/?view=activity");
+  await page.locator("[data-admin-deletion-queue]").click();
+  await expect(page.locator("#deletionQueueCounts")).toContainText("3 awaiting approval");
+  await page.locator("#deletionQueueDigest summary").click();
+  await expect(page.locator("#deletionQueueDigest li")).toContainText("Synthetic Reminder");
+  await expect(page.locator(".deletion-request-row.late")).toHaveCount(3);
+  const legacy = page.locator(".deletion-request-row").filter({hasText: "Synthetic Legacy"});
+  await expect(legacy).toContainText("recorded creator is missing");
+  await expect(legacy.getByRole("checkbox")).toHaveCount(0);
+  await expect(legacy.getByRole("button", {name: "Approve request"})).toHaveCount(0);
+  await legacy.getByRole("button", {name: "Review", exact: true}).click();
+  const review = page.locator("#activityDeletionQueueDialog");
+  await expect(review.getByRole("button", {name: "Approve", exact: true})).toHaveCount(0);
+  await expect(review.getByRole("button", {name: "Reject", exact: true})).toBeVisible();
+  await review.getByRole("button", {name: "Close review"}).click();
+  await page.getByLabel("Entry type").selectOption("Reminder");
+  await expect(page.getByRole("checkbox", {name: "Select request for Synthetic Activity"})).toHaveCount(0);
+  await page.getByLabel("Entry type").selectOption("");
+  await page.getByRole("checkbox", {name: "Select request for Synthetic Reminder"}).check();
+  await page.getByRole("checkbox", {name: "Select request for Synthetic Activity"}).check();
+  await page.getByRole("button", {name: "Approve selected (2)"}).click();
+  await expect(review).toBeVisible();
+  await expect(review).toContainText("Synthetic Reminder");
+  await expect(review).toContainText("Synthetic Activity");
+  expect(decisions).toHaveLength(0);
+  await review.locator('[name="admin_password"]').fill("test-confirmation");
+  await review.getByRole("button", {name: "Approve", exact: true}).click();
+  await expect(review).toBeHidden();
+  await expect(page.locator("#deletionQueueCounts")).toContainText("2 decided");
+  expect(decisions.map(item => item.action)).toEqual(["approve", "approve"]);
+  await page.getByRole("button", {name: "Decided", exact: true}).click();
+  const reminderRow = page.locator(".deletion-request-row").filter({hasText: "Synthetic Reminder"});
+  await reminderRow.getByRole("button", {name: "Restore"}).click();
+  await review.locator('[name="admin_password"]').fill("test-confirmation");
+  await review.getByRole("button", {name: "Restore", exact: true}).click();
+  await expect(reminderRow).toContainText("Restored");
+  expect(decisions.at(-1).id).toBe("delete-0");
+  expect(decisions.at(-1).action).toBe("restore");
+});
+
 test("existing administrative dialogs preserve presentation and role restrictions", async ({page}, info) => {
   test.setTimeout(120000);
   const role = await login(page, info);
@@ -51,9 +119,11 @@ test("existing administrative dialogs preserve presentation and role restriction
   // Historical Activity layers intercept pointer clicks; capture native keyboard
   // activation without claiming the baseline pointer workflow was functional.
   const activate = locator => phase === "before" ? locator.press("Enter") : locator.click();
+  const activityCount = phase === "before" ? page.locator("#activitySummary") : page.locator(".admin-activity-count");
+  const activityCountText = phase === "before" ? "18 activities" : /18 of 18/;
   await page.goto("/?view=activity");
-  await expect(page.locator("#activitySummary")).toHaveText("18 activities");
-  await activate(page.locator('#activityView [data-view-activity-lead="ui-lead-1"]').first());
+  await expect(activityCount).toHaveText(activityCountText);
+  await activate(page.locator(phase === "before" ? '#activityView [data-view-activity-lead="ui-lead-1"]' : '[data-admin-activity-history="ui-lead-1"]').first());
   if (phase === "before" && !await page.locator("#activityDetailsDialog").isVisible()) {
     await expect(page.locator("#leadDetailView")).toBeVisible();
     info.annotations.push({type:"baseline-limitation", description:"Historical View keyboard activation navigates to the lead instead of opening Activity Details; pointer activation is intercepted by the old layout."});
@@ -62,16 +132,21 @@ test("existing administrative dialogs preserve presentation and role restriction
   } else {
     await inspectDialog("activityDetailsDialog", "activity-details");
     await expect(page.locator("#activityDetailsBody")).toContainText("Synthetic Steel Company 01");
-    await activate(page.locator("#editActivityFromDetails"));
-    await inspectDialog("activityDialog", "activity-details-edit");
-    await activate(page.locator("#closeActivityDialog"));
+    if (phase === "before") {
+      await activate(page.locator("#editActivityFromDetails"));
+      await inspectDialog("activityDialog", "activity-details-edit");
+      await activate(page.locator("#closeActivityDialog"));
+    } else {
+      await expect(page.locator("#editActivityFromDetails")).toBeHidden();
+      await expect(page.locator("#requestActivityDeletionFromDetails")).toBeHidden();
+    }
   }
   await page.goto("/?view=activity");
-  await expect(page.locator("#activitySummary")).toHaveText("18 activities");
-  await activate(page.locator("#openActivityDeletionQueue"));
-  await expect(page.locator("#activityDeletionQueueDialog")).toBeVisible();
+  await expect(activityCount).toHaveText(activityCountText);
+  await activate(page.locator(phase === "before" ? "#openActivityDeletionQueue" : "[data-admin-deletion-queue]"));
+  await expect(page.locator(phase === "before" ? "#activityDeletionQueueDialog" : "#deletionRequestsView")).toBeVisible();
   await expect(page.locator("#activityDeletionQueueBody")).toContainText("No deletion requests");
-  await inspectDialog("activityDeletionQueueDialog", "deletion-review-empty");
+  if (phase === "before") await inspectDialog("activityDeletionQueueDialog", "deletion-review-empty");
   if (phase === "after" && info.project.name.endsWith("mobile")) {
     const heights = await page.locator('.activity-queue-toolbar input[type="search"]').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
     for (const height of heights) {
@@ -79,7 +154,7 @@ test("existing administrative dialogs preserve presentation and role restriction
       expect(height).toBeLessThanOrEqual(52);
     }
   }
-  await activate(page.locator('[data-close-activity-queue]'));
+  await activate(page.locator(phase === "before" ? '[data-close-activity-queue]' : "#deletionQueueBack"));
   if (info.project.name.endsWith("mobile")) await activate(page.locator("#mobileMenuToggle"));
   await activate(page.locator("#sidebarToolsMenu > summary"));
   await activate(page.locator("#openSalesmanForm"));

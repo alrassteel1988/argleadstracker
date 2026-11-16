@@ -127,7 +127,7 @@ assert.throws(
   "activityFileSignatureLooksValid",
   "loadActivityDeletionQueue",
   "cancelActivityDeletionRequest",
-  "data-activity-request-action",
+  "data-deletion-action",
   "fetchActivities()"
 ].forEach(token => assert(clientSource.includes(token), `${token} must be wired`));
 
@@ -135,7 +135,8 @@ assert.throws(
   "/api/activity-deletion-requests",
   "/attachments",
   "deleteRequestCancelMatch",
-  "You cannot approve or reject your own request",
+  "Only the recorded creator can request deletion",
+  "activity_restored",
   "pending deletion request and cannot be edited",
   "createStorageSignedUrlForBucket",
   "activity_archived"

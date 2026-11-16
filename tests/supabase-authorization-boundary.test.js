@@ -72,7 +72,7 @@ test("allowlisted cron operations use the service-role credential", async t => {
   assert.equal(calls[0].options.headers.Authorization, "Bearer service.role.signature");
 });
 
-test("server-validated lead insert is the only lead write allowlisted for service role", async t => {
+test("server-validated lead insert is allowed but arbitrary lead updates are denied", async t => {
   const calls = [];
   t.mock.method(global, "fetch", async (url, options) => {
     calls.push({ url, options });
@@ -98,6 +98,17 @@ test("server-validated lead insert is the only lead write allowlisted for servic
     serviceRest("leads.untrusted_update", "leads?id=eq.lead-1", { method: "PATCH", body: { assigned_to: "other" } }),
     /service-role operation is not allowlisted/
   );
+});
+
+test("activity deletion service credentials are restricted to the two dedicated POST RPCs", async t => {
+  const request = t.mock.method(global, "fetch", async () => jsonResponse());
+  await assert.rejects(serviceRest("workflow.activity_deletion", "leads?id=eq.lead-1", { method: "PATCH" }), /restricted/);
+  await assert.rejects(serviceRest("cron.activity_deletion_digest", "rpc/commit_activity_deletion", { method: "POST" }), /restricted/);
+  await assert.rejects(serviceRest("workflow.activity_deletion", "rpc/commit_activity_deletion", { method: "GET" }), /restricted/);
+  await assert.rejects(serviceRest("workflow.activity_deletion", "rpc/commit_activity_deletion", { method: "POST", token: "user-token" }), /restricted/);
+  await serviceRest("workflow.activity_deletion", "rpc/commit_activity_deletion", { method: "POST" });
+  await serviceRest("cron.activity_deletion_digest", "rpc/send_activity_deletion_digest", { method: "POST" });
+  assert.equal(request.mock.callCount(), 2);
 });
 
 test("Storage upload and signing use the user's JWT, not service role", async t => {
