@@ -212,10 +212,41 @@ async function main() {
   const selfRequest = await submit(admin, adminActivity.activity.id);
   const selfApproved = expect(await decide(selfRequest.request, "approve"), 200, "audited admin self-approval");
   assert.equal(selfApproved.request.requested_by, selfApproved.request.reviewed_by);
+
+  // Recreate the legacy production shape using only this run's synthetic lead.
+  const legacyIds = [`legacy-${runId}`, `legacy-wrong-creator-${runId}`];
+  const legacyRequests = legacyIds.map((activityId, index) => ({
+    id: `legacy-request-${runId}-${index}`, type: "Activity Review Request", at: date,
+    requested_at: new Date().toISOString(), requested_by: salesman.user.id, requested_by_name: salesman.user.name,
+    delete_request: true, target_type: "activity", target_activity_id: activityId,
+    request_status: "pending", reason: "Synthetic pre-upgrade request"
+  }));
+  expect(await supabase(rowPath, "PATCH", { activities: [
+    ...selfApproved.lead.activities.map(item => item.id === legacyIds[0] ? { ...item, deletion_status: "pending" } : item),
+    { id: legacyIds[1], type: "Phone Call", at: date, created_by: other.user.id, deletion_status: "pending" },
+    ...legacyRequests
+  ] }), 200, "seed legacy pending requests on this synthetic lead only");
+  const legacyQueue = expect(await crm(`${queue}?search=${runId}`, admin), 200, "legacy pending queue");
+  assert.equal(legacyQueue.length, 2);
+  assert.ok(legacyQueue.every(item => item.target_available && item.can_approve === false
+    && /recorded creator/.test(item.approval_block_reason)));
+  for (const legacyRequest of legacyRequests) {
+    const blocked = expect(await decide(legacyRequest, "approve"), 409, "block legacy approval");
+    assert.match(blocked.error, /recorded creator/i);
+  }
+  const legacyReadBack = expect(await crm(leadPath, salesman), 200, "read back blocked legacy approvals");
+  assert.ok(legacyIds.every(id => !legacyReadBack.activities.find(item => item.id === id).archived));
+  assert.ok(legacyRequests.every(request => legacyReadBack.activities.find(item => item.id === request.id).request_status === "pending"));
+  const legacyRejected = expect(await decide(legacyRequests[0], "reject", admin, {
+    note: "The original creator was not recorded."
+  }), 200, "reject unattributed request without archiving");
+  assert.equal(legacyRejected.request.request_status, "rejected");
+  const legacyWithdrawn = expect(await decide(legacyRequests[1], "cancel", salesman), 200, "withdraw legacy request without archiving");
+  assert.equal(legacyWithdrawn.request.request_status, "cancelled");
   const finalQueue = expect(await crm(`${queue}?status=all&search=${runId}`, admin), 200, "decided queue");
   assert.deepEqual((finalQueue.requests || finalQueue).map(item => item.request_status).sort(),
-    ["approved", "cancelled", "rejected", "restored", "restored"]);
-  console.log(`PASS staging: independent sessions, request lifecycle, role/RLS denial, approval race, due/health inputs, notifications, digest retry. Synthetic run ${runId}.`);
+    ["approved", "cancelled", "cancelled", "rejected", "rejected", "restored", "restored"]);
+  console.log(`PASS staging: independent sessions, legacy ownership blocks, request lifecycle, role/RLS denial, approval race, due/health inputs, notifications, digest retry. Synthetic run ${runId}.`);
 }
 
 main().catch(error => {

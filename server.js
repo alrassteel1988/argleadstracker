@@ -1555,6 +1555,22 @@ function pendingDeletionForActivity(activities, activityId) {
   ));
 }
 
+function isActivityDeletionTarget(target) {
+  return Boolean(target && !target.delete_request && !target.archived && !target.workflow_log
+    && !/^notes?$/i.test(String(target.type || "").trim()));
+}
+
+function deletionApprovalBlockReason(request, target) {
+  if (!target || target.archived) return "The original entry is no longer available for this action.";
+  if (!isActivityDeletionTarget(target)) return "This entry is not eligible for deletion.";
+  const creator = String(target.created_by || "").trim();
+  const requester = String(request.requested_by || "").trim();
+  if (!creator || creator !== requester) {
+    return "Approval blocked: the recorded creator is missing or does not match the requester.";
+  }
+  return "";
+}
+
 function normalizeDeleteRequest(input, lead, user, activities) {
   const targetType = String(input.target_type || "").trim().toLowerCase();
   let reason = String(input.reason || "").trim();
@@ -1606,7 +1622,7 @@ function normalizeDeleteRequest(input, lead, user, activities) {
       throw error;
     }
     const target = activities[activityIndex];
-    if (target.delete_request || target.archived || target.workflow_log || /^notes?$/i.test(String(target.type || "").trim())) {
+    if (!isActivityDeletionTarget(target)) {
       const error = new Error("This entry cannot be requested for deletion.");
       error.status = 400;
       throw error;
@@ -6823,6 +6839,8 @@ async function handleApi(req, res, url) {
         .filter(activity => activity.delete_request && activity.target_type === "activity")
         .map(request => {
           const target = activities.find(activity => activity.id === request.target_activity_id);
+          const pending = request.request_status === "pending";
+          const blockReason = pending ? deletionApprovalBlockReason(request, target) : "";
           return {
             ...request,
             lead_id: lead.id,
@@ -6830,6 +6848,8 @@ async function handleApi(req, res, url) {
             assigned_salesman: lead.assigned_salesman,
             entry_type: request.entry_type || (isReminderActivity(target) ? "Reminder" : "Activity"),
             target_available: Boolean(target && !target.archived),
+            can_approve: pending && !blockReason,
+            approval_block_reason: blockReason,
             can_restore: Boolean(target?.archived && target.archive_request_id === request.id && request.request_status === "approved"),
             activity_date: target?.at || "",
             activity_type: target?.activity_purpose || target?.type || "Activity",
@@ -7373,7 +7393,11 @@ async function handleApi(req, res, url) {
       return sendJson(res, 409, { error: "The request has changed. Refresh the queue and try again." });
     }
     const target = activities.find(activity => activity.id === request.target_activity_id);
-    if (action !== "reject" && (!target || (restoring ? !target.archived || target.archive_request_id !== request.id : target.archived))) {
+    if (action === "approve") {
+      const blockReason = deletionApprovalBlockReason(request, target);
+      if (blockReason) return sendJson(res, 409, { error: blockReason });
+    }
+    if (restoring && (!target?.archived || target.archive_request_id !== request.id)) {
       return sendJson(res, 409, { error: "The original entry is no longer available for this action." });
     }
     const note = String(payload.note || "").trim();

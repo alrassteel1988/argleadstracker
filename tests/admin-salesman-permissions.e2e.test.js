@@ -423,6 +423,42 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert(!restoredActivity.archived);
     assert(restoredActivity.audit_history.some(event => event.action === "activity_restored"));
 
+    const legacyDb = JSON.parse(fs.readFileSync(dbPath, "utf8"));
+    const legacyLead = legacyDb.leads.find(item => item.id === ownLead.data.id);
+    const legacyAt = new Date().toISOString();
+    for (const [suffix, creator] of [["unattributed", null], ["wrong-creator", adminLogin.data.user.id]]) {
+      legacyLead.activities.push(
+        { id: `legacy-entry-${suffix}`, type: "Phone Call", at: legacyAt,
+          deletion_status: "pending", ...(creator ? { created_by: creator } : {}) },
+        { id: `legacy-request-${suffix}`, type: "Activity Review Request", at: legacyAt,
+          requested_at: legacyAt, requested_by: salesmanAccount.data.id, delete_request: true,
+          target_type: "activity", target_activity_id: `legacy-entry-${suffix}`,
+          request_status: "pending", reason: "Legacy duplicate request" }
+      );
+    }
+    fs.writeFileSync(dbPath, JSON.stringify(legacyDb));
+    for (const suffix of ["unattributed", "wrong-creator"]) {
+      const response = await request(baseUrl, `${deletionPath}/legacy-request-${suffix}/approve`, adminDecision);
+      assert.equal(response.response.status, 409, `Approval must reject legacy ${suffix} requests`);
+      assert.match(response.data.error, /recorded creator/i);
+    }
+    const legacyQueue = await request(baseUrl, "/api/activity-deletion-requests", { token: adminToken });
+    const legacyRows = legacyQueue.data.filter(item => item.id.startsWith("legacy-request-"));
+    assert.equal(legacyRows.length, 2);
+    assert(legacyRows.every(item => item.target_available && !item.can_approve && item.approval_block_reason));
+    const legacyReject = await request(baseUrl, `${deletionPath}/legacy-request-unattributed/reject`, {
+      ...adminDecision, body: { ...adminDecision.body, note: "The original creator was not recorded." }
+    });
+    assert.equal(legacyReject.response.status, 200);
+    assert.equal(legacyReject.data.request.request_status, "rejected");
+    assert(!legacyReject.data.lead.activities.find(item => item.id === "legacy-entry-unattributed").archived);
+    const legacyWithdraw = await request(baseUrl, `${deletionPath}/legacy-request-wrong-creator/cancel`, {
+      method: "POST", token: salesmanToken, csrfToken: salesmanCsrfToken
+    });
+    assert.equal(legacyWithdraw.response.status, 200);
+    assert.equal(legacyWithdraw.data.request.request_status, "cancelled");
+    assert(!legacyWithdraw.data.lead.activities.find(item => item.id === "legacy-entry-wrong-creator").archived);
+
     const meetingActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
       token: salesmanToken,

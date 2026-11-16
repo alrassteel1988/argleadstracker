@@ -16,8 +16,12 @@ test("deletion queue filters records and confirms bulk approval and restore", as
     entry_type: index ? "Activity" : "Reminder", activity_type: "Phone Call",
     activity_notes: "Synthetic review details", reason: "Duplicate test entry",
     requested_by_name: "Demo Salesman", requested_at: "2025-01-01T12:00:00Z",
-    request_status: "pending", target_available: true
+    request_status: "pending", target_available: true, can_approve: true
   }));
+  entries.push({
+    ...entries[0], id: "delete-2", lead_id: "lead-2", company_name: "Synthetic Legacy",
+    can_approve: false, approval_block_reason: "Approval blocked: the recorded creator is missing or does not match the requester."
+  });
   const decisions = [];
   await page.route("**/api/activity-deletion-requests?status=all&include_digest=1", route => route.fulfill({json: {
     requests: entries,
@@ -34,17 +38,25 @@ test("deletion queue filters records and confirms bulk approval and restore", as
   });
   await page.goto("/?view=activity");
   await page.locator("[data-admin-deletion-queue]").click();
-  await expect(page.locator("#deletionQueueCounts")).toContainText("2 awaiting approval");
+  await expect(page.locator("#deletionQueueCounts")).toContainText("3 awaiting approval");
   await page.locator("#deletionQueueDigest summary").click();
   await expect(page.locator("#deletionQueueDigest li")).toContainText("Synthetic Reminder");
-  await expect(page.locator(".deletion-request-row.late")).toHaveCount(2);
+  await expect(page.locator(".deletion-request-row.late")).toHaveCount(3);
+  const legacy = page.locator(".deletion-request-row").filter({hasText: "Synthetic Legacy"});
+  await expect(legacy).toContainText("recorded creator is missing");
+  await expect(legacy.getByRole("checkbox")).toHaveCount(0);
+  await expect(legacy.getByRole("button", {name: "Approve request"})).toHaveCount(0);
+  await legacy.getByRole("button", {name: "Review", exact: true}).click();
+  const review = page.locator("#activityDeletionQueueDialog");
+  await expect(review.getByRole("button", {name: "Approve", exact: true})).toHaveCount(0);
+  await expect(review.getByRole("button", {name: "Reject", exact: true})).toBeVisible();
+  await review.getByRole("button", {name: "Close review"}).click();
   await page.getByLabel("Entry type").selectOption("Reminder");
   await expect(page.getByRole("checkbox", {name: "Select request for Synthetic Activity"})).toHaveCount(0);
   await page.getByLabel("Entry type").selectOption("");
   await page.getByRole("checkbox", {name: "Select request for Synthetic Reminder"}).check();
   await page.getByRole("checkbox", {name: "Select request for Synthetic Activity"}).check();
   await page.getByRole("button", {name: "Approve selected (2)"}).click();
-  const review = page.locator("#activityDeletionQueueDialog");
   await expect(review).toBeVisible();
   await expect(review).toContainText("Synthetic Reminder");
   await expect(review).toContainText("Synthetic Activity");

@@ -2268,7 +2268,7 @@ function renderActivityDeletionQueue() {
   const tag = (label, cls = "") => `<span class="request-status ${cls}">${escapeHtml(label)}</span>`;
   const button = (index, action, label, cls = "ghost-button", title = label) => `<button type="button" class="${cls}" data-deletion-action="${action}" data-deletion-index="${index}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${label}</button>`;
   const bulk = document.querySelector("#deletionQueueBulk");
-  const visibleSelected = rows.filter(row => row.target_available && deletionQueue.checked.has(row));
+  const visibleSelected = rows.filter(row => row.can_approve && deletionQueue.checked.has(row));
   bulk.disabled = !pending || !visibleSelected.length;
   bulk.textContent = visibleSelected.length ? `Approve selected (${visibleSelected.length})` : "Approve selected";
   const totalPending = deletionQueue.rows.filter(row => row.request_status === "pending").length;
@@ -2279,15 +2279,15 @@ function renderActivityDeletionQueue() {
     const age = days >= 7 ? "late" : days >= 3 ? "waiting" : "";
     const date = row.requested_at || row.date;
     return `<article class="deletion-request-row ${pending ? age : ""}">
-      <div>${pending && row.target_available ? `<input type="checkbox" aria-label="Select request for ${escapeHtml(row.company_name)}" data-deletion-select="${index}" ${deletionQueue.checked.has(row) ? "checked" : ""}>` : ""}</div>
+      <div>${pending && row.can_approve ? `<input type="checkbox" aria-label="Select request for ${escapeHtml(row.company_name)}" data-deletion-select="${index}" ${deletionQueue.checked.has(row) ? "checked" : ""}>` : ""}</div>
       <div><strong>${escapeHtml(formatDateTime(date || ""))}</strong>${pending ? `<small>${days}d waiting</small>` : ""}</div>
       <div><strong>${escapeHtml(row.company_name || "Lead")}</strong><small>${escapeHtml(row.requested_by_name || "Requester not recorded")}</small></div>
       <div><strong>${escapeHtml(row.entry_type)} &middot; ${escapeHtml(row.activity_type || "Entry")}</strong><small>${escapeHtml(row.activity_notes || "No entry notes")}</small></div>
       <div><strong>${escapeHtml(row.reason || "No reason recorded")}</strong>${row.comments ? `<small>${escapeHtml(row.comments)}</small>` : ""}
       ${!pending ? `<small>${tag(activityDeletionStatusLabel(row.request_status), escapeHtml(row.request_status))} ${escapeHtml(row.restored_by_name || row.reviewed_by_name || "")} ${escapeHtml(formatDateTime(row.restored_at || row.reviewed_at || ""))}</small><small>${escapeHtml(row.review_note || "")}</small>` : ""}
-      ${pending && !row.target_available ? "<small>Original entry unavailable</small>" : ""}</div>
+      ${pending && row.approval_block_reason ? `<small>${escapeHtml(row.approval_block_reason)}</small>` : ""}</div>
       <div class="deletion-row-actions">${button(index, "view", pending ? "Review" : "View")}
-      ${pending && row.target_available ? button(index, "approve", "&#10003;", "ghost-button", "Approve request") : ""}
+      ${pending && row.can_approve ? button(index, "approve", "&#10003;", "ghost-button", "Approve request") : ""}
       ${row.can_restore ? button(index, "restore", "Restore") : ""}</div>
     </article>`;
   }).join("") : '<div class="activity-workflow-empty">No deletion requests match these filters.</div>';
@@ -2332,6 +2332,7 @@ async function loadActivityDeletionQueue() {
 
 function openDeletionReview(rows, action) {
   if (!rows.length || state.currentUser?.role !== "admin") return;
+  if (action === "approve" && rows.some(row => !row.can_approve)) return;
   deletionQueue.selected = rows;
   const dialog = els.activityDeletionQueueDialog;
   const form = dialog.querySelector("form");
@@ -2349,9 +2350,11 @@ function openDeletionReview(rows, action) {
     ${(single.audit_history || []).length ? `<ul>${single.audit_history.map(event => `<li>${escapeHtml(event.action || event.event || "Update")} &middot; ${escapeHtml(event.actor_name || event.by_name || "")} &middot; ${escapeHtml(formatDateTime(event.at || ""))}</li>`).join("")}</ul>` : ""}
   ` : `<ul>${rows.map(row => `<li>${escapeHtml(row.company_name)} &middot; ${escapeHtml(row.activity_type || row.entry_type)}</li>`).join("")}</ul>`;
   const pending = single?.request_status === "pending";
-  const choices = action === "view" ? [...(pending && single.target_available ? ["approve"] : []), ...(pending ? ["reject"] : [])] : [action];
+  const choices = action === "view" ? [...(pending && single.can_approve ? ["approve"] : []), ...(pending ? ["reject"] : [])] : [action];
   dialog.querySelector("#deletionReviewFields").hidden = !choices.length;
-  dialog.querySelector("#deletionReviewHelp").textContent = choices.includes("approve") ? "Approval hides the entry from the lead timeline. The decision remains in history, and an Admin can restore the entry." : "";
+  dialog.querySelector("#deletionReviewHelp").textContent = choices.includes("approve")
+    ? "Approval hides the entry from the lead timeline. The decision remains in history, and an Admin can restore the entry."
+    : pending ? single.approval_block_reason || "" : "";
   dialog.querySelector("#deletionReviewButtons").innerHTML = choices.map(choice =>
     `<button type="submit" class="${choice === "reject" ? "danger-button" : "primary-button"}" value="${choice}">${{approve: "Approve", reject: "Reject", restore: "Restore"}[choice]}</button>`
   ).join("");
@@ -17892,6 +17895,7 @@ els.activityDeletionQueueBody.addEventListener("change", event => {
   const index = event.target.dataset.deletionSelect;
   if (index == null) return;
   const row = deletionQueue.rows[Number(index)];
+  if (!row?.can_approve) return;
   if (event.target.checked) deletionQueue.checked.add(row);
   else deletionQueue.checked.delete(row);
   const bulk = document.querySelector("#deletionQueueBulk");
