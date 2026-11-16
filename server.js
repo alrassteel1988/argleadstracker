@@ -51,6 +51,9 @@ const {
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
 const { canReadManagementTask, validateManagementTask, saveLocalManagementTask } = require("./src/services/managementTaskService");
 const { canResolveLeadFollowup, isResolvedReminder, validateLeadFollowup, resolveLocalLeadFollowup } = require("./src/services/leadFollowupService");
+const { PROTECTED: SCHEDULE_PROTECTED, activeSchedule, scheduleState, initialSchedule, requestScheduleChange,
+  scheduleEditDeadline, schedulePatchChanges, outcomeScheduleEvent, activityScheduleReport, isPendingReminder,
+  matchesActiveStep } = require("./src/services/activityScheduleService");
 const {
   enrichCompanyFromGoogle,
   enrichHunter,
@@ -404,6 +407,7 @@ function readDb() {
   db.notifications = Array.isArray(db.notifications) ? db.notifications : [];
   db.management_tasks = Array.isArray(db.management_tasks) ? db.management_tasks : [];
   db.management_task_events = Array.isArray(db.management_task_events) ? db.management_task_events : [];
+  db.activity_schedule_events = Array.isArray(db.activity_schedule_events) ? db.activity_schedule_events : [];
   db.weekly_reports = Array.isArray(db.weekly_reports) ? db.weekly_reports : [];
   db.weekly_report_versions = Array.isArray(db.weekly_report_versions) ? db.weekly_report_versions : [];
   db.weekly_report_reviews = Array.isArray(db.weekly_report_reviews) ? db.weekly_report_reviews : [];
@@ -1428,6 +1432,8 @@ function normalizeReminderActivity(input, lead, user) {
     due_time: String(input.due_time || "09:00").trim(),
     reminder_status: "scheduled",
     transaction_status: "pending",
+    ...(user?.id ? { created_by: user.id, created_by_name: user.name || user.email || "",
+      created_at: new Date().toISOString() } : {}),
     google_calendar_url: googleCalendarUrl({
       title,
       details,
@@ -1443,7 +1449,10 @@ function activitySummary(activity = {}) {
 }
 
 function activityCorrection(existing, input, lead, user) {
-  if (!existing || existing.delete_request) {
+  if (existing && pendingDeletionForActivity(lead.activities || [], existing.id)) {
+    throw Object.assign(new Error("This entry is read-only while deletion is pending."), { status: 409 });
+  }
+  if (!existing || existing.delete_request || existing.archived) {
     const error = new Error("This activity cannot be corrected through this flow.");
     error.status = 400;
     throw error;
@@ -1532,7 +1541,9 @@ function normalizePlainActivity(input, user) {
     at: new Date().toISOString().slice(0, 10),
     type: String(input.type || "Note"),
     text: String(input.text || "Activity added"),
-    transaction_status: "pending"
+    transaction_status: "pending",
+    created_by: user.id,
+    created_by_name: user.name || user.email || "User"
   };
   ACTIVITY_EXTRA_FIELDS.forEach(field => {
     if (input[field] !== undefined) activity[field] = input[field];
@@ -1540,12 +1551,37 @@ function normalizePlainActivity(input, user) {
   return normalizeWorkflowActivity(activity, user);
 }
 
+function pendingDeletionForActivity(activities, activityId) {
+  if (!activityId) return false;
+  return activities.some(item => (
+    (String(item.id) === String(activityId) && item.deletion_status === "pending")
+    || (item.delete_request && item.target_type === "activity"
+      && String(item.target_activity_id) === String(activityId) && item.request_status === "pending")
+  ));
+}
+
+function isActivityDeletionTarget(target) {
+  return Boolean(target && !target.delete_request && !target.archived && !target.workflow_log
+    && !/^notes?$/i.test(String(target.type || "").trim()));
+}
+
+function deletionApprovalBlockReason(request, target) {
+  if (!target || target.archived) return "The original entry is no longer available for this action.";
+  if (!isActivityDeletionTarget(target)) return "This entry is not eligible for deletion.";
+  const creator = String(target.created_by || "").trim();
+  const requester = String(request.requested_by || "").trim();
+  if (!creator || creator !== requester) {
+    return "Approval blocked: the recorded creator is missing or does not match the requester.";
+  }
+  return "";
+}
+
 function normalizeDeleteRequest(input, lead, user, activities) {
   const targetType = String(input.target_type || "").trim().toLowerCase();
   let reason = String(input.reason || "").trim();
   let comments = String(input.comments || "").trim();
-  if (!["lead", "activity"].includes(targetType)) {
-    const error = new Error("Choose whether to delete the lead or an activity.");
+  if (targetType !== "activity") {
+    const error = new Error("Only activities and reminders can be requested for deletion.");
     error.status = 400;
     throw error;
   }
@@ -1558,16 +1594,19 @@ function normalizeDeleteRequest(input, lead, user, activities) {
     comments = comments || reason;
     reason = "Other";
   }
-  if (targetType === "activity" && reason === "Other" && !comments) {
-    const error = new Error("Add supporting comments when the deletion reason is Other.");
+  if ((comments || (reason !== "Other" ? reason : "")).length < 10) {
+    const error = new Error("Enter a deletion reason of at least 10 characters.");
     error.status = 400;
     throw error;
+  }
+  if (comments.length > 4000) {
+    throw Object.assign(new Error("The deletion reason must not exceed 4000 characters."), { status: 400 });
   }
   const request = {
     id: newRecordId("delreq"),
     at: new Date().toISOString().slice(0, 10),
-    type: targetType === "activity" ? "Activity Review Request" : "Delete Request",
-    text: targetType === "activity" ? `Activity review requested: ${reason}` : `Delete lead requested: ${reason}`,
+    type: "Activity Review Request",
+    text: `Activity review requested: ${reason}`,
     delete_request: true,
     request_status: "pending",
     target_type: targetType,
@@ -1581,26 +1620,30 @@ function normalizeDeleteRequest(input, lead, user, activities) {
     const activityId = String(input.activity_id || "").trim();
     const activityIndex = activityId
       ? activities.findIndex(activity => String(activity.id) === activityId)
-      : Number(input.activity_index);
+      : /^\d+$/.test(String(input.activity_index ?? "")) ? Number(input.activity_index) : -1;
     if (!Number.isInteger(activityIndex) || activityIndex < 0 || !activities[activityIndex]) {
       const error = new Error("Activity not found.");
       error.status = 404;
       throw error;
     }
-    if (activities[activityIndex].delete_request) {
-      const error = new Error("Delete request entries cannot be deleted through this flow.");
+    const target = activities[activityIndex];
+    if (!isActivityDeletionTarget(target)) {
+      const error = new Error("This entry cannot be requested for deletion.");
       error.status = 400;
       throw error;
     }
-    if (activities.some(activity => activity.delete_request
-      && activity.target_type === "activity"
-      && activity.target_activity_id === activities[activityIndex].id
-      && activity.request_status === "pending")) {
+    if (!target.created_by || String(target.created_by) !== String(user.id)) {
+      const error = new Error("Only the recorded creator can request deletion of this entry.");
+      error.status = 403;
+      throw error;
+    }
+    if (pendingDeletionForActivity(activities, target.id)) {
       const error = new Error("A deletion request is already pending for this activity.");
       error.status = 409;
       throw error;
     }
     request.target_activity_id = activities[activityIndex].id;
+    request.entry_type = isReminderActivity(target) ? "Reminder" : "Activity";
     request.target_activity_summary = `${activities[activityIndex].at || ""} ${activities[activityIndex].type || "Activity"} - ${activities[activityIndex].text || ""}`.trim();
   }
   return request;
@@ -2221,6 +2264,11 @@ function resolvePmrActivityLink(input, lead) {
     if (!existingActivity) {
       const error = new Error("Linked meeting activity was not found on this lead. Refresh and choose the activity again.");
       error.status = 400;
+      throw error;
+    }
+    if (existingActivity.archived || pendingDeletionForActivity(activities, selectedActivityId)) {
+      const error = new Error("This activity cannot be linked while archived or awaiting deletion review.");
+      error.status = 409;
       throw error;
     }
     return {
@@ -2977,13 +3025,18 @@ function integrationLogEntry(service, action, status, startedAt, error = "") {
 }
 
 const MARKET_INTELLIGENCE_CRON_JOB = "market_intelligence_weekly";
+const ACTIVITY_DELETION_DIGEST_JOB = "activity_deletion_digest";
 const CRON_STALE_RUN_MS = 30 * 60 * 1000;
+
+function weeklyCronService(idempotencyKey) {
+  return idempotencyKey.startsWith(`${ACTIVITY_DELETION_DIGEST_JOB}:`) ? ACTIVITY_DELETION_DIGEST_JOB : "market_intelligence";
+}
 
 function cronRunLogEntry({ idempotencyKey, window, startedAt }) {
   return {
     id: `ilog-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     timestamp: startedAt,
-    service: "market_intelligence",
+    service: weeklyCronService(idempotencyKey),
     action: "weekly_cron",
     status: "running",
     duration_ms: 0,
@@ -3045,7 +3098,7 @@ async function reserveSupabaseCronRun({ idempotencyKey, window, startedAt }) {
       body: {
         id: runId,
         timestamp: startedAt,
-        service: "market_intelligence",
+        service: weeklyCronService(idempotencyKey),
         action: "weekly_cron",
         status: "running",
         duration_ms: 0,
@@ -3171,6 +3224,41 @@ async function handleMarketIntelligenceCron(req, res, supabaseEnabled) {
     reserve: supabaseEnabled ? reserveSupabaseCronRun : reserveLocalCronRun,
     execute: () => executeMarketIntelligenceCron(supabaseEnabled),
     complete: supabaseEnabled ? completeSupabaseCronRun : completeLocalCronRun,
+    logger: console
+  });
+  return sendJson(res, result.status, result.body);
+}
+
+async function handleActivityDeletionDigest(req, res, supabaseEnabled) {
+  const result = await runSecuredScheduledJob({
+    req, configuredSecret: process.env.CRON_SECRET, jobName: ACTIVITY_DELETION_DIGEST_JOB,
+    reserve: supabaseEnabled ? reserveSupabaseCronRun : reserveLocalCronRun,
+    complete: supabaseEnabled ? completeSupabaseCronRun : completeLocalCronRun,
+    execute: async ({ window }) => {
+      let written;
+      if (supabaseEnabled) {
+        written = await serviceRest("cron.activity_deletion_digest", "rpc/send_activity_deletion_digest", {
+          method: "POST", body: { p_window: window }
+        });
+      } else {
+        const db = readDb();
+        const requests = db.leads.flatMap(lead => (lead.activities || [])
+          .filter(item => item.delete_request && item.target_type === "activity" && item.request_status === "pending")
+          .map(item => ({ lead_id: lead.id, request_id: item.id, requested_at: item.requested_at })));
+        const notices = requests.length ? db.users.filter(user => isAdmin(user) && user.status !== "inactive")
+          .map(user => ({
+            id: idempotencyUuid(`activity-deletion-digest:${window}:${user.id}`),
+            recipient_uid: user.id, type: ACTIVITY_DELETION_DIGEST_JOB, title: "Weekly deletion approval digest",
+            message: `${requests.length} deletion request(s) awaiting approval.`,
+            payload: { view: "activity/deletions", window, requests },
+            read: false, created_at: new Date().toISOString()
+          })).filter(item => !db.notifications.some(existing => existing.id === item.id)) : [];
+        db.notifications.unshift(...notices);
+        if (notices.length) writeDb(db);
+        written = notices.length;
+      }
+      return { recordsWritten: written, response: { notifications: written } };
+    },
     logger: console
   });
   return sendJson(res, result.status, result.body);
@@ -3766,6 +3854,83 @@ async function persistActivityCollection(db, user, lead, activities, supabaseEna
     || lead.last_activity
     || "";
   return persistLeadPatch(db, user, lead.id, { activities: normalized, last_activity: lastActivity }, supabaseEnabled);
+}
+
+function deletionSummaryPatch(lead, activities, target, request, action, local) {
+  if (!target) return {};
+  if (action === "restore") {
+    const patch = {};
+    if (request.previous_next_action && !lead.next_action && !lead.next_action_date
+      && !isResolvedReminder(target, activities)) {
+      patch.next_action = request.previous_next_action;
+      patch.next_action_date = request.previous_next_action_date;
+      if (local) patch.activity_schedule = request.previous_activity_schedule ?? null;
+    }
+    if (request.previous_last_activity > String(lead.last_activity || "").slice(0, 10)) {
+      patch.last_activity = request.previous_last_activity;
+    }
+    return patch;
+  }
+  if (action !== "approve") return {};
+  const patch = {};
+  if (isReminderActivity(target) && lead.next_action && lead.next_action_date) {
+    const matches = activities.filter(item => isReminderActivity(item) && !item.delete_request
+      && (item === target || !item.archived) && !isResolvedReminder(item, activities)
+      && !["completed", "cancelled"].includes(item.reminder_status)
+      && !["closed", "cancelled"].includes(item.transaction_status)
+      && String(item.due_date || item.reminder_due_date || "") === lead.next_action_date
+      && String(item.activity_required || item.text || "").trim().toLowerCase() === String(lead.next_action).trim().toLowerCase());
+    if (matches.length === 1 && matches[0] === target) {
+      request.previous_next_action = lead.next_action;
+      request.previous_next_action_date = lead.next_action_date;
+      patch.next_action = "";
+      patch.next_action_date = null;
+      if (local) {
+        request.previous_activity_schedule = lead.activity_schedule ?? null;
+        patch.activity_schedule = null;
+      }
+    }
+  }
+  const current = String(lead.last_activity || "").slice(0, 10);
+  if (current && activityDateOnly(target) === current) {
+    request.previous_last_activity = current;
+    patch.last_activity = activities.filter(item => !item.archived && !item.delete_request
+      && item.followup_resolution !== "cancelled" && !item.followup_label)
+      .map(activityDateOnly).filter(date => date && date <= current).sort().at(-1) || null;
+  }
+  return patch;
+}
+
+async function persistDeletionDecision(db, user, lead, activities, supabaseEnabled, summary = {}) {
+  const conflict = () => Object.assign(new Error("The lead changed. Refresh and try again."), { status: 409 });
+  const patch = { activities: ensureActivityIds(activities), ...summary };
+  if (supabaseEnabled) {
+    if (!lead.updated_at) throw conflict();
+    const row = await serviceRest("workflow.activity_deletion", "rpc/commit_activity_deletion", {
+      method: "POST",
+      body: { p_lead_id: lead.id, p_expected_updated_at: lead.updated_at, p_patch: patch }
+    }).catch(error => {
+      if (error.status === 404) throw Object.assign(new Error("Deletion approvals are not configured for this database."), { status: 503 });
+      throw error;
+    });
+    if (!row?.id) throw conflict();
+    return fromSupabaseLead(row);
+  }
+  const fresh = readDb();
+  const latest = fresh.leads.find(item => item.id === lead.id && leadBelongsToUser(item, user));
+  if (!latest || JSON.stringify(latest) !== JSON.stringify(lead)) throw conflict();
+  Object.assign(latest, patch);
+  writeDb(fresh);
+  return leadWithDerivedFields(latest);
+}
+
+async function scheduleReportPages(resource, parameters, token) {
+  const rows = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = await rest(`${resource}?${parameters}&limit=500&offset=${offset}`, supabaseDataOptions(token));
+    rows.push(...page);
+    if (page.length < 500) return rows;
+  }
 }
 
 function activityById(lead, activityId) {
@@ -5113,6 +5278,9 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/cron/fetch-market-intelligence") {
     return handleMarketIntelligenceCron(req, res, supabaseEnabled);
   }
+  if (req.method === "GET" && url.pathname === "/api/cron/activity-deletion-digest") {
+    return handleActivityDeletionDigest(req, res, supabaseEnabled);
+  }
   const db = supabaseEnabled ? null : readDb();
 
   if (["GET", "POST"].includes(req.method) && url.pathname === "/api/cron/process-lead-intelligence") {
@@ -5573,9 +5741,12 @@ async function handleApi(req, res, url) {
       last_activity: activity.at
     };
     if (audit.intent !== "add_note") {
-      patch.next_action = activity.next_action_plan;
-      patch.next_action_date = activity.next_action_date;
-      patch.activity_purpose = activity.activity_purpose;
+      if (!activeSchedule(lead)) {
+        patch.next_action = activity.next_action_plan;
+        patch.next_action_date = activity.next_action_date;
+        patch.activity_purpose = activity.activity_purpose;
+        if (!supabaseEnabled) patch.activity_schedule = initialSchedule({ ...lead, ...patch }, new Date().toISOString());
+      }
     }
     const updatedLead = await persistLeadPatch(db, user, lead.id, patch, supabaseEnabled);
     let draft = null;
@@ -6674,7 +6845,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/activity-deletion-requests") {
-    if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Management access required." });
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
     const leads = supabaseEnabled
       ? (await rest("leads?select=*&order=created_at.desc", supabaseDataOptions(user.token))).map(fromSupabaseLead)
       : db.leads.map(leadWithDerivedFields);
@@ -6690,11 +6861,18 @@ async function handleApi(req, res, url) {
         .filter(activity => activity.delete_request && activity.target_type === "activity")
         .map(request => {
           const target = activities.find(activity => activity.id === request.target_activity_id);
+          const pending = request.request_status === "pending";
+          const blockReason = pending ? deletionApprovalBlockReason(request, target) : "";
           return {
             ...request,
             lead_id: lead.id,
             company_name: lead.company_name,
             assigned_salesman: lead.assigned_salesman,
+            entry_type: request.entry_type || (isReminderActivity(target) ? "Reminder" : "Activity"),
+            target_available: Boolean(target && !target.archived),
+            can_approve: pending && !blockReason,
+            approval_block_reason: blockReason,
+            can_restore: Boolean(target?.archived && target.archive_request_id === request.id && request.request_status === "approved"),
             activity_date: target?.at || "",
             activity_type: target?.activity_purpose || target?.type || "Activity",
             activity_notes: target?.notes || target?.text || "",
@@ -6712,6 +6890,23 @@ async function handleApi(req, res, url) {
         && (!from || String(request.requested_at || "").slice(0, 10) >= from)
         && (!to || String(request.requested_at || "").slice(0, 10) <= to))
       .sort((a, b) => String(b.requested_at || "").localeCompare(String(a.requested_at || "")));
+    if (url.searchParams.get("include_digest") === "1") {
+      const digest = supabaseEnabled
+        ? (await rest(`notifications?recipient_uid=eq.${encodeURIComponent(user.id)}&type=eq.activity_deletion_digest&select=created_at,payload&order=created_at.desc&limit=1`,
+          supabaseDataOptions(user.token)).catch(() => []))[0]
+        : db.notifications.find(item => item.recipient_uid === user.id && item.type === ACTIVITY_DELETION_DIGEST_JOB);
+      const companies = new Map(leads.map(lead => [lead.id, lead.company_name]));
+      return sendJson(res, 200, {
+        requests,
+        digest: Array.isArray(digest?.payload?.requests) ? {
+          created_at: digest.created_at,
+          requests: digest.payload.requests.map(item => ({
+            id: item.request_id, company_name: companies.get(item.lead_id) || "Lead no longer in the queue",
+            requested_at: item.requested_at
+          }))
+        } : null
+      });
+    }
     return sendJson(res, 200, requests);
   }
 
@@ -6761,6 +6956,7 @@ async function handleApi(req, res, url) {
     const lead = withAutomaticReminder(normalizeLead(payload), user);
     lead.created_by = user.id;
     lead.created_by_name = user.name || user.email || "User";
+    lead.activity_schedule = initialSchedule(lead, new Date().toISOString());
     if (!isDirectorOrAdmin(user)) {
       lead.assigned_to = user.id;
       lead.assigned_salesman = user.name || user.email || lead.assigned_salesman;
@@ -7018,6 +7214,73 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, updated || result.lead);
   }
 
+  if (req.method === "GET" && url.pathname === "/api/activity-schedule-report") {
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
+    const now = new Date().toISOString();
+    let leads = db?.leads;
+    let events = db?.activity_schedule_events;
+    if (supabaseEnabled) {
+      const { week_start: start } = activityScheduleReport([], [], now);
+      try {
+        leads = await scheduleReportPages("leads", "select=id,company_name,assigned_to,assigned_salesman,updated_at,next_action,next_action_date,activity_schedule,activities&order=id.asc", user.token);
+        const weekFilter = encodeURIComponent(`${start}T00:00:00+04:00`);
+        events = (await scheduleReportPages("activity_schedule_events",
+          `select=*&or=(recorded_at.gte.${weekFilter},original_due_date.gte.${start})&order=recorded_at.desc,id.asc`, user.token))
+          .map(({ details, ...metadata }) => ({ ...details, ...metadata }));
+      } catch (error) {
+        if (error.status === 404 || /schema cache|does not exist/i.test(error.message)) {
+          return sendJson(res, 503, { error: "Activity schedule controls are not configured for this database." });
+        }
+        throw error;
+      }
+    }
+    return sendJson(res, 200, activityScheduleReport(leads, events, now));
+  }
+
+  const scheduleMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activity-schedule$/);
+  if (scheduleMatch && ["GET", "POST"].includes(req.method)) {
+    const input = req.method === "POST" ? await readBody(req) : null;
+    const freshDb = supabaseEnabled ? null : readDb();
+    const lead = await accessibleLeadById(freshDb, user, decodeURIComponent(scheduleMatch[1]), supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    if (!isAdmin(user) && (user.role !== "salesman" || !lead.assigned_to || String(lead.assigned_to) !== String(user.id))) {
+      return sendJson(res, 403, { error: "Only the current assigned salesman or an Admin can change this schedule." });
+    }
+    if (supabaseEnabled && !Object.hasOwn(lead, "activity_schedule")) {
+      return sendJson(res, 503, { error: "Activity schedule controls are not configured for this database." });
+    }
+    const now = new Date().toISOString();
+    if (req.method === "GET") {
+      const plan = scheduleState(lead, now);
+      if (!plan) return sendJson(res, 409, { error: "There is no open follow-up to reschedule." });
+      return sendJson(res, 200, { plan, action: lead.next_action, date: lead.next_action_date, updated_at: lead.updated_at || "",
+        needs_review: !isAdmin(user) && !(Date.parse(now) < scheduleEditDeadline(lead, plan)) });
+    }
+    const result = requestScheduleChange(lead, user, input || {}, now);
+    let saved;
+    if (supabaseEnabled) {
+      try {
+        saved = await serviceRest("workflow.activity_schedule", "rpc/commit_activity_schedule", {
+          method: "POST", body: { p_lead_id: lead.id, p_version: lead.updated_at, p_event: result.event,
+            p_patch: { next_action_date: result.lead.next_action_date, activities: result.lead.activities,
+              activity_schedule: result.lead.activity_schedule } }
+        });
+      } catch (error) {
+        if (error.status === 404) return sendJson(res, 503, { error: "Activity schedule controls are not configured for this database." });
+        if (/needs a reschedule request/i.test(error.message)) return sendJson(res, 409, { error: "The edit window closed. Reload and submit a reschedule request." });
+        throw error;
+      }
+      if (!saved?.id) return sendJson(res, 409, { error: "The activity changed. Refresh before saving." });
+    } else {
+      Object.assign(lead, result.lead);
+      freshDb.activity_schedule_events.unshift(result.event);
+      writeDb(freshDb);
+      saved = lead;
+    }
+    return sendJson(res, result.status === "pending" ? 202 : 200, { status: result.status,
+      lead: supabaseEnabled ? fromSupabaseLead(saved) : leadWithDerivedFields(saved) });
+  }
+
   const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
   if (req.method === "PATCH" && leadMatch) {
     let payload = await readBody(req);
@@ -7028,6 +7291,8 @@ async function handleApi(req, res, url) {
         return sendJson(res, 403, { error: "Only management can reassign a lead." });
       }
       payload = prepareLeadPayloadForUser(payload, user, existing);
+      delete payload.activities;
+      if (activeSchedule(existing) && schedulePatchChanges(existing, payload)) return sendJson(res, 409, { error: SCHEDULE_PROTECTED });
       const stageProvided = Boolean(payload.stage || payload.lead_status);
       if (payload.stage || payload.lead_status) {
         payload.lead_status = normalizeStageValue(payload.stage || payload.lead_status, existing.stage);
@@ -7098,6 +7363,13 @@ async function handleApi(req, res, url) {
       return sendJson(res, 403, { error: "Only management can reassign a lead." });
     }
     payload = prepareLeadPayloadForUser(payload, user, lead);
+    delete payload.activities;
+    if (activeSchedule(lead) && schedulePatchChanges(lead, payload)) return sendJson(res, 409, { error: SCHEDULE_PROTECTED });
+    if (!activeSchedule(lead) && schedulePatchChanges(lead, payload)) {
+      payload.activity_schedule = initialSchedule({ ...lead, ...payload }, new Date().toISOString());
+    } else {
+      delete payload.activity_schedule;
+    }
     const stageProvided = Boolean(payload.stage || payload.lead_status);
     if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
       payload = await googleEnrichPayload({ ...lead, ...payload, google_place_id: "" }, req);
@@ -7152,7 +7424,7 @@ async function handleApi(req, res, url) {
   if (req.method === "DELETE" && leadMatch) {
     const payload = await readBody(req);
     if (!isAdmin(user)) {
-      return sendJson(res, 403, { error: "Salesman delete actions require admin approval. Use Request Delete instead." });
+      return sendJson(res, 403, { error: "Salesmen cannot delete or request deletion of a lead." });
     }
     if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
       return sendJson(res, 403, { error: "Admin password confirmation is required to delete a lead." });
@@ -7172,218 +7444,97 @@ async function handleApi(req, res, url) {
 
   const deleteRequestMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/delete-requests$/);
   if (req.method === "POST" && deleteRequestMatch) {
+    if (!["admin", "salesman"].includes(user.role)) return sendJson(res, 403, { error: "Admin or salesman access required." });
     const payload = await readBody(req);
-    if (supabaseEnabled) {
-      const lead = await getSupabaseLead(user.token, deleteRequestMatch[1], user);
-      if (!lead) return leadNotFound(res);
-      const activities = ensureActivityIds(lead.activities);
-      const requestActivity = normalizeDeleteRequest(payload, lead, user, activities);
-      const target = activities.find(activity => activity.id === requestActivity.target_activity_id);
-      if (target) {
-        target.deletion_status = "pending";
-        target.audit_history = [
-          activityAuditEvent("deletion_requested", user, {
-            request_id: requestActivity.id,
-            reason: requestActivity.reason,
-            comments: requestActivity.comments
-          }),
-          ...(target.audit_history || [])
-        ];
-      }
-      const leads = await rest(`leads?id=eq.${encodeURIComponent(deleteRequestMatch[1])}&select=*`, {
-        method: "PATCH",
-        ...supabaseDataOptions(user.token),
-        headers: { Prefer: "return=representation" },
-        body: { activities: [requestActivity, ...activities], last_activity: requestActivity.at }
-      });
-      await recordActivityWorkflowNotification(db, user, await activityManagerIds(db, supabaseEnabled), {
-        type: "activity_deletion_requested",
-        lead_id: lead.id,
+    const currentDb = supabaseEnabled ? db : readDb();
+    const lead = await accessibleLeadById(currentDb, user, deleteRequestMatch[1], supabaseEnabled);
+    if (!lead) return leadNotFound(res);
+    const activities = ensureActivityIds(lead.activities);
+    const requestActivity = normalizeDeleteRequest(payload, lead, user, activities);
+    const target = activities.find(activity => activity.id === requestActivity.target_activity_id);
+    target.deletion_status = "pending";
+    target.audit_history = [
+      activityAuditEvent("deletion_requested", user, {
         request_id: requestActivity.id,
-        title: "Activity deletion request",
-        message: `${requestActivity.requested_by_name} requested deletion of an activity for ${lead.company_name}.`
-      }, supabaseEnabled);
-      return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), request: requestActivity });
-    }
-    const lead = db.leads.find(item => item.id === deleteRequestMatch[1]);
-    if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
-    lead.activities = ensureActivityIds(lead.activities);
-    const requestActivity = normalizeDeleteRequest(payload, lead, user, lead.activities);
-    const target = lead.activities.find(activity => activity.id === requestActivity.target_activity_id);
-    if (target) {
-      target.deletion_status = "pending";
-      target.audit_history = [
-        activityAuditEvent("deletion_requested", user, {
-          request_id: requestActivity.id,
-          reason: requestActivity.reason,
-          comments: requestActivity.comments
-        }),
-        ...(target.audit_history || [])
-      ];
-    }
-    lead.activities.unshift(requestActivity);
-    lead.last_activity = requestActivity.at;
-    writeDb(db);
-    await recordActivityWorkflowNotification(db, user, await activityManagerIds(db, supabaseEnabled), {
+        reason: requestActivity.reason,
+        comments: requestActivity.comments
+      }),
+      ...(target.audit_history || [])
+    ];
+    const saved = await persistDeletionDecision(currentDb, user, lead, [requestActivity, ...activities], supabaseEnabled);
+    if (!supabaseEnabled) await recordActivityWorkflowNotification(readDb(), user, currentDb.users.filter(isAdmin).map(item => item.id), {
       type: "activity_deletion_requested",
       lead_id: lead.id,
       request_id: requestActivity.id,
       title: "Activity deletion request",
-      message: `${requestActivity.requested_by_name} requested deletion of an activity for ${lead.company_name}.`
+      message: `${requestActivity.requested_by_name} requested deletion of an entry for ${lead.company_name}.`
     }, supabaseEnabled);
-    return sendJson(res, 201, { lead: leadWithDerivedFields(lead), request: requestActivity });
+    return sendJson(res, 201, { lead: saved, request: requestActivity });
   }
 
-  const deleteApprovalMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/delete-requests\/([^/]+)\/(approve|reject)$/);
+  const deleteApprovalMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/delete-requests\/([^/]+)\/(approve|reject|restore)$/);
   if (req.method === "POST" && deleteApprovalMatch) {
-    if (!isDirectorOrAdmin(user)) return sendJson(res, 403, { error: "Management access required." });
+    if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required." });
     const payload = await readBody(req);
-    if (isAdmin(user) && !await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
+    if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
       return sendJson(res, 403, { error: "Admin password confirmation is required." });
     }
-    const leadId = deleteApprovalMatch[1];
-    const requestId = deleteApprovalMatch[2];
-    const action = deleteApprovalMatch[3];
-    if (supabaseEnabled) {
-      const lead = await getSupabaseLead(user.token, leadId, user);
-      if (!lead) return leadNotFound(res);
-      const activities = ensureActivityIds(lead.activities);
-      const requestIndex = activities.findIndex(activity => activity.id === requestId && activity.delete_request);
-      if (requestIndex < 0) return sendJson(res, 404, { error: "Delete request not found." });
-      const requestActivity = activities[requestIndex];
-      if (requestActivity.request_status !== "pending") return sendJson(res, 409, { error: "This delete request has already been reviewed." });
-      if (String(requestActivity.requested_by) === String(user.id)) return sendJson(res, 403, { error: "You cannot approve or reject your own request." });
-      if (action === "reject" && !String(payload.note || "").trim()) return sendJson(res, 400, { error: "Add a rejection comment." });
-      if (action === "approve" && requestActivity.target_type === "lead") {
-        await rest(`leads?id=eq.${encodeURIComponent(leadId)}`, { method: "DELETE", ...supabaseDataOptions(user.token) });
-        return sendJson(res, 200, { ok: true, deleted: true });
-      }
-      const reviewedRequest = {
-        ...requestActivity,
-        request_status: action === "approve" ? "approved" : "rejected",
-        reviewed_by: user.id,
-        reviewed_by_name: user.name || user.email || "Admin",
-        reviewed_at: new Date().toISOString(),
-        review_note: String(payload.note || "").trim()
-      };
-      activities[requestIndex] = reviewedRequest;
-      const targetIndex = activities.findIndex(activity => activity.id === requestActivity.target_activity_id);
-      if (targetIndex >= 0) {
-        activities[targetIndex] = {
-          ...activities[targetIndex],
-          deletion_status: action === "approve" ? "approved" : "rejected",
-          ...(action === "approve" ? {
-            archived: true,
-            archived_at: reviewedRequest.reviewed_at,
-            archived_by: user.id,
-            archive_request_id: requestActivity.id
-          } : {}),
-          audit_history: [
-            activityAuditEvent(action === "approve" ? "activity_archived" : "deletion_rejected", user, {
-              request_id: requestActivity.id,
-              review_note: reviewedRequest.review_note
-            }),
-            ...(activities[targetIndex].audit_history || [])
-          ]
-        };
-      }
-      const reviewActivity = requestActivity.target_type === "activity" ? {
-        id: newRecordId("act"),
-        at: new Date().toISOString().slice(0, 10),
-        type: "Activity Review",
-        text: `Activity deletion request ${action === "approve" ? "approved and archived" : "rejected"} by ${user.name || user.email || "Admin"}.${payload.note ? ` Note: ${String(payload.note).trim()}` : ""}`,
-        immutable_append: true,
-        review_request_id: requestActivity.id,
-        target_activity_id: requestActivity.target_activity_id || "",
-        target_activity_summary: requestActivity.target_activity_summary || "",
-        reviewed_by: user.id,
-        reviewed_by_name: user.name || user.email || "Admin",
-        reviewed_at: new Date().toISOString()
-      } : null;
-      const nextActivities = reviewActivity ? [reviewActivity, ...activities] : activities;
-      const leads = await rest(`leads?id=eq.${encodeURIComponent(leadId)}&select=*`, {
-        method: "PATCH",
-        ...supabaseDataOptions(user.token),
-        headers: { Prefer: "return=representation" },
-        body: { activities: nextActivities, last_activity: nextActivities[0]?.at || lead.last_activity }
-      });
-      await recordActivityWorkflowNotification(db, user, [requestActivity.requested_by], {
-        type: action === "approve" ? "activity_deletion_approved" : "activity_deletion_rejected",
-        lead_id: lead.id,
-        request_id: requestActivity.id,
-        title: action === "approve" ? "Activity deletion approved" : "Activity deletion rejected",
-        message: `${lead.company_name}: your activity deletion request was ${action === "approve" ? "approved and archived" : "rejected"}.${reviewedRequest.review_note ? ` ${reviewedRequest.review_note}` : ""}`
-      }, supabaseEnabled);
-      return sendJson(res, 200, { lead: fromSupabaseLead(leads[0]), request: reviewedRequest, review: reviewActivity });
-    }
-    const lead = db.leads.find(item => item.id === leadId);
+    const [, leadId, requestId, action] = deleteApprovalMatch;
+    const currentDb = supabaseEnabled ? db : readDb();
+    const lead = await accessibleLeadById(currentDb, user, leadId, supabaseEnabled);
     if (!lead) return leadNotFound(res);
-    lead.activities = ensureActivityIds(lead.activities);
-    const requestIndex = lead.activities.findIndex(activity => activity.id === requestId && activity.delete_request);
-    if (requestIndex < 0) return sendJson(res, 404, { error: "Delete request not found." });
-    const requestActivity = lead.activities[requestIndex];
-    if (requestActivity.request_status !== "pending") return sendJson(res, 409, { error: "This delete request has already been reviewed." });
-    if (String(requestActivity.requested_by) === String(user.id)) return sendJson(res, 403, { error: "You cannot approve or reject your own request." });
-    if (action === "reject" && !String(payload.note || "").trim()) return sendJson(res, 400, { error: "Add a rejection comment." });
-    if (action === "approve" && requestActivity.target_type === "lead") {
-      db.leads = db.leads.filter(item => item.id !== leadId);
-      writeDb(db);
-      return sendJson(res, 200, { ok: true, deleted: true });
+    const { activities, activity: request } = activityById(lead, requestId);
+    if (!request?.delete_request || request.target_type !== "activity") {
+      return sendJson(res, 404, { error: "Activity deletion request not found." });
     }
-    const reviewedRequest = {
-      ...requestActivity,
-      request_status: action === "approve" ? "approved" : "rejected",
-      reviewed_by: user.id,
-      reviewed_by_name: user.name || user.email || "Admin",
-      reviewed_at: new Date().toISOString(),
-      review_note: String(payload.note || "").trim()
-    };
-    lead.activities[requestIndex] = reviewedRequest;
-    const targetIndex = lead.activities.findIndex(activity => activity.id === requestActivity.target_activity_id);
-    if (targetIndex >= 0) {
-      lead.activities[targetIndex] = {
-        ...lead.activities[targetIndex],
-        deletion_status: action === "approve" ? "approved" : "rejected",
-        ...(action === "approve" ? {
-          archived: true,
-          archived_at: reviewedRequest.reviewed_at,
-          archived_by: user.id,
-          archive_request_id: requestActivity.id
-        } : {}),
-        audit_history: [
-          activityAuditEvent(action === "approve" ? "activity_archived" : "deletion_rejected", user, {
-            request_id: requestActivity.id,
-            review_note: reviewedRequest.review_note
-          }),
-          ...(lead.activities[targetIndex].audit_history || [])
-        ]
-      };
+    const restoring = action === "restore";
+    if (request.request_status !== (restoring ? "approved" : "pending")) {
+      return sendJson(res, 409, { error: "The request has changed. Refresh the queue and try again." });
     }
-    if (requestActivity.target_type === "activity") {
-      lead.activities.unshift({
-        id: newRecordId("act"),
-        at: new Date().toISOString().slice(0, 10),
-        type: "Activity Review",
-        text: `Activity deletion request ${action === "approve" ? "approved and archived" : "rejected"} by ${user.name || user.email || "Admin"}.${payload.note ? ` Note: ${String(payload.note).trim()}` : ""}`,
-        immutable_append: true,
-        review_request_id: requestActivity.id,
-        target_activity_id: requestActivity.target_activity_id || "",
-        target_activity_summary: requestActivity.target_activity_summary || "",
-        reviewed_by: user.id,
-        reviewed_by_name: user.name || user.email || "Admin",
-        reviewed_at: new Date().toISOString()
+    const target = activities.find(activity => activity.id === request.target_activity_id);
+    if (action === "approve") {
+      const blockReason = deletionApprovalBlockReason(request, target);
+      if (blockReason) return sendJson(res, 409, { error: blockReason });
+    }
+    if (restoring && (!target?.archived || target.archive_request_id !== request.id)) {
+      return sendJson(res, 409, { error: "The original entry is no longer available for this action." });
+    }
+    const note = String(payload.note || "").trim();
+    if (action === "reject" && !note) return sendJson(res, 400, { error: "A rejection reason is required." });
+    if (note.length > 4000) return sendJson(res, 400, { error: "The decision note must not exceed 4000 characters." });
+    const now = new Date().toISOString();
+    const actor = user.name || user.email || "Admin";
+    const status = restoring ? "restored" : action === "approve" ? "approved" : "rejected";
+    if (restoring) {
+      Object.assign(request, { request_status: status, restored_at: now, restored_by: user.id, restored_by_name: actor });
+      for (const key of ["archived", "archived_at", "archived_by", "archive_request_id"]) delete target[key];
+    } else {
+      Object.assign(request, {
+        request_status: status, reviewed_by: user.id, reviewed_by_name: actor, reviewed_at: now, review_note: note
+      });
+      if (action === "approve") Object.assign(target, {
+        archived: true, archived_at: now, archived_by: user.id, archive_request_id: request.id
       });
     }
-    lead.last_activity = lead.activities[0]?.at || lead.last_activity;
-    writeDb(db);
-    await recordActivityWorkflowNotification(db, user, [requestActivity.requested_by], {
-      type: action === "approve" ? "activity_deletion_approved" : "activity_deletion_rejected",
+    if (target && !(!restoring && target.archived && target.archive_request_id !== request.id)) {
+      target.deletion_status = status;
+      target.audit_history = [
+        activityAuditEvent(restoring ? "activity_restored" : action === "approve" ? "activity_archived" : "deletion_rejected", user, {
+          request_id: request.id, review_note: note
+        }),
+        ...(target.audit_history || [])
+      ];
+    }
+    const summary = deletionSummaryPatch(lead, activities, target, request, action, !supabaseEnabled);
+    const saved = await persistDeletionDecision(currentDb, user, lead, activities, supabaseEnabled, summary);
+    if (!supabaseEnabled) await recordActivityWorkflowNotification(readDb(), user, [request.requested_by], {
+      type: `activity_deletion_${status}`,
       lead_id: lead.id,
-      request_id: requestActivity.id,
-      title: action === "approve" ? "Activity deletion approved" : "Activity deletion rejected",
-      message: `${lead.company_name}: your activity deletion request was ${action === "approve" ? "approved and archived" : "rejected"}.${reviewedRequest.review_note ? ` ${reviewedRequest.review_note}` : ""}`
+      request_id: request.id,
+      title: `Activity deletion ${status}`,
+      message: `${lead.company_name}: your activity deletion request was ${status}.${note ? ` ${note}` : ""}`
     }, supabaseEnabled);
-    return sendJson(res, 200, { lead: leadWithDerivedFields(lead), request: reviewedRequest });
+    return sendJson(res, 200, { lead: saved, request });
   }
 
   const stageMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/stage$/);
@@ -7465,7 +7616,7 @@ async function handleApi(req, res, url) {
     if (!found.activity || found.activity.delete_request || found.activity.archived) {
       return sendJson(res, 404, { error: "Activity not found." });
     }
-    if (found.activity.deletion_status === "pending") {
+    if (pendingDeletionForActivity(found.activities, found.activity.id)) {
       return sendJson(res, 409, { error: "This activity has a pending deletion request and cannot be edited until management completes the review." });
     }
     if (!canManageActivity(user, lead, found.activity)) {
@@ -7539,7 +7690,9 @@ async function handleApi(req, res, url) {
     if (!lead) return leadNotFound(res);
     const found = activityById(lead, activityAttachmentDownloadMatch[2]);
     const attachment = found.activity?.attachments?.find(item => item.id === activityAttachmentDownloadMatch[3] && !item.removed_at);
-    if (!attachment) return sendJson(res, 404, { error: "Attachment not found." });
+    if (!attachment || (found.activity.archived && !isAdmin(user))) {
+      return sendJson(res, 404, { error: "Attachment not found." });
+    }
     if (supabaseEnabled) {
       const signedUrl = await createStorageSignedUrlForBucket(
         ACTIVITY_ATTACHMENT_BUCKET,
@@ -7571,6 +7724,13 @@ async function handleApi(req, res, url) {
     const lead = await accessibleLeadById(freshDb, user, leadId, supabaseEnabled);
     if (!lead) return leadNotFound(res);
     if (!canResolveLeadFollowup(user, lead)) return sendJson(res, 403, { error: "Only an Admin or the assigned salesman can resolve this follow-up." });
+    if (!(lead.activities || []).some(item => item.id === `followup-${values.request_id}`)
+      && (lead.activities || []).some(item => isReminderActivity(item)
+        && pendingDeletionForActivity(lead.activities, item.id)
+        && String(item.due_date || item.reminder_due_date || "") === values.expected_due
+        && String(item.activity_required || item.text || "").trim().toLowerCase() === values.expected_action.toLowerCase())) {
+      return sendJson(res, 409, { error: "This follow-up is read-only while deletion is pending." });
+    }
     try {
       if (supabaseEnabled) {
         const result = await rest("rpc/resolve_lead_followup", {
@@ -7581,6 +7741,8 @@ async function handleApi(req, res, url) {
       }
       const result = resolveLocalLeadFollowup(lead, user, values, now);
       if (!result.duplicate) {
+        freshDb.activity_schedule_events.unshift(outcomeScheduleEvent(lead, user, result.activity, now));
+        result.lead.activity_schedule = initialSchedule(result.lead, now);
         Object.assign(lead, result.lead);
         writeDb(freshDb);
       }
@@ -7613,7 +7775,16 @@ async function handleApi(req, res, url) {
     const matches = activities.filter(activity => activity && String(activity.id || "") === activityId);
     if (matches.length !== 1 || !activityId) return sendJson(res, 409, { error: "This activity needs a unique, permanent ID before it can be updated." });
     const activity = matches[0];
-    if (activity.archived || activity.delete_request || activity.deletion_status === "pending") return sendJson(res, 409, { error: "This activity cannot be updated." });
+    if (activity.archived || activity.delete_request || pendingDeletionForActivity(activities, activity.id)) {
+      return sendJson(res, 409, { error: "This activity cannot be updated." });
+    }
+    if (["closed", "cancelled", "completed"].includes(activity.transaction_status) || activity.followup_resolution
+      || ["completed", "cancelled"].includes(activity.reminder_status)) {
+      return sendJson(res, 409, { error: "This outcome is read-only; add a correction instead." });
+    }
+    if (isPendingReminder(activity) && values.next_attempt && values.next_attempt !== (activity.transaction_next_attempt || "")) {
+      return sendJson(res, 409, { error: SCHEDULE_PROTECTED });
+    }
     if (!canManageActivity(user, lead, activity)) return sendJson(res, 403, { error: "You cannot edit this activity." });
     let updated;
     try { updated = updateActivityTransaction(activity, values, user, version); }
@@ -7646,7 +7817,7 @@ async function handleApi(req, res, url) {
     if (!found.activity || found.activity.delete_request || found.activity.archived) {
       return sendJson(res, 404, { error: "Activity not found." });
     }
-    if (found.activity.deletion_status === "pending") {
+    if (pendingDeletionForActivity(found.activities, found.activity.id)) {
       return sendJson(res, 409, { error: "This activity has a pending deletion request and cannot be edited until management completes the review." });
     }
     if (!canManageActivity(user, lead, found.activity)) {
@@ -7660,51 +7831,49 @@ async function handleApi(req, res, url) {
       notes: payload.notes,
       structured_activity: true
     }, user);
-    let updated = updateWorkflowActivity(found.activity, {
+    const corrected = updateWorkflowActivity(found.activity, {
       next_action_plan: normalized.next_action_plan,
       next_action_date: normalized.next_action_date,
       activity_purpose: normalized.activity_purpose,
       notes: normalized.notes
     }, user, payload.version);
-    const removeIds = new Set(Array.isArray(payload.remove_attachment_ids) ? payload.remove_attachment_ids.map(String) : []);
-    if (removeIds.size) {
-      const removedAt = new Date().toISOString();
-      const removed = [];
-      updated.attachments = (updated.attachments || []).map(attachment => {
-        if (!removeIds.has(String(attachment.id)) || attachment.removed_at) return attachment;
-        removed.push(attachment);
-        return { ...attachment, removed_at: removedAt, removed_by: user.id };
-      });
-      if (removed.length) {
-        updated.updated_at = removedAt;
-        updated.version += 1;
-        updated.audit_history = [
-          activityAuditEvent("attachment_removed", user, {
-            attachments: removed.map(item => ({ id: item.id, filename: item.original_filename }))
-          }),
-          ...(updated.audit_history || [])
-        ];
-      }
+    if (Array.isArray(payload.remove_attachment_ids) && payload.remove_attachment_ids.length) {
+      return sendJson(res, 409, { error: "Original attachments are read-only. Add a correction with any supporting files." });
     }
-    found.activities[found.index] = updated;
-    const persisted = await persistActivityCollection(db, user, lead, found.activities, supabaseEnabled);
-    return sendJson(res, 200, { lead: persisted, activity: updated });
+    const fields = ["next_action_plan", "next_action_date", "activity_purpose", "notes"];
+    const changed = fields.filter(field => String(found.activity[field] ?? "") !== String(corrected[field] ?? ""));
+    if (!changed.length) return sendJson(res, 200, { lead, activity: found.activity });
+    if (isPendingReminder(found.activity)) return sendJson(res, 409, { error: SCHEDULE_PROTECTED });
+    const reason = String(payload.correction_reason || "").trim();
+    if (reason.length < 10 || reason.length > 500) return sendJson(res, 400, { error: "Enter a correction reason of 10 to 500 characters." });
+    const correction = normalizeWorkflowActivity({
+      ...activityCorrection(found.activity, { text: reason }, lead, user), created_by: user.id,
+      created_by_name: user.name || user.email || "User",
+      audit_history: [activityAuditEvent("activity_correction", user, { reason,
+        before: Object.fromEntries(changed.map(field => [field, found.activity[field] ?? ""])),
+        after: Object.fromEntries(changed.map(field => [field, corrected[field] ?? ""]))
+      })]
+    }, user);
+    const persisted = await persistActivityCollection(db, user, lead, [correction, ...found.activities], supabaseEnabled);
+    return sendJson(res, 201, { lead: persisted, activity: correction, correction: true });
   }
 
   const deleteRequestCancelMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/delete-requests\/([^/]+)\/cancel$/);
   if (req.method === "POST" && deleteRequestCancelMatch) {
-    const lead = await accessibleLeadById(db, user, deleteRequestCancelMatch[1], supabaseEnabled);
+    const currentDb = supabaseEnabled ? db : readDb();
+    const lead = await accessibleLeadById(currentDb, user, deleteRequestCancelMatch[1], supabaseEnabled);
     if (!lead) return leadNotFound(res);
     const found = activityById(lead, deleteRequestCancelMatch[2]);
-    if (!found.activity?.delete_request || found.activity.request_status !== "pending") {
+    if (!found.activity?.delete_request || found.activity.target_type !== "activity" || found.activity.request_status !== "pending") {
       return sendJson(res, 409, { error: "This deletion request is no longer pending." });
     }
-    if (String(found.activity.requested_by) !== String(user.id) && !isDirectorOrAdmin(user)) {
-      return sendJson(res, 403, { error: "Only the requester or management can cancel this request." });
+    if (String(found.activity.requested_by) !== String(user.id)) {
+      return sendJson(res, 403, { error: "Only the requester can withdraw this request." });
     }
     found.activity.request_status = "cancelled";
     found.activity.cancelled_at = new Date().toISOString();
     found.activity.cancelled_by = user.id;
+    found.activity.cancelled_by_name = user.name || user.email || "User";
     const target = found.activities.find(item => item.id === found.activity.target_activity_id);
     if (target) {
       target.deletion_status = "";
@@ -7714,8 +7883,8 @@ async function handleApi(req, res, url) {
       ];
     }
     found.activities[found.index] = found.activity;
-    await persistActivityCollection(db, user, lead, found.activities, supabaseEnabled);
-    return sendJson(res, 200, { request: found.activity });
+    const saved = await persistDeletionDecision(currentDb, user, lead, found.activities, supabaseEnabled);
+    return sendJson(res, 200, { lead: saved, request: found.activity });
   }
 
   const activityEditMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/activities\/(\d+)$/);
@@ -7758,6 +7927,9 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const lead = await getSupabaseLead(user.token, activityMatch[1], user);
       if (!lead) return leadNotFound(res);
+      if (payload.followup_completed && matchesActiveStep(lead, payload.completed_due_date, payload.completed_activity_required)) {
+        return sendJson(res, 409, { error: "Use Log outcome to complete the current next step." });
+      }
       const duplicate = (lead.activities || []).find(activity => String(activity.id) === String(payload.id || ""));
       if (duplicate) return sendJson(res, 200, { lead, activity: duplicate, duplicate: true });
       const isReminder = String(payload.type || "").toLowerCase() === "reminder" || payload.reminder || Boolean(payload.due_date);
@@ -7765,16 +7937,20 @@ async function handleApi(req, res, url) {
         ? normalizeReminderActivity(payload, lead, user)
         : normalizePlainActivity(payload, user);
       const updates = { last_activity: activity.at, activities: [activity, ...(lead.activities || [])] };
-      if (payload.structured_activity) {
+      const preserveSchedule = Boolean(payload.structured_activity && activeSchedule(lead));
+      if (payload.structured_activity && !preserveSchedule) {
         updates.next_action = activity.next_action_plan;
         updates.next_action_date = activity.next_action_date;
         updates.activity_purpose = activity.activity_purpose;
       }
       const leads = await patchSupabaseLeadWithOptionalFallback(user.token, activityMatch[1], updates);
-      return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), activity });
+      return sendJson(res, 201, { lead: fromSupabaseLead(leads[0]), activity, schedule_unchanged: preserveSchedule });
     }
     const lead = db.leads.find(item => item.id === activityMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    if (payload.followup_completed && matchesActiveStep(lead, payload.completed_due_date, payload.completed_activity_required)) {
+      return sendJson(res, 409, { error: "Use Log outcome to complete the current next step." });
+    }
     const duplicate = (lead.activities || []).find(activity => String(activity.id) === String(payload.id || ""));
     if (duplicate) return sendJson(res, 200, { lead, activity: duplicate, duplicate: true });
     const isReminder = String(payload.type || "").toLowerCase() === "reminder" || payload.reminder || Boolean(payload.due_date);
@@ -7783,13 +7959,15 @@ async function handleApi(req, res, url) {
       : normalizePlainActivity(payload, user);
     lead.activities.unshift(activity);
     lead.last_activity = activity.at;
-    if (payload.structured_activity) {
+    const preserveSchedule = Boolean(payload.structured_activity && activeSchedule(lead));
+    if (payload.structured_activity && !preserveSchedule) {
       lead.next_action = activity.next_action_plan;
       lead.next_action_date = activity.next_action_date;
       lead.activity_purpose = activity.activity_purpose;
+      lead.activity_schedule = initialSchedule(lead, new Date().toISOString());
     }
     writeDb(db);
-    return sendJson(res, 201, { lead, activity });
+    return sendJson(res, 201, { lead, activity, schedule_unchanged: preserveSchedule });
   }
 
   const pmrMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/pmrs$/);

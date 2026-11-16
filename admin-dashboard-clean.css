@@ -1648,6 +1648,19 @@ body.admin-reference-mode.admin-dashboard-mode #appShell .topbar { padding-botto
   min-width: 0;
 }
 .clean-admin-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; }
+.clean-admin-metrics:where(.clean-admin-metrics--deletions) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.deletion-dashboard-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border: 1px solid #e7c777;
+  border-radius: 8px;
+  background: #fff4db;
+  color: #65450c;
+}
 .clean-admin-metrics > :is(button, article) {
   display: grid;
   align-content: start;

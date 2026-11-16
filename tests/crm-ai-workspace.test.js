@@ -190,22 +190,26 @@ console.log("PASS AI workspace routes, existing action reuse and escaped caller-
     { id: 'two', next_action_date: '2020-01-02', transaction_status: 'closed', transaction_remarks: 'Done' },
     { next_action_date: '2020-01-03' },
     { id: 'future', next_action_date: '2099-01-01' },
-    { id: 'deleted', next_action_date: '2020-01-01', deletion_status: 'pending' }
+    { id: 'deletion-pending', next_action_date: '2020-01-01', deletion_status: 'pending' },
+    { id: 'archived', next_action_date: '2020-01-01', archived: true, deletion_status: 'approved' }
   ] }];
   const state = { currentUser: { id: 'u' }, leads, leadsLoaded: true };
   const context = { state, isSalesmanRole: () => true, arrangeAssistantLauncher: () => {}, Intl, Date };
   vm.createContext(context);
   vm.runInContext(`${client.match(/function escapeHtml\([^]*?\n\}/)[0]}; ${client.match(/function neglectedActivityRows\([^]*?\n\}/)[0]}; ${client.match(/function renderNeglectedActivities\([^]*?\n\}/)[0]}; let neglectedActivityFilter='all', neglectedActivityEditor=null; const neglectedOutcomes={pending:[],closed:[]}; rows=neglectedActivityRows; render=renderNeglectedActivities;`, context);
   const rows = context.rows(leads, '2026-10-27');
-  assert.equal(rows.length, 3);
-  assert.equal(rows[0].status, 'pending');
-  assert.equal(rows[1].status, 'closed');
-  assert.equal(rows[2].stable, false);
+  assert.equal(rows.length, 4);
+  assert.equal(rows.find(row => row.activity.id === 'one').status, 'pending');
+  assert.equal(rows.find(row => row.activity.id === 'two').status, 'closed');
+  assert.equal(rows.find(row => !row.activity.id).stable, false);
+  assert.equal(rows.find(row => row.activity.id === 'deletion-pending').locked, true);
+  assert.ok(!rows.some(row => row.activity.id === 'archived'));
   const workspace = { innerHTML: '', querySelector: () => null };
   context.render(workspace);
   assert.match(workspace.innerHTML, /&lt;img src=x&gt;/);
   assert.doesNotMatch(workspace.innerHTML, /<img/);
   assert.match(workspace.innerHTML, /Activity needs a permanent ID/);
+  assert.match(workspace.innerHTML, /Deletion pending approval/);
   assert.doesNotMatch(workspace.innerHTML, /data-neglected-export/);
   context.isSalesmanRole = () => false;
   context.render(workspace);

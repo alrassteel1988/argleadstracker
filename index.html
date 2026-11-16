@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="/pipeline-live-leads.css?v=6-shared-controls">
   <link rel="stylesheet" href="/tasks-contrast.css?v=1">
   <link rel="stylesheet" href="/activity-modal.css?v=2-followup-outcomes">
-  <link rel="stylesheet" href="/activity-workflow.css?v=1">
+  <link rel="stylesheet" href="/activity-workflow.css?v=4">
   <link rel="stylesheet" href="/ai-sales-assistant.css?v=1">
   <link rel="stylesheet" href="/activity-dashboard-latest.css?v=calendar-minimize-4">
   <link rel="stylesheet" href="/lead-detail-contrast.css?v=2-action-buttons">
@@ -37,11 +37,11 @@
   <link rel="stylesheet" href="/crm-dashboard.css?v=17-neglected-activities">
   <link rel="stylesheet" href="/crm-data.css?v=1">
   <link rel="stylesheet" href="/crm-record.css?v=9-lead-sidebar-height">
-  <link rel="stylesheet" href="/crm-activity.css?v=1">
+  <link rel="stylesheet" href="/crm-activity.css?v=2">
   <link rel="stylesheet" href="/crm-team.css?v=1">
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
-  <link rel="stylesheet" href="/admin-dashboard-clean.css?v=12-activity-compact">
+  <link rel="stylesheet" href="/admin-dashboard-clean.css?v=13-deletion-approvals">
   <link rel="stylesheet" href="/management-tasks.css?v=2">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
@@ -172,6 +172,7 @@
             <button class="ghost-button" id="openPlacesSearch">Search places</button>
             <button class="primary-button" id="openLeadForm">Add lead</button>
             <div class="admin-activity-header-actions hidden" id="adminActivityHeaderActions">
+              <button class="ghost-button" type="button" data-admin-deletion-queue>Deletion requests</button>
               <button class="ghost-button" type="button" data-admin-activity-export>Export</button>
               <button class="primary-button" type="button" data-admin-log-activity>Log activity</button>
             </div>
@@ -872,7 +873,31 @@
           </div>
         </section>
 
+        <section class="view-panel hidden deletion-requests-view" id="deletionRequestsView" aria-labelledby="deletionQueueHeading">
+          <button type="button" class="text-button" id="deletionQueueBack">Back to Activity log</button>
+          <h1 id="deletionQueueHeading">Deletion <em class="crm-title-accent">requests</em></h1>
+          <div id="deletionQueueCounts" aria-live="polite"></div>
+          <details id="deletionQueueDigest" hidden>
+            <summary>Latest weekly digest</summary>
+            <ul></ul>
+          </details>
+          <div class="deletion-queue-tabs" role="group" aria-label="Request status">
+            <button class="ghost-button" type="button" data-deletion-tab="pending" aria-pressed="true">Awaiting approval</button>
+            <button class="ghost-button" type="button" data-deletion-tab="decided" aria-pressed="false">Decided</button>
+          </div>
+          <div class="deletion-queue-filters">
+            <input id="activityDeletionQueueSearch" type="search" aria-label="Search requests" placeholder="Search company, entry or reason">
+            <select id="activityDeletionQueueSalesman" aria-label="Requester"><option value="">All requesters</option></select>
+            <select id="deletionQueueType" aria-label="Entry type"><option value="">All entry types</option><option>Activity</option><option>Reminder</option></select>
+            <button type="button" id="deletionQueueBulk" class="primary-button" disabled>Approve selected</button>
+          </div>
+          <div id="activityDeletionQueueBody"></div>
+        </section>
         <section class="view-panel hidden" id="activityView">
+          <details id="activityGovernance" class="activity-governance" hidden>
+            <summary>Activity schedule review &amp; weekly follow-through</summary>
+            <div id="activityGovernanceBody"></div>
+          </details>
           <div class="activity-dashboard">
             <div class="activity-main-column">
               <section class="activity-kpi-grid" aria-label="Activity metrics">
@@ -1570,6 +1595,10 @@
             <span>Notes</span>
             <textarea id="activityNotes" name="notes" rows="6" placeholder="Type notes or record a voice note"></textarea>
           </label>
+          <label class="activity-entry-notes" id="activityCorrectionReason" hidden>
+            <span>Correction reason</span>
+            <input name="correction_reason" maxlength="500">
+          </label>
         </div>
 
         <section class="activity-voice-recorder" aria-labelledby="activityVoiceHeading">
@@ -1665,34 +1694,19 @@
     </dialog>
 
     <dialog id="activityDeletionQueueDialog" class="activity-workflow-dialog activity-queue-dialog" aria-labelledby="activityDeletionQueueTitle">
-      <section class="activity-queue-modal">
-        <header class="activity-workflow-header">
-          <div>
-            <span>Management review</span>
-            <h2 id="activityDeletionQueueTitle">Activity Deletion <em class="crm-title-accent">Requests</em></h2>
+      <form id="deletionReviewForm" class="activity-queue-modal">
+        <header class="activity-workflow-header"><h2 id="activityDeletionQueueTitle">Review deletion request</h2><button type="button" data-close-activity-queue aria-label="Close review">&times;</button></header>
+        <div class="deletion-review-content">
+          <div id="deletionReviewEntry"></div>
+          <p id="deletionReviewHelp"></p>
+          <div id="deletionReviewFields">
+            <label>Decision note (required to reject)<textarea name="note" maxlength="2000"></textarea></label>
+            <label>Confirm admin password<input type="password" name="admin_password" autocomplete="current-password"></label>
           </div>
-          <button type="button" data-close-activity-queue aria-label="Close deletion request queue">&times;</button>
-        </header>
-        <div class="activity-queue-toolbar">
-          <input id="activityDeletionQueueSearch" type="search" placeholder="Search company, requester, or reason">
-          <select id="activityDeletionQueueStatus">
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="all">All statuses</option>
-          </select>
-          <input id="activityDeletionQueueRequester" type="search" placeholder="Requester">
-          <select id="activityDeletionQueueSalesman">
-            <option value="">All salesmen</option>
-          </select>
-          <label>From <input id="activityDeletionQueueFrom" type="date"></label>
-          <label>To <input id="activityDeletionQueueTo" type="date"></label>
+          <p id="deletionReviewMessage" role="alert"></p>
         </div>
-        <div id="activityDeletionQueueBody"></div>
-      </section>
+        <footer class="deletion-review-footer"><button class="ghost-button" type="button" data-close-activity-queue>Close</button><span id="deletionReviewButtons"></span></footer>
+      </form>
     </dialog>
 
     <dialog id="pendingChangesDialog" class="quick-log-dialog">
@@ -1819,7 +1833,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=management-tasks-drawer"></script>
+  <script src="/client.js?v=activity-workflows-integration"></script>
   </body>
 </html>
 
