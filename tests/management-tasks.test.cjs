@@ -166,6 +166,63 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     await db.exec("reset role");
     const assigned = await db.query("select action, actor_id from private.management_task_events where task_id=$1", [task2]);
     assert.deepEqual(assigned.rows, [{ action: "assign", actor_id: admin.id }]);
+
+    await db.exec(`create table public.companies (
+      id uuid primary key default gen_random_uuid(), created_by uuid not null, company_name text not null,
+      legal_name text, year_established integer, industry text, location text, address text, phone text,
+      website text, google_place_id text, google_maps_url text, google_rating numeric,
+      google_review_count integer, latitude numeric, longitude numeric, business_category text,
+      opening_hours jsonb, enrichment_source text, enrichment_status text,
+      enriched_at timestamptz, enrichment_updated_at timestamptz);
+      alter table public.companies enable row level security;
+      create policy company_owner on public.companies for all to authenticated
+        using (created_by = auth.uid()) with check (created_by = auth.uid());
+      grant insert, select on public.companies to authenticated;
+      alter table public.profiles enable row level security;
+      create policy read_own_profile on public.profiles for select to authenticated using (id = auth.uid());
+      grant select on public.profiles to authenticated;
+      alter table public.leads alter column id set default gen_random_uuid(),
+        add column company_id uuid references public.companies(id),
+        add column lead_status text not null default 'PROSPECT',
+        add constraint leads_status_blueprint_check check (lead_status in ('PROSPECT', 'DORMANT'));`);
+    await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261116124651_atomic_initial_management_lead.sql"), "utf8"));
+    const task3 = "b0000000-0000-4000-8000-000000000003";
+    const atomic = async (company, overrides = {}) => (await db.query(
+      "select public.save_initial_management_lead($1::jsonb) as lead",
+      [JSON.stringify({ company_name: company, lead_status: "NEW", created_by: admin.id, assigned_to: rep.id,
+        initial_management_task_id: task3, next_action: "To Call", next_action_date: "2099-01-01", ...overrides })]
+    )).rows[0].lead;
+    await db.exec("set role anon");
+    await assert.rejects(() => atomic("Anonymous fixture"), { code: "42501" });
+    await as(rep);
+    await assert.rejects(() => atomic("Salesman fixture", { created_by: rep.id }), { code: "42501" });
+    await as(admin);
+    await assert.rejects(() => atomic("Ownership fixture", { created_by: rep.id }), { code: "42501" });
+    await assert.rejects(() => atomic("Rollback fixture"), { code: "23514", constraint: "reject_invalid_fixture" });
+    await assert.rejects(() => atomic("Bad stage fixture", { lead_status: "LOST" }), { code: "23514", constraint: "leads_status_blueprint_check" });
+    await assert.rejects(() => atomic("Task collision fixture", { initial_management_task_id: taskId }), { code: "23505" });
+    assert.equal((await db.query("select count(*)::int as count from public.companies")).rows[0].count, 0,
+      "Rejected leads and task failures must not leave company records");
+    const prospect = await atomic("Atomic Prospect fixture");
+    assert.equal(prospect.lead_status, "PROSPECT");
+    assert.equal(prospect.initial_management_task_id, task3);
+    assert.ok(prospect.company_id);
+    assert.equal(prospect.next_action_date, null);
+    assert.equal((await list()).filter(task => task.lead_id === prospect.id).length, 1);
+
+    await db.exec("reset role; alter table public.leads drop constraint leads_status_blueprint_check");
+    await as(admin);
+    const withModernStage = await atomic("Modern fixture", {
+      initial_management_task_id: "b0000000-0000-4000-8000-000000000004", company_id: prospect.company_id
+    });
+    assert.equal(withModernStage.lead_status, "NEW");
+    assert.equal(withModernStage.company_id, prospect.company_id);
+    assert.equal((await db.query("select count(*)::int as count from public.companies")).rows[0].count, 1,
+      "An existing company must be reused");
+    await as(peer);
+    assert.equal((await list()).length, 0);
+    await as(rep);
+    assert.equal((await list()).filter(task => task.id === task3 && task.lead_id === prospect.id).length, 1);
   } finally {
     await db.close();
   }

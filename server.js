@@ -3990,6 +3990,10 @@ async function saveSupabaseLead(token, user, input) {
     }
   }
   let company = await findCompany(token, lead);
+  if (initialTask) {
+    lead.company_id = company?.id || null;
+    return fromSupabaseLead(await saveSupabaseLeadWithInitialTask(token, lead));
+  }
   if (!company) {
     const companies = await rest("companies?select=*", {
       method: "POST",
@@ -4021,17 +4025,8 @@ async function saveSupabaseLead(token, user, input) {
     company = companies[0];
   }
   lead.company_id = company?.id || null;
-  let leads;
-  try {
-    leads = await postSupabaseLeadWithValidatedOwnership(token, user, lead);
-  } catch (error) {
-    if (initialTask && /initial_management_task_id.*(?:column|schema cache)|(?:column|schema cache).*initial_management_task_id/i.test(error.message)) {
-      throw Object.assign(new Error("Automatic management assignments are not configured in this environment. The lead was not saved."), { status: 503 });
-    }
-    throw error;
-  }
-  // INSERT RETURNING precedes the AFTER trigger's update of the lead's ordinary next step.
-  return fromSupabaseLead(initialTask ? { ...leads[0], next_action: "", next_action_date: null } : leads[0]);
+  const leads = await postSupabaseLeadWithValidatedOwnership(token, user, lead);
+  return fromSupabaseLead(leads[0]);
 }
 
 function importMode(value) {
@@ -4061,6 +4056,27 @@ function optionalLeadColumnMissing(error) {
   const message = String(error?.message || "");
   return OPTIONAL_SUPABASE_LEAD_COLUMNS.some(column => message.includes(`'${column}'`) || message.includes(`"${column}"`))
     || /schema cache|column .* does not exist/i.test(message);
+}
+
+async function saveSupabaseLeadWithInitialTask(token, body) {
+  const save = async lead => {
+    try {
+      return await rest("rpc/save_initial_management_lead", {
+        method: "POST", ...supabaseDataOptions(token), body: { p_lead: lead }
+      });
+    } catch (error) {
+      if (/save_initial_management_lead.*(?:does not exist|schema cache)|schema cache.*save_initial_management_lead/i.test(error.message)) {
+        throw Object.assign(new Error("Automatic management assignments are not configured in this environment. The lead was not saved."), { status: 503 });
+      }
+      throw error;
+    }
+  };
+  try {
+    return await save(body);
+  } catch (error) {
+    if (!optionalLeadColumnMissing(error)) throw error;
+    return save(stripOptionalSupabaseLeadColumns(body));
+  }
 }
 
 function isSupabaseRlsInsertError(error) {
