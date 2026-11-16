@@ -284,7 +284,8 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(structuredActivity.data.activity.activity_purpose, "Quotation Follow Up");
     assert.equal(structuredActivity.data.activity.created_by, salesmanAccount.data.id);
     assert(structuredActivity.data.activity.created_at);
-    assert.equal(structuredActivity.data.lead.next_action, "To Send Email");
+    assert.equal(structuredActivity.data.lead.next_action, ownLead.data.next_action);
+    assert.equal(structuredActivity.data.schedule_unchanged, true);
 
     const structuredActivityRetry = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
@@ -311,7 +312,43 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(adminStructuredActivity.response.status, 201, JSON.stringify(adminStructuredActivity.data));
     assert.equal(adminStructuredActivity.data.activity.created_by, adminLogin.data.user.id);
-    assert.equal(adminStructuredActivity.data.lead.next_action, "To Visit");
+    assert.equal(adminStructuredActivity.data.lead.next_action, otherLead.data.next_action);
+    assert.equal(adminStructuredActivity.data.schedule_unchanged, true);
+
+    const repSession = { token: salesmanToken, csrfToken: salesmanCsrfToken };
+    const adminSession = { token: adminToken, csrfToken: adminCsrfToken };
+    const policyLead = await request(baseUrl, "/api/leads", {
+      ...repSession, method: "POST", body: { company_name: "Synthetic Schedule Policy Lead", next_action: "To Call",
+        next_action_date: "2099-03-10", stage: "PROSPECT", territory: "UAE-North" }
+    });
+    assert.equal(policyLead.response.status, 201);
+    const policyLeadPath = `/api/leads/${policyLead.data.id}`;
+    assert.equal((await request(baseUrl, policyLeadPath, {
+      ...repSession, method: "PATCH", body: { next_action_date: "2099-03-11" }
+    })).response.status, 409);
+    const schedulePath = `${policyLeadPath}/activity-schedule`;
+    const schedule = await request(baseUrl, schedulePath, repSession);
+    assert.equal(schedule.response.status, 200);
+    assert.equal(schedule.data.needs_review, false);
+    const changeBody = { operation: "submit", expected_updated_at: schedule.data.updated_at, expected_plan_id: schedule.data.plan.id,
+      date: "2099-03-11", time: "11:00", priority: "High", agenda: "Review steel requirements",
+      reason: "Customer prefers tomorrow morning." };
+    const changed = await request(baseUrl, schedulePath, { ...repSession, method: "POST", body: changeBody });
+    assert.equal(changed.response.status, 200, JSON.stringify(changed.data));
+    assert.equal(changed.data.lead.next_action_date, "2099-03-11");
+    assert.equal(changed.data.lead.activity_schedule.original_due_date, "2099-03-10");
+    assert.equal((await request(baseUrl, schedulePath, { ...repSession, method: "POST", body: changeBody })).response.status, 409);
+    const revised = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/${structuredActivity.data.activity.id}`, {
+      ...repSession, method: "PATCH", body: { ...structuredActivityPayload, version: 1,
+        notes: "Revised note with corrected quote information.", correction_reason: "Original quote details were incorrect." }
+    });
+    assert.equal(revised.response.status, 201, JSON.stringify(revised.data));
+    assert.equal(revised.data.activity.audit_history[0].before.notes, structuredActivityPayload.notes);
+    assert.equal(revised.data.lead.activities.find(item => item.id === structuredActivity.data.activity.id).notes, structuredActivityPayload.notes);
+    assert.equal((await request(baseUrl, "/api/activity-schedule-report", repSession)).response.status, 403);
+    const managementReport = await request(baseUrl, "/api/activity-schedule-report", adminSession);
+    assert.equal(managementReport.response.status, 200);
+    assert.equal(managementReport.data.rows.find(row => row.name === "E2E Salesman").changed, 1);
 
     const handoffWithoutNote = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
       method: "PATCH",

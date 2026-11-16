@@ -9,6 +9,7 @@ const SERVICE_ROLE_OPERATIONS = new Set([
   "cron.integration_logs",
   "cron.market_intelligence",
   "leads.server_validated_insert",
+  "workflow.activity_schedule",
   "notifications.director_fanout",
   "profiles.admin_update",
   "security.rate_limits",
@@ -236,6 +237,9 @@ async function rest(path, options = {}) {
 async function serviceRest(operation, path, options = {}) {
   if (!SERVICE_ROLE_OPERATIONS.has(operation)) {
     throw new Error(`Supabase service-role operation is not allowlisted: ${operation || "missing operation"}.`);
+  }
+  if (operation === "workflow.activity_schedule" && (path !== "rpc/commit_activity_schedule" || options.method !== "POST" || options.token)) {
+    throw new Error("Activity schedule service writes are restricted to their assigned RPC.");
   }
   return rest(path, {
     ...options,
