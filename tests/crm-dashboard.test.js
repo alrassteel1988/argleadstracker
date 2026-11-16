@@ -36,7 +36,7 @@ console.log("PASS proposal dashboard surfaces, readable content, normal flow and
 const vm = require("node:vm");
 const client = read("client.js");
 const panelSource = client.slice(client.indexOf("function renderSalespersonReferencePanels("), client.indexOf("function arrangeSalespersonMobileDashboard("));
-function referencePanels({ loading = false, error = "", leads = [] } = {}) {
+function referencePanels({ loading = false, error = "", leads = [], tasks = [] } = {}) {
   const nodes = new Map();
   const root = { querySelector: selector => {
     if (!nodes.has(selector)) nodes.set(selector, { innerHTML: "", textContent: "" });
@@ -44,8 +44,10 @@ function referencePanels({ loading = false, error = "", leads = [] } = {}) {
   } };
   const datasets = { myLeads: leads, overdueCalls: leads.filter(lead => lead.overdue), stageNew: leads, stageNegotiation: [] };
   const context = {
+    managementTasks: { rows: tasks }, formatDisplayDate: date => date,
     els: { salesmanSimplifiedDashboard: root }, state: { leadsLoading: loading, leadsLoaded: !loading && !error, leadsError: error },
-    actionableSalesmanLeads: () => leads, firstTouchDueLeads: () => leads,
+    actionableSalesmanLeads: () => leads.filter(lead => !lead.initial_management_task_id || lead.next_action_date),
+    firstTouchDueLeads: () => leads.filter(lead => !lead.initial_management_task_id),
     primaryLeadContact: lead => ({ phone: lead.phone }), leadHasOverdueNextAction: lead => lead.overdue,
     daysOverdue: () => 4, stageDisplayLabel: () => "Prospect", salesmanDashboardSummaryIcon: () => "<svg></svg>",
     leadGeneratedBySalesman: lead => lead.created_by === "self",
@@ -66,5 +68,12 @@ assert.match(panels("#salespersonQuickGrid").innerHTML, /salesperson-quick-count
 assert.match(referencePanels()("#salespersonFocusList").innerHTML, /are clear/);
 assert.match(referencePanels({ loading: true })("#salespersonFocusList").innerHTML, /Loading/);
 assert.match(referencePanels({ error: "Unavailable" })("#salespersonFocusList").innerHTML, /unavailable/);
-assert.match(client, /const candidates = \[\.\.\.actionableSalesmanLeads\(\), \.\.\.firstTouchDueLeads\(\)\]/, "Focus must use existing caller-scoped datasets");
+const managedLead = { id: "managed", company_name: "Managed lead", initial_management_task_id: "linked-task" };
+const openTask = { id: "linked-task", lead_id: "managed", title: "To Call", due_date: "2099-01-01", status: "not_started" };
+const managedFocus = (task, lead = managedLead) => referencePanels({ leads: [lead], tasks: [task] })("#salespersonFocusList").innerHTML;
+assert.match(managedFocus(openTask), /data-mg-open="linked-task"/);
+assert.doesNotMatch(managedFocus(openTask), /data-dashboard-focus-log/);
+assert.match(managedFocus({ ...openTask, status: "completed" }), /are clear/);
+assert.match(managedFocus({ ...openTask, lead_id: "another-lead" }), /are clear/);
+assert.match(client, /const candidates = \[\.\.\.assigned, \.\.\.actionableSalesmanLeads\(\), \.\.\.firstTouchDueLeads\(\)\]/, "Focus must retain the existing caller-scoped queues alongside linked tasks");
 console.log("PASS Salesperson focus escaping, deduplication, truthful provenance, empty/loading/error states");

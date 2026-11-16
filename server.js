@@ -49,7 +49,8 @@ const {
   workflowId
 } = require("./src/services/activityWorkflowService");
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
-const { canReadManagementTask, validateManagementTask, saveLocalManagementTask } = require("./src/services/managementTaskService");
+const { canReadManagementTask, validateManagementTask, saveLocalManagementTask, requestsInitialManagementTask,
+  initialManagementTaskInput } = require("./src/services/managementTaskService");
 const { canResolveLeadFollowup, isResolvedReminder, validateLeadFollowup, resolveLocalLeadFollowup } = require("./src/services/leadFollowupService");
 const {
   enrichCompanyFromGoogle,
@@ -2308,8 +2309,9 @@ function actionResponse(action, lead, pmr) {
   return "Action is not available.";
 }
 
-function toSupabaseLead(input, user) {
-  const lead = withAutomaticReminder(normalizeLead(input), user);
+function toSupabaseLead(input, user, { initialTask = false } = {}) {
+  const normalized = normalizeLead(input);
+  const lead = initialTask ? normalized : withAutomaticReminder(normalized, user);
   const salesmanScoped = !isDirectorOrAdmin(user);
   const profileTerritory = String(user?.territory || "").trim();
   const profileName = String(user?.name || user?.email || "").trim();
@@ -3965,8 +3967,18 @@ async function recordHandoffNotification(token, lead, handoffEvent) {
 }
 
 async function saveSupabaseLead(token, user, input) {
-  const lead = toSupabaseLead(input, user);
-  if (isAdmin(user) && !lead.assigned_to) {
+  const initialTask = requestsInitialManagementTask(input, user);
+  const lead = toSupabaseLead(input, user, { initialTask });
+  if (initialTask) {
+    const identity = lead.assigned_to ? `id=eq.${encodeURIComponent(lead.assigned_to)}` : `full_name=eq.${encodeURIComponent(lead.assigned_salesman)}`;
+    const reps = await rest(`profiles?${identity}&role=eq.salesman&status=eq.active&select=id,full_name&limit=2`, supabaseDataOptions(token));
+    if (reps.length !== 1) throw Object.assign(new Error("Choose a uniquely identified active salesman for this next step."), { status: 400 });
+    lead.assigned_to = reps[0].id;
+    lead.assigned_salesman = reps[0].full_name || lead.assigned_salesman;
+    lead.next_action_date = String(input.next_action_date || "").trim();
+    initialManagementTaskInput(lead, lead.assigned_to, new Date());
+    lead.initial_management_task_id = crypto.randomUUID();
+  } else if (isAdmin(user) && !lead.assigned_to) {
     lead.assigned_to = await resolveSalesmanId(token, lead.assigned_salesman);
   }
   if (lead.google_place_id) {
@@ -4009,8 +4021,17 @@ async function saveSupabaseLead(token, user, input) {
     company = companies[0];
   }
   lead.company_id = company?.id || null;
-  const leads = await postSupabaseLeadWithValidatedOwnership(token, user, lead);
-  return fromSupabaseLead(leads[0]);
+  let leads;
+  try {
+    leads = await postSupabaseLeadWithValidatedOwnership(token, user, lead);
+  } catch (error) {
+    if (initialTask && /initial_management_task_id.*(?:column|schema cache)|(?:column|schema cache).*initial_management_task_id/i.test(error.message)) {
+      throw Object.assign(new Error("Automatic management assignments are not configured in this environment. The lead was not saved."), { status: 503 });
+    }
+    throw error;
+  }
+  // INSERT RETURNING precedes the AFTER trigger's update of the lead's ordinary next step.
+  return fromSupabaseLead(initialTask ? { ...leads[0], next_action: "", next_action_date: null } : leads[0]);
 }
 
 function importMode(value) {
@@ -6758,17 +6779,35 @@ async function handleApi(req, res, url) {
       await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
       return sendJson(res, 201, lead);
     }
-    const lead = withAutomaticReminder(normalizeLead(payload), user);
+    const createInitialTask = requestsInitialManagementTask(payload, user);
+    const normalized = normalizeLead(payload);
+    const lead = createInitialTask ? normalized : withAutomaticReminder(normalized, user);
+    const localDb = createInitialTask ? readDb() : db;
     lead.created_by = user.id;
     lead.created_by_name = user.name || user.email || "User";
     if (!isDirectorOrAdmin(user)) {
       lead.assigned_to = user.id;
       lead.assigned_salesman = user.name || user.email || lead.assigned_salesman;
     }
-    db.leads.unshift(lead);
-    writeDb(db);
-    scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
-    await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
+    if (createInitialTask) {
+      const reps = localDb.users.filter(rep => rep.role === "salesman" && rep.status === "active"
+        && (payload.assigned_to ? String(rep.id) === String(payload.assigned_to) : rep.name === lead.assigned_salesman));
+      if (reps.length !== 1) return sendJson(res, 400, { error: "Choose a uniquely identified active salesman for this next step." });
+      const now = new Date().toISOString();
+      lead.id = crypto.randomUUID();
+      lead.assigned_to = reps[0].id;
+      lead.assigned_salesman = reps[0].name;
+      lead.next_action_date = String(payload.next_action_date || "").trim();
+      const values = initialManagementTaskInput(lead, lead.assigned_to, now);
+      lead.initial_management_task_id = crypto.randomUUID();
+      lead.next_action = "";
+      lead.next_action_date = null;
+      localDb.leads.unshift(lead);
+      saveLocalManagementTask(localDb, user, "assign", lead.initial_management_task_id, values, now);
+    } else localDb.leads.unshift(lead);
+    writeDb(localDb);
+    scheduleLeadAutoEnrichment({ db: localDb, user, lead, req, supabaseEnabled });
+    await queueLeadIntelligenceForNewLead(localDb, user, lead, supabaseEnabled);
     return sendJson(res, 201, leadWithDerivedFields(lead));
   }
 
@@ -7021,6 +7060,7 @@ async function handleApi(req, res, url) {
   const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
   if (req.method === "PATCH" && leadMatch) {
     let payload = await readBody(req);
+    delete payload.initial_management_task_id;
     if (supabaseEnabled) {
       const existing = await getSupabaseLead(user.token, leadMatch[1], user);
       if (!existing) return leadNotFound(res);

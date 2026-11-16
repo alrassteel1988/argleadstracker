@@ -103,3 +103,60 @@ test("assign, progress and complete a management task across roles", async ({ pa
     await peer.close();
   }
 });
+
+test("Admin lead creation assigns one task shared by Focus and Management Tasks", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "admin-desktop", "Two independent desktop sessions");
+  await blockExternalTraffic(page);
+  await login(page, info);
+  const context = await browser.newContext({ baseURL: info.project.use.baseURL, serviceWorkers: "block" });
+  try {
+    const sales = await context.newPage();
+    await blockExternalTraffic(sales);
+    await login(sales, { project: { name: "salesman" } });
+    const company = "Unique Bluebeam Procurement Account";
+    await page.locator("#openLeadForm").click();
+    await page.locator("#leadCompanyName").fill(company);
+    await page.locator("#formSalesman").selectOption("Demo Salesman");
+    await page.locator("#leadStepNext").click();
+    await page.locator("#leadStepNext").click();
+    await expect(page.locator("#leadNextStepHelp")).toContainText("assigned as a Management Task");
+    await expect(page.locator("#formNextAction")).toHaveValue("To Call");
+    await page.locator('#leadForm textarea[name="notes"]').fill("Ask who manages purchasing.");
+    const saving = page.waitForResponse(response => response.url().endsWith("/api/leads") && response.request().method() === "POST");
+    await page.locator("#leadSubmitButton").click();
+    const response = await saving;
+    const lead = await response.json();
+    expect(response.status(), JSON.stringify(lead)).toBe(201);
+    expect(lead.initial_management_task_id).toBeTruthy();
+    expect(lead.assigned_to).toBe("ui-salesman");
+    expect(lead.next_action_date).toBeNull();
+    expect(lead.activities).toHaveLength(0);
+    const tasks = await page.evaluate(id => api("/api/management-tasks").then(rows => rows.filter(item => item.lead_id === id)), lead.id);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].id).toBe(lead.initial_management_task_id);
+    expect(tasks[0].assigned_by).toBe("ui-admin");
+    expect(tasks[0].instructions).toContain("Ask who manages purchasing.");
+
+    await sales.reload();
+    const focus = sales.locator("#salespersonFocusList li").filter({ hasText: company });
+    await expect(focus).toHaveCount(1);
+    await expect(focus).toContainText("To Call");
+    await expect(focus.locator("[data-dashboard-focus-log]")).toHaveCount(0);
+    const open = focus.getByRole("button", { name: `Open management task for ${company}` });
+    await expect(open).toHaveAttribute("data-mg-open", tasks[0].id);
+    await open.click();
+    const drawer = sales.locator("#managementTasksDrawer");
+    const row = drawer.locator(`[data-mg-card="${tasks[0].id}"]`);
+    await expect(row).toContainText(company);
+    await row.getByLabel("Status for To Call").selectOption("completed");
+    await row.getByLabel("Completion remarks for management").fill("Spoke with the purchasing contact.");
+    await row.getByRole("button", { name: "Mark completed" }).click();
+    await expect(row).toContainText("Spoke with the purchasing contact.");
+    await drawer.getByRole("button", { name: "Close management tasks" }).click();
+    await expect(focus).toHaveCount(0);
+    const persisted = await page.evaluate(id => api("/api/management-tasks").then(rows => rows.find(item => item.id === id)), tasks[0].id);
+    expect(persisted.status).toBe("completed");
+  } finally {
+    await context.close();
+  }
+});

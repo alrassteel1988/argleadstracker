@@ -4122,6 +4122,13 @@ function renderLeadFormWizard() {
   const step = Number(state.leadFormStep || 0);
   const panels = [...els.leadForm.querySelectorAll("[data-lead-step-panel]")];
   const steps = [...els.leadForm.querySelectorAll("[data-lead-step]")];
+  const nextStepHelp = document.getElementById("leadNextStepHelp");
+  if (nextStepHelp) {
+    const assignee = String(els.formSalesman?.value || "").trim();
+    nextStepHelp.textContent = state.currentUser?.role === "admin" && !state.editingLeadId && assignee && assignee.toLowerCase() !== "unassigned"
+      ? "This next action will be assigned as a Management Task and linked from the salesperson's Focus list."
+      : "Lock the next action, then save only the notes or extra follow-up detail that will help the team move cleanly.";
+  }
   panels.forEach((panel, index) => {
     const active = index === step;
     panel.hidden = !active;
@@ -4198,7 +4205,7 @@ function resetLeadFormForNewLead() {
     if (els.formTerritory) els.formTerritory.value = state.currentUser.territory || els.formTerritory.value;
   }
   if (els.leadForm.elements.next_action_date) {
-    els.leadForm.elements.next_action_date.value = today();
+    els.leadForm.elements.next_action_date.value = state.currentUser?.role === "admin" ? managementTaskDate() : today();
   }
   renderLeadProductInterestOptions();
   ensureLeadFormSelectValue("next_action", NEXT_ACTION_PLAN_OPTIONS[0], NEXT_ACTION_PLAN_OPTIONS[0]);
@@ -8556,7 +8563,7 @@ function salesmanDashboardLeads() {
 function firstTouchDueLeads() {
   return salesmanDashboardLeads()
     .filter(lead => !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage)))
-    .filter(lead => !hasLeadContactedActivity(lead))
+    .filter(lead => !lead.initial_management_task_id && !hasLeadContactedActivity(lead))
     .sort((a, b) => {
       const originRank = lead => leadOriginForCurrentUser(lead, state.currentUser).includes("Admin") ? 0 : 1;
       return originRank(a) - originRank(b)
@@ -8641,12 +8648,25 @@ function renderSalespersonReferencePanels(datasets) {
   const root = els.salesmanSimplifiedDashboard;
   const loading = state.leadsLoading && !state.leadsLoaded;
   const unavailable = state.leadsError && !state.leadsLoaded;
-  const candidates = [...actionableSalesmanLeads(), ...firstTouchDueLeads()];
+  const linked = new Map(datasets.myLeads.filter(lead => lead.initial_management_task_id).map(lead => [String(lead.initial_management_task_id), lead]));
+  const assigned = managementTasks.rows.filter(task => task.status !== "completed"
+    && String(linked.get(String(task.id))?.id) === String(task.lead_id) && linked.has(String(task.id)))
+    .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
+    .map(task => ({ ...linked.get(String(task.id)), initialTask: task }));
+  const candidates = [...assigned, ...actionableSalesmanLeads(), ...firstTouchDueLeads()];
   const seen = new Set();
   const focus = candidates.filter(lead => !seen.has(lead.id) && seen.add(lead.id)).slice(0, 3);
   root.querySelector("#salespersonFocusList").innerHTML = loading || unavailable
     ? `<li class="empty-copy">${loading ? "Loading your priorities..." : "Priorities unavailable. Use Refresh to retry."}</li>`
     : focus.length ? focus.map((lead, index) => {
+      if (lead.initialTask) {
+        const task = lead.initialTask;
+        const company = escapeHtml(lead.company_name || "Unnamed company");
+        return `<li><span class="salesperson-focus-number">${index + 1}</span><div class="focus-copy">
+          <button type="button" class="salesperson-focus-company" data-dashboard-focus-open="${escapeHtml(lead.id)}">${company}</button>
+          <p>${escapeHtml(task.title)} &middot; Due ${escapeHtml(formatDisplayDate(task.due_date))}</p></div>
+          <div class="focus-actions"><button type="button" class="ghost-button" data-mg-open="${escapeHtml(task.id)}" aria-label="Open management task for ${company}" title="Open management task"><span class="focus-icon focus-chevron"></span></button></div></li>`;
+      }
       const contact = primaryLeadContact(lead);
       const overdue = leadHasOverdueNextAction(lead);
       const emailAction = /email/i.test(lead.next_action || "");
@@ -10933,7 +10953,7 @@ function desktopLeadOverviewMarkup(lead) {
     <div class="record-main-column">
       <section class="drawer-section record-next-step">
         ${recordFollowupConfirmation(lead)}
-        <div class="record-next-content"><div><span class="record-eyebrow">Next step</span><h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3><p>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong> ` : ""}${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p></div>
+        <div class="record-next-content"><div><span class="record-eyebrow">Next step</span><h3>${escapeHtml(recordNextStepLabel(lead))}</h3><p>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong> ` : ""}${escapeHtml(recordNextStepDue(lead))}</p></div>
         <div class="record-action-row">${recordFollowupActions(lead)}</div></div>
         <div class="record-next-guidance" aria-live="polite"><div><span class="record-guidance-badge">${escapeHtml(guidance ? source : "Guidance")}</span><button class="ghost-button" type="button" data-refresh-lead-ai-summary="${id}" ${summary?.loading ? "disabled" : ""}>Ask again</button></div><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable. Ask again to retry."))}</p></div>
         ${recordProfileFollowupMarkup(lead)}
@@ -10980,10 +11000,23 @@ function canResolveLeadNextStep(lead) {
 
 function recordFollowupActions(lead) {
   const id = escapeHtml(lead.id);
+  if (lead.initial_management_task_id && !lead.next_action_date && isSalesmanRole()) {
+    return `<button class="ghost-button" type="button" data-mg-open="${escapeHtml(lead.initial_management_task_id)}">Open management task</button>`;
+  }
   return `<button class="ghost-button" type="button" data-drawer-edit-lead="${id}">${lead.next_action ? "Reschedule" : "Set next step"}</button>${
     canResolveLeadNextStep(lead) ? `<button class="ghost-button record-cancel-followup" type="button" data-lead-followup="cancelled" data-followup-lead="${id}">Cancel activity</button>
       <button class="primary-button" type="button" data-lead-followup="completed" data-followup-lead="${id}">Log outcome</button>` : ""
   }`;
+}
+
+function recordNextStepLabel(lead) {
+  return lead.next_action ? normalizeNextActionPlan(lead.next_action)
+    : lead.initial_management_task_id ? "Initial step assigned by management" : "No next step set";
+}
+
+function recordNextStepDue(lead) {
+  return lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}`
+    : lead.initial_management_task_id ? "Deadline and progress are in Management Tasks." : "No due date set";
 }
 
 function recordFollowupStatus(activity) {
@@ -11128,9 +11161,9 @@ function mobileLeadNextStepMarkup(lead) {
   return `<section class="drawer-section record-mobile-next" aria-label="Next step">
     ${recordFollowupConfirmation(lead)}
     <div class="record-mobile-next-heading"><span>Next step</span>${overdueDays ? `<strong class="record-overdue">${overdueDays} days overdue</strong>` : ""}</div>
-    <h3>${escapeHtml(lead.next_action ? normalizeNextActionPlan(lead.next_action) : "No next step set")}</h3>
+    <h3>${escapeHtml(recordNextStepLabel(lead))}</h3>
     <div class="record-mobile-guidance" aria-live="polite"><div class="record-mobile-guidance-heading"><span>${escapeHtml(guidance ? guidanceLabel : "Guidance")}</span><button class="ghost-button" type="button" data-refresh-lead-ai-summary="${escapeHtml(lead.id)}" ${summary?.loading ? "disabled" : ""}>Ask again</button></div><p>${escapeHtml(guidance || (summary?.loading ? "Loading guidance..." : "Guidance unavailable."))}</p></div>
-    <p class="record-mobile-due">${escapeHtml(lead.next_action_date ? `Due ${formatDisplayDate(lead.next_action_date)}` : "No due date set")}</p>
+    <p class="record-mobile-due">${escapeHtml(recordNextStepDue(lead))}</p>
     <div class="record-mobile-next-footer">${recordFollowupActions(lead)}</div>
     ${recordProfileFollowupMarkup(lead)}
   </section>`;
@@ -15129,11 +15162,12 @@ function renderManagementTaskDrawerRow(task, update) {
   </article>`;
 }
 
-function renderManagementTasks() {
+function renderManagementTasks({ refreshFocus = false } = {}) {
   if (!state.currentUser) return;
   renderManagementTaskDashboard();
   renderManagementTaskWorkspace();
   renderManagementTaskDrawer();
+  if (refreshFocus && currentView === "dashboard" && isSalesmanRole()) renderSalespersonReferencePanels(salesmanDashboardSummaryDatasets());
 }
 
 async function loadManagementTasks() {
@@ -15154,7 +15188,7 @@ async function loadManagementTasks() {
     workspace.error = "Unavailable";
   } finally {
     workspace.loading = false;
-    if (workspace === managementTasks && workspace.generation === generation) renderManagementTasks();
+    if (workspace === managementTasks && workspace.generation === generation) renderManagementTasks({ refreshFocus: true });
   }
 }
 
@@ -15208,7 +15242,7 @@ async function saveManagementTask(action, id, values, errorHost) {
     workspace.rows = [...workspace.rows.filter(task => task.id !== saved.id), saved];
     workspace.update = null;
     workspace.message = { assign: "Task assigned.", edit: "Task updated.", remind: "Reminder sent in the CRM.", progress: "Task status saved.", seen: "Notice marked as read." }[action];
-    renderManagementTasks();
+    renderManagementTasks({ refreshFocus: true });
     return true;
   } catch (error) {
     if (workspace !== managementTasks) return false;
@@ -17986,6 +18020,10 @@ els.leadForm.addEventListener("submit", async event => {
   if (state.editingLeadId) {
     try {
       const existing = state.leads.find(item => item.id === state.editingLeadId);
+      if (existing?.initial_management_task_id && !existing.next_action_date && !payload.next_action_date) {
+        delete payload.next_action;
+        delete payload.next_action_date;
+      }
       if (existing && isLostStageValue(payload.stage) && !isLostStageValue(state.editingOriginalStage)) {
         if (!state.editingLostData) {
           state.editingLostData = await promptLostReason(existing);

@@ -55,7 +55,7 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
   const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE);
   const db = new PGlite();
   try {
-    await db.exec(`create role anon; create role authenticated;
+    await db.exec(`create role anon; create role authenticated; create role service_role;
       create schema private; grant usage on schema private to authenticated;
       create schema auth; grant usage on schema auth to authenticated;
       create function auth.uid() returns uuid language sql as $$
@@ -114,6 +114,58 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     await db.exec("reset role");
     const { rows } = await db.query("select action, actor_id from private.management_task_events order by (snapshot->>'version')::int");
     assert.deepEqual(rows.map(event => [event.action, event.actor_id]), [["assign", admin.id], ["progress", rep.id], ["edit", admin.id], ["progress", rep.id]]);
+
+    await db.exec(`alter table public.leads
+      add column assigned_salesman text,
+      add column created_by uuid,
+      add column next_action text,
+      add column next_action_date date,
+      add column activity_purpose text,
+      add column notes text,
+      add constraint reject_invalid_fixture check (company_name <> 'Rollback fixture');
+      grant insert, select, update on public.leads to authenticated;`);
+    await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261116111051_initial_management_task.sql"), "utf8"));
+    const lead2 = "a0000000-0000-4000-8000-000000000002";
+    const task2 = "b0000000-0000-4000-8000-000000000002";
+    const create = (actor, company = "New synthetic account", assignee = rep.id) => db.query(
+      `insert into public.leads (id, initial_management_task_id, assigned_to, created_by, company_name, next_action, next_action_date, activity_purpose, notes)
+        values ($1, $2, $3, $4, $5, 'To Call', '2099-01-01', 'Company Introductory', 'Ask for the buyer') returning *`,
+      [lead2, task2, assignee, actor.id, company]);
+    await as(rep);
+    await assert.rejects(() => create(rep), { code: "42501" });
+    await as(admin);
+    await assert.rejects(() => create(admin, "New synthetic account", admin.id), { code: "22023" });
+    await assert.rejects(() => create(admin, "Rollback fixture"), { code: "23514" });
+    assert.equal((await list()).length, 1, "A rejected lead must not leave an orphan assignment");
+    await create(admin);
+    const saved = (await db.query("select * from public.leads where id=$1", [lead2])).rows[0];
+    assert.equal(saved.initial_management_task_id, task2);
+    assert.equal(saved.next_action, "");
+    assert.equal(saved.next_action_date, null);
+    await assert.rejects(() => create(admin), { code: "23505" });
+    await db.query(`insert into public.leads (id, initial_management_task_id, assigned_to, created_by, company_name, next_action, next_action_date)
+      values ($1, gen_random_uuid(), $2, $3, 'No-op conflict', 'To Call', '2099-01-01') on conflict (id) do nothing`,
+    [lead2, rep.id, admin.id]);
+    assert.equal((await list()).length, 2, "A skipped insert must not create an extra task");
+    const rejectedId = "a0000000-0000-4000-8000-000000000003";
+    await assert.rejects(db.query(`insert into public.leads (id, initial_management_task_id, assigned_to, created_by, company_name, next_action, next_action_date)
+      values ($1, $2, $3, $4, 'Task collision', 'To Call', '2099-01-01')`, [rejectedId, taskId, rep.id, admin.id]),
+    { code: "23505" });
+    assert.equal((await db.query("select id from public.leads where id=$1", [rejectedId])).rows.length, 0,
+      "A failed assignment must roll back the lead");
+    await as(peer);
+    assert.equal((await list()).length, 0);
+    await as(rep);
+    const openingTask = (await list()).find(task => task.id === task2);
+    assert.equal(openingTask.lead_id, lead2);
+    assert.equal(openingTask.assigned_by, admin.id);
+    assert.equal(openingTask.title, "To Call");
+    assert.equal(openingTask.due_date.toISOString().slice(0, 10), "2099-01-01");
+    assert.equal(openingTask.instructions, "Company Introductory\nAsk for the buyer");
+    await assert.rejects(db.query("update public.leads set initial_management_task_id=null where id=$1", [lead2]), { code: "42501" });
+    await db.exec("reset role");
+    const assigned = await db.query("select action, actor_id from private.management_task_events where task_id=$1", [task2]);
+    assert.deepEqual(assigned.rows, [{ action: "assign", actor_id: admin.id }]);
   } finally {
     await db.close();
   }
