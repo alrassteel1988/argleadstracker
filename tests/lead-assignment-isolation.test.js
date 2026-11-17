@@ -152,6 +152,22 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     const bhatiaProtectedRoute = await request(baseUrl, `/api/leads/${encodeURIComponent(createdByAlex.data.id)}/pmrs`, bhatia);
     assert.equal(bhatiaProtectedRoute.response.status, 200, JSON.stringify(bhatiaProtectedRoute.data));
 
+    const oldOwnerNotices = await request(baseUrl, "/api/lead-handoff-notices", alex);
+    const newOwnerNotices = await request(baseUrl, "/api/lead-handoff-notices", bhatia);
+    assert.equal(oldOwnerNotices.response.status, 200);
+    assert.equal(newOwnerNotices.response.status, 200);
+    assert.equal(oldOwnerNotices.data.length, 1);
+    assert.equal(newOwnerNotices.data.length, 1);
+    assert.deepEqual(Object.keys(oldOwnerNotices.data[0]).sort(), ["created_at", "id", "lead_id"]);
+    assert.equal(oldOwnerNotices.data[0].lead_id, null);
+    assert.equal(newOwnerNotices.data[0].lead_id, createdByAlex.data.id);
+    const dismiss = (session, id) => request(baseUrl, `/api/lead-handoff-notices/${id}`, { method: "PATCH", ...session, body: {} });
+    await dismiss(alex, newOwnerNotices.data[0].id);
+    assert.equal((await request(baseUrl, "/api/lead-handoff-notices", bhatia)).data.length, 1,
+      "Former owner cannot dismiss a notice sent to the new owner");
+    await dismiss(alex, oldOwnerNotices.data[0].id);
+    assert.equal((await request(baseUrl, "/api/lead-handoff-notices", alex)).data.length, 0);
+
     console.log("PASS reassigned lead is isolated to its current salesman");
   } finally {
     await new Promise(resolve => server.close(resolve));

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v166-initial-management-task";
+const CACHE_VERSION = "arg-pwa-v168-admin-lead-reassignment";
 const APP_SHELL = [
   "/",
   "/index.html",

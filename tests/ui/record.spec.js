@@ -4,6 +4,31 @@ const { inspectPresentation } = require("./presentation-audit");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("lead reassignment requires Admin and displays the saved handoff", async ({ page }, info) => {
+  const role = await login(page, info);
+  await page.goto("/leads/ui-lead-1?tab=overview");
+  await page.locator('#leadDetailView [data-drawer-edit-lead="ui-lead-1"]:visible').first().click();
+  const assignee = page.locator("#formSalesman");
+  if (role === "salesman") {
+    await expect(assignee).toBeDisabled();
+    return;
+  }
+  await assignee.selectOption({ label: "Other Demo Salesman" });
+  await page.locator("#leadStepNext").click();
+  await page.locator("#leadStepNext").click();
+  await page.locator('#leadForm button[type="submit"]').click();
+  const confirm = page.locator("#confirmHandoff");
+  await expect(confirm).toBeDisabled();
+  await page.locator('#handoffForm [name="handoff_note"]').fill("Transfer the test lead for continued follow-up.");
+  await confirm.click();
+  await expect(page.locator("#leadDialog")).toBeHidden();
+  await page.locator('.lead-detail-tabs [data-drawer-tab="activities"]').click();
+  const history = page.locator("details").filter({ hasText: "Ownership Handoff History" });
+  await history.locator("summary").click();
+  await expect(history).toContainText("Demo Salesman to Other Demo Salesman");
+  await expect(history).toContainText("Transfer the test lead for continued follow-up.");
+});
+
 test("scheduled outcome and cancellation save real history and a replacement", async ({ page }, info) => {
   const role = await login(page, info);
   const mobile = info.project.name.endsWith("mobile");
