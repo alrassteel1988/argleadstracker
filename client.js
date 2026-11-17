@@ -14959,7 +14959,8 @@ function renderWeeklyReviewView() {
 }
 
 const MG_TASK_LABELS = { not_started: "Not started", in_progress: "In progress", completed: "Completed" };
-const MG_TASK_FILTERS = { all: "All", pending: "Pending", overdue: "Overdue", completed: "Completed" };
+const MG_TASK_FILTERS = { all: "All", pending: "Pending", overdue: "Overdue", completed: "Completed", removed: "Removed" };
+const MG_TASK_ASSIGNED_TIME = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dubai", dateStyle: "medium", timeStyle: "medium" });
 const newManagementTaskState = () => ({ rows: [], ready: false, loading: false, error: "", tab: "weekly", adminFilter: "all",
   drawerFilter: "pending", drawerQuery: "", drawerSort: "due", assignee: "", openRows: new Set(), update: null, message: "", pending: false, generation: 0 });
 let managementTasks = newManagementTaskState();
@@ -14972,26 +14973,34 @@ function managementTaskDateTime(date) {
   return date ? formatDisplayDate(new Date(Date.parse(date) + 4 * 3600_000).toISOString().slice(0, 10)) : "";
 }
 
+function managementTaskAssignedTime(date) {
+  const time = Date.parse(date);
+  return Number.isFinite(time) ? MG_TASK_ASSIGNED_TIME.format(time) : "";
+}
+
 function managementTaskCounts(rows) {
   const today = managementTaskDate();
-  const completed = rows.filter(task => task.status === "completed").length;
-  return { all: rows.length, pending: rows.length - completed, completed,
-    today: rows.filter(task => task.status !== "completed" && task.due_date === today).length,
-    overdue: rows.filter(task => task.status !== "completed" && task.due_date < today).length };
+  const active = rows.filter(task => !task.removed_at);
+  const completed = active.filter(task => task.status === "completed").length;
+  return { all: active.length, pending: active.length - completed, completed, removed: rows.length - active.length,
+    today: active.filter(task => task.status !== "completed" && task.due_date === today).length,
+    overdue: active.filter(task => task.status !== "completed" && task.due_date < today).length };
 }
 
 function managementTaskOrder(rows) {
   return [...rows].sort((a, b) => Number(a.status === "completed") - Number(b.status === "completed")
-    || a.due_date.localeCompare(b.due_date) || a.title.localeCompare(b.title));
+    || a.due_date.localeCompare(b.due_date) || a.title.localeCompare(b.title)
+    || Date.parse(a.created_at) - Date.parse(b.created_at));
 }
 
 function managementTaskFilter(rows, filter) {
   const today = managementTaskDate();
-  return managementTaskOrder(rows).filter(task => filter === "all"
-    || (filter === "completed" ? task.status === "completed" : task.status !== "completed" && (filter !== "overdue" || task.due_date < today)));
+  return managementTaskOrder(rows).filter(task => filter === "removed" ? Boolean(task.removed_at) : !task.removed_at && (filter === "all"
+    || (filter === "completed" ? task.status === "completed" : task.status !== "completed" && (filter !== "overdue" || task.due_date < today))));
 }
 
 function managementTaskTiming(task) {
+  if (task.removed_at) return ["neutral", managementTaskDateTime(task.removed_at)];
   if (task.status === "completed") return ["done", `Completed ${managementTaskDateTime(task.completed_at)}`];
   const days = Math.round((Date.parse(task.due_date) - Date.parse(managementTaskDate())) / 86400000);
   const span = `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`;
@@ -15004,6 +15013,7 @@ function managementTaskTag(text, tone = "") {
 }
 
 function managementTaskStatus(task) {
+  if (task.removed_at) return managementTaskTag("Removed", "neutral");
   return managementTaskTag(MG_TASK_LABELS[task.status] || "Unknown", task.status === "completed" ? "done" : task.status === "in_progress" ? "info" : "neutral");
 }
 
@@ -15095,15 +15105,17 @@ function renderManagementTaskWorkspace() {
 function renderManagementTaskRow(task) {
   const id = escapeHtml(task.id);
   const [tone, timing] = managementTaskTiming(task);
+  const canRemove = ["not_started", "in_progress"].includes(task.status)
+    && !state.leads.some(lead => lead.initial_management_task_id === task.id);
   return `<details data-mg-row="${id}" ${managementTasks.openRows.has(task.id) ? "open" : ""}>
-    <summary class="mg-task-row"><span class="mg-task-row-title"><strong>${escapeHtml(task.title)}</strong><small>${task.lead_name ? escapeHtml(task.lead_name) + " &middot; " : ""}Assigned ${escapeHtml(managementTaskDateTime(task.created_at))}</small></span>
+    <summary class="mg-task-row"><span class="mg-task-row-title"><strong>${escapeHtml(task.title)}</strong><small>${task.lead_name ? escapeHtml(task.lead_name) + " &middot; " : ""}Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))}</small></span>
       <span class="mg-task-row-person">${escapeHtml(task.assignee_name)}</span><time class="mg-task-row-date" datetime="${escapeHtml(task.due_date)}">${escapeHtml(formatDisplayDate(task.due_date))}</time>
       <span class="mg-task-row-timing">${managementTaskTag(timing, tone)}</span><span class="mg-task-row-priority">${managementTaskPriority(task)}</span><span class="mg-task-row-status">${managementTaskStatus(task)}</span><span class="mg-task-chevron" aria-hidden="true"></span>
       ${task.remarks ? `<small class="mg-task-mobile-remarks">${escapeHtml(task.remarks)}</small>` : ""}</summary>
     <div class="mg-task-details"><div><strong>Management instructions &middot; ${escapeHtml(task.assigned_by_name)}</strong><p>${escapeHtml(task.instructions)}</p>
       ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">Open linked lead</button>` : ""}</div>
       <div><strong>Salesman remarks</strong><p>${task.progress_at ? escapeHtml(managementTaskDateTime(task.progress_at)) + " &middot; " : ""}${escapeHtml(task.remarks || "No remarks yet.")}</p></div>
-      ${task.status === "completed" ? "" : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button></div>`}</div>
+      ${task.removed_at ? `<div><strong>Removal reason</strong><p>${escapeHtml(task.removal_reason)}</p></div>` : task.status === "completed" ? "" : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button>${canRemove ? `<button type="button" class="ghost-button" data-mg-remove="${id}">Remove task</button>` : ""}</div>`}</div>
   </details>`;
 }
 
@@ -15216,6 +15228,7 @@ function openManagementTaskForm(task) {
   const form = document.querySelector("#managementTaskForm");
   const reps = state.userAccounts.filter(user => user.status === "active" && user.role === "salesman");
   const editing = Boolean(task);
+  form.dataset.action = editing ? "edit" : "assign";
   form.dataset.taskId = task?.id || crypto.randomUUID();
   form.dataset.version = task?.version || "";
   form.innerHTML = `<header class="mg-task-dialog-header"><h2 id="managementTaskFormTitle">${editing ? "Edit" : "Assign a"} <em class="crm-title-accent">task</em></h2><button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close task form" title="Close">&times;</button></header>
@@ -15234,6 +15247,22 @@ function openManagementTaskForm(task) {
   dialog.showModal();
 }
 
+function openManagementTaskRemoval(task) {
+  if (state.currentUser?.role !== "admin" || !["not_started", "in_progress"].includes(task.status) || task.removed_at) return;
+  const form = document.querySelector("#managementTaskForm");
+  form.dataset.action = "remove";
+  form.dataset.taskId = task.id;
+  form.dataset.version = task.version;
+  form.innerHTML = `<header class="mg-task-dialog-header"><h2 id="managementTaskFormTitle">Remove task</h2><button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close task form" title="Close">&times;</button></header>
+    <div class="mg-task-form-fields">
+      <p><strong>${escapeHtml(task.title)}</strong> &middot; ${escapeHtml(task.assignee_name)}${task.lead_name ? " &middot; " + escapeHtml(task.lead_name) : ""}<br><small>Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))} (Dubai time)</small></p>
+      <p>This removes the assignment from the salesman's list. The lead and task history are kept.</p>
+      <label>Removal reason<textarea name="reason" rows="3" minlength="10" maxlength="4000" required></textarea></label>
+      <p role="status" class="mg-task-message" hidden></p>
+    </div><footer class="mg-task-form-actions"><button type="button" class="ghost-button" data-mg-close>Keep task</button><button type="submit" class="danger-button">Remove task</button></footer>`;
+  form.closest("dialog").showModal();
+}
+
 async function saveManagementTask(action, id, values, errorHost) {
   const workspace = managementTasks;
   if (workspace.pending) return false;
@@ -15244,7 +15273,7 @@ async function saveManagementTask(action, id, values, errorHost) {
     if (workspace !== managementTasks) return false;
     workspace.rows = [...workspace.rows.filter(task => task.id !== saved.id), saved];
     workspace.update = null;
-    workspace.message = { assign: "Task assigned.", edit: "Task updated.", remind: "Reminder sent in the CRM.", progress: "Task status saved.", seen: "Notice marked as read." }[action];
+    workspace.message = { assign: "Task assigned.", edit: "Task updated.", remove: "Task removed. History retained.", remind: "Reminder sent in the CRM.", progress: "Task status saved.", seen: "Notice marked as read." }[action];
     renderManagementTasks({ refreshFocus: true });
     return true;
   } catch (error) {
@@ -15271,10 +15300,10 @@ async function saveManagementTask(action, id, values, errorHost) {
 }
 
 document.addEventListener("click", event => {
-  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remind],[data-mg-progress],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
+  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remove],[data-mg-remind],[data-mg-progress],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
   if (!button) return;
   const data = button.dataset, drawer = document.querySelector("#managementTasksDrawer");
-  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemind, data.mgProgress, data.mgSeen].includes(item.id));
+  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemove, data.mgRemind, data.mgProgress, data.mgSeen].includes(item.id));
   if ("mgClose" in data) { button.closest("dialog")?.close(); return; }
   if (managementTasks.pending) return;
   if ("mgOpen" in data) openManagementTaskDrawer(data.mgOpen);
@@ -15293,6 +15322,7 @@ document.addEventListener("click", event => {
     managementTasks.assignee = managementTasks.assignee === data.mgAssignee ? "" : data.mgAssignee;
     renderManagementTaskWorkspace();
   } else if ("mgAssign" in data || data.mgEdit && task) openManagementTaskForm(task);
+  else if (data.mgRemove && task) openManagementTaskRemoval(task);
   else if ((data.mgRemind || data.mgSeen) && task) {
     button.disabled = true;
     saveManagementTask(data.mgRemind ? "remind" : "seen", task.id, { expected_version: task.version });
@@ -15326,7 +15356,7 @@ document.querySelector("#managementTaskForm")?.addEventListener("submit", async 
   if (form.dataset.version) values.expected_version = Number(form.dataset.version);
   const button = form.querySelector('[type="submit"]');
   button.disabled = true;
-  const saved = await saveManagementTask(form.dataset.version ? "edit" : "assign", form.dataset.taskId, values, form.querySelector(".mg-task-message"));
+  const saved = await saveManagementTask(form.dataset.action, form.dataset.taskId, values, form.querySelector(".mg-task-message"));
   button.disabled = false;
   if (saved) form.closest("dialog").close();
 });

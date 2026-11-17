@@ -11,6 +11,8 @@ const lead = "00000000-0000-4000-8000-000000000004";
 const taskId = "00000000-0000-4000-8000-000000000005";
 const payload = { title: "Confirm project list", instructions: "Ask for dates and tonnage.", due_date: "2099-11-15", priority: "high", assignee_id: rep.id, lead_id: lead };
 const completion = { expected_version: 3, status: "completed", remarks: "Confirmed the dates and tonnage." };
+const duplicateId = "00000000-0000-4000-8000-000000000006";
+const removal = { expected_version: 1, reason: "Duplicate assignment; keep the original." };
 
 test("management task validation rejects invalid deadlines and incomplete remarks", () => {
   for (const due_date of ["", "2026-02-30", "2025-11-12"]) {
@@ -49,6 +51,34 @@ test("local management task saves enforce roles, ownership, versions and history
     ["assign", admin.id], ["remind", admin.id], ["edit", admin.id], ["progress", rep.id]
   ]);
   assert.equal(db.management_task_events[0].snapshot.title, payload.title);
+});
+
+test("only an active Admin can remove an open duplicate and retain its audit", () => {
+  const db = { users: [admin, rep], leads: [{ id: lead, assigned_to: rep.id, company_name: "Synthetic Steel", initial_management_task_id: taskId }],
+    management_tasks: [], management_task_events: [] };
+  const now = "2026-11-17T10:00:00Z";
+  const save = (user, action, id, values) => saveLocalManagementTask(db, user, action, id,
+    validateManagementTask(action, values, now.slice(0, 10)), now);
+  save(admin, "assign", taskId, payload);
+  save(admin, "assign", duplicateId, payload);
+  assert.throws(() => save(rep, "remove", duplicateId, removal), { status: 403 });
+  assert.throws(() => save({ ...admin, status: "inactive" }, "remove", duplicateId, removal), { status: 403 });
+  assert.throws(() => save(admin, "remove", taskId, removal), { status: 409 });
+  assert.throws(() => save(admin, "remove", duplicateId, { ...removal, expected_version: 2 }), { status: 409 });
+  assert.throws(() => save(admin, "remove", duplicateId, { ...removal, reason: "  short  " }), { status: 400 });
+  const removed = save(admin, "remove", duplicateId, removal);
+  assert.equal(removed.version, 2);
+  assert.equal(removed.removed_at, now);
+  assert.equal(removed.removed_by, admin.id);
+  assert.equal(removed.removal_reason, removal.reason);
+  assert.equal(canReadManagementTask(db, rep, removed), false);
+  assert.deepEqual(db.management_tasks.filter(task => canReadManagementTask(db, rep, task)).map(task => task.id), [taskId]);
+  assert.throws(() => save(admin, "remove", duplicateId, { ...removal, expected_version: 2 }), { status: 409 });
+  assert.throws(() => save(admin, "remind", duplicateId, { expected_version: 2 }), { status: 409 });
+  assert.equal(db.leads[0].initial_management_task_id, taskId);
+  assert.deepEqual(db.management_task_events.map(event => [event.action, event.task_id]),
+    [["assign", taskId], ["assign", duplicateId], ["remove", duplicateId]]);
+  assert.equal(db.management_task_events[2].snapshot.removal_reason, removal.reason);
 });
 
 test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !process.env.CRM_TEST_PGLITE_MODULE }, async () => {
@@ -235,6 +265,44 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     const unlinkedLead = await db.query("insert into public.leads (company_name) values ('Ordinary fixture') returning next_action, activity_purpose, initial_management_task_id");
     assert.deepEqual(unlinkedLead.rows, [{ next_action: "Qualify lead", activity_purpose: "Company Introductory", initial_management_task_id: null }]);
     assert.equal((await db.query("select count(*)::int as n from public.management_tasks where lead_name='Ordinary fixture'")).rows[0].n, 0);
+
+    // The staging workspace already recognizes reassign/close events. Removing a duplicate must not narrow that rule.
+    await db.exec(`alter table private.management_task_events drop constraint management_task_events_action_check;
+      alter table private.management_task_events add constraint management_task_events_action_check
+        check (action in ('assign','edit','remind','progress','reassign','close'));`);
+    const saveAuditFixture = action => db.query(`insert into private.management_task_events (task_id, action, actor_id, actor_name, snapshot)
+      values ($1,$2,$3,'Demo Admin','{}')`, [task2, action, admin.id]);
+    await saveAuditFixture("reassign");
+    await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261117114500_remove_duplicate_management_tasks.sql"), "utf8"));
+    await saveAuditFixture("close");
+    await assert.rejects(() => saveAuditFixture("unknown"), { code: "23514" });
+    const remove = async (id, version = 1, reason = removal.reason) => (await db.query(
+      "select public.remove_management_task($1,$2,$3) as task", [id, version, reason])).rows[0].task;
+    await as(admin);
+    await db.query("select public.save_management_task('assign',$1,$2::jsonb)", [duplicateId, JSON.stringify({ ...payload, lead_id: lead2, title: "To Call" })]);
+    await as(rep);
+    assert.ok((await list()).some(task => task.id === duplicateId));
+    await assert.rejects(() => remove(duplicateId), { code: "42501" });
+    await db.exec("reset role; set role anon");
+    await assert.rejects(() => remove(duplicateId), { code: "42501" });
+    await as(admin);
+    await assert.rejects(() => remove(taskId, 4), { code: "40001", message: /Completed tasks/ });
+    await assert.rejects(() => remove(task2), { code: "40001", message: /original task/ });
+    await assert.rejects(() => remove(duplicateId, 2), { code: "40001", message: /task changed/ });
+    await assert.rejects(() => remove(duplicateId, 1, "  short  "), { code: "22023" });
+    await assert.rejects(() => db.query("delete from public.management_tasks where id=$1", [duplicateId]), { code: "42501" });
+    const removed = await remove(duplicateId);
+    assert.equal(removed.removed_by, admin.id);
+    assert.equal(removed.version, 2);
+    await assert.rejects(() => remove(duplicateId, 2), { code: "40001", message: /Removed tasks/ });
+    await assert.rejects(() => db.query("select public.save_management_task('edit',$1,$2::jsonb)",
+      [duplicateId, JSON.stringify({ ...payload, expected_version: 2 })]), { code: "40001", message: /Removed tasks/ });
+    await as(rep);
+    assert.ok((await list()).some(task => task.id === task2));
+    assert.ok(!(await list()).some(task => task.id === duplicateId));
+    await db.exec("reset role");
+    const audit = await db.query("select actor_id, snapshot->>'removal_reason' as reason from private.management_task_events where task_id=$1 and action='remove'", [duplicateId]);
+    assert.deepEqual(audit.rows, [{ actor_id: admin.id, reason: removal.reason }]);
   } finally {
     await db.close();
   }
