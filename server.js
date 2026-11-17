@@ -7127,6 +7127,9 @@ async function handleApi(req, res, url) {
         return sendJson(res, 400, { error: "Choose one active Salesman from the account list." });
       }
       payload = prepareLeadPayloadForUser(payload, user, existing);
+      for (const field of ["next_action_date", "enriched_at", "enrichment_updated_at", "lost_at"]) {
+        if (typeof payload[field] === "string" && !payload[field].trim()) payload[field] = null;
+      }
       const stageProvided = Boolean(payload.stage || payload.lead_status);
       if (payload.stage || payload.lead_status) {
         payload.lead_status = normalizeStageValue(payload.stage || payload.lead_status, existing.stage);
@@ -7156,6 +7159,13 @@ async function handleApi(req, res, url) {
         "auto_enrichment", "latitude", "longitude", "activities"
       ].filter(field => isDirectorOrAdmin(user) || field !== "territory");
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
+      // Hidden form inputs serialize these fields as strings, even without enrichment data.
+      if (typeof updates.google_review_count === "string" && !updates.google_review_count.trim()) {
+        updates.google_review_count = 0;
+      }
+      if (typeof updates.opening_hours === "string") {
+        updates.opening_hours = updates.opening_hours.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      }
       for (const field of ["latitude", "longitude", "google_rating"]) {
         if (!Object.hasOwn(updates, field)) continue;
         const value = updates[field];

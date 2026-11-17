@@ -108,3 +108,30 @@ test("existing administrative dialogs preserve presentation and role restriction
     limitations:info.annotations.filter(item => item.type === "baseline-limitation")
   }, null, 2));
 });
+
+test("Admin submits the full Edit Lead form with blank optional fields", async ({page}, info) => {
+  test.skip(!info.project.name.startsWith("admin") || phase === "before", "Current Admin edit flow only");
+  await login(page, info);
+  await page.goto("/leads/ui-lead-1?tab=overview");
+  await page.locator('#leadDetailView [data-drawer-edit-lead="ui-lead-1"]:visible').first().click();
+  await page.locator("#formSalesman").selectOption({label:"Other Demo Salesman"});
+  await page.locator("#leadStepNext").click();
+  await page.locator("#leadStepNext").click();
+  await page.locator('#leadForm input[name="next_action_date"]').fill("");
+  const form = await page.locator("#leadForm").evaluate(element => {
+    const data = new FormData(element);
+    return {...Object.fromEntries(data), estimated_value:Number(data.get("estimated_value") || 0),
+      product_interest:data.getAll("product_interest").join(", ")};
+  });
+  expect(form).toMatchObject({next_action_date:"", enriched_at:"", latitude:"", longitude:"", google_rating:""});
+  const note = "Synthetic browser regression: verify blank optional Edit Lead fields.";
+  await page.locator('#leadForm button[type="submit"]').click();
+  await page.locator('#handoffForm [name="handoff_note"]').fill(note);
+  const saved = page.waitForResponse(response => response.url().endsWith("/api/leads/ui-lead-1")
+    && response.request().method() === "PATCH");
+  await page.locator("#confirmHandoff").click();
+  const response = await saved;
+  expect(response.request().postDataJSON()).toEqual({...form, assigned_to:"ui-other", handoff_note:note});
+  expect(response.ok(), await response.text()).toBe(true);
+  await expect(page.locator("#leadDialog")).toBeHidden();
+});

@@ -20,6 +20,20 @@ let lead = {
 const patches = [];
 const transfers = [];
 let transferError;
+let postgres;
+// Include the visible, collapsed, and hidden controls serialized by Edit Lead.
+const editForm = {
+  company_name: "Synthetic Reassignment Lead", assigned_salesman: "New Owner", territory: "UAE-North",
+  sector: "Fabricator", tier: "1", country_emirate: "Dubai, UAE", location: "UAE-North", legal_name: "",
+  year_established: "", industry: "", business_category: "", address: "", website: "", google_maps_url: "",
+  contact_person: "", phone: "", email: "", stage: "NEW", priority: "Warm", primary_contact_title: "",
+  estimated_value: 0, secondary_contact_name: "", secondary_contact_title: "", secondary_contact_mobile: "",
+  secondary_contact_email: "", tags: "", quotation_ref: "", product_interest: "", next_action: "To Call",
+  next_action_date: "", activity_purpose: "Company Introductory", notes: "Synthetic handoff", estimated_monthly_volume: "",
+  first_order_date: "", products_services_remarks: "", google_place_id: "", google_rating: "", google_review_count: "0",
+  latitude: "", longitude: "", opening_hours: "Mon: 09:00-17:00\nTue: 09:00-17:00", enrichment_source: "",
+  enrichment_status: "pending", enriched_at: ""
+};
 const actual = require(supabasePath);
 require.cache[require.resolve(supabasePath)].exports = {
   ...actual,
@@ -49,8 +63,9 @@ require.cache[require.resolve(supabasePath)].exports = {
     if (resource === "rpc/reassign_lead" && method === "POST") {
       assert.equal(token, "admin");
       if (transferError) throw transferError;
-      if (typeof body.p_patch.google_rating === "string" && !body.p_patch.google_rating.trim()) {
-        throw Object.assign(new Error('invalid input syntax for type numeric: ""'), { status: 400 });
+      if (postgres) {
+        // The audited RPC casts its JSON patch through jsonb_populate_record.
+        await postgres.query("select * from jsonb_populate_record(null::edit_lead_fields, $1::jsonb)", [JSON.stringify(body.p_patch)]);
       }
       transfers.push(body);
       assert.equal(body.p_lead_id, leadId);
@@ -78,6 +93,15 @@ async function request(token, body) {
 }
 
 async function verify() {
+  if (process.env.CRM_TEST_PGLITE_MODULE) {
+    const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE);
+    postgres = new PGlite();
+    await postgres.exec(`create type edit_lead_fields as (
+      estimated_value numeric(14,2), google_rating numeric(3,2), google_review_count integer,
+      latitude double precision, longitude double precision, opening_hours jsonb,
+      next_action_date date, enriched_at timestamptz, enrichment_updated_at timestamptz, lost_at timestamptz, lost_by uuid
+    )`);
+  }
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   try {
     const reassign = { assigned_salesman: "New Owner", latitude: "", longitude: " ", google_rating: "" };
@@ -95,11 +119,16 @@ async function verify() {
     assert.equal((await request("admin", { ...reassign, handoff_note: note })).status, 503);
     assert.equal(patches.length, 0, "Missing transactional RPC must never fall back to a direct owner update");
     transferError = undefined;
-    const result = await request("admin", { ...reassign, assigned_to: nextId, handoff_note: note });
+    const result = await request("admin", { ...editForm, assigned_to: nextId, handoff_note: note });
     assert.equal(result.status, 200, JSON.stringify(result.body));
     assert.equal(transfers[0].p_patch.latitude, null);
     assert.equal(transfers[0].p_patch.longitude, null);
     assert.equal(transfers[0].p_patch.google_rating, null);
+    assert.equal(transfers[0].p_patch.next_action_date, null);
+    assert.equal(transfers[0].p_patch.enriched_at, null);
+    assert.equal(transfers[0].p_patch.google_review_count, "0");
+    assert.deepEqual(transfers[0].p_patch.opening_hours, ["Mon: 09:00-17:00", "Tue: 09:00-17:00"]);
+    assert.equal(Object.hasOwn(transfers[0].p_patch, "first_order_date"), false);
     assert.equal(transfers[0].p_note, note);
     assert.equal(result.body.assigned_to, nextId);
     assert.equal(result.body.created_by, "former");
@@ -110,11 +139,18 @@ async function verify() {
     assert.equal((await request("former")).status, 404);
     assert.equal((await request("next")).status, 200);
 
-    const coordinates = await request("admin", { latitude: 0, longitude: "55.5", google_rating: "4.5" });
+    const coordinates = await request("admin", { latitude: 0, longitude: "55.5", google_rating: "4.5",
+      next_action_date: "2026-11-18", enriched_at: "2026-11-17T06:00:00Z", enrichment_updated_at: " ",
+      google_review_count: "", opening_hours: "" });
     assert.equal(coordinates.status, 200);
     assert.equal(patches[0].latitude, 0);
     assert.equal(patches[0].longitude, 55.5);
     assert.equal(patches[0].google_rating, 4.5);
+    assert.equal(patches[0].next_action_date, "2026-11-18");
+    assert.equal(patches[0].enriched_at, "2026-11-17T06:00:00Z");
+    assert.equal(patches[0].enrichment_updated_at, null);
+    assert.equal(patches[0].google_review_count, 0);
+    assert.deepEqual(patches[0].opening_hours, []);
     const invalid = await request("admin", { latitude: ["25"] });
     assert.equal(invalid.status, 400);
     const invalidRating = await request("admin", { google_rating: "not rated" });
@@ -125,9 +161,12 @@ async function verify() {
     assert.equal(Object.hasOwn(patches[1], "latitude"), false);
     assert.equal(Object.hasOwn(patches[1], "longitude"), false);
     assert.equal(Object.hasOwn(patches[1], "google_rating"), false);
-    console.log("PASS Supabase lead reassignment with blank coordinates and rating, handoff, and role isolation");
+    assert.equal(Object.hasOwn(patches[1], "next_action_date"), false);
+    assert.equal(Object.hasOwn(patches[1], "enriched_at"), false);
+    console.log("PASS Supabase lead reassignment with a full Edit Lead payload, audit, and role isolation");
   } finally {
     await new Promise(resolve => server.close(resolve));
+    await postgres?.close();
   }
 }
 
