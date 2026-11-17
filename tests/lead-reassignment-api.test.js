@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const supabasePath = path.join(__dirname, "..", "supabase-client.js");
@@ -13,7 +14,7 @@ const users = {
 };
 let lead = {
   id: leadId, company_name: "Synthetic Reassignment Lead", created_by: "former", assigned_to: "former",
-  assigned_salesman: "Former Owner", territory: "UAE-North", lead_status: "NEW", latitude: null, longitude: null,
+  assigned_salesman: "Former Owner", territory: "UAE-North", lead_status: "PROSPECT", latitude: null, longitude: null,
   updated_at: "2026-11-17T06:00:00Z",
   activities: [{ id: "original-activity", type: "Site Visit" }]
 };
@@ -34,6 +35,14 @@ const editForm = {
   latitude: "", longitude: "", opening_hours: "Mon: 09:00-17:00\nTue: 09:00-17:00", enrichment_source: "",
   enrichment_status: "pending", enriched_at: ""
 };
+async function validateDatabasePatch(body) {
+  if (postgres) {
+    // The audited RPC uses this cast, and both write paths face the same status constraint.
+    await postgres.query(`update public.leads current_lead
+      set lead_status = case when $1::jsonb ? 'lead_status' then patch.lead_status else current_lead.lead_status end
+      from jsonb_populate_record(null::public.leads, $1::jsonb) patch`, [JSON.stringify(body)]);
+  }
+}
 const actual = require(supabasePath);
 require.cache[require.resolve(supabasePath)].exports = {
   ...actual,
@@ -51,6 +60,7 @@ require.cache[require.resolve(supabasePath)].exports = {
         if (["latitude", "longitude"].some(field => typeof body[field] === "string" && !body[field].trim())) {
           throw Object.assign(new Error('invalid input syntax for type double precision: ""'), { status: 400 });
         }
+        await validateDatabasePatch(body);
         patches.push(body);
         lead = { ...lead, ...body };
       }
@@ -63,10 +73,7 @@ require.cache[require.resolve(supabasePath)].exports = {
     if (resource === "rpc/reassign_lead" && method === "POST") {
       assert.equal(token, "admin");
       if (transferError) throw transferError;
-      if (postgres) {
-        // The audited RPC casts its JSON patch through jsonb_populate_record.
-        await postgres.query("select * from jsonb_populate_record(null::edit_lead_fields, $1::jsonb)", [JSON.stringify(body.p_patch)]);
-      }
+      await validateDatabasePatch(body.p_patch);
       transfers.push(body);
       assert.equal(body.p_lead_id, leadId);
       assert.equal(body.p_target_id, nextId);
@@ -96,11 +103,18 @@ async function verify() {
   if (process.env.CRM_TEST_PGLITE_MODULE) {
     const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE);
     postgres = new PGlite();
-    await postgres.exec(`create type edit_lead_fields as (
+    const blueprint = fs.readFileSync(path.join(__dirname, "..", "supabase", "migrations", "20260603130000_blueprint_phase1_foundation.sql"), "utf8");
+    const statusConstraint = blueprint.match(/^alter table public\.leads add constraint leads_status_blueprint_check\s+check \([^;]+\);/m);
+    assert.ok(statusConstraint, "Blueprint status constraint is required for this fixture");
+    await postgres.exec(`create table public.leads (
+      lead_status text not null,
       estimated_value numeric(14,2), google_rating numeric(3,2), google_review_count integer,
       latitude double precision, longitude double precision, opening_hours jsonb,
-      next_action_date date, enriched_at timestamptz, enrichment_updated_at timestamptz, lost_at timestamptz, lost_by uuid
-    )`);
+      next_action_date date, first_order_date date, enriched_at timestamptz, enrichment_updated_at timestamptz,
+      lost_at timestamptz, lost_by uuid
+    );
+    ${statusConstraint[0]}
+    insert into public.leads (lead_status) values ('PROSPECT');`);
   }
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   try {
@@ -119,8 +133,19 @@ async function verify() {
     assert.equal((await request("admin", { ...reassign, handoff_note: note })).status, 503);
     assert.equal(patches.length, 0, "Missing transactional RPC must never fall back to a direct owner update");
     transferError = undefined;
-    const result = await request("admin", { ...editForm, assigned_to: nextId, handoff_note: note });
+    const changedStage = await request("admin", { ...editForm, stage: "CONTACTED", assigned_to: nextId, handoff_note: note });
+    assert.equal(changedStage.status, 400);
+    assert.match(changedStage.body.error, /Save the stage change separately/);
+    assert.equal(transfers.length, 0);
+    const result = await request("admin", { ...editForm, assigned_to: nextId, handoff_note: note, lost_reason: "must not be written" });
     assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.equal(Object.hasOwn(transfers[0].p_patch, "lead_status"), false);
+    assert.equal(Object.hasOwn(transfers[0].p_patch, "lost_reason"), false);
+    assert.equal(lead.lead_status, "PROSPECT");
+    assert.equal(result.body.stage, "NEW");
+    if (postgres) {
+      assert.equal((await postgres.query("select lead_status from public.leads")).rows[0].lead_status, "PROSPECT");
+    }
     assert.equal(transfers[0].p_patch.latitude, null);
     assert.equal(transfers[0].p_patch.longitude, null);
     assert.equal(transfers[0].p_patch.google_rating, null);
@@ -163,6 +188,26 @@ async function verify() {
     assert.equal(Object.hasOwn(patches[1], "google_rating"), false);
     assert.equal(Object.hasOwn(patches[1], "next_action_date"), false);
     assert.equal(Object.hasOwn(patches[1], "enriched_at"), false);
+    const leadDetails = {
+      sector: "Piling", tier: "3", country_emirate: "Dubai, UAE", primary_contact_title: "Buyer",
+      secondary_contact_name: "Test Backup Contact", secondary_contact_title: "Assistant",
+      secondary_contact_mobile: "+12025550101", secondary_contact_email: "backup@example.test",
+      tags: "synthetic", quotation_ref: "TEST-123", estimated_monthly_volume: "25 MT/month"
+    };
+    const ordinaryEdit = await request("admin", {...editForm, ...leadDetails,
+      contact_person: "Test Contact", email: "buyer@example.test", first_order_date: "2026-12-01"});
+    assert.equal(ordinaryEdit.status, 200, JSON.stringify(ordinaryEdit.body));
+    assert.equal(Object.hasOwn(patches[2], "lead_status"), false);
+    assert.equal(transfers.length, 1, "Editing lead details must not run another handoff");
+    for (const [field, value] of Object.entries(leadDetails)) assert.equal(ordinaryEdit.body[field], value, field);
+    assert.equal(ordinaryEdit.body.contact_person, "Test Contact");
+    assert.equal(ordinaryEdit.body.email, "buyer@example.test");
+    assert.equal(ordinaryEdit.body.first_order_date, "2026-12-01");
+    const clearOrderDate = await request("next", {first_order_date: ""});
+    assert.equal(clearOrderDate.status, 200);
+    assert.equal(clearOrderDate.body.first_order_date, null);
+    const deniedEdit = await request("former", {sector: "Contractor"});
+    assert.equal(deniedEdit.status, 404);
     console.log("PASS Supabase lead reassignment with a full Edit Lead payload, audit, and role isolation");
   } finally {
     await new Promise(resolve => server.close(resolve));

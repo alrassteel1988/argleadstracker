@@ -1756,6 +1756,18 @@ function requestedLeadReassignment(payload, lead) {
     && String(payload.assigned_salesman || "").trim().toLowerCase() !== String(lead.assigned_salesman || "").trim().toLowerCase();
 }
 
+const LEAD_LOST_FIELDS = ["lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by"];
+
+function requestedLeadStageChange(payload, lead) {
+  const existingStage = normalizeStageValue(lead.stage || lead.lead_status);
+  return [payload.stage, payload.lead_status].some(value =>
+    String(value ?? "").trim() && normalizeStageValue(value, "") !== existingStage);
+}
+
+function omitLeadStageEdits(updates) {
+  for (const field of ["stage", "lead_status", ...LEAD_LOST_FIELDS]) delete updates[field];
+}
+
 function canonicalTerritory(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -7120,6 +7132,9 @@ async function handleApi(req, res, url) {
       if (!existing) return leadNotFound(res);
       const reassign = requestedLeadReassignment(payload, existing);
       if (reassign && !isAdmin(user)) return sendJson(res, 403, { error: "Only an Admin can reassign a lead." });
+      if (reassign && requestedLeadStageChange(payload, existing)) {
+        return sendJson(res, 400, { error: "Reassignment keeps the current stage. Save the stage change separately." });
+      }
       const note = reassign ? validHandoffNote(payload) : "";
       if (reassign && !note) return sendJson(res, 400, { error: "Enter a handoff note of 20 to 4000 characters." });
       const target = reassign ? await resolveHandoffTarget(user.token, payload) : null;
@@ -7127,21 +7142,18 @@ async function handleApi(req, res, url) {
         return sendJson(res, 400, { error: "Choose one active Salesman from the account list." });
       }
       payload = prepareLeadPayloadForUser(payload, user, existing);
-      for (const field of ["next_action_date", "enriched_at", "enrichment_updated_at", "lost_at"]) {
+      for (const field of ["next_action_date", "first_order_date", "enriched_at", "enrichment_updated_at", "lost_at"]) {
         if (typeof payload[field] === "string" && !payload[field].trim()) payload[field] = null;
       }
-      const stageProvided = Boolean(payload.stage || payload.lead_status);
-      if (payload.stage || payload.lead_status) {
-        payload.lead_status = normalizeStageValue(payload.stage || payload.lead_status, existing.stage);
+      for (const [formField, column] of [["contact_person", "contact_name"], ["email", "contact_email"]]) {
+        if (Object.hasOwn(payload, formField) && !Object.hasOwn(payload, column)) payload[column] = payload[formField];
+      }
+      const requestedStage = normalizeStageValue(payload.stage || payload.lead_status, "");
+      const stageChanged = !target && requestedStage && requestedStage !== existing.stage;
+      if (stageChanged) {
+        payload.lead_status = requestedStage;
         delete payload.stage;
         if (isLostStage(payload.lead_status)) Object.assign(payload, normalizeLostFields(payload, user));
-      }
-      if (!stageProvided) {
-        delete payload.lost_reason;
-        delete payload.lost_reason_detail;
-        delete payload.lost_competitor;
-        delete payload.lost_at;
-        delete payload.lost_by;
       }
       if (payload.company_name && String(payload.company_name).trim() !== String(existing.company_name || "").trim()) {
         payload = await googleEnrichPayload({ ...existing, ...payload, google_place_id: "" }, req);
@@ -7156,9 +7168,14 @@ async function handleApi(req, res, url) {
         "estimated_scale", "estimated_annual_revenue", "key_personnel", "recent_projects",
         "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at",
         "lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by",
-        "auto_enrichment", "latitude", "longitude", "activities"
+        "auto_enrichment", "latitude", "longitude", "activities",
+        ...(!target ? ["sector", "tier", "country_emirate", "primary_contact_title", "secondary_contact_name",
+          "secondary_contact_title", "secondary_contact_mobile", "secondary_contact_email", "tags", "quotation_ref",
+          "estimated_monthly_volume", "first_order_date"] : [])
       ].filter(field => isDirectorOrAdmin(user) || field !== "territory");
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
+      // The UI stage may be an alias for a different stored blueprint value.
+      if (!stageChanged) omitLeadStageEdits(updates);
       // Hidden form inputs serialize these fields as strings, even without enrichment data.
       if (typeof updates.google_review_count === "string" && !updates.google_review_count.trim()) {
         updates.google_review_count = 0;
@@ -7191,6 +7208,9 @@ async function handleApi(req, res, url) {
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
     const reassign = requestedLeadReassignment(payload, lead);
     if (reassign && !isAdmin(user)) return sendJson(res, 403, { error: "Only an Admin can reassign a lead." });
+    if (reassign && requestedLeadStageChange(payload, lead)) {
+      return sendJson(res, 400, { error: "Reassignment keeps the current stage. Save the stage change separately." });
+    }
     const note = reassign ? validHandoffNote(payload) : "";
     if (reassign && !note) return sendJson(res, 400, { error: "Enter a handoff note of 20 to 4000 characters." });
     const target = reassign ? localHandoffTarget(db, payload) : null;
@@ -7206,6 +7226,7 @@ async function handleApi(req, res, url) {
     delete payload.assigned_to;
     delete payload.assigned_salesman;
     if (target) {
+      omitLeadStageEdits(payload);
       const handoffEvent = buildHandoffEvent({
         lead,
         newOwner: target,
@@ -7235,13 +7256,7 @@ async function handleApi(req, res, url) {
         });
       }
     }
-    if (!stageProvided) {
-      delete payload.lost_reason;
-      delete payload.lost_reason_detail;
-      delete payload.lost_competitor;
-      delete payload.lost_at;
-      delete payload.lost_by;
-    }
+    if (!stageProvided) for (const field of LEAD_LOST_FIELDS) delete payload[field];
     Object.assign(lead, payload);
     writeDb(db);
     return sendJson(res, 200, leadWithDerivedFields(lead));
