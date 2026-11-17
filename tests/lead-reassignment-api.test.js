@@ -49,6 +49,9 @@ require.cache[require.resolve(supabasePath)].exports = {
     if (resource === "rpc/reassign_lead" && method === "POST") {
       assert.equal(token, "admin");
       if (transferError) throw transferError;
+      if (typeof body.p_patch.google_rating === "string" && !body.p_patch.google_rating.trim()) {
+        throw Object.assign(new Error('invalid input syntax for type numeric: ""'), { status: 400 });
+      }
       transfers.push(body);
       assert.equal(body.p_lead_id, leadId);
       assert.equal(body.p_target_id, nextId);
@@ -77,7 +80,7 @@ async function request(token, body) {
 async function verify() {
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   try {
-    const reassign = { assigned_salesman: "New Owner", latitude: "", longitude: " " };
+    const reassign = { assigned_salesman: "New Owner", latitude: "", longitude: " ", google_rating: "" };
     const denied = await request("former", reassign);
     assert.equal(denied.status, 403, JSON.stringify(denied.body));
     assert.equal((await request("manager", { assigned_to: nextId })).status, 403);
@@ -96,6 +99,7 @@ async function verify() {
     assert.equal(result.status, 200, JSON.stringify(result.body));
     assert.equal(transfers[0].p_patch.latitude, null);
     assert.equal(transfers[0].p_patch.longitude, null);
+    assert.equal(transfers[0].p_patch.google_rating, null);
     assert.equal(transfers[0].p_note, note);
     assert.equal(result.body.assigned_to, nextId);
     assert.equal(result.body.created_by, "former");
@@ -106,18 +110,22 @@ async function verify() {
     assert.equal((await request("former")).status, 404);
     assert.equal((await request("next")).status, 200);
 
-    const coordinates = await request("admin", { latitude: 0, longitude: "55.5" });
+    const coordinates = await request("admin", { latitude: 0, longitude: "55.5", google_rating: "4.5" });
     assert.equal(coordinates.status, 200);
     assert.equal(patches[0].latitude, 0);
     assert.equal(patches[0].longitude, 55.5);
+    assert.equal(patches[0].google_rating, 4.5);
     const invalid = await request("admin", { latitude: ["25"] });
     assert.equal(invalid.status, 400);
-    assert.equal(patches.length, 1, "Invalid coordinates must not reach Supabase");
+    const invalidRating = await request("admin", { google_rating: "not rated" });
+    assert.equal(invalidRating.status, 400);
+    assert.equal(patches.length, 1, "Invalid numeric fields must not reach Supabase");
     const noCoordinates = await request("admin", { notes: "Owner unchanged" });
     assert.equal(noCoordinates.status, 200);
     assert.equal(Object.hasOwn(patches[1], "latitude"), false);
     assert.equal(Object.hasOwn(patches[1], "longitude"), false);
-    console.log("PASS Supabase lead reassignment with blank coordinates, handoff, and role isolation");
+    assert.equal(Object.hasOwn(patches[1], "google_rating"), false);
+    console.log("PASS Supabase lead reassignment with blank coordinates and rating, handoff, and role isolation");
   } finally {
     await new Promise(resolve => server.close(resolve));
   }

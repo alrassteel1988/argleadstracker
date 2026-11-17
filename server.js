@@ -7156,7 +7156,7 @@ async function handleApi(req, res, url) {
         "auto_enrichment", "latitude", "longitude", "activities"
       ].filter(field => isDirectorOrAdmin(user) || field !== "territory");
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
-      for (const field of ["latitude", "longitude"]) {
+      for (const field of ["latitude", "longitude", "google_rating"]) {
         if (!Object.hasOwn(updates, field)) continue;
         const value = updates[field];
         if (value === null || (typeof value === "string" && !value.trim())) {
@@ -7164,7 +7164,8 @@ async function handleApi(req, res, url) {
         } else if ((typeof value === "string" || typeof value === "number") && Number.isFinite(Number(value))) {
           updates[field] = Number(value);
         } else {
-          return sendJson(res, 400, { error: `Enter a valid ${field} or leave it blank.` });
+          const label = field === "google_rating" ? "Google rating" : field;
+          return sendJson(res, 400, { error: `Enter a valid ${label} or leave it blank.` });
         }
       }
       if (target) {
