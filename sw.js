@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v164-salesman-activity-only";
+const CACHE_VERSION = "arg-pwa-v166-initial-management-task";
 const APP_SHELL = [
   "/",
   "/index.html",

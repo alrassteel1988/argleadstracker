@@ -49,7 +49,8 @@ const {
   workflowId
 } = require("./src/services/activityWorkflowService");
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
-const { canReadManagementTask, validateManagementTask, saveLocalManagementTask } = require("./src/services/managementTaskService");
+const { canReadManagementTask, validateManagementTask, saveLocalManagementTask, requestsInitialManagementTask,
+  initialManagementTaskInput } = require("./src/services/managementTaskService");
 const { canResolveLeadFollowup, isResolvedReminder, validateLeadFollowup, resolveLocalLeadFollowup } = require("./src/services/leadFollowupService");
 const {
   enrichCompanyFromGoogle,
@@ -2308,8 +2309,9 @@ function actionResponse(action, lead, pmr) {
   return "Action is not available.";
 }
 
-function toSupabaseLead(input, user) {
-  const lead = withAutomaticReminder(normalizeLead(input), user);
+function toSupabaseLead(input, user, { initialTask = false } = {}) {
+  const normalized = normalizeLead(input);
+  const lead = initialTask ? normalized : withAutomaticReminder(normalized, user);
   const salesmanScoped = !isDirectorOrAdmin(user);
   const profileTerritory = String(user?.territory || "").trim();
   const profileName = String(user?.name || user?.email || "").trim();
@@ -3965,8 +3967,18 @@ async function recordHandoffNotification(token, lead, handoffEvent) {
 }
 
 async function saveSupabaseLead(token, user, input) {
-  const lead = toSupabaseLead(input, user);
-  if (isAdmin(user) && !lead.assigned_to) {
+  const initialTask = requestsInitialManagementTask(input, user);
+  const lead = toSupabaseLead(input, user, { initialTask });
+  if (initialTask) {
+    const identity = lead.assigned_to ? `id=eq.${encodeURIComponent(lead.assigned_to)}` : `full_name=eq.${encodeURIComponent(lead.assigned_salesman)}`;
+    const reps = await rest(`profiles?${identity}&role=eq.salesman&status=eq.active&select=id,full_name&limit=2`, supabaseDataOptions(token));
+    if (reps.length !== 1) throw Object.assign(new Error("Choose a uniquely identified active salesman for this next step."), { status: 400 });
+    lead.assigned_to = reps[0].id;
+    lead.assigned_salesman = reps[0].full_name || lead.assigned_salesman;
+    lead.next_action_date = String(input.next_action_date || "").trim();
+    initialManagementTaskInput(lead, lead.assigned_to, new Date());
+    lead.initial_management_task_id = crypto.randomUUID();
+  } else if (isAdmin(user) && !lead.assigned_to) {
     lead.assigned_to = await resolveSalesmanId(token, lead.assigned_salesman);
   }
   if (lead.google_place_id) {
@@ -3978,6 +3990,10 @@ async function saveSupabaseLead(token, user, input) {
     }
   }
   let company = await findCompany(token, lead);
+  if (initialTask) {
+    lead.company_id = company?.id || null;
+    return fromSupabaseLead(await saveSupabaseLeadWithInitialTask(token, lead));
+  }
   if (!company) {
     const companies = await rest("companies?select=*", {
       method: "POST",
@@ -4040,6 +4056,27 @@ function optionalLeadColumnMissing(error) {
   const message = String(error?.message || "");
   return OPTIONAL_SUPABASE_LEAD_COLUMNS.some(column => message.includes(`'${column}'`) || message.includes(`"${column}"`))
     || /schema cache|column .* does not exist/i.test(message);
+}
+
+async function saveSupabaseLeadWithInitialTask(token, body) {
+  const save = async lead => {
+    try {
+      return await rest("rpc/save_initial_management_lead", {
+        method: "POST", ...supabaseDataOptions(token), body: { p_lead: lead }
+      });
+    } catch (error) {
+      if (/save_initial_management_lead.*(?:does not exist|schema cache)|schema cache.*save_initial_management_lead/i.test(error.message)) {
+        throw Object.assign(new Error("Automatic management assignments are not configured in this environment. The lead was not saved."), { status: 503 });
+      }
+      throw error;
+    }
+  };
+  try {
+    return await save(body);
+  } catch (error) {
+    if (!optionalLeadColumnMissing(error)) throw error;
+    return save(stripOptionalSupabaseLeadColumns(body));
+  }
 }
 
 function isSupabaseRlsInsertError(error) {
@@ -6758,17 +6795,35 @@ async function handleApi(req, res, url) {
       await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
       return sendJson(res, 201, lead);
     }
-    const lead = withAutomaticReminder(normalizeLead(payload), user);
+    const createInitialTask = requestsInitialManagementTask(payload, user);
+    const normalized = normalizeLead(payload);
+    const lead = createInitialTask ? normalized : withAutomaticReminder(normalized, user);
+    const localDb = createInitialTask ? readDb() : db;
     lead.created_by = user.id;
     lead.created_by_name = user.name || user.email || "User";
     if (!isDirectorOrAdmin(user)) {
       lead.assigned_to = user.id;
       lead.assigned_salesman = user.name || user.email || lead.assigned_salesman;
     }
-    db.leads.unshift(lead);
-    writeDb(db);
-    scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled });
-    await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
+    if (createInitialTask) {
+      const reps = localDb.users.filter(rep => rep.role === "salesman" && rep.status === "active"
+        && (payload.assigned_to ? String(rep.id) === String(payload.assigned_to) : rep.name === lead.assigned_salesman));
+      if (reps.length !== 1) return sendJson(res, 400, { error: "Choose a uniquely identified active salesman for this next step." });
+      const now = new Date().toISOString();
+      lead.id = crypto.randomUUID();
+      lead.assigned_to = reps[0].id;
+      lead.assigned_salesman = reps[0].name;
+      lead.next_action_date = String(payload.next_action_date || "").trim();
+      const values = initialManagementTaskInput(lead, lead.assigned_to, now);
+      lead.initial_management_task_id = crypto.randomUUID();
+      lead.next_action = "";
+      lead.next_action_date = null;
+      localDb.leads.unshift(lead);
+      saveLocalManagementTask(localDb, user, "assign", lead.initial_management_task_id, values, now);
+    } else localDb.leads.unshift(lead);
+    writeDb(localDb);
+    scheduleLeadAutoEnrichment({ db: localDb, user, lead, req, supabaseEnabled });
+    await queueLeadIntelligenceForNewLead(localDb, user, lead, supabaseEnabled);
     return sendJson(res, 201, leadWithDerivedFields(lead));
   }
 
@@ -7021,6 +7076,7 @@ async function handleApi(req, res, url) {
   const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
   if (req.method === "PATCH" && leadMatch) {
     let payload = await readBody(req);
+    delete payload.initial_management_task_id;
     if (supabaseEnabled) {
       const existing = await getSupabaseLead(user.token, leadMatch[1], user);
       if (!existing) return leadNotFound(res);

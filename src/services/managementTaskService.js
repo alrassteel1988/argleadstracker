@@ -16,6 +16,21 @@ function canReadManagementTask(db, user, task) {
     && ownsLinkedLead(db, task.assignee_id, task.lead_id));
 }
 
+function requestsInitialManagementTask(input, user) {
+  const assignee = String(input.assigned_salesman || "").trim();
+  return user.role === "admin" && Boolean(input.assigned_to || (assignee && assignee.toLowerCase() !== "unassigned"))
+    && Boolean(String(input.next_action || "").trim());
+}
+
+function initialManagementTaskInput(lead, assigneeId, now) {
+  const today = new Date(+new Date(now) + 4 * 3600_000).toISOString().slice(0, 10);
+  const instructions = [lead.activity_purpose, lead.notes].filter(Boolean).join("\n") || "Initial next step assigned by management.";
+  return validateManagementTask("assign", {
+    assignee_id: String(assigneeId), lead_id: String(lead.id || ""), title: lead.next_action,
+    instructions: [...instructions].slice(0, 4000).join(""), due_date: lead.next_action_date, priority: "medium"
+  }, today);
+}
+
 function validateManagementTask(action, body, today) {
   const input = body && typeof body === "object" ? body : {};
   const str = key => typeof input[key] === "string" ? input[key].trim() : "";
@@ -96,4 +111,5 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
   return task;
 }
 
-module.exports = { taskError, canReadManagementTask, validateManagementTask, saveLocalManagementTask };
+module.exports = { taskError, canReadManagementTask, validateManagementTask, saveLocalManagementTask,
+  requestsInitialManagementTask, initialManagementTaskInput };
