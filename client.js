@@ -1580,7 +1580,7 @@ async function syncOutbox() {
 }
 
 async function syncPendingPmr(item) {
-  let payload = { ...(item.payload || {}) };
+  let payload = { id: item.id, ...(item.payload || {}) };
   if (item.voice_note_blob && !payload.voice_note_id) {
     const uploaded = await uploadPmrVoiceBlob(item.voice_note_blob, item.voice_note_mime_type || "audio/webm");
     payload = {
@@ -6847,7 +6847,7 @@ function leadOriginChipClass(originLabel) {
 }
 
 function completedFollowupActivity(activity) {
-  if (!activity || activity.delete_request || activity.followup_resolution === "cancelled" || isReminderActivity(activity)) return false;
+  if (!activity || isPmrFilingEvent(activity) || activity.delete_request || activity.followup_resolution === "cancelled" || isReminderActivity(activity)) return false;
   const text = `${activity.type || ""} ${activity.text || ""}`.toLowerCase();
   return /follow|call|email|visit|meeting|quotation|quote|order/.test(text);
 }
@@ -8080,12 +8080,13 @@ function adminReferenceActivityRows() {
   const leads = personal ? state.leads.filter(lead => lead.assigned_to && String(lead.assigned_to) === String(user.id)) : state.leads;
   const people = [state.currentUser, ...(state.userAccounts || []), ...(state.settings.salesmen || []).filter(item => typeof item === "object")].filter(Boolean);
   return allActivities(leads).filter(item => !item.archived && !item.delete_request &&
-    (!personal || (!item.pending_sync && item.created_by && String(item.created_by) === String(user.id)))).map(activity => {
+    (!personal || (!isPmrFilingEvent(item) && !item.pending_sync && item.created_by && String(item.created_by) === String(user.id)))).map(activity => {
     const creator = people.find(person => String(person.id || person.user_id) === String(activity.created_by || ""));
     const assignedBy = people.find(person => String(person.id || person.user_id) === String(activity.assigned_by || activity.task_created_by || ""));
     const manager = person => ["admin", "manager", "director"].includes(String(person?.role || "").toLowerCase());
     const origin = manager(creator) || manager(assignedBy) ? "Management" : creator?.role === "salesman" ? "Self" : "Not recorded";
     return { ...activity, origin, actor: activity.created_by_name || creator?.name || activity.logged_by || "Not recorded",
+      auditOnly: isPmrFilingEvent(activity),
       closed: activity.transaction_status === "closed", cancelled: activity.followup_resolution === "cancelled",
       retired: Boolean(activity.followup_retired), remarks: String(activity.transaction_remarks || "").trim(),
       outcome: String(activity.transaction_outcome || ""), date: String(activity.at || activity.created_at || "").slice(0, 10) };
@@ -8103,7 +8104,7 @@ function adminReferenceFilterActivity(rows) {
       && (f.person === "all" || row.actor === f.person)
       && (f.date === "all" || age !== null && (f.date === "7" ? age >= 0 && age <= 7 : f.date === "30" ? age >= 0 && age <= 30 : age > 30))
       && (f.linked === "all" || (f.linked === "quote" ? Boolean(row.quotation_ref) : f.linked === "pmr" ? Boolean(row.pmr_id || row.pmr_ref) : !row.quotation_ref && !row.pmr_id && !row.pmr_ref))
-      && (f.status === "all" || (f.status === "missing" ? !row.remarks && !row.retired
+      && (f.status === "all" || !row.auditOnly && (f.status === "missing" ? !row.remarks && !row.retired
         : f.status === "cancelled" ? row.cancelled : f.status === "completed" ? row.followup_resolution === "completed"
         : f.status === "pending" ? !row.closed && !row.cancelled && !row.retired
         : f.status === "closed" ? row.closed : row.closed && (f.status === "done" ? /^done/i.test(row.outcome) : /^not reached/i.test(row.outcome))));
@@ -8147,6 +8148,7 @@ function renderReferenceAdminActivity() {
   const calendarOpen = Boolean(host.querySelector(".admin-ref-calendar")?.open);
   const f = adminReference.activity;
   const all = personal && !state.leadsLoaded ? [] : adminReferenceActivityRows();
+  const countable = all.filter(row => !row.auditOnly);
   const filtered = adminReferenceFilterActivity(all);
   const size = adminReference.activityPageSize || 50;
   const pages = Math.max(1, Math.ceil(filtered.length / size));
@@ -8155,7 +8157,7 @@ function renderReferenceAdminActivity() {
   const rows = filtered.slice(offset, offset + size);
   const people = new Map();
   let closed = 0, pending = 0, missing = 0, done = 0, notReached = 0;
-  for (const row of all) {
+  for (const row of countable) {
     const person = people.get(row.actor) || { total: 0, closed: 0 };
     person.total++;
     if (row.closed) {
@@ -8178,11 +8180,11 @@ function renderReferenceAdminActivity() {
   ];
   const tags = definitions.filter(([key]) => f[key] !== "all").map(([key, label, options]) => `<button class="admin-ref-tag" type="button" data-admin-clear-filter="${key}">${label}: ${escapeHtml(options.find(([value]) => value === f[key])?.[1] || f[key])} &times;</button>`).join("")
     + (f.sort === "oldest" ? '<button class="admin-ref-tag" type="button" data-admin-clear-filter="sort">Sort: Oldest first &times;</button>' : "");
-  const statusLabel = row => row.cancelled ? "Cancelled" : row.followup_resolution === "completed" ? "Completed"
+  const statusLabel = row => row.auditOnly ? "Filed" : row.cancelled ? "Cancelled" : row.followup_resolution === "completed" ? "Completed"
     : row.closed ? "Closed" : row.retired ? "Resolved reminder" : "Pending";
   const preview = (value, className = "") => `<span class="admin-activity-preview ${className}" title="${escapeHtml(value)}">${escapeHtml(value)}</span>`;
   const renderRow = row => {
-    const noRemarks = !row.remarks && !row.retired;
+    const noRemarks = !row.remarks && !row.retired && !row.auditOnly;
     const tone = row.cancelled || /^not reached/i.test(row.outcome) ? "danger" : row.closed || row.followup_resolution === "completed" ? "teal" : row.retired ? "" : "warning";
     const note = row.note || row.text || "No notes";
     const date = formatDisplayDate(row.date);
@@ -8204,9 +8206,9 @@ function renderReferenceAdminActivity() {
   const unavailable = Boolean(state.leadsError && !state.leadsLoaded);
   const emptyMessage = loading ? "Loading activities..." : unavailable ? escapeHtml(state.leadsError) : all.length ? "No activities match these filters." : personal ? "No activity logged on your assigned leads." : "No activities recorded.";
   const count = n => personal && (loading || unavailable) ? "&mdash;" : n;
-  const cancelled = all.filter(row => row.cancelled).length;
+  const cancelled = countable.filter(row => row.cancelled).length;
   host.innerHTML = `<section class="admin-ref-activity-stats" aria-label="Activity summary">
-    <article class="admin-ref-stat teal"><span>Activities closed</span><div><strong>${count(closed)}</strong> <b>/ ${count(all.length)}</b>${personal ? "" : ` <small>${done} done &middot; ${notReached} not reached</small>`}</div>${personal && (loading || unavailable) ? "" : adminReferenceProgress(closed, all.length)}</article>
+    <article class="admin-ref-stat teal"><span>Activities closed</span><div><strong>${count(closed)}</strong> <b>/ ${count(countable.length)}</b>${personal ? "" : ` <small>${done} done &middot; ${notReached} not reached</small>`}</div>${personal && (loading || unavailable) ? "" : adminReferenceProgress(closed, countable.length)}</article>
     <article class="admin-ref-stat warning"><span>Still pending</span><div><strong>${count(pending)}</strong> <small>Awaiting next step</small></div></article>
     <button class="admin-ref-stat danger admin-activity-missing" type="button" data-admin-activity-filter="status" data-value="${f.status === "missing" ? "all" : "missing"}" aria-pressed="${f.status === "missing"}"><span>No remarks</span><div><strong>${count(missing)}</strong> <small>Unexplained &rsaquo;</small></div></button>
     ${personal ? `<article class="admin-ref-stat"><span>Cancelled</span><strong>${count(cancelled)}</strong></article>`
@@ -10878,7 +10880,7 @@ function recordRelationshipHealth(lead) {
   const known = !closed && days !== null && Number.isFinite(cadence) && cadence > 0;
   const tone = !known ? "unknown" : days > cadence * 1.6 ? "red" : days > cadence ? "amber" : "green";
   const recent = (lead.activities || []).filter(activity => {
-    if (activity.followup_resolution === "cancelled") return false;
+    if (isPmrFilingEvent(activity) || activity.followup_resolution === "cancelled") return false;
     const elapsed = recordDaysSince(activity.at);
     return elapsed !== null && elapsed <= 60;
   });
@@ -10942,7 +10944,8 @@ function companyAiActionsMarkup(lead, { mobile = false, overview = false } = {})
 
 function desktopLeadOverviewMarkup(lead) {
   const id = escapeHtml(lead.id);
-  const activities = [...(lead.activities || [])].sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))).slice(0, 3);
+  const activities = (lead.activities || []).filter(activity => !isPmrFilingEvent(activity))
+    .sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))).slice(0, 3);
   const reminders = remindersForLead(lead).slice(0, 3);
   const overdueDays = lead.next_action_date ? Math.max(0, -daysUntil(lead.next_action_date)) : 0;
   const summary = state.selectedId === lead.id ? state.leadAiSummary : null;
@@ -11283,19 +11286,24 @@ function renderDrawerOverview(lead) {
 }
 
 function renderDrawerActivities(lead) {
-  const activities = [...(lead.activities || [])].sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  const activities = (lead.activities || []).filter(activity => !isPmrFilingEvent(activity))
+    .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  const pmrLinks = pmrActivityLinks(lead);
   const handoffs = [...(state.leadDrawerHandoffs || [])].sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
   const reminders = remindersForLead(lead);
   const latestActivity = activities[0];
   const recentActivities = activities.slice(0, 3);
   const olderActivities = activities.slice(3);
-  const activityCard = (activity, index) => `
+  const activityCard = activity => {
+    const index = (lead.activities || []).indexOf(activity);
+    return `
     <article class="drawer-activity ${activityTypeClass(activity.type)}">
       <div><span class="activity-type-label"><i>${escapeHtml(ACTIVITY_TYPE_ICONS[activity.type] || "ACT")}</i>${escapeHtml(recordFollowupTitle(activity))}</span> ${recordFollowupStatus(activity)}<span class="meta-label">${escapeHtml(activity.at || "")}</span></div>
       <p class="activity-note clamp" data-expand-note>${escapeHtml(activity.text || activity.note || "No note added.")}</p>
-      <div class="activity-actions">${activityEditButton(lead.id, index, activity)}${activityDeleteButton(lead.id, index, activity)}</div>
+      <div class="activity-actions">${pmrLinks.has(activity.id) ? `<button class="small-action" type="button" data-drawer-tab="pmr" data-pmr-meeting="${escapeHtml(activity.id)}">View PMR</button>` : ""}${activityEditButton(lead.id, index, activity)}${activityDeleteButton(lead.id, index, activity)}</div>
     </article>
   `;
+  };
   return `
     <section class="drawer-section">
       <div class="drawer-tab-heading">
@@ -11313,7 +11321,7 @@ function renderDrawerActivities(lead) {
       </div>
       <div class="drawer-list">
         ${recentActivities.length
-          ? recentActivities.map((activity, index) => activityCard(activity, index)).join("")
+          ? recentActivities.map(activityCard).join("")
           : `<div class="timeline-empty"><strong>No activities logged yet.</strong><span>Log the first one.</span><button class="ghost-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Add New Activity</button></div>`
         }
       </div>
@@ -11325,7 +11333,7 @@ function renderDrawerActivities(lead) {
           </summary>
           <div class="drawer-disclosure-body">
             <div class="drawer-list">
-              ${olderActivities.map((activity, index) => activityCard(activity, index + 3)).join("")}
+              ${olderActivities.map(activityCard).join("")}
             </div>
           </div>
         </details>
@@ -11376,7 +11384,7 @@ function renderDrawerPmrs(lead) {
   const latest = pmrs[0];
   const earlierPmrs = pmrs.slice(1);
   const pmrCard = pmr => `
-    <article class="drawer-pmr">
+    <article class="drawer-pmr" data-pmr-activity="${escapeHtml(pmr.activity_id || "")}">
       <div class="drawer-card-title"><strong>${escapeHtml(pmr.meeting_date || "Meeting")}</strong><span class="chip ${heatClass(pmr.relationship_heat_score)}">Heat ${escapeHtml(pmr.relationship_heat_score || "3")}/5</span></div>
       <div class="chip-row">
         ${pmr.pending_sync ? `<span class="chip warm">Pending sync</span>` : ""}
@@ -11387,6 +11395,8 @@ function renderDrawerPmrs(lead) {
         ${pmr.activity_id ? `<span class="chip">${escapeHtml(linkedActivityLabel(lead, pmr.activity_id))}</span>` : ""}
       </div>
       <p class="activity-note clamp" data-expand-note>${escapeHtml(pmr.notes || "No PMR notes added.")}</p>
+      ${[["Products", pmr.products_discussed], ["Competitors", pmr.competitors_mentioned], ["Compliance", pmr.compliance_requirements]]
+        .filter(([, value]) => value).map(([label, value]) => `<p class="activity-note"><strong>${label}:</strong> ${escapeHtml(value)}</p>`).join("")}
       ${pmr.voice_note_url || pmr.voice_note_id ? activityAudioMarkup(pmr) : ""}
     </article>
   `;
@@ -11395,9 +11405,11 @@ function renderDrawerPmrs(lead) {
       <div class="drawer-tab-heading">
         <div>
           <h3>Post-Meeting Reports</h3>
-          <p class="drawer-section-copy">Highlight the latest meeting outcome first, then keep the report archive tucked underneath.</p>
         </div>
-        <button class="ghost-button" type="button" data-drawer-file-pmr="${escapeHtml(lead.id)}">File New PMR</button>
+        <div class="activity-actions">
+          <button class="record-text-action" type="button" data-drawer-tab="reminders">View reminders</button>
+          <button class="ghost-button" type="button" data-drawer-file-pmr="${escapeHtml(lead.id)}">File New PMR</button>
+        </div>
       </div>
       <div class="drawer-summary-grid">
         ${drawerSummaryMetric("Total PMRs", String(pmrs.length))}
@@ -11775,6 +11787,12 @@ function bindLeadDrawerEvents() {
       if (currentView === "lead") syncBrowserRoute({ replace: true });
       render();
       loadActivityAudioSources();
+      if (button.dataset.pmrMeeting) {
+        const report = document.querySelector(`[data-pmr-activity="${CSS.escape(button.dataset.pmrMeeting)}"]`);
+        const history = report?.closest("details");
+        if (history) history.open = true;
+        report?.scrollIntoView({ block: "nearest" });
+      }
     });
   });
   document.querySelector("#drawerStageSelect")?.addEventListener("change", async event => {
@@ -12269,26 +12287,71 @@ async function addDrawerReminder(leadId) {
   }
 }
 
+function pmrKey(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isPmrFilingEvent(activity) {
+  return pmrKey(activity?.type) === "pmr filed";
+}
+
+function pmrActivityLinks(lead) {
+  const links = (lead.activities || []).filter(activity => activity.pmr_linked || isPmrFilingEvent(activity))
+    .map(activity => activity.target_activity_id || activity.meeting_activity_id || activity.activity_id || activity.id);
+  if (state.selectedId === lead.id) links.push(...(state.leadDrawerPmrs || []).map(pmr => pmr.activity_id));
+  return new Set(links.filter(Boolean));
+}
+
+function pmrToday() {
+  return new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function pmrLinkableActivities(lead) {
-  const meetingTypes = new Set(["in-person meeting", "site visit", "customer meeting", "phone call", "video call", "visit"]);
+  const links = pmrActivityLinks(lead);
   return (lead.activities || []).filter(activity => {
-    if (!activity?.id || activity.delete_request || activity.correction || activity.pmr_linked) return false;
-    const type = String(activity.type || "").trim().toLowerCase();
-    const text = String(activity.text || activity.note || "").toLowerCase();
-    return meetingTypes.has(type) || text.includes("meeting") || text.includes("visit");
-  });
+    const day = String(activity?.at || "").slice(0, 10);
+    if (!activity?.id || !/^\d{4}-\d{2}-\d{2}$/.test(day) || day > pmrToday() ||
+        links.has(activity.id) || activity.archived || activity.reminder || activity.delete_request || activity.deletion_status === "pending" || activity.correction) return false;
+    const statuses = [activity.status, activity.transaction_status, activity.followup_resolution].map(pmrKey);
+    const outcome = pmrKey(activity.transaction_outcome || activity.outcome);
+    if (statuses.some(status => ["cancelled", "canceled", "scheduled", "planned", "in progress", "in_progress", "not reached", "failed"].includes(status)) ||
+        /not reached|no answer|voicemail|wrong number|invalid number|meeting booked/.test(outcome)) return false;
+    const type = pmrKey(activity.type);
+    if (type === "phone call") return ["spoke to customer", "done - spoke to customer", "connected"].includes(outcome);
+    const completed = statuses.some(status => ["completed", "closed", "done"].includes(status)) || activity.followup_completed === true || /^done\b/.test(outcome);
+    const scheduled = activity.due_date || activity.due_at || activity.reminder || activity.next_action_date || activity.followup_label;
+    return ["in-person meeting", "site visit", "video call", "video meeting", "customer meeting", "meeting", "visit"].includes(type)
+      && (completed || !scheduled);
+  }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }
 
 function populatePmrActivityOptions(lead) {
   if (!els.pmrActivityLink) return;
   const activities = pmrLinkableActivities(lead);
   els.pmrActivityLink.innerHTML = [
-    `<option value="">Create a new meeting activity for this PMR</option>`,
+    `<option value="">Choose a completed meeting</option>`,
     ...activities.map(activity => {
       const label = `${activity.at || "No date"} - ${activity.type || "Activity"} - ${activity.text || activity.note || "No note"}`;
-      return `<option value="${escapeHtml(activity.id)}">${escapeHtml(label.slice(0, 140))}</option>`;
-    })
+      return `<option value="${escapeHtml(activity.id)}" data-meeting-date="${escapeHtml(String(activity.at).slice(0, 10))}" data-meeting-type="${escapeHtml(pmrKey(activity.type))}">${escapeHtml(label.slice(0, 140))}</option>`;
+    }),
+    `<option value="__new_meeting__">Record an unlogged meeting</option>`
   ].join("");
+}
+
+function updatePmrMeetingFields() {
+  const fields = els.pmrForm.elements;
+  const option = els.pmrActivityLink.selectedOptions[0];
+  const unlogged = option?.value === "__new_meeting__";
+  fields.meeting_type.disabled = !unlogged;
+  fields.meeting_type.required = unlogged;
+  document.querySelector("#pmrMeetingTypeField").classList.toggle("hidden", !unlogged);
+  fields.meeting_date.readOnly = Boolean(option?.dataset.meetingDate);
+  if (fields.meeting_date.readOnly) fields.meeting_date.value = option.dataset.meetingDate;
+  const phone = (unlogged ? pmrKey(fields.meeting_type.value) : option?.dataset.meetingType) === "phone call";
+  fields.substantive_call.disabled = !phone;
+  fields.substantive_call.required = phone;
+  fields.substantive_call.checked = false;
+  document.querySelector("#pmrSubstantiveCallField").classList.toggle("hidden", !phone);
 }
 
 function openPmrForLead(leadId) {
@@ -12298,8 +12361,11 @@ function openPmrForLead(leadId) {
   els.pmrForm.reset();
   resetPmrVoiceNote();
   els.pmrForm.elements.company_id.value = lead.id;
-  els.pmrForm.elements.meeting_date.value = today();
+  els.pmrForm.elements.id.value = clientId("pmr");
+  els.pmrForm.elements.meeting_date.value = pmrToday();
+  els.pmrForm.elements.meeting_date.max = pmrToday();
   populatePmrActivityOptions(lead);
+  updatePmrMeetingFields();
   els.pmrDialog.showModal();
 }
 
@@ -18086,7 +18152,9 @@ els.leadForm.addEventListener("submit", async event => {
 });
 
 function pmrPayloadFromForm() {
-  return Object.fromEntries(new FormData(els.pmrForm).entries());
+  const payload = Object.fromEntries(new FormData(els.pmrForm).entries());
+  if (payload.activity_id === "__new_meeting__") payload.activity_id = "";
+  return payload;
 }
 
 function applyOptimisticPmr(leadId, payload, hasVoiceNote = false) {
@@ -18126,10 +18194,14 @@ async function queuePmrForSync(leadId, payload) {
   applyOptimisticPmr(leadId, queuedPayload, voicePending);
 }
 
+els.pmrActivityLink.addEventListener("change", updatePmrMeetingFields);
+els.pmrForm.elements.meeting_type.addEventListener("change", updatePmrMeetingFields);
 els.pmrForm.addEventListener("submit", async event => {
   event.preventDefault();
   const companyId = els.pmrForm.elements.company_id.value;
-  if (!companyId) return;
+  const submit = els.pmrForm.querySelector('[type="submit"]');
+  if (!companyId || submit.disabled) return;
+  submit.disabled = true;
   els.pmrMessage.textContent = "Saving PMR...";
   let payload = pmrPayloadFromForm();
   try {
@@ -18160,6 +18232,8 @@ els.pmrForm.addEventListener("submit", async event => {
       return;
     }
     setMessage(els.pmrMessage, error.message, "error");
+  } finally {
+    submit.disabled = false;
   }
 });
 

@@ -409,11 +409,23 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(meetingActivity.response.status, 201, JSON.stringify(meetingActivity.data));
 
+    const savePmr = (body, token = salesmanToken, csrfToken = salesmanCsrfToken, leadId = ownLead.data.id) =>
+      request(baseUrl, `/api/leads/${leadId}/pmrs`, { method: "POST", token, csrfToken, body });
+    const emailAboutVisit = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+      method: "POST", token: salesmanToken, csrfToken: salesmanCsrfToken,
+      body: { type: "Email", text: "Email about a meeting and site visit" }
+    });
+    assert.equal(emailAboutVisit.response.status, 201);
+    assert.equal((await savePmr({ activity_id: emailAboutVisit.data.activity.id })).response.status, 400);
+    assert.equal((await savePmr({ meeting_date: "2099-06-16", meeting_type: "Site Visit" })).response.status, 400);
+    assert.equal((await savePmr({ meeting_type: "Phone Call" })).response.status, 400);
+
     const linkedPmr = await request(baseUrl, `/api/leads/${ownLead.data.id}/pmrs`, {
       method: "POST",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
       body: {
+        id: "pmr-visit-test",
         activity_id: meetingActivity.data.activity.id,
         meeting_date: "2026-06-16",
         relationship_heat_score: "4",
@@ -423,8 +435,14 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(linkedPmr.response.status, 201, JSON.stringify(linkedPmr.data));
     assert.equal(linkedPmr.data.pmr.activity_id, meetingActivity.data.activity.id);
+    assert.equal(linkedPmr.data.pmr.meeting_date, meetingActivity.data.activity.at);
+    assert.equal(linkedPmr.data.lead.last_activity, emailAboutVisit.data.lead.last_activity);
     assert(linkedPmr.data.lead.activities.some(item => item.type === "PMR Filed" && item.target_activity_id === meetingActivity.data.activity.id));
-    assert(linkedPmr.data.lead.activities.some(item => item.id === meetingActivity.data.activity.id));
+    assert.deepEqual(linkedPmr.data.lead.activities.find(item => item.id === meetingActivity.data.activity.id), meetingActivity.data.activity);
+    const retriedPmr = await savePmr({ id: "pmr-visit-test", activity_id: meetingActivity.data.activity.id });
+    assert.equal(retriedPmr.response.status, 200);
+    assert.equal(retriedPmr.data.pmr.id, linkedPmr.data.pmr.id);
+    assert.equal((await savePmr({ activity_id: meetingActivity.data.activity.id }, adminToken, adminCsrfToken)).response.status, 409);
 
     const autoLinkedPmr = await request(baseUrl, `/api/leads/${ownLead.data.id}/pmrs`, {
       method: "POST",
@@ -440,6 +458,14 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(autoLinkedPmr.response.status, 201, JSON.stringify(autoLinkedPmr.data));
     assert(autoLinkedPmr.data.pmr.activity_id);
     assert(autoLinkedPmr.data.lead.activities.some(item => item.id === autoLinkedPmr.data.pmr.activity_id && item.type === "In-Person Meeting"));
+    const phone = { id: "pmr-phone-test", meeting_type: "Phone Call", substantive_call: true, notes: "Agreed steel delivery quantities and next steps." };
+    const substantive = await savePmr(phone, adminToken, adminCsrfToken);
+    assert.equal(substantive.response.status, 201, JSON.stringify(substantive.data));
+    assert.equal(substantive.data.lead.activities.find(item => item.id === substantive.data.pmr.activity_id).type, "Phone Call");
+    assert.equal((await savePmr(phone, adminToken, adminCsrfToken)).response.status, 200);
+    const pmrReadback = await request(baseUrl, `/api/leads/${ownLead.data.id}/pmrs`, { token: salesmanToken });
+    assert.equal(pmrReadback.response.status, 200);
+    assert.equal(pmrReadback.data.length, 3);
 
     const leadDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
       method: "POST",

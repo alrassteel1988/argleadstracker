@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v166-initial-management-task";
+const CACHE_VERSION = "arg-pwa-v167-pmr-meeting-only";
 const APP_SHELL = [
   "/",
   "/index.html",

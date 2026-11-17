@@ -1265,9 +1265,15 @@
         </div>
         <div class="form-grid">
           <input name="company_id" type="hidden">
+          <input name="id" type="hidden">
+          <label class="wide">Meeting activity<select name="activity_id" id="pmrActivityLink" required></select></label>
+          <label id="pmrMeetingTypeField" class="hidden">Meeting type<select name="meeting_type" disabled>
+            <option value="">Choose a type</option><option>In-Person Meeting</option><option>Site Visit</option>
+            <option value="Video Call">Video meeting</option><option>Phone Call</option>
+          </select></label>
           <label>Meeting date<input name="meeting_date" type="date" required></label>
+          <label id="pmrSubstantiveCallField" class="wide hidden"><span><input type="checkbox" name="substantive_call" disabled> The customer was reached and we discussed a business outcome or agreed on a next step.</span></label>
           <label>Relationship heat<select name="relationship_heat_score" id="pmrHeat"></select></label>
-          <label class="wide">Linked meeting activity<select name="activity_id" id="pmrActivityLink"></select><small>Choose an existing visit/call, or let the app create a meeting activity for this PMR.</small></label>
           <label>First order timing<select name="first_order_timing" id="pmrOrderTiming"></select></label>
           <label>Potential annual value<select name="potential_annual_value" id="pmrPotentialValue"></select></label>
           <label>Director action<select name="director_action_required" id="pmrDirectorAction"></select></label>
@@ -1822,7 +1828,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=initial-management-task"></script>
+  <script src="/client.js?v=pmr-meeting-only"></script>
   </body>
 </html>
 

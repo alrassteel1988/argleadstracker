@@ -16,16 +16,18 @@ const context = vm.createContext({ state, adminReference,
   normalizeStageKey: stage => stage, daysSince: date => (Date.parse("2026-11-02") - Date.parse(date)) / 86400000,
   downloadTextFile: (...args) => {context.download = args;}
 });
-vm.runInContext(["adminReferenceActivityRows", "adminReferenceFilterActivity", "adminReferenceQuoteRows", "adminReferenceExport"].map(fn).join("\n"), context);
+vm.runInContext(["pmrKey", "isPmrFilingEvent", "adminReferenceActivityRows", "adminReferenceFilterActivity", "adminReferenceQuoteRows", "adminReferenceExport"].map(fn).join("\n"), context);
 state.leads = [{id:"lead", company_name:"Test company", stage:"NEW", quotation_ref:"Q1", estimated_value:100,
   activities:[{id:"1", created_by:"admin", at:"2026-11-01", type:"Email", text:"sent catalogue"},
     {id:"2", created_by:"rep", at:"2026-10-01", type:"Call", transaction_status:"closed", transaction_outcome:"Done - spoke to customer", transaction_remarks:"Requirements confirmed"},
-    {id:"3", created_by:"unknown", at:"2026-10-10", type:"Meeting"}]}];
+    {id:"3", created_by:"unknown", at:"2026-10-10", type:"Meeting"},
+    {id:"4", created_by:"rep", at:"2026-11-02", type:"PMR Filed", transaction_status:"closed"}]}];
 let rows = context.adminReferenceActivityRows();
 assert.equal(rows[0].origin, "Management");
 assert.equal(rows[1].origin, "Self");
 assert.equal(rows[2].origin, "Not recorded", "Unknown provenance must not be fabricated as Self");
 assert.equal(rows[0].closed, false, "Legacy activities default Pending");
+assert.equal(rows[3].auditOnly, true, "Admin retains the report filing audit row");
 adminReference.activity.status = "closed";
 assert.equal(context.adminReferenceFilterActivity(rows).length, 1);
 adminReference.activity.search = "requirements";
@@ -62,7 +64,7 @@ state.leads.push(
   {id:"unverified", assigned_salesman:"Salesman", activities:[{id:"unverified-activity",created_by:"rep"}]}
 );
 assert.deepEqual(Array.from(context.adminReferenceActivityRows(), row => row.id), ["2"],
-  "Personal log requires verified authorship and current assignment, and excludes pending sync and hidden records");
+  "Personal log requires verified authorship and current assignment, and excludes audit-only, pending sync and hidden records");
 state.currentUser.id = "other";
 assert.equal(context.adminReferenceActivityRows().length, 0, "Another signed-in Salesman cannot inherit the previous account's log");
 assert.match(source, /renderReferenceAdminShell\(\)/);
