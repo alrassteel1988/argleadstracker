@@ -116,6 +116,7 @@ const state = {
   leadDrawerIntel: [],
   leadIntelligenceMissingPdfUrls: new Set(),
   leadDrawerHandoffs: [],
+  handoffNotices: null,
   leadAiSummary: {
     visible: true,
     loading: false,
@@ -3916,6 +3917,7 @@ function setLeadFormMode(mode = "create") {
   if (els.leadSubmitButton) {
     els.leadSubmitButton.textContent = mode === "edit" ? "Save Changes" : "Save Lead";
   }
+  if (els.formSalesman) els.formSalesman.disabled = mode === "edit" && state.currentUser?.role !== "admin";
 }
 
 function activityRecordingElapsedSeconds(session = activityModalRecorder) {
@@ -8715,6 +8717,7 @@ window.matchMedia("(max-width: 720px)").addEventListener("change", arrangeSalesp
 
 function renderSalesmanSimplifiedDashboard() {
   if (!els.salesmanSimplifiedDashboard) return;
+  renderHandoffNotices();
   const datasets = salesmanDashboardSummaryDatasets();
   const leads = datasets.myLeads;
   const queue = actionableSalesmanLeads();
@@ -16232,6 +16235,7 @@ async function loadLeads(options = {}) {
     await fetchActivities();
     await fetchAttentionFlags();
     await fetchMarketIntel();
+    await fetchHandoffNotices();
     render();
     if (currentView === "lead" && state.selectedId) {
       loadLeadDetailData(state.selectedId);
@@ -16249,6 +16253,53 @@ async function loadLeads(options = {}) {
     if (els.summaryCardDetailsDialog?.open) renderSummaryCardDetailsResults();
   }
 }
+
+async function fetchHandoffNotices() {
+  const user = state.currentUser;
+  if (user?.role !== "salesman") return;
+  try {
+    const rows = await api("/api/lead-handoff-notices");
+    if (state.currentUser === user) state.handoffNotices = { userId: user.id, rows: Array.isArray(rows) ? rows : [] };
+  } catch {
+    if (state.currentUser === user) state.handoffNotices = null;
+  }
+}
+
+function renderHandoffNotices() {
+  const host = document.querySelector("#salesmanHandoffNotices");
+  if (!host) return;
+  const rows = state.currentUser?.role === "salesman" && state.handoffNotices?.userId === state.currentUser.id
+    ? state.handoffNotices.rows : [];
+  host.classList.toggle("hidden", !rows.length);
+  host.innerHTML = rows.map(row => {
+    const lead = row.lead_id ? state.leads.find(item => item.id === row.lead_id) : null;
+    if (row.lead_id && !lead) return "";
+    return `<article class="salesman-first-touch-card"><div class="salesman-first-touch-main">
+      <strong>${lead ? "Lead assigned to you" : "Lead access updated"}</strong>
+      <p>${lead ? escapeHtml(lead.company_name || "Assigned lead") : "Management reassigned a lead. It is no longer in your pipeline."}</p>
+    </div><div class="salesman-first-touch-actions">
+      ${lead ? `<a class="small-action" href="/leads/${encodeURIComponent(lead.id)}?tab=activities">Open lead</a>` : ""}
+      <button type="button" class="small-action" data-dismiss-handoff-notice="${escapeHtml(row.id)}">Dismiss</button>
+    </div></article>`;
+  }).join("");
+}
+
+document.querySelector("#salesmanHandoffNotices")?.addEventListener("click", async event => {
+  const button = event.target.closest("[data-dismiss-handoff-notice]");
+  if (!button) return;
+  const batch = state.handoffNotices;
+  button.disabled = true;
+  try {
+    await api(`/api/lead-handoff-notices/${encodeURIComponent(button.dataset.dismissHandoffNotice)}`, { method: "PATCH", body: "{}" });
+    if (state.handoffNotices === batch && batch) {
+      batch.rows = batch.rows.filter(row => row.id !== button.dataset.dismissHandoffNotice);
+      renderHandoffNotices();
+    }
+  } catch (error) {
+    setToast(error.message, "error");
+    button.disabled = false;
+  }
+});
 
 async function loadIntegrationStatus() {
   try {
@@ -18012,7 +18063,7 @@ els.leadForm.addEventListener("submit", async event => {
   const payload = Object.fromEntries(formData.entries());
   payload.product_interest = formData.getAll("product_interest").map(value => String(value || "").trim()).filter(Boolean).join(", ");
   payload.estimated_value = Number(payload.estimated_value || 0);
-  if (!isAdminOrManager() && state.currentUser) {
+  if (!state.editingLeadId && !isAdminOrManager() && state.currentUser) {
     payload.assigned_salesman = state.currentUser.name || state.currentUser.email || payload.assigned_salesman;
     payload.territory = state.currentUser.territory || payload.territory;
   }
@@ -18037,7 +18088,7 @@ els.leadForm.addEventListener("submit", async event => {
       }
       if (
         existing
-        && isAdminOrManager()
+        && state.currentUser?.role === "admin"
         && String(payload.assigned_salesman || "").trim() !== String(existing.assigned_salesman || "").trim()
       ) {
         const note = await promptHandoff(existing, payload.assigned_salesman);
@@ -18046,6 +18097,9 @@ els.leadForm.addEventListener("submit", async event => {
           return;
         }
         payload.handoff_note = note;
+        const selected = (state.userAccounts || []).filter(account => account.role === "salesman" && account.status === "active"
+          && salesmanName(account) === payload.assigned_salesman && account.id);
+        if (selected.length === 1) payload.assigned_to = selected[0].id;
       }
       lead = await api(`/api/leads/${encodeURIComponent(state.editingLeadId)}`, { method: "PATCH", body: JSON.stringify(payload) });
       state.selectedId = lead.id;

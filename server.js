@@ -1756,6 +1756,18 @@ function requestedLeadReassignment(payload, lead) {
     && String(payload.assigned_salesman || "").trim().toLowerCase() !== String(lead.assigned_salesman || "").trim().toLowerCase();
 }
 
+const LEAD_LOST_FIELDS = ["lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by"];
+
+function requestedLeadStageChange(payload, lead) {
+  const existingStage = normalizeStageValue(lead.stage || lead.lead_status);
+  return [payload.stage, payload.lead_status].some(value =>
+    String(value ?? "").trim() && normalizeStageValue(value, "") !== existingStage);
+}
+
+function omitLeadStageEdits(updates) {
+  for (const field of ["stage", "lead_status", ...LEAD_LOST_FIELDS]) delete updates[field];
+}
+
 function canonicalTerritory(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -3894,31 +3906,24 @@ async function resolveSalesmanId(token, assignedSalesman) {
   }
 }
 
-async function resolveSalesmanProfile(token, assignedSalesman) {
-  const name = String(assignedSalesman || "").trim();
-  if (!name) return null;
-  try {
-    let profiles = await rest(`profiles?role=eq.salesman&full_name=eq.${encodeURIComponent(name)}&select=id,full_name,territory&limit=1`, supabaseDataOptions(token));
-    if (!profiles[0] && name.includes("@")) {
-      profiles = await rest(`profiles?role=eq.salesman&email=eq.${encodeURIComponent(name)}&select=id,full_name,territory&limit=1`, supabaseDataOptions(token));
-    }
-    if (!profiles[0] && name.length >= 3) {
-      profiles = await rest(`profiles?role=eq.salesman&full_name=ilike.*${encodeURIComponent(name)}*&select=id,full_name,territory&limit=1`, supabaseDataOptions(token));
-    }
-    return profiles[0] || null;
-  } catch {
-    return null;
-  }
+async function resolveHandoffTarget(token, payload) {
+  const id = String(payload.assigned_to || "").trim();
+  const name = String(payload.assigned_salesman || "").trim();
+  if (!id && !name) return null;
+  if (id && !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id)) return null;
+  const key = id ? "id" : "full_name";
+  const value = id || name;
+  const matches = await rest(`profiles?role=eq.salesman&status=eq.active&${key}=eq.${encodeURIComponent(value)}&select=id,full_name,territory&limit=2`, supabaseDataOptions(token));
+  return matches.length === 1 && String(matches[0].full_name || "").trim() ? matches[0] : null;
 }
 
-function localSalesmanProfile(db, assignedSalesman) {
-  const name = String(assignedSalesman || "").trim().toLowerCase();
-  if (!name) return null;
-  const user = (db.users || db.salesmen || []).find(person =>
-    String(person.name || person.full_name || "").trim().toLowerCase() === name
-    || String(person.email || "").trim().toLowerCase() === name
-  );
-  return user ? { id: user.id, full_name: user.name || user.full_name || user.email, territory: user.territory } : null;
+function localHandoffTarget(db, payload) {
+  const id = String(payload.assigned_to || "").trim();
+  const name = String(payload.assigned_salesman || "").trim().toLowerCase();
+  const matches = (db.users || []).filter(person => person.role === "salesman" && person.status === "active"
+    && (id ? person.id === id : Boolean(name && String(person.name || "").trim().toLowerCase() === name)));
+  const target = matches.length === 1 ? matches[0] : null;
+  return target?.name ? { id: target.id, full_name: target.name, territory: target.territory } : null;
 }
 
 function handoffActivity(event) {
@@ -3926,8 +3931,10 @@ function handoffActivity(event) {
     id: newRecordId("act"),
     at: new Date().toISOString().slice(0, 10),
     type: "Handoff",
-    text: `Reassigned from ${event.previous_owner_name || "Unassigned"} to ${event.new_owner_name || "Unassigned"}. Note: ${event.handoff_note}`,
+    text: `Reassigned from ${event.previous_owner_name || "Unassigned"} to ${event.new_owner_name || "Unassigned"}.`,
     handoff_id: event.handoff_id,
+    created_by: event.initiated_by_uid,
+    created_by_name: event.initiated_by_name,
     logged_by: event.initiated_by_name
   };
 }
@@ -3949,21 +3956,38 @@ function buildHandoffEvent({ lead, newOwner, newTerritory, note, user }) {
   };
 }
 
-async function recordHandoffNotification(token, lead, handoffEvent) {
-  if (!handoffEvent?.new_owner_uid) return;
-  await rest("notifications", {
-    method: "POST",
-    ...supabaseDataOptions(token),
-    body: {
-      recipient_uid: handoffEvent.new_owner_uid,
-      lead_id: lead.id,
-      type: "handoff",
-      title: `${lead.company_name || "A lead"} has been assigned to you`,
-      message: `${lead.company_name || "A lead"} has been assigned to you. Note from ${handoffEvent.initiated_by_name || "management"}: ${handoffEvent.handoff_note}`,
-      status: "pending",
-      payload: handoffEvent
+function validHandoffNote(payload) {
+  const note = String(payload.handoff_note || "").trim();
+  return note.length >= 20 && note.length <= 4000 ? note : "";
+}
+
+async function saveSupabaseLeadHandoff(token, existing, target, note, patch) {
+  const save = body => rest("rpc/reassign_lead", {
+    method: "POST", ...supabaseDataOptions(token),
+    body: { p_lead_id: existing.id, p_target_id: target.id, p_note: note, p_expected_updated_at: existing.updated_at, p_patch: body }
+  });
+  try {
+    return await save(patch);
+  } catch (error) {
+    if (error.status === 404 && /function.*reassign_lead/i.test(error.message)) {
+      throw Object.assign(new Error("Lead reassignment is not configured in this environment."), { status: 503 });
     }
-  }).catch(() => null);
+    if (!optionalLeadColumnMissing(error)) throw error;
+    return save(stripOptionalSupabaseLeadColumns(patch));
+  }
+}
+
+function addLocalHandoffNotices(db, leadId, event) {
+  const notice = (recipient_uid, lead_id, title, message) => ({
+    id: newRecordId("notice"), recipient_uid, lead_id, type: "handoff", title, message,
+    payload: {}, status: "pending", created_at: event.timestamp
+  });
+  db.notifications.unshift(notice(event.new_owner_uid, leadId, "A lead was assigned to you",
+    "Management assigned you a lead. Open the lead to review its handoff history."));
+  if (event.previous_owner_uid && event.previous_owner_uid !== event.new_owner_uid) {
+    db.notifications.unshift(notice(event.previous_owner_uid, null, "Lead access updated",
+      "Management reassigned a lead. It is no longer in your pipeline."));
+  }
 }
 
 async function saveSupabaseLead(token, user, input) {
@@ -5255,6 +5279,32 @@ async function handleApi(req, res, url) {
   const user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
   if (!await enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)) return;
+
+  const handoffNoticeMatch = url.pathname.match(/^\/api\/lead-handoff-notices\/([a-z0-9-]{1,80})$/i);
+  if ((req.method === "GET" && url.pathname === "/api/lead-handoff-notices") || (req.method === "PATCH" && handoffNoticeMatch)) {
+    const leadScope = `recipient_uid=eq.${encodeURIComponent(user.id)}&type=eq.handoff&status=eq.pending`;
+    const pending = row => row.recipient_uid === user.id && row.type === "handoff" && row.status === "pending";
+    if (req.method === "GET") {
+      const rows = supabaseEnabled
+        ? await rest(`notifications?${leadScope}&select=id,lead_id,created_at&order=created_at.desc&limit=10`, supabaseDataOptions(user.token))
+        : db.notifications.filter(row => pending(row) && (!row.lead_id
+          || db.leads.some(lead => lead.id === row.lead_id && leadBelongsToUser(lead, user)))).slice(0, 10);
+      return sendJson(res, 200, rows.map(row => ({ id: row.id, lead_id: row.lead_id || null, created_at: row.created_at })));
+    }
+    const id = handoffNoticeMatch[1];
+    if (supabaseEnabled) {
+      await rest(`notifications?${leadScope}&id=eq.${encodeURIComponent(id)}`, {
+        method: "PATCH", ...supabaseDataOptions(user.token), body: { status: "dismissed" }
+      });
+    } else {
+      const row = db.notifications.find(item => item.id === id && pending(item));
+      if (row) {
+        row.status = "dismissed";
+        writeDb(db);
+      }
+    }
+    return sendJson(res, 200, { ok: true });
+  }
 
   const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen)$/i);
   if ((req.method === "GET" && url.pathname === "/api/management-tasks") || (req.method === "POST" && managementTaskAction)) {
@@ -7080,103 +7130,116 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const existing = await getSupabaseLead(user.token, leadMatch[1], user);
       if (!existing) return leadNotFound(res);
-      if (!isDirectorOrAdmin(user) && requestedLeadReassignment(payload, existing)) {
-        return sendJson(res, 403, { error: "Only management can reassign a lead." });
+      const reassign = requestedLeadReassignment(payload, existing);
+      if (reassign && !isAdmin(user)) return sendJson(res, 403, { error: "Only an Admin can reassign a lead." });
+      if (reassign && requestedLeadStageChange(payload, existing)) {
+        return sendJson(res, 400, { error: "Reassignment keeps the current stage. Save the stage change separately." });
+      }
+      const note = reassign ? validHandoffNote(payload) : "";
+      if (reassign && !note) return sendJson(res, 400, { error: "Enter a handoff note of 20 to 4000 characters." });
+      const target = reassign ? await resolveHandoffTarget(user.token, payload) : null;
+      if (reassign && !target) {
+        return sendJson(res, 400, { error: "Choose one active Salesman from the account list." });
       }
       payload = prepareLeadPayloadForUser(payload, user, existing);
-      const stageProvided = Boolean(payload.stage || payload.lead_status);
-      if (payload.stage || payload.lead_status) {
-        payload.lead_status = normalizeStageValue(payload.stage || payload.lead_status, existing.stage);
+      for (const field of ["next_action_date", "first_order_date", "enriched_at", "enrichment_updated_at", "lost_at"]) {
+        if (typeof payload[field] === "string" && !payload[field].trim()) payload[field] = null;
+      }
+      for (const [formField, column] of [["contact_person", "contact_name"], ["email", "contact_email"]]) {
+        if (Object.hasOwn(payload, formField) && !Object.hasOwn(payload, column)) payload[column] = payload[formField];
+      }
+      const requestedStage = normalizeStageValue(payload.stage || payload.lead_status, "");
+      const stageChanged = !target && requestedStage && requestedStage !== existing.stage;
+      if (stageChanged) {
+        payload.lead_status = requestedStage;
         delete payload.stage;
         if (isLostStage(payload.lead_status)) Object.assign(payload, normalizeLostFields(payload, user));
-      }
-      if (!stageProvided) {
-        delete payload.lost_reason;
-        delete payload.lost_reason_detail;
-        delete payload.lost_competitor;
-        delete payload.lost_at;
-        delete payload.lost_by;
       }
       if (payload.company_name && String(payload.company_name).trim() !== String(existing.company_name || "").trim()) {
         payload = await googleEnrichPayload({ ...existing, ...payload, google_place_id: "" }, req);
       }
-      let handoffEvent = null;
-      if (
-        isDirectorOrAdmin(user)
-        && payload.assigned_salesman
-        && String(payload.assigned_salesman).trim() !== String(existing.assigned_salesman || "").trim()
-      ) {
-        const note = String(payload.handoff_note || "").trim();
-        if (note.length < 20) return sendJson(res, 400, { error: "A handoff note is required (minimum 20 characters)." });
-        const newOwner = await resolveSalesmanProfile(user.token, payload.assigned_salesman);
-        handoffEvent = buildHandoffEvent({
-          lead: existing,
-          newOwner: newOwner || { full_name: payload.assigned_salesman, territory: payload.territory },
-          newTerritory: payload.territory || newOwner?.territory,
-          note,
-          user
-        });
-        payload.assigned_to = newOwner?.id || null;
-        payload.territory = handoffEvent.new_territory;
-        payload.activities = [handoffActivity(handoffEvent), ...(existing.activities || [])];
-      }
-      delete payload.handoff_note;
       const allowed = [
         "company_name", "industry", "location", "address", "phone", "website", "google_place_id",
         "google_maps_url", "google_rating", "google_review_count", "contact_name", "contact_email",
-        "hunter_confidence_score", "lead_status", "notes", "territory", "assigned_salesman", "priority",
+        "hunter_confidence_score", "lead_status", "notes", "territory", "priority",
         "estimated_value", "product_interest", "activity_purpose", "next_action", "next_action_date", "source",
         "legal_name", "year_established", "business_category", "opening_hours",
         "steel_products_likely_needed", "competitors_likely_using", "certifications",
         "estimated_scale", "estimated_annual_revenue", "key_personnel", "recent_projects",
         "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at",
         "lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by",
-        "auto_enrichment", "latitude", "longitude", "assigned_to", "activities"
-      ].filter(field => isDirectorOrAdmin(user) || !["assigned_salesman", "assigned_to", "created_by", "territory"].includes(field));
+        "auto_enrichment", "latitude", "longitude", "activities",
+        ...(!target ? ["sector", "tier", "country_emirate", "primary_contact_title", "secondary_contact_name",
+          "secondary_contact_title", "secondary_contact_mobile", "secondary_contact_email", "tags", "quotation_ref",
+          "estimated_monthly_volume", "first_order_date"] : [])
+      ].filter(field => isDirectorOrAdmin(user) || field !== "territory");
       const updates = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
-      const leads = await patchSupabaseLeadWithOptionalFallback(user.token, leadMatch[1], updates);
-      if (!leads[0]) return sendJson(res, 404, { error: "Lead not found" });
-      if (handoffEvent) {
-        await rest("handoff_logs", {
-          method: "POST",
-          ...supabaseDataOptions(user.token),
-          body: { ...handoffEvent, lead_id: leadMatch[1] }
-        }).catch(error => {
-          throw Object.assign(new Error(`Lead reassigned, but handoff log could not be saved: ${error.message}`), { status: 500 });
-        });
-        await recordHandoffNotification(user.token, existing, handoffEvent);
+      // The UI stage may be an alias for a different stored blueprint value.
+      if (!stageChanged) omitLeadStageEdits(updates);
+      // Hidden form inputs serialize these fields as strings, even without enrichment data.
+      if (typeof updates.google_review_count === "string" && !updates.google_review_count.trim()) {
+        updates.google_review_count = 0;
       }
+      if (typeof updates.opening_hours === "string") {
+        updates.opening_hours = updates.opening_hours.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      }
+      for (const field of ["latitude", "longitude", "google_rating"]) {
+        if (!Object.hasOwn(updates, field)) continue;
+        const value = updates[field];
+        if (value === null || (typeof value === "string" && !value.trim())) {
+          updates[field] = null;
+        } else if ((typeof value === "string" || typeof value === "number") && Number.isFinite(Number(value))) {
+          updates[field] = Number(value);
+        } else {
+          const label = field === "google_rating" ? "Google rating" : field;
+          return sendJson(res, 400, { error: `Enter a valid ${label} or leave it blank.` });
+        }
+      }
+      if (target) {
+        delete updates.activities;
+        const saved = await saveSupabaseLeadHandoff(user.token, existing, target, note, updates);
+        return sendJson(res, 200, fromSupabaseLead(saved));
+      }
+      const leads = await patchSupabaseLeadWithOptionalFallback(user.token, leadMatch[1], updates);
+      if (!leads[0]) return leadNotFound(res);
       return sendJson(res, 200, fromSupabaseLead(leads[0]));
     }
     const lead = db.leads.find(item => item.id === leadMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
-    if (!isDirectorOrAdmin(user) && requestedLeadReassignment(payload, lead)) {
-      return sendJson(res, 403, { error: "Only management can reassign a lead." });
+    const reassign = requestedLeadReassignment(payload, lead);
+    if (reassign && !isAdmin(user)) return sendJson(res, 403, { error: "Only an Admin can reassign a lead." });
+    if (reassign && requestedLeadStageChange(payload, lead)) {
+      return sendJson(res, 400, { error: "Reassignment keeps the current stage. Save the stage change separately." });
     }
+    const note = reassign ? validHandoffNote(payload) : "";
+    if (reassign && !note) return sendJson(res, 400, { error: "Enter a handoff note of 20 to 4000 characters." });
+    const target = reassign ? localHandoffTarget(db, payload) : null;
+    if (reassign && !target) return sendJson(res, 400, { error: "Choose one active Salesman from the account list." });
+    if (target && target.id === lead.assigned_to) return sendJson(res, 409, { error: "The selected Salesman already owns this lead." });
     payload = prepareLeadPayloadForUser(payload, user, lead);
     const stageProvided = Boolean(payload.stage || payload.lead_status);
     if (payload.company_name && String(payload.company_name).trim() !== String(lead.company_name || "").trim()) {
       payload = await googleEnrichPayload({ ...lead, ...payload, google_place_id: "" }, req);
     }
-    if (
-      isDirectorOrAdmin(user)
-      && payload.assigned_salesman
-      && String(payload.assigned_salesman).trim() !== String(lead.assigned_salesman || "").trim()
-    ) {
-      const note = String(payload.handoff_note || "").trim();
-      if (note.length < 20) return sendJson(res, 400, { error: "A handoff note is required (minimum 20 characters)." });
-      const newOwner = localSalesmanProfile(db, payload.assigned_salesman) || { full_name: payload.assigned_salesman, territory: payload.territory };
+    delete payload.created_by;
+    delete payload.handoff_log;
+    delete payload.assigned_to;
+    delete payload.assigned_salesman;
+    if (target) {
+      omitLeadStageEdits(payload);
       const handoffEvent = buildHandoffEvent({
         lead,
-        newOwner,
-        newTerritory: payload.territory || newOwner.territory,
+        newOwner: target,
+        newTerritory: payload.territory || target.territory,
         note,
         user
       });
-      payload.assigned_to = newOwner.id || "";
+      payload.assigned_to = target.id;
+      payload.assigned_salesman = target.full_name;
       payload.territory = handoffEvent.new_territory;
       lead.handoff_log = [handoffEvent, ...(lead.handoff_log || [])];
       payload.activities = [handoffActivity(handoffEvent), ...(lead.activities || [])];
+      addLocalHandoffNotices(db, lead.id, handoffEvent);
     }
     delete payload.handoff_note;
     if (payload.stage || payload.lead_status) {
@@ -7193,13 +7256,7 @@ async function handleApi(req, res, url) {
         });
       }
     }
-    if (!stageProvided) {
-      delete payload.lost_reason;
-      delete payload.lost_reason_detail;
-      delete payload.lost_competitor;
-      delete payload.lost_at;
-      delete payload.lost_by;
-    }
+    if (!stageProvided) for (const field of LEAD_LOST_FIELDS) delete payload[field];
     Object.assign(lead, payload);
     writeDb(db);
     return sendJson(res, 200, leadWithDerivedFields(lead));
