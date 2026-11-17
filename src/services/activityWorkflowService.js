@@ -93,6 +93,14 @@ function activityAuditEvent(action, user, details = {}) {
   };
 }
 
+function activityAuthorFields(user) {
+  return {
+    created_by: user.id,
+    created_by_name: [user.name, user.full_name, user.email].find(value => typeof value === "string" && value.trim())?.trim() || "User",
+    created_by_role: user.role
+  };
+}
+
 function normalizeWorkflowActivity(activity, user = null) {
   const now = new Date().toISOString();
   const createdAt = activity.created_at || now;
@@ -160,6 +168,7 @@ module.exports = {
   ACTIVITY_DELETION_REASONS,
   MAX_ACTIVITY_ATTACHMENT_BYTES,
   activityAuditEvent,
+  activityAuthorFields,
   activityEditableFields,
   normalizeWorkflowActivity,
   safeOriginalFilename,

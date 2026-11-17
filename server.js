@@ -42,6 +42,7 @@ const {
   ACTIVITY_DELETION_REASONS,
   MAX_ACTIVITY_ATTACHMENT_BYTES,
   activityAuditEvent,
+  activityAuthorFields,
   normalizeWorkflowActivity,
   safeOriginalFilename,
   updateWorkflowActivity,
@@ -1418,6 +1419,7 @@ function normalizeReminderActivity(input, lead, user) {
     "Created from ARG Leads Tracker."
   ].filter(Boolean).join("\n");
   return {
+    ...activityAuthorFields(user),
     id: input.id || newRecordId("act"),
     at: new Date().toISOString().slice(0, 10),
     type: "Reminder",
@@ -1456,6 +1458,7 @@ function activityCorrection(existing, input, lead, user) {
     throw error;
   }
   const correction = {
+    ...activityAuthorFields(user),
     id: newRecordId("act"),
     at: new Date().toISOString().slice(0, 10),
     type: "Correction",
@@ -1520,8 +1523,7 @@ function normalizeStructuredActivity(input, user) {
     next_action_date: nextActionDate,
     activity_purpose: activityPurpose,
     transaction_status: "pending",
-    created_by: user.id,
-    created_by_name: user.name || user.email || "User",
+    ...activityAuthorFields(user),
     created_at: createdAt
   }, user);
 }
@@ -1529,6 +1531,7 @@ function normalizeStructuredActivity(input, user) {
 function normalizePlainActivity(input, user) {
   if (input.structured_activity) return normalizeStructuredActivity(input, user);
   const activity = {
+    ...activityAuthorFields(user),
     id: input.id || newRecordId("act"),
     at: new Date().toISOString().slice(0, 10),
     type: String(input.type || "Note"),
@@ -2249,12 +2252,13 @@ function resolvePmrActivityLink(input, lead) {
   };
 }
 
-function pmrTimelineActivity({ activityId, pmr, payload, existingActivity }) {
+function pmrTimelineActivity({ activityId, pmr, payload, existingActivity, user }) {
   const hasVoiceNote = Boolean(pmr.voice_note_url || pmr.voice_note_id);
   const hasTranscript = Boolean(pmr.voice_note_transcript);
   const selectedExisting = Boolean(existingActivity);
   const baseText = `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.${hasVoiceNote ? " Voice note attached." : ""}${hasTranscript ? " AI transcript saved." : ""}`;
   return {
+    ...activityAuthorFields(user),
     id: selectedExisting ? newRecordId("act") : activityId,
     at: pmr.meeting_date || new Date().toISOString().slice(0, 10),
     type: selectedExisting ? "PMR Filed" : "In-Person Meeting",
@@ -6811,6 +6815,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/leads") {
     const rawPayload = prepareLeadPayloadForUser(await readBody(req), user);
+    if (Array.isArray(rawPayload.activities) && rawPayload.activities.length) return sendJson(res, 400, { error: "Use the activity workflow to log or update activities." });
     const payload = await googleEnrichPayload(rawPayload, req);
     if (!payload.allow_duplicate) {
       const duplicateSource = supabaseEnabled
@@ -7126,6 +7131,7 @@ async function handleApi(req, res, url) {
   const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
   if (req.method === "PATCH" && leadMatch) {
     let payload = await readBody(req);
+    if (Object.hasOwn(payload, "activities")) return sendJson(res, 400, { error: "Use the activity workflow to log or update activities." });
     delete payload.initial_management_task_id;
     if (supabaseEnabled) {
       const existing = await getSupabaseLead(user.token, leadMatch[1], user);
@@ -7168,7 +7174,7 @@ async function handleApi(req, res, url) {
         "estimated_scale", "estimated_annual_revenue", "key_personnel", "recent_projects",
         "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at",
         "lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by",
-        "auto_enrichment", "latitude", "longitude", "activities",
+        "auto_enrichment", "latitude", "longitude",
         ...(!target ? ["sector", "tier", "country_emirate", "primary_contact_title", "secondary_contact_name",
           "secondary_contact_title", "secondary_contact_mobile", "secondary_contact_email", "tags", "quotation_ref",
           "estimated_monthly_volume", "first_order_date"] : [])
@@ -7196,7 +7202,6 @@ async function handleApi(req, res, url) {
         }
       }
       if (target) {
-        delete updates.activities;
         const saved = await saveSupabaseLeadHandoff(user.token, existing, target, note, updates);
         return sendJson(res, 200, fromSupabaseLead(saved));
       }
@@ -7510,7 +7515,7 @@ async function handleApi(req, res, url) {
       const activityText = isLostStage(nextStage) && payload.lost_reason
         ? `Stage changed to Lost. Reason: ${payload.lost_reason}${payload.lost_competitor ? `; competitor: ${payload.lost_competitor}` : ""}`
         : `Stage changed to ${nextStage}`;
-      const activity = { id: newRecordId("act"), at: new Date().toISOString().slice(0, 10), type: "Stage", text: activityText };
+      const activity = { ...activityAuthorFields(user), id: newRecordId("act"), at: new Date().toISOString().slice(0, 10), type: "Stage", text: activityText };
       const baseStageBody = {
         lead_status: nextStage,
         last_activity: activity.at,
@@ -7926,6 +7931,7 @@ async function handleApi(req, res, url) {
         });
         const pmr = fromSupabasePmr(pmrs[0]);
         const activity = pmrTimelineActivity({
+          user,
           activityId: link.activityId,
           pmr,
           payload,
@@ -7955,6 +7961,7 @@ async function handleApi(req, res, url) {
       lead.activities = link.activities;
       const pmr = normalizePmr({ ...payload, activity_id: link.activityId }, lead, publicUser(user));
       const activity = pmrTimelineActivity({
+        user,
         activityId: link.activityId,
         pmr,
         payload,
@@ -8087,6 +8094,7 @@ async function handleApi(req, res, url) {
       });
       const flag = created[0];
       const activity = {
+        ...activityAuthorFields(user),
         id: newRecordId("act"),
         at: new Date().toISOString().slice(0, 10),
         type: "Flagged for Attention",
@@ -8125,6 +8133,7 @@ async function handleApi(req, res, url) {
     };
     lead.activities = ensureActivityIds(lead.activities);
     lead.activities.unshift({
+      ...activityAuthorFields(user),
       id: newRecordId("act"),
       at: new Date().toISOString().slice(0, 10),
       type: "Flagged for Attention",

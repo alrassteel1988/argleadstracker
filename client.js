@@ -8081,13 +8081,26 @@ function adminReferenceActivityRows() {
   const personal = user?.role === "salesman";
   const leads = personal ? state.leads.filter(lead => lead.assigned_to && String(lead.assigned_to) === String(user.id)) : state.leads;
   const people = [state.currentUser, ...(state.userAccounts || []), ...(state.settings.salesmen || []).filter(item => typeof item === "object")].filter(Boolean);
+  const personById = id => id && people.find(person => String(person.id || person.user_id) === String(id));
+  const roleKey = value => String(value || "").toLowerCase();
+  const manager = role => ["admin", "manager", "director"].includes(roleKey(role));
   return allActivities(leads).filter(item => !item.archived && !item.delete_request &&
     (!personal || (!item.pending_sync && item.created_by && String(item.created_by) === String(user.id)))).map(activity => {
-    const creator = people.find(person => String(person.id || person.user_id) === String(activity.created_by || ""));
-    const assignedBy = people.find(person => String(person.id || person.user_id) === String(activity.assigned_by || activity.task_created_by || ""));
-    const manager = person => ["admin", "manager", "director"].includes(String(person?.role || "").toLowerCase());
-    const origin = manager(creator) || manager(assignedBy) ? "Management" : creator?.role === "salesman" ? "Self" : "Not recorded";
-    return { ...activity, origin, actor: activity.created_by_name || creator?.name || activity.logged_by || "Not recorded",
+    const originalEvents = (Array.isArray(activity.audit_history) ? activity.audit_history : [])
+      .filter(event => event?.action === "activity_created" && event.actor_id
+        && (!activity.created_by || String(event.actor_id) === String(activity.created_by)));
+    const creation = originalEvents.length === 1 ? originalEvents[0] : null;
+    const correction = activity.correction && activity.immutable_append ? activity.corrected_by : "";
+    const creator = personById(activity.created_by || correction || creation?.actor_id);
+    const assignedBy = personById(activity.assigned_by || activity.task_created_by);
+    const creatorRole = activity.created_by_role || creator?.role;
+    const handoff = activity.type === "Handoff" && activity.handoff_id && activity.created_by;
+    const origin = manager(creatorRole) || manager(assignedBy?.role) || handoff ? "Management"
+      : roleKey(creatorRole) === "salesman" ? "Self" : "Not recorded";
+    const actor = [activity.created_by_name, correction && activity.corrected_by_name, creation?.actor_name,
+      creator?.name, creator?.full_name, activity.logged_by].find(value => typeof value === "string" && value.trim())?.trim() || "Not recorded";
+    const originLabel = actor === "Not recorded" ? origin : origin === "Not recorded" ? actor : `${actor} \u00b7 ${origin}`;
+    return { ...activity, origin, originLabel, actor,
       closed: activity.transaction_status === "closed", cancelled: activity.followup_resolution === "cancelled",
       retired: Boolean(activity.followup_retired), remarks: String(activity.transaction_remarks || "").trim(),
       outcome: String(activity.transaction_outcome || ""), date: String(activity.at || activity.created_at || "").slice(0, 10) };
@@ -8194,7 +8207,7 @@ function renderReferenceAdminActivity() {
       <td data-label="Date & time"><span class="admin-activity-date" title="${escapeHtml(date)}"><b>${escapeHtml(date.replace(/ \d{4}$/, ""))}</b>${time ? `<span> &middot; ${escapeHtml(time)}</span>` : ""}</span></td>
       <td data-label="Company"><button class="text-button admin-activity-preview" type="button" title="${company}" data-admin-open-lead="${escapeHtml(row.lead_id)}">${company}</button></td>
       <td data-label="Type">${preview(row.type || "Note")}</td>
-      <td data-label="Origin"><span class="admin-ref-tag ${row.origin === "Management" ? "navy" : row.origin === "Self" ? "teal" : ""}">${row.origin === "Not recorded" ? "" : adminActivityIcon(row.origin === "Management" ? "management" : "self")}${escapeHtml(row.origin)}</span></td>
+      <td data-label="Origin"><span class="admin-ref-tag admin-activity-origin ${row.origin === "Management" ? "navy" : row.origin === "Self" ? "teal" : ""}">${row.origin === "Not recorded" ? "" : adminActivityIcon(row.origin === "Management" ? "management" : "self")}<span>${escapeHtml(row.originLabel)}</span></span></td>
       <td data-label="Logged by">${preview(row.actor, row.actor === "Not recorded" ? "admin-activity-unknown" : "")}</td>
       <td data-label="Notes">${preview(note)}</td>
       <td data-label="Quote &middot; PMR"><div class="admin-activity-links">${row.quotation_ref ? preview(row.quotation_ref, "admin-activity-quote") : ""}${row.pmr_id || row.pmr_ref ? '<span class="admin-ref-tag teal">PMR linked</span>' : ""}${!row.quotation_ref && !row.pmr_id && !row.pmr_ref ? "&mdash;" : ""}</div></td>
@@ -8296,7 +8309,7 @@ function renderReferenceAdminActivity() {
   host.querySelector(".admin-ref-table-scroll").onscroll = () => filters.forEach(filter => { filter.open = false; });
   if (!personal) {
     document.querySelector("[data-admin-log-activity]").onclick = event => openActivityModal("", event.currentTarget);
-    document.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.origin, row.actor, row.note || row.text, row.quotation_ref, statusLabel(row), row.outcome, row.remarks]));
+    document.querySelector("[data-admin-activity-export]").onclick = () => adminReferenceExport("activity-log.csv", ["Date", "Company", "Type", "Origin", "Logged by", "Notes", "Quote", "Status", "Outcome", "Remarks"], filtered.map(row => [row.at, row.company_name, row.type, row.originLabel, row.actor, row.note || row.text, row.quotation_ref, statusLabel(row), row.outcome, row.remarks]));
   }
   host.querySelectorAll("[data-admin-activity-history]").forEach(button => button.onclick = () => {
     openActivityDetails(button.dataset.adminActivityHistory, Number(button.dataset.index), button.dataset.activityId);

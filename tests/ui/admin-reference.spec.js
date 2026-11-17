@@ -203,6 +203,18 @@ test("v3 lead previews preserve keyboard access, scoped Pipeline links and narro
   }
 });
 
+test("Admin activity shows the recorded author in Origin", async ({ page }, info) => {
+  test.skip(!info.project.name.startsWith("admin"), "Admin activity log");
+  await login(page, info);
+  if (info.project.name.endsWith("mobile")) await page.locator("#mobileMenuToggle").click();
+  await page.locator('#mobileSidebar [data-view="activity"]').click();
+  const host = page.locator("#adminReferenceActivity");
+  const row = host.locator("tbody tr").filter({ hasText: "Steel Company 01" });
+  await expect(row.locator('td[data-label="Origin"]')).toHaveText("Demo Admin \u00b7 Management");
+  await expect(row.locator('td[data-label="Logged by"]')).toHaveText("Demo Admin");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+});
+
 test("Admin activity filters origin, notes and status without mutation controls", async ({ page }, info) => {
   test.skip(!info.project.name.startsWith("admin"), "Admin layout only");
   await login(page, info);

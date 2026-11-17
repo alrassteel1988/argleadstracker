@@ -24,6 +24,7 @@ state.leads = [{id:"lead", company_name:"Test company", stage:"NEW", quotation_r
 let rows = context.adminReferenceActivityRows();
 assert.equal(rows[0].origin, "Management");
 assert.equal(rows[1].origin, "Self");
+assert.equal(rows[1].originLabel, "Salesman \u00b7 Self");
 assert.equal(rows[2].origin, "Not recorded", "Unknown provenance must not be fabricated as Self");
 assert.equal(rows[0].closed, false, "Legacy activities default Pending");
 adminReference.activity.status = "closed";
@@ -65,6 +66,20 @@ assert.deepEqual(Array.from(context.adminReferenceActivityRows(), row => row.id)
   "Personal log requires verified authorship and current assignment, and excludes pending sync and hidden records");
 state.currentUser.id = "other";
 assert.equal(context.adminReferenceActivityRows().length, 0, "Another signed-in Salesman cannot inherit the previous account's log");
+state.currentUser = {id:"admin", role:"admin"};
+state.leads = [{id:"historical", assigned_to:"rep", assigned_salesman:"Salesman", activities:[
+  {id:"legacy-note", audit_history:[{action:"activity_created", actor_id:"rep", actor_name:"Original name"},
+    {action:"activity_updated", actor_id:"other", actor_name:"Different editor"}]},
+  {id:"legacy-reminder", type:"Reminder"},
+  {id:"snapshot", created_by:"former-user", created_by_name:"Recorded author", created_by_role:"salesman"},
+  {id:"handoff", type:"Handoff", handoff_id:"verified-handoff", created_by:"former-admin", created_by_name:"Recorded manager"},
+  {id:"legacy-label", logged_by:"Named historical author"},
+  {id:"ambiguous", audit_history:[{action:"activity_created", actor_id:"rep", actor_name:"First"},
+    {action:"activity_created", actor_id:"other", actor_name:"Second"}]}
+]}];
+const history = context.adminReferenceActivityRows();
+assert.deepEqual(Array.from(history, row => row.originLabel), ["Original name \u00b7 Self", "Not recorded",
+  "Recorded author \u00b7 Self", "Recorded manager \u00b7 Management", "Named historical author", "Not recorded"]);
 assert.match(source, /renderReferenceAdminShell\(\)/);
 assert.match(source, /data-admin-activity-history/);
 assert.match(source, /readOnlyLog = currentView === "activity" && \(state\.currentUser\?\.role === "admin" \|\| isSalesmanRole\(\)\)/);
