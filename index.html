@@ -1180,17 +1180,21 @@
               <div>
                 <span class="lead-step-kicker">Step 3 of 3</span>
                 <h3>Next Step &amp; Notes</h3>
-                <p id="leadNextStepHelp">Lock the next action, then save only the notes or extra follow-up detail that will help the team move cleanly.</p>
+                <p id="leadNextStepHelp">Add the next action and notes for this lead.</p>
               </div>
-              <button class="ghost-button lead-details-toggle" type="button" data-lead-details-toggle="followup">Show Details</button>
             </div>
             <div class="form-grid">
-              <label>Next action plan<select name="next_action" id="formNextAction">
+              <label id="leadInitialTaskChoice" hidden>Management task<select name="initial_management_task_title" disabled>
+                <option value="New Lead Outreach">New Lead Outreach</option>
+                <option value="Respond to Initial RFQ">Respond to Initial RFQ</option>
+              </select></label>
+              <label id="leadNextActionField">Next action plan<select name="next_action" id="formNextAction">
+                <option value="">No next action</option>
                 <option value="To Call">To Call</option>
                 <option value="To Send Email">To Send Email</option>
                 <option value="To Visit">To Visit</option>
               </select></label>
-              <label>Next action date<input name="next_action_date" type="date"></label>
+              <label id="leadNextActionDateField">Next action date<input name="next_action_date" type="date"></label>
               <label>Type / Purpose of Activity<select name="activity_purpose" id="formActivityPurpose">
                 <option value="Company Introductory">Company Introductory</option>
                 <option value="New Requirements">New Requirements</option>
@@ -1202,19 +1206,6 @@
               <div class="wide voice-control">
                 <button class="voice-button" id="recordLeadVoice" type="button">Record Voice Note</button>
                 <span class="voice-status" id="leadVoiceStatus" aria-live="polite"></span>
-              </div>
-              <div class="wide lead-optional-group hidden" data-lead-details-group="followup">
-                <div class="lead-section-card">
-                  <div class="lead-section-header">
-                    <strong>Additional follow-up detail</strong>
-                    <span>Use these when the opportunity already has richer sales context.</span>
-                  </div>
-                  <div class="form-grid">
-                    <label>Est. monthly volume<input name="estimated_monthly_volume" placeholder="MT/month"></label>
-                    <label>First order date<input name="first_order_date" type="date"></label>
-                    <label class="wide">Products/services remarks<textarea name="products_services_remarks" rows="3" placeholder="Google Places limitations or sales notes"></textarea></label>
-                  </div>
-                </div>
               </div>
               <input name="google_place_id" type="hidden">
               <input name="google_rating" type="hidden">
@@ -1823,7 +1814,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=linked-task-resolution"></script>
+  <script src="/client.js?v=lead-registration-purpose"></script>
   </body>
 </html>
 

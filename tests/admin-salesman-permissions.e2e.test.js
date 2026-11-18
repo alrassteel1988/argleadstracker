@@ -64,6 +64,12 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(salesmanAccount.response.status, 201);
 
+    const otherAccount = await request(baseUrl, "/api/users", {
+      method: "POST", token: adminToken, csrfToken: adminCsrfToken,
+      body: { name: "Other Salesman", email: "other-e2e@example.test", password: "OtherSalesPass123!", territory: "UAE-South" }
+    });
+    assert.equal(otherAccount.response.status, 201);
+
     const dormantAccount = await request(baseUrl, "/api/users", {
       method: "POST",
       token: adminToken,

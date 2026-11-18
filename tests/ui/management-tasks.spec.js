@@ -163,10 +163,11 @@ test("Admin removes only the selected duplicate and keeps an audit view", async 
 });
 
 test("Admin lead creation assigns one task shared by Focus and Management Tasks", async ({ page, browser }, info) => {
-  test.skip(info.project.name !== "admin-desktop", "Two independent desktop sessions");
+  test.skip(!info.project.name.startsWith("admin"), "Two independent role sessions");
   await blockExternalTraffic(page);
   await login(page, info);
-  const context = await browser.newContext({ baseURL: info.project.use.baseURL, serviceWorkers: "block" });
+  const context = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: info.project.use.viewport,
+    isMobile: info.project.use.isMobile, hasTouch: info.project.use.hasTouch, serviceWorkers: "block" });
   try {
     const sales = await context.newPage();
     await blockExternalTraffic(sales);
@@ -177,9 +178,17 @@ test("Admin lead creation assigns one task shared by Focus and Management Tasks"
     await page.locator("#formSalesman").selectOption("Demo Salesman");
     await page.locator("#leadStepNext").click();
     await page.locator("#leadStepNext").click();
-    await expect(page.locator("#leadNextStepHelp")).toContainText("assigned as a Management Task");
-    await expect(page.locator("#formNextAction")).toHaveValue("To Call");
+    await expect(page.locator("#leadNextStepHelp")).toContainText("Assigned as a Management Task");
+    await expect(page.locator("#formNextAction")).toBeHidden();
+    await expect(page.locator('#leadForm input[name="next_action_date"]')).toBeHidden();
+    await expect(page.locator('#leadForm [name="first_order_date"]')).toHaveCount(0);
+    await expect(page.locator('#leadForm [data-lead-details-group="followup"]')).toHaveCount(0);
+    const choice = page.locator('#leadForm [name="initial_management_task_title"]');
+    expect(await choice.locator("option").allTextContents()).toEqual(["New Lead Outreach", "Respond to Initial RFQ"]);
+    await expect(choice).toHaveValue("New Lead Outreach");
+    await choice.selectOption("Respond to Initial RFQ");
     await page.locator('#leadForm textarea[name="notes"]').fill("Ask who manages purchasing.");
+    await capture(page, info, "admin-lead-registration-step3", { fullPage: false });
     const saving = page.waitForResponse(response => response.url().endsWith("/api/leads") && response.request().method() === "POST");
     await page.locator("#leadSubmitButton").click();
     const response = await saving;
@@ -193,12 +202,15 @@ test("Admin lead creation assigns one task shared by Focus and Management Tasks"
     expect(tasks).toHaveLength(1);
     expect(tasks[0].id).toBe(lead.initial_management_task_id);
     expect(tasks[0].assigned_by).toBe("ui-admin");
+    expect(tasks[0].title).toBe("Respond to Initial RFQ");
+    const { nextManagementWorkingDate } = require("../../src/services/managementTaskService");
+    expect(tasks[0].due_date).toBe(nextManagementWorkingDate(tasks[0].created_at));
     expect(tasks[0].instructions).toContain("Ask who manages purchasing.");
 
     await sales.reload();
     const focus = sales.locator("#salespersonFocusList li").filter({ hasText: company });
     await expect(focus).toHaveCount(1);
-    await expect(focus).toContainText("To Call");
+    await expect(focus).toContainText("Respond to Initial RFQ");
     await expect(focus.locator("[data-dashboard-focus-log]")).toHaveCount(0);
     const open = focus.getByRole("button", { name: `Open management task for ${company}` });
     await expect(open).toHaveAttribute("data-mg-open", tasks[0].id);
@@ -206,7 +218,7 @@ test("Admin lead creation assigns one task shared by Focus and Management Tasks"
     const drawer = sales.locator("#managementTasksDrawer");
     const row = drawer.locator(`[data-mg-card="${tasks[0].id}"]`);
     await expect(row).toContainText(company);
-    await row.getByLabel("Status for To Call").selectOption("completed");
+    await row.getByLabel("Status for Respond to Initial RFQ").selectOption("completed");
     await row.getByLabel("Completion remarks for management").fill("Spoke with the purchasing contact.");
     await row.getByRole("button", { name: "Mark completed" }).click();
     await expect(row).toContainText("Spoke with the purchasing contact.");
@@ -217,6 +229,51 @@ test("Admin lead creation assigns one task shared by Focus and Management Tasks"
   } finally {
     await context.close();
   }
+});
+
+test("Salesman Step 3 starts blank and is optional without a manufactured reminder", async ({ page }, info) => {
+  test.skip(!info.project.name.startsWith("salesman"), "Salesman registration only");
+  await blockExternalTraffic(page);
+  await login(page, info);
+  for (const [index, mode] of ["skip", "notes", "schedule"].entries()) {
+    await page.goto("/?view=pipeline");
+    await page.locator("#openLeadForm").click();
+    await page.locator("#leadCompanyName").fill(["Own Bluefin Engineering", "Cedar Workshop Supplies", "Unique Silverbeam Piling"][index]);
+    await page.locator("#leadStepNext").click();
+    await expect(page.locator("#leadSubmitButton")).toBeVisible();
+    if (mode !== "skip") {
+      await page.locator("#leadStepNext").click();
+      await expect(page.locator("#formNextAction")).toHaveValue("");
+      await expect(page.locator('#leadForm [name="next_action_date"]')).toHaveValue("");
+      await expect(page.locator("#leadInitialTaskChoice")).toBeHidden();
+      await expect(page.locator('#leadForm [name="first_order_date"]')).toHaveCount(0);
+      await expect(page.locator('#leadForm [name="estimated_monthly_volume"]')).toHaveCount(0);
+      await expect(page.locator('#leadForm [name="products_services_remarks"]')).toHaveCount(0);
+      await page.locator('#leadForm [name="notes"]').fill("Save notes without requiring a scheduled follow-up.");
+      if (mode === "schedule") {
+        await page.locator("#formNextAction").selectOption("To Call");
+        await page.locator("#leadSubmitButton").click();
+        await expect(page.locator("#leadDialog")).toBeVisible();
+        expect(await page.locator('#leadForm [name="next_action_date"]').evaluate(field => field.validationMessage)).toContain("Enter both");
+        await page.locator('#leadForm [name="next_action_date"]').fill("2099-01-01");
+      }
+      await capture(page, info, `salesman-lead-step3-${mode}`, { fullPage: false });
+    }
+    const saving = page.waitForResponse(response => response.url().endsWith("/api/leads") && response.request().method() === "POST");
+    await page.locator("#leadSubmitButton").click();
+    const response = await saving;
+    const lead = await response.json();
+    expect(response.status(), JSON.stringify(lead)).toBe(201);
+    expect(lead.initial_management_task_id).toBeFalsy();
+    expect(lead.activities.filter(item => item.reminder)).toHaveLength(mode === "schedule" ? 1 : 0);
+    expect(lead.next_action_date).toBe(mode === "schedule" ? "2099-01-01" : null);
+    const persisted = await page.evaluate(id => api(`/api/leads/${id}`), lead.id);
+    expect(persisted.next_action).toBe(mode === "schedule" ? "To Call" : "");
+    expect(persisted.next_action_date).toBe(lead.next_action_date);
+    expect(persisted.activities.filter(item => item.reminder)).toHaveLength(mode === "schedule" ? 1 : 0);
+    await expect(page.locator("#leadDialog")).toBeHidden();
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });
 
 test("Admin resolves an initial duplicate on the same lead and Salesman retains the next step", async ({ page, browser }, info) => {

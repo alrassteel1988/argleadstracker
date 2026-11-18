@@ -2321,8 +2321,27 @@ function actionResponse(action, lead, pmr) {
   return "Action is not available.";
 }
 
-function toSupabaseLead(input, user, { initialTask = false } = {}) {
-  const normalized = normalizeLead(input);
+function normalizeNewLead(input, user) {
+  const lead = normalizeLead(input);
+  if (user.role === "salesman") {
+    const action = String(input.next_action || "").trim();
+    const date = String(input.next_action_date || "").trim();
+    if (!action && !date) {
+      lead.next_action = "";
+      lead.next_action_date = null;
+    } else {
+      const parsed = new Date(date + "T00:00:00Z");
+      if (!NEXT_ACTION_OPTIONS.includes(action) || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+        || !Number.isFinite(+parsed) || parsed.toISOString().slice(0, 10) !== date) {
+        throw Object.assign(new Error("Enter both a next action plan and a valid date, or leave both blank."), { status: 400 });
+      }
+    }
+  }
+  return lead;
+}
+
+function toSupabaseLead(input, user, { initialTask = false, newRegistration = false } = {}) {
+  const normalized = newRegistration ? normalizeNewLead(input, user) : normalizeLead(input);
   const lead = initialTask ? normalized : withAutomaticReminder(normalized, user);
   const salesmanScoped = !isDirectorOrAdmin(user);
   const profileTerritory = String(user?.territory || "").trim();
@@ -3992,15 +4011,16 @@ function addLocalHandoffNotices(db, leadId, event) {
 
 async function saveSupabaseLead(token, user, input) {
   const initialTask = requestsInitialManagementTask(input, user);
-  const lead = toSupabaseLead(input, user, { initialTask });
+  const lead = toSupabaseLead(input, user, { initialTask, newRegistration: true });
   if (initialTask) {
     const identity = lead.assigned_to ? `id=eq.${encodeURIComponent(lead.assigned_to)}` : `full_name=eq.${encodeURIComponent(lead.assigned_salesman)}`;
     const reps = await rest(`profiles?${identity}&role=eq.salesman&status=eq.active&select=id,full_name&limit=2`, supabaseDataOptions(token));
     if (reps.length !== 1) throw Object.assign(new Error("Choose a uniquely identified active salesman for this next step."), { status: 400 });
     lead.assigned_to = reps[0].id;
     lead.assigned_salesman = reps[0].full_name || lead.assigned_salesman;
-    lead.next_action_date = String(input.next_action_date || "").trim();
-    initialManagementTaskInput(lead, lead.assigned_to, new Date());
+    const values = initialManagementTaskInput({ ...lead, initial_management_task_title: input.initial_management_task_title }, lead.assigned_to, new Date());
+    lead.next_action = values.title;
+    lead.next_action_date = values.due_date;
     lead.initial_management_task_id = crypto.randomUUID();
   } else if (isAdmin(user) && !lead.assigned_to) {
     lead.assigned_to = await resolveSalesmanId(token, lead.assigned_salesman);
@@ -6852,7 +6872,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 201, lead);
     }
     const createInitialTask = requestsInitialManagementTask(payload, user);
-    const normalized = normalizeLead(payload);
+    const normalized = normalizeNewLead(payload, user);
     const lead = createInitialTask ? normalized : withAutomaticReminder(normalized, user);
     const localDb = createInitialTask ? readDb() : db;
     lead.created_by = user.id;
@@ -6869,8 +6889,7 @@ async function handleApi(req, res, url) {
       lead.id = crypto.randomUUID();
       lead.assigned_to = reps[0].id;
       lead.assigned_salesman = reps[0].name;
-      lead.next_action_date = String(payload.next_action_date || "").trim();
-      const values = initialManagementTaskInput(lead, lead.assigned_to, now);
+      const values = initialManagementTaskInput({ ...lead, initial_management_task_title: payload.initial_management_task_title }, lead.assigned_to, now);
       lead.initial_management_task_id = crypto.randomUUID();
       lead.next_action = "";
       lead.next_action_date = null;
