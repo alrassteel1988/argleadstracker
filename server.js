@@ -4033,44 +4033,9 @@ async function saveSupabaseLead(token, user, input) {
       throw error;
     }
   }
-  let company = await findCompany(token, lead);
-  if (initialTask) {
-    lead.company_id = company?.id || null;
-    return fromSupabaseLead(await saveSupabaseLeadWithInitialTask(token, lead));
-  }
-  if (!company) {
-    const companies = await rest("companies?select=*", {
-      method: "POST",
-      ...supabaseDataOptions(token),
-      headers: { Prefer: "return=representation" },
-      body: {
-        company_name: lead.company_name,
-        legal_name: lead.legal_name,
-        year_established: lead.year_established,
-        industry: lead.industry,
-        location: lead.location,
-        address: lead.address,
-        phone: lead.phone,
-        website: lead.website,
-        google_place_id: lead.google_place_id,
-        google_maps_url: lead.google_maps_url,
-        google_rating: lead.google_rating,
-        google_review_count: lead.google_review_count,
-        business_category: lead.business_category,
-        opening_hours: lead.opening_hours,
-        products_services_remarks: lead.products_services_remarks,
-        enrichment_source: lead.enrichment_source,
-        enrichment_status: lead.enrichment_status,
-        enriched_at: lead.enriched_at,
-        enrichment_updated_at: lead.enrichment_updated_at,
-        created_by: user.id
-      }
-    });
-    company = companies[0];
-  }
+  const company = await findCompany(token, lead);
   lead.company_id = company?.id || null;
-  const leads = await postSupabaseLeadWithValidatedOwnership(token, user, lead);
-  return fromSupabaseLead(leads[0]);
+  return fromSupabaseLead(await saveSupabaseLeadAtomically(token, lead, initialTask));
 }
 
 function importMode(value) {
@@ -4102,15 +4067,16 @@ function optionalLeadColumnMissing(error) {
     || /schema cache|column .* does not exist/i.test(message);
 }
 
-async function saveSupabaseLeadWithInitialTask(token, body) {
+async function saveSupabaseLeadAtomically(token, body, initialTask) {
+  const rpc = initialTask ? "save_initial_management_lead" : "save_new_crm_lead";
   const save = async lead => {
     try {
-      return await rest("rpc/save_initial_management_lead", {
+      return await rest(`rpc/${rpc}`, {
         method: "POST", ...supabaseDataOptions(token), body: { p_lead: lead }
       });
     } catch (error) {
-      if (/save_initial_management_lead.*(?:does not exist|schema cache)|schema cache.*save_initial_management_lead/i.test(error.message)) {
-        throw Object.assign(new Error("Automatic management assignments are not configured in this environment. The lead was not saved."), { status: 503 });
+      if (new RegExp(`${rpc}.*(?:does not exist|schema cache)|schema cache.*${rpc}`, "i").test(error.message)) {
+        throw Object.assign(new Error(`${initialTask ? "Automatic management assignments are" : "Transactional lead registration is"} not configured in this environment. The lead was not saved.`), { status: 503 });
       }
       throw error;
     }

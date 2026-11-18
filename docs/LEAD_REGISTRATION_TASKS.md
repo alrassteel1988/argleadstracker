@@ -66,3 +66,29 @@ Results:
 - Initial full verification first failed at the old permissions fixture's other-lead create assertion (`400 == 201`): its assignee did not exist. The fixture now explicitly creates that active Salesman; the boundary checks remain unchanged and pass.
 
 Not performed: hosted staging migration, fresh Vercel Preview, hosted Admin/Salesman rehearsal, Production access, Production migration, merge or deployment. These remain release gates, not verified outcomes. No secrets or customer records were used in the fixtures or screenshots. The existing root-worktree changes were left untouched.
+
+## Salesman Save Repair
+
+The first hosted rehearsal found that ordinary Salesman registration sent `NEW` to the blueprint schema, which accepts `PROSPECT`. Its separate company insert could survive a failed lead insert. The Admin linked-task path was already transactional.
+
+Migration `20261118111941_atomic_new_lead_registration.sql` adds `public.save_new_crm_lead(jsonb)`. Ordinary form registration now uses this caller-token, security-invoker RPC to create the company and lead together. It preserves RLS, verifies active identity and Salesman ownership, rejects unsupported fields and invisible companies, and grants execution only to `authenticated`. No service-role fallback, backfill, default change or orphan cleanup is included. The existing Admin company/lead/task RPC is retained.
+
+Only an exact `leads_status_blueprint_check` failure for input `NEW` retries as `PROSPECT`; other failures roll back the whole save. A schema accepting `NEW` keeps it. The existing API stage label remains unchanged. Missing migration returns 503 instead of falling back to separate inserts.
+
+Repair files: `server.js`, the new migration, `tests/lead-registration-database.test.cjs`, `tests/lead-registration-api.test.cjs`, `package.json`, `package-lock.json`, `.github/workflows/verify.yml`, and this document. PGlite is pinned as a development dependency, and CI explicitly enables database regressions.
+
+```powershell
+$env:CRM_TEST_PGLITE_MODULE='@electric-sql/pglite'
+node tests/lead-registration-api.test.cjs
+npm run verify
+$env:CRM_UI_SUITE='management-tasks'
+$env:CRM_UI_TEST_PORT='4291'
+$env:CRM_UI_ARTIFACT_DIR=Join-Path (Get-Location) '.tmp\lead-registration-ui'
+node node_modules/playwright/cli.js test --config=playwright.ui.config.js
+```
+
+Full local verification passed after the repair. SQL tests execute the real migration with the repository's blueprint constraint and synthetic caller roles. The API test passes the complete serialized registration payload into that RPC and checks persisted status, optional scheduling, 503 on missing migration, denied writes, and no split-write fallback. SQL tests also verify company/lead rollback on constraint, date, numeric, RLS and audit failures, invisible-company isolation, visible-company reuse, unchanged `NEW` on a compatible schema, and function permissions. The first enhanced API assertion incorrectly expected the database label in the normalized API response; it now separately checks both layers.
+
+The user approved pushing this repair to PR #72 and applying only this migration to staging after backup/schema and browser checks. Hosted repair results remain pending until recorded separately. Production, PR #69, PR #71 and the earlier synthetic orphan company are outside this approval.
+
+Repair browser regression: 10 passed and 10 intentional role-inapplicable skips across desktop/mobile. Admin task choices and optional Salesman scheduling remain intact; desktop Admin and mobile Salesman screenshots were inspected. These local browser tests use the synthetic JSON server, while the SQL/API regressions above exercise the actual transactional function.
