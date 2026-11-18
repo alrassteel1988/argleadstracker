@@ -347,6 +347,7 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
 
     await db.exec("alter table public.leads add column updated_at timestamptz");
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118053747_resolve_same_lead_task_duplicates.sql"), "utf8"));
+    await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118081602_admin_access_and_change_audit.sql"), "utf8"));
     const keep = "00000000-0000-4000-8000-000000000007", foreign = "00000000-0000-4000-8000-000000000008";
     await as(admin);
     for (const [id, linkedId] of [[keep, lead2], [foreign, lead]]) {
@@ -394,6 +395,11 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     assert.deepEqual((await db.query("select * from public.management_tasks where id=$1", [keep])).rows[0], retainedBefore);
     const resolutionAudit = (await db.query("select actor_id,snapshot->>'previous_initial_task_id' as previous,snapshot->>'retained_task_id' as retained from private.management_task_events where action='resolve_duplicate'")).rows;
     assert.deepEqual(resolutionAudit, [{ actor_id: admin.id, previous: task2, retained: keep }]);
+    const adminAudit = (await db.query("select actor_id,table_name,record_id,changed_fields from private.admin_audit_events where phase='change'")).rows;
+    assert.equal(adminAudit.filter(event => event.table_name === "management_tasks" && event.record_id === task2).length, 1,
+      "The competing failed resolution must not commit an Admin change event");
+    assert.ok(adminAudit.some(event => event.table_name === "leads" && event.changed_fields.includes("initial_management_task_id")));
+    assert.ok(adminAudit.every(event => event.actor_id === admin.id));
     await saveAuditFixture("reassign");
     await saveAuditFixture("close");
   } finally {

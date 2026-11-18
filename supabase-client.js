@@ -1,3 +1,4 @@
+const { auditHeaders } = require("./src/services/adminAuditService");
 const SUPABASE_URL = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -12,6 +13,7 @@ const SERVICE_ROLE_OPERATIONS = new Set([
   "notifications.director_fanout",
   "profiles.admin_update",
   "security.rate_limits",
+  "security.admin_audit",
   "workflow.activity_managers",
   "lead_intelligence.worker"
 ]);
@@ -45,6 +47,10 @@ async function request(path, {
   if (service && !SERVICE_ROLE_OPERATIONS.has(serviceOperation)) {
     throw new Error(`Supabase service-role operation is not allowlisted: ${serviceOperation || "missing operation"}.`);
   }
+  if (serviceOperation === "security.admin_audit"
+    && (path !== "/rest/v1/rpc/append_admin_access_event" || method !== "POST")) {
+    throw new Error("Admin audit service access is restricted to the append-only writer.");
+  }
   const key = service ? SUPABASE_SERVICE_ROLE_KEY : SUPABASE_ANON_KEY;
   if (!key) throw new Error(service ? "SUPABASE_SERVICE_ROLE_KEY is not configured." : "Supabase publishable key is not configured.");
   if (!service && !token && !path.startsWith("/auth/v1/token")) {
@@ -57,7 +63,8 @@ async function request(path, {
       apikey: key,
       Authorization: `Bearer ${token || key}`,
       ...(body ? { "Content-Type": "application/json" } : {}),
-      ...headers
+      ...headers,
+      ...auditHeaders()
     },
     body: body ? JSON.stringify(body) : undefined
   });
