@@ -58,3 +58,25 @@ reviewed corrective operation; never delete the resolution event.
 - The management-tasks Playwright suite covers desktop/mobile Admin confirmation,
   unavailable-candidate explanation, cross-lead candidate exclusion, retry after
   failed save, and Salesperson Focus Today / Management Tasks consistency.
+
+## Staging Rehearsal Evidence - 18 November 2026
+
+- The approved migration was applied only to ARG Leads CRM Staging
+  (grxzqxqgtksunzfhtwox), after checking the completed backup from
+  02:51:32 UTC / 06:51:32 Dubai. Supabase recorded ledger version 20261118055110
+  for resolve_same_lead_task_duplicates; do not apply the file again merely
+  because its filename timestamp differs from the generated ledger version.
+- Separate authenticated Admin and Salesperson database-role sessions verified
+  successful same-lead resolution, unchanged retained task, append-only audit,
+  Salesperson visibility, anonymous denial, cross-lead/stale rejection, and the
+  direct-link guard. All synthetic rehearsal writes were rolled back; read-back
+  found no remaining rehearsal companies, leads, tasks, or audit events.
+- Public RPC invoker security, private definer checks, fixed search paths, RLS,
+  and audit-table write restrictions were checked. Security advisors reported
+  the same four pre-existing findings before and after, with no new finding.
+- Local npm run verify passed with PGlite enabled. The desktop/mobile browser
+  suite passed seven tests with one pre-existing mobile skip; a final focused
+  duplicate-resolution rerun passed both desktop and mobile cases.
+- These results do not establish hosted Preview success. Fresh exact-branch
+  staging credentials and separate private Admin/Salesperson browser sessions
+  are still required. Production and live AGM tasks were not accessed or changed.
