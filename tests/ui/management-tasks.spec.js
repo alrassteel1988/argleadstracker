@@ -218,3 +218,89 @@ test("Admin lead creation assigns one task shared by Focus and Management Tasks"
     await context.close();
   }
 });
+
+test("Admin resolves an initial duplicate on the same lead and Salesman retains the next step", async ({ page, browser }, info) => {
+  test.skip(!info.project.name.startsWith("admin"), "Uses separate synthetic Admin and Salesman sessions");
+  await blockExternalTraffic(page);
+  await page.goto("/");
+  await page.locator('#loginForm input[name="email"]').fill(FIXTURE_USERS.find(user => user.role === "admin").email);
+  await page.locator('#loginForm input[name="password"]').fill(FIXTURE_PASSWORD);
+  await page.locator('#loginForm button[type="submit"]').click();
+  await expect(page.locator("#appShell")).toBeVisible();
+  await expect(page.locator("#loginForm")).toBeHidden();
+  const linked = await page.evaluate(async () => api("/api/leads", { method: "POST", body: JSON.stringify({
+    company_name: "ZZZ Resolute Delta QC70", assigned_to: "ui-salesman", assigned_salesman: "Demo Salesman",
+    stage: "NEW", next_action: "To Call", next_action_date: "2099-01-01", activity_purpose: "Company Introductory"
+  }) }));
+  await page.goto("/?view=tasks");
+  await page.locator('[data-mg-tab="management"]').click();
+  const workspace = page.locator("#managementTasksWorkspace");
+  const source = workspace.locator(`[data-mg-row="${linked.initial_management_task_id}"]`);
+  await source.locator("summary").click();
+  await expect(source.getByRole("button", { name: "Resolve duplicate", exact: true })).toBeDisabled();
+  await expect(source).toContainText("separate duplicate-lead review");
+  const [keep, foreign] = await page.evaluate(async leadId => {
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    for (const [i, id] of ids.entries()) await api(`/api/management-tasks/${id}/assign`, { method: "POST", body: JSON.stringify({
+      title: i ? "Other lead candidate" : "Retained same-lead follow-up", instructions: "Synthetic duplicate-resolution browser verification.",
+      assignee_id: "ui-salesman", lead_id: i ? "ui-lead-2" : leadId, due_date: "2099-01-01", priority: "medium"
+    }) });
+    return ids;
+  }, linked.id);
+  await workspace.getByRole("button", { name: "Refresh", exact: true }).click();
+  await source.getByRole("button", { name: "Resolve duplicate", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Resolve duplicate task", exact: true });
+  const retained = dialog.getByRole("combobox", { name: "Task to retain" });
+  await expect(retained.locator("option")).toHaveCount(2);
+  await expect(retained).not.toContainText("Other lead candidate");
+  await retained.selectOption(keep);
+  await expect(dialog.locator("[data-mg-retained-preview]")).toContainText("Retained same-lead follow-up");
+  const reason = "This opening task duplicates the retained follow-up on the same lead.";
+  await dialog.getByRole("textbox", { name: "Resolution reason" }).fill(reason);
+  await dialog.getByRole("checkbox").check();
+  const checkbox = await dialog.getByRole("checkbox").boundingBox();
+  expect(checkbox.width).toBeLessThanOrEqual(20);
+  expect(checkbox.height).toBeLessThanOrEqual(20);
+  await capture(page, info, "same-lead-resolution-confirm", { fullPage: false });
+  await page.route("**/api/management-tasks/*/resolve_duplicate", route => route.fulfill({
+    status: 503, json: { error: "Synthetic temporary failure" }
+  }), { times: 1 });
+  await dialog.getByRole("button", { name: "Resolve duplicate", exact: true }).click();
+  await expect(dialog.getByRole("status")).toContainText("Synthetic temporary failure");
+  await expect(dialog.getByRole("textbox", { name: "Resolution reason" })).toHaveValue(reason);
+  await dialog.getByRole("button", { name: "Resolve duplicate", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(source).toHaveCount(0);
+  const savedLead = await page.evaluate(id => api(`/api/leads/${id}`), linked.id);
+  expect(savedLead.initial_management_task_id).toBe(keep);
+  await workspace.getByRole("button", { name: /^Removed / }).click();
+  await expect(source).toBeVisible();
+  await source.locator("summary").click();
+  await expect(source).toContainText(reason);
+  await expect(source).toContainText("Retained same-lead follow-up");
+  await expect(source.getByRole("button", { name: "Resolve duplicate", exact: true })).toHaveCount(0);
+  const ctx = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: info.project.use.viewport,
+    isMobile: info.project.use.isMobile, hasTouch: info.project.use.hasTouch, serviceWorkers: "block" });
+  try {
+    const sales = await ctx.newPage();
+    await blockExternalTraffic(sales);
+    // This case creates an extra lead, so the shared twelve-lead login assertion is not applicable.
+    await sales.goto("/");
+    await sales.locator('#loginForm input[name="email"]').fill(FIXTURE_USERS.find(user => user.role === "salesman").email);
+    await sales.locator('#loginForm input[name="password"]').fill(FIXTURE_PASSWORD);
+    await sales.locator('#loginForm button[type="submit"]').click();
+    await expect(sales.locator("#appShell")).toBeVisible();
+    await expect(sales.locator("#loginForm")).toBeHidden();
+    const focus = sales.locator("#salespersonFocusList");
+    await expect(focus.locator(`[data-mg-open="${keep}"]`)).toBeVisible();
+    await expect(focus.locator(`[data-mg-open="${linked.initial_management_task_id}"]`)).toHaveCount(0);
+    await sales.locator("#managementTasksMetric button").click();
+    const drawer = sales.locator("#managementTasksDrawer");
+    await expect(drawer.locator(`[data-mg-card="${keep}"]`)).toBeVisible();
+    await expect(drawer.locator(`[data-mg-card="${linked.initial_management_task_id}"]`)).toHaveCount(0);
+    await expect(drawer.locator(`[data-mg-card="${foreign}"]`)).toBeVisible();
+    await expect(drawer.getByRole("button", { name: "Resolve duplicate", exact: true })).toHaveCount(0);
+    expect(await sales.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+    await capture(sales, info, "same-lead-retained-task", { fullPage: false });
+  } finally { await ctx.close(); }
+});

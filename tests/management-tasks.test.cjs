@@ -81,6 +81,47 @@ test("only an active Admin can remove an open duplicate and retain its audit", (
   assert.equal(db.management_task_events[2].snapshot.removal_reason, removal.reason);
 });
 
+test("same-lead initial task resolution enforces confirmation, versions and retained ownership", () => {
+  const now = "2026-11-18T08:00:00Z";
+  const db = { users: [admin, rep, peer], leads: [{ id: lead, assigned_to: rep.id, company_name: "Synthetic Steel", initial_management_task_id: taskId }],
+    management_tasks: [], management_task_events: [] };
+  const save = (user, action, id, values) => saveLocalManagementTask(db, user, action, id, validateManagementTask(action, values), now);
+  save(admin, "assign", taskId, payload);
+  save(admin, "assign", duplicateId, payload);
+  const values = { ...removal, retained_task_id: duplicateId, retained_version: 1, confirmed: true };
+  for (const bad of [{ confirmed: false }, { confirmed: "true" }, { retained_version: 0 }, { retained_task_id: "" }, { reason: "short" }]) {
+    assert.throws(() => save(admin, "resolve_duplicate", taskId, { ...values, ...bad }), { status: 400 });
+  }
+  for (const actor of [rep, peer, { ...admin, role: "manager" }, { ...admin, status: "inactive" }]) {
+    assert.throws(() => save(actor, "resolve_duplicate", taskId, values), { status: 403 });
+  }
+  assert.throws(() => save(admin, "resolve_duplicate", taskId, { ...values, retained_task_id: taskId }), { status: 409 });
+  assert.throws(() => save(admin, "resolve_duplicate", taskId, { ...values, retained_version: 2 }), { status: 409 });
+  const retained = db.management_tasks.find(task => task.id === duplicateId);
+  for (const bad of [{ lead_id: "another-lead" }, { assignee_id: peer.id }, { removed_at: now }, { status: "completed" }]) {
+    const before = { ...retained };
+    Object.assign(retained, bad);
+    assert.throws(() => save(admin, "resolve_duplicate", taskId, values), { status: 409 });
+    Object.assign(retained, before);
+    if (!before.removed_at) delete retained.removed_at;
+    assert.equal(db.leads[0].initial_management_task_id, taskId);
+    assert.equal(db.management_task_events.length, 2);
+  }
+  const original = { ...retained };
+  const result = save(admin, "resolve_duplicate", taskId, values);
+  assert.equal(result.duplicate_of_task_id, duplicateId);
+  assert.equal(result.removed_by, admin.id);
+  assert.equal(db.leads[0].initial_management_task_id, duplicateId);
+  assert.equal(result.resolved_lead.initial_management_task_id, duplicateId);
+  assert.deepEqual(retained, original, "The retained task's content and version stay unchanged");
+  assert.deepEqual(db.management_tasks.filter(task => canReadManagementTask(db, rep, task)).map(task => task.id), [duplicateId]);
+  assert.equal(db.management_task_events.at(-1).action, "resolve_duplicate");
+  assert.equal(db.management_task_events.at(-1).snapshot.previous_initial_task_id, taskId);
+  assert.equal(db.management_task_events.at(-1).snapshot.retained_task_id, duplicateId);
+  assert.throws(() => save(admin, "remove", duplicateId, removal), { status: 409 }, "Retained task becomes protected");
+  assert.throws(() => save(admin, "resolve_duplicate", taskId, { ...values, expected_version: 2 }), { status: 409 });
+});
+
 test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !process.env.CRM_TEST_PGLITE_MODULE }, async () => {
   const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE);
   const db = new PGlite();
@@ -303,6 +344,58 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     await db.exec("reset role");
     const audit = await db.query("select actor_id, snapshot->>'removal_reason' as reason from private.management_task_events where task_id=$1 and action='remove'", [duplicateId]);
     assert.deepEqual(audit.rows, [{ actor_id: admin.id, reason: removal.reason }]);
+
+    await db.exec("alter table public.leads add column updated_at timestamptz");
+    await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118053747_resolve_same_lead_task_duplicates.sql"), "utf8"));
+    const keep = "00000000-0000-4000-8000-000000000007", foreign = "00000000-0000-4000-8000-000000000008";
+    await as(admin);
+    for (const [id, linkedId] of [[keep, lead2], [foreign, lead]]) {
+      await db.query("select public.save_management_task('assign',$1,$2::jsonb)", [id, JSON.stringify({ ...payload, lead_id: linkedId })]);
+    }
+    const resolve = (overrides = {}) => db.query("select public.resolve_management_task_duplicate($1,$2,$3,$4,$5,$6) as task",
+      [task2, overrides.version ?? 1, overrides.keep ?? keep, overrides.keepVersion ?? 1, overrides.reason ?? removal.reason, overrides.confirmed ?? true]);
+    await as(rep);
+    await assert.rejects(() => resolve(), { code: "42501" });
+    await db.exec("set role anon");
+    await assert.rejects(() => resolve(), { code: "42501" });
+    await as(admin);
+    for (const bad of [{ confirmed: false }, { reason: "short" }]) await assert.rejects(() => resolve(bad), { code: "22023" });
+    for (const bad of [{ keep: foreign }, { version: 9 }, { keepVersion: 9 }]) await assert.rejects(() => resolve(bad), { code: "40001" });
+    await assert.rejects(() => db.query("update public.leads set initial_management_task_id=$1 where id=$2", [keep, lead2]), { code: "42501" });
+    await assert.rejects(() => db.exec("insert into private.management_task_events (task_id,action,actor_id,actor_name,snapshot) values (gen_random_uuid(),'resolve_duplicate',auth.uid(),'Forged','{}')"), { code: "42501" });
+    await db.exec("reset role");
+    await db.exec(`create function public.reject_resolution_fixture() returns trigger language plpgsql as $$
+      begin raise exception 'Synthetic rollback fixture' using errcode='23514'; end; $$;
+      create trigger reject_resolution_fixture after update of initial_management_task_id on public.leads
+        for each row execute function public.reject_resolution_fixture();`);
+    await as(admin);
+    await assert.rejects(() => resolve(), { code: "23514" });
+    await db.exec("reset role");
+    assert.equal((await db.query("select initial_management_task_id from public.leads where id=$1", [lead2])).rows[0].initial_management_task_id, task2);
+    assert.equal((await db.query("select removed_at from public.management_tasks where id=$1", [task2])).rows[0].removed_at, null);
+    assert.equal((await db.query("select count(*)::int as n from private.management_task_events where action='resolve_duplicate'")).rows[0].n, 0);
+    await db.exec("drop trigger reject_resolution_fixture on public.leads; drop function public.reject_resolution_fixture()");
+    const retainedBefore = (await db.query("select * from public.management_tasks where id=$1", [keep])).rows[0];
+    await as(admin);
+    const competing = await Promise.allSettled([resolve(), resolve()]);
+    assert.equal(competing.filter(result => result.status === "fulfilled").length, 1);
+    assert.equal(competing.find(result => result.status === "rejected").reason.code, "40001");
+    const resolved = competing.find(result => result.status === "fulfilled").value.rows[0].task;
+    assert.equal(resolved.duplicate_of_task_id, keep);
+    assert.equal(resolved.resolved_lead.initial_management_task_id, keep);
+    await assert.rejects(() => resolve(), { code: "40001" });
+    await assert.rejects(() => db.query("select public.remove_management_task($1,1,$2)", [keep, removal.reason]), { code: "40001" });
+    await assert.rejects(() => db.query("update public.leads set initial_management_task_id=$1 where id=$2", [task2, lead2]), { code: "42501" });
+    await as(rep);
+    const visibleAfter = await list();
+    assert.ok(visibleAfter.some(task => task.id === keep));
+    assert.ok(!visibleAfter.some(task => task.id === task2));
+    await db.exec("reset role");
+    assert.deepEqual((await db.query("select * from public.management_tasks where id=$1", [keep])).rows[0], retainedBefore);
+    const resolutionAudit = (await db.query("select actor_id,snapshot->>'previous_initial_task_id' as previous,snapshot->>'retained_task_id' as retained from private.management_task_events where action='resolve_duplicate'")).rows;
+    assert.deepEqual(resolutionAudit, [{ actor_id: admin.id, previous: task2, retained: keep }]);
+    await saveAuditFixture("reassign");
+    await saveAuditFixture("close");
   } finally {
     await db.close();
   }
