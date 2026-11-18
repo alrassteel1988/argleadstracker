@@ -97,11 +97,17 @@ async function create(token, body) {
       alter table public.leads enable row level security;
       create policy own_profile on public.profiles for select to authenticated using(id=auth.uid());
       create policy own_company on public.companies for all to authenticated using(created_by=auth.uid()) with check(created_by=auth.uid());
-      create policy own_lead on public.leads for all to authenticated using(assigned_to=auth.uid()) with check(created_by=auth.uid() and assigned_to=auth.uid());
+      create schema private; grant usage on schema private to authenticated;
+      create function private.crm_can_access_lead(target_lead_id uuid) returns boolean language sql stable security definer set search_path=pg_catalog as $$
+        select exists(select 1 from public.leads where id=target_lead_id and assigned_to=auth.uid());
+      $$;
+      create policy own_lead_read on public.leads for select to authenticated using(private.crm_can_access_lead(id));
+      create policy own_lead_insert on public.leads for insert to authenticated with check(created_by=auth.uid() and assigned_to=auth.uid());
       grant select on public.profiles to authenticated;
       grant select,insert on public.companies,public.leads to authenticated;`);
     await postgres.query("insert into public.profiles values($1,$2,$3,'salesman','active')", [users.sales.id,users.sales.name,users.sales.territory]);
     await postgres.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118111941_atomic_new_lead_registration.sql"), "utf8"));
+    await postgres.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118113937_registration_rls_readback.sql"), "utf8"));
   }
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   try {

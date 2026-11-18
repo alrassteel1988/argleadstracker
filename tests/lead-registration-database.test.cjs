@@ -28,7 +28,18 @@ test("new lead RPC preserves RLS and rolls company and lead back together on the
       alter table public.leads enable row level security;
       create policy own_profile on public.profiles for select to authenticated using(id=auth.uid());
       create policy own_company on public.companies for all to authenticated using(created_by=auth.uid()) with check(created_by=auth.uid());
-      create policy own_lead on public.leads for all to authenticated using(created_by=auth.uid()) with check(created_by=auth.uid());
+      create schema private; grant usage on schema private to authenticated;
+      create function private.crm_can_access_lead(target_lead_id uuid) returns boolean language sql stable security definer set search_path=pg_catalog as $$
+        select exists(select 1 from public.profiles where id=auth.uid() and role='admin' and status='active')
+          or exists(select 1 from public.leads lead join public.profiles profile on profile.id=auth.uid()
+            where lead.id=target_lead_id and profile.status='active' and profile.role='salesman'
+              and (lead.assigned_to=profile.id or (lead.assigned_to is null and nullif(btrim(lead.assigned_salesman),'') is not null
+                and lower(btrim(lead.assigned_salesman))=lower(btrim(profile.full_name))
+                and not exists(select 1 from public.profiles other where other.id<>profile.id and other.role='salesman'
+                  and other.status='active' and lower(btrim(other.full_name))=lower(btrim(profile.full_name))))));
+      $$;
+      create policy own_lead_read on public.leads for select to authenticated using(private.crm_can_access_lead(id));
+      create policy own_lead_insert on public.leads for insert to authenticated with check(created_by=auth.uid());
       grant select on public.profiles to authenticated;
       grant select,insert on public.companies,public.leads to authenticated;`);
     for (const [id, role, status, name] of [[admin,"admin","active","Admin"],[sales,"salesman","active","Salesman"],
@@ -36,6 +47,7 @@ test("new lead RPC preserves RLS and rolls company and lead back together on the
       await db.query("insert into public.profiles values($1,$2,$3,$4,'Dubai')", [id,role,status,name]);
     }
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118111941_atomic_new_lead_registration.sql"), "utf8"));
+    await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118113937_registration_rls_readback.sql"), "utf8"));
     const as = async (id, role="authenticated") => {
       await db.exec(`set role ${role}`);
       await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id || ""]);
@@ -98,6 +110,12 @@ test("new lead RPC preserves RLS and rolls company and lead back together on the
     await assert.rejects(() => save(input("RLS denied fixture")), {code:"42501"});
     assert.deepEqual(await counts(), {companies:1,leads:2});
     await db.exec(`drop policy reject_insert_fixture on public.leads;
+      create policy reject_read_fixture on public.leads as restrictive for select to authenticated
+        using(company_name <> 'RLS read denied fixture');`);
+    await as(sales);
+    await assert.rejects(() => save(input("RLS read denied fixture")), {code:"P0002"});
+    assert.deepEqual(await counts(), {companies:1,leads:2}, "A denied read-back must roll back both inserts");
+    await db.exec(`drop policy reject_read_fixture on public.leads;
       create function public.reject_fixture_write() returns trigger language plpgsql as $$begin raise exception 'Synthetic audit failure'; end$$;
       create trigger reject_fixture_write after insert on public.leads for each row execute function public.reject_fixture_write();`);
     await as(sales);

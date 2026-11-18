@@ -92,3 +92,13 @@ Full local verification passed after the repair. SQL tests execute the real migr
 The user approved pushing this repair to PR #72 and applying only this migration to staging after backup/schema and browser checks. Hosted repair results remain pending until recorded separately. Production, PR #69, PR #71 and the earlier synthetic orphan company are outside this approval.
 
 Repair browser regression: 10 passed and 10 intentional role-inapplicable skips across desktop/mobile. Admin task choices and optional Salesman scheduling remain intact; desktop Admin and mobile Salesman screenshots were inspected. These local browser tests use the synthetic JSON server, while the SQL/API regressions above exercise the actual transactional function.
+
+## Staging RLS Read-Back Follow-Up
+
+Commit `7e9d06a6227ea4ac8d49f94f734a34102988f626` was pushed to PR #72. The approved atomic registration migration was applied to staging under ledger version `20261118113707`. Its function permissions were verified, and all company/lead/task hashes remained unchanged. The fresh Preview is `argleadstracker-idberokf5-al-ras-steel.vercel.app` (Vercel deployment `5MWAUwj1CcMZ2Z6WtpRFvwiCSZ6k`).
+
+A rollback-only hosted Salesman rehearsal exposed a second issue: the existing `private.crm_can_access_lead(id)` SELECT policy looks up the lead and cannot see the inserted row during `INSERT ... RETURNING`. The rehearsal failed with 42501 and left company/lead counts and hashes unchanged. No persistent test records were created by that rehearsal.
+
+Follow-up migration `20261118113937_registration_rls_readback.sql` replaces only the new security-invoker function. It generates the lead ID within the transaction, inserts without RETURNING, then reads through the unchanged SELECT policy in a separate statement. Both inserts still roll back if the read is denied. It does not alter RLS, grants, existing records, defaults or the Admin linked-task function. Apply it after the atomic registration migration, not instead of it.
+
+The SQL regression now reproduces the lookup-based policy, including current assignment and legacy name matching. The API regression also exercises a stable lookup-based policy with the full serializer payload. Both pass locally with the follow-up; the first migration alone reproduces staging's 42501. Additional coverage confirms a denied final read rolls back both records. The complete `npm run verify` passed again with the follow-up. The user explicitly approved pushing this follow-up to PR #72 and applying only this migration to staging after verification and a backup recheck. Hosted Admin/Salesman repair results are recorded separately after testing; this approval does not cover Production, merging, PR #69/#71 or orphan cleanup.
