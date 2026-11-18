@@ -6,6 +6,8 @@ test("assign, progress and complete a management task across roles", async ({ pa
   test.skip(!info.project.name.startsWith("admin"), "Runs both roles against one synthetic workspace");
   const title = "Confirm project list";
   const remarks = "Confirmed dates and tonnage with procurement.";
+  const instructions = "Ask for dates and tonnage. Record the confirmed schedule.\nPlease provide a synthetic quotation for beams and plates, including specification, quantity, lead time and delivery terms.\nReference: SYNTHETIC-RFQ-ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789.";
+  const progressRemarks = "Waiting for the buyer to call back.\nQuotation prepared for the requested beams and plates. Awaiting confirmation of the delivery schedule and specification.\nReference: SYNTHETIC-RESPONSE-ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789.";
   await blockExternalTraffic(page);
   await login(page, info);
   await page.goto("/?view=tasks");
@@ -16,7 +18,7 @@ test("assign, progress and complete a management task across roles", async ({ pa
   await form.getByRole("combobox", { name: "Salesman", exact: true }).selectOption("ui-salesman", { timeout: 8000 });
   await form.getByRole("combobox", { name: "Lead / account (optional)", exact: true }).selectOption("ui-lead-1", { timeout: 8000 });
   await form.getByLabel("Task", { exact: true }).fill(title);
-  await form.getByLabel("Instructions / remarks").fill("Ask for dates and tonnage. Record the confirmed schedule.");
+  await form.getByLabel("Instructions / remarks").fill(instructions);
   const deadline = form.getByLabel("Deadline");
   await deadline.fill(await deadline.getAttribute("min"));
   await form.getByText("High", { exact: true }).click();
@@ -50,11 +52,58 @@ test("assign, progress and complete a management task across roles", async ({ pa
     await search.clear();
     await capture(sales, info, "salesman-management-tasks", { fullPage: false });
     await card.getByRole("button", { name: "Start", exact: true }).click();
-    await card.getByLabel("Progress remarks").fill("Waiting for the buyer to call back.");
+    await card.getByLabel("Progress remarks").fill(progressRemarks);
     await card.locator('button[type="submit"]').click();
     await expect(card).toContainText("Waiting for the buyer to call back.");
+    await workspace.getByRole("button", { name: "Refresh", exact: true }).click();
+    await row.locator("summary").click();
+    const details = row.locator(".mg-task-details");
+    await expect(details.locator(":scope > div").nth(0)).toContainText(instructions);
+    await expect(details.locator(":scope > div").nth(1)).toContainText(progressRemarks);
+    const adminViewport = page.viewportSize();
+    for (const width of info.project.name.endsWith("mobile") ? [375] : [1440, 1100, 900, 768, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      const layout = await details.evaluate(panel => {
+        const instructions = panel.children[0], remarks = panel.children[1];
+        return { instructions: instructions.getBoundingClientRect().width, remarks: remarks.getBoundingClientRect().width,
+          instructionOverflow: instructions.scrollWidth - instructions.clientWidth,
+          remarkOverflow: remarks.scrollWidth - remarks.clientWidth,
+          remarkHeight: remarks.querySelector("p").getBoundingClientRect().height,
+          pageOverflow: document.documentElement.scrollWidth - innerWidth };
+      });
+      expect(Math.abs(layout.instructions - layout.remarks), `Equal instruction/remark space at ${width}px`).toBeLessThanOrEqual(1);
+      expect(layout.instructionOverflow).toBeLessThanOrEqual(1);
+      expect(layout.remarkOverflow).toBeLessThanOrEqual(1);
+      expect(layout.remarkHeight).toBeGreaterThan(40);
+      expect(layout.pageOverflow).toBeLessThanOrEqual(1);
+      if ([1440,375].includes(width)) await capture(page, info, `admin-task-saved-remarks-${width}`, { fullPage: true });
+    }
+    await page.setViewportSize(adminViewport);
     const status = card.getByRole("combobox", { name: `Status for ${title}` });
     await expect(status).toHaveValue("in_progress");
+    const widths = info.project.name.endsWith("mobile") ? [375] : [1440, 1100, 1024, 901, 900, 768, 375];
+    for (const width of widths) {
+      await sales.setViewportSize({ width, height: info.project.use.viewport.height });
+      const layout = await card.evaluate(row => {
+        const action = row.querySelector(".mg-drawer-action button");
+        const select = row.querySelector("select");
+        const range = document.createRange();
+        range.selectNodeContents(action);
+        const fonts = [".mg-drawer-lead button", ".mg-drawer-task summary strong", ".mg-drawer-due b", ".mg-drawer-remarks p"]
+          .map(selector => getComputedStyle(row.querySelector(selector)).fontSize);
+        return { fonts, actionFont: getComputedStyle(action).fontSize, selectFont: getComputedStyle(select).fontSize,
+          actionHeight: action.getBoundingClientRect().height, selectHeight: select.getBoundingClientRect().height,
+          textLines: range.getClientRects().length, actionOverflow: action.scrollWidth > action.clientWidth,
+          rowOverflow: row.scrollWidth > row.clientWidth, drawerOverflow: row.closest("dialog").scrollWidth > row.closest("dialog").clientWidth };
+      });
+      expect(new Set(layout.fonts).size, `Consistent row typography at ${width}px`).toBe(1);
+      expect(layout.actionFont).toBe(layout.selectFont);
+      expect(layout.actionHeight).toBe(layout.selectHeight);
+      expect(layout.textLines, `Complete must stay on one line at ${width}px`).toBe(1);
+      expect(layout.actionOverflow || layout.rowOverflow || layout.drawerOverflow).toBe(false);
+      if (width === 1440 || width === 375) await capture(sales, info, `task-typography-${width}`, { fullPage: false });
+    }
+    await sales.setViewportSize(info.project.use.viewport);
     await status.selectOption("completed");
     const complete = card.getByRole("button", { name: "Mark completed" });
     await expect(complete).toBeDisabled();
@@ -239,6 +288,30 @@ test("Admin resolves an initial duplicate on the same lead and Salesman retains 
   await source.locator("summary").click();
   await expect(source.getByRole("button", { name: "Resolve duplicate", exact: true })).toBeDisabled();
   await expect(source).toContainText("separate duplicate-lead review");
+  const originalViewport = page.viewportSize();
+  for (const width of info.project.name.endsWith("mobile") ? [375] : [1440, 1100, 900, 768, 720, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    const layout = await source.locator(".mg-task-details").evaluate(panel => {
+      const parts = [...panel.children];
+      const actions = panel.querySelector(".mg-task-row-actions");
+      const buttons = [...actions.querySelectorAll("button")];
+      return {
+        width: panel.clientWidth,
+        textWidth: parts[0].clientWidth + parts[1].clientWidth,
+        textDifference: Math.abs(parts[0].clientWidth - parts[1].clientWidth),
+        buttonWidths: buttons.map(button => button.getBoundingClientRect().width),
+        clipped: buttons.some(button => button.scrollWidth > button.clientWidth + 1),
+        overflow: document.documentElement.scrollWidth - innerWidth
+      };
+    });
+    expect(Math.max(...layout.buttonWidths), `Compact Admin actions at ${width}px`).toBeLessThanOrEqual(170);
+    expect(layout.clipped, `Action labels at ${width}px`).toBe(false);
+    expect(layout.overflow, `Page width at ${width}px`).toBeLessThanOrEqual(1);
+    expect(layout.textDifference, `Equal text columns at ${width}px`).toBeLessThanOrEqual(1);
+    if (width >= 900) expect(layout.textWidth / layout.width, `Room for task content at ${width}px`).toBeGreaterThan(.7);
+    if ([1440,375].includes(width)) await capture(page, info, `admin-expanded-task-${width}`, { fullPage: true });
+  }
+  await page.setViewportSize(originalViewport);
   const [keep, foreign] = await page.evaluate(async leadId => {
     const ids = [crypto.randomUUID(), crypto.randomUUID()];
     for (const [i, id] of ids.entries()) await api(`/api/management-tasks/${id}/assign`, { method: "POST", body: JSON.stringify({
