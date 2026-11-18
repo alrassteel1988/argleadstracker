@@ -104,6 +104,64 @@ test("assign, progress and complete a management task across roles", async ({ pa
   }
 });
 
+test("Admin removes only the selected duplicate and keeps an audit view", async ({ page, browser }, info) => {
+  test.skip(!info.project.name.startsWith("admin"), "Runs both roles against one synthetic workspace");
+  await blockExternalTraffic(page);
+  await login(page, info);
+  const [original, duplicate] = await page.evaluate(async () => {
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    for (const id of ids) await api(`/api/management-tasks/${id}/assign`, { method: "POST", body: JSON.stringify({
+      title: "Synthetic duplicate assignment", instructions: "Ask about the delivery schedule.",
+      assignee_id: "ui-salesman", lead_id: "ui-lead-1", due_date: "2099-01-01", priority: "medium"
+    }) });
+    return ids;
+  });
+  await page.goto("/?view=tasks");
+  await page.locator('[data-mg-tab="management"]').click();
+  const workspace = page.locator("#managementTasksWorkspace");
+  const row = workspace.locator(`[data-mg-row="${duplicate}"]`);
+  const originalRow = workspace.locator(`[data-mg-row="${original}"]`);
+  await row.locator("summary").click();
+  await row.getByRole("button", { name: "Remove task" }).click();
+  const dialog = page.locator("#managementTaskFormDialog");
+  await expect(dialog).toContainText("Synthetic Steel Company 01");
+  const reason = "Entered twice. Keep the first assignment.";
+  await dialog.getByLabel("Removal reason").fill(reason);
+  await dialog.getByRole("button", { name: "Remove task" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(row).toHaveCount(0);
+  await expect(originalRow).toBeVisible();
+  await page.reload();
+  await page.locator('[data-mg-tab="management"]').click();
+  await workspace.getByRole("button", { name: "Removed 1" }).click();
+  await expect(row).toContainText("Removed");
+  await row.locator("summary").click();
+  await expect(row).toContainText(reason);
+  await expect(row.getByRole("button", { name: "Remove task" })).toHaveCount(0);
+
+  const ctx = await browser.newContext({ baseURL: info.project.use.baseURL, serviceWorkers: "block" });
+  try {
+    const sales = await ctx.newPage();
+    await blockExternalTraffic(sales);
+    await login(sales, { project: { name: "salesman" } });
+    await sales.locator("#managementTasksMetric button").click();
+    const drawer = sales.locator("#managementTasksDrawer");
+    await expect(drawer.locator(`[data-mg-card="${original}"]`)).toBeVisible();
+    await expect(drawer.locator(`[data-mg-card="${duplicate}"]`)).toHaveCount(0);
+    await expect(drawer.getByRole("button", { name: /Removed|Remove task/ })).toHaveCount(0);
+    const denied = await sales.evaluate(async id => {
+      try {
+        await api(`/api/management-tasks/${id}/Remove`, { method: "POST", body: JSON.stringify({
+          expected_version: 1, reason: "Synthetic unauthorized removal attempt." }) });
+        return 200;
+      } catch (error) { return error.status; }
+    }, original);
+    expect(denied).toBe(403);
+  } finally {
+    await ctx.close();
+  }
+});
+
 test("Admin lead creation assigns one task shared by Focus and Management Tasks", async ({ page, browser }, info) => {
   test.skip(info.project.name !== "admin-desktop", "Two independent desktop sessions");
   await blockExternalTraffic(page);

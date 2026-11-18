@@ -12,7 +12,7 @@ function ownsLinkedLead(db, salesmanId, leadId) {
 }
 
 function canReadManagementTask(db, user, task) {
-  return user.role === "admin" || (user.role === "salesman" && task.assignee_id === String(user.id)
+  return user.role === "admin" || (user.role === "salesman" && !task.removed_at && task.assignee_id === String(user.id)
     && ownsLinkedLead(db, task.assignee_id, task.lead_id));
 }
 
@@ -62,11 +62,17 @@ function validateManagementTask(action, body, today) {
     }
     Object.assign(values, { status, remarks });
   }
+  if (action === "remove") {
+    const reason = str("reason");
+    if ([...reason].length < 10 || !limited(reason, 4000)) throw taskError(400, "Enter a removal reason of 10 to 4000 characters.");
+    values.reason = reason;
+  }
   return values;
 }
 
 function saveLocalManagementTask(db, user, action, id, values, now) {
-  if ((["assign", "edit", "remind"].includes(action) && user.role !== "admin")
+  if ((["assign", "edit", "remind", "remove"].includes(action) && user.role !== "admin")
+    || (action === "remove" && user.status !== "active")
     || (["progress", "seen"].includes(action) && user.role !== "salesman")) throw taskError(403, "This task action is not available to your role.");
   const actor = String(user.id), actorName = user.name || "User";
   const old = db.management_tasks.find(task => task.id === id);
@@ -86,6 +92,7 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
   } else {
     if (!old || !canReadManagementTask(db, user, old)) throw taskError(404, "Task not found.");
     if (old.version !== values.expected_version) throw taskError(409, "This task changed. Refresh before trying again.");
+    if (old.removed_at) throw taskError(409, "Removed tasks are read-only.");
     if (action === "seen") {
       old.seen_at ||= now;
       return old;
@@ -103,6 +110,12 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
     } else if (action === "progress") {
       Object.assign(task, { status: values.status, remarks: values.remarks, progress_at: now,
         completed_at: values.status === "completed" ? now : null, seen_at: now });
+    } else if (action === "remove") {
+      if (!["not_started", "in_progress"].includes(old.status)) throw taskError(409, "Only open tasks can be removed.");
+      if (db.leads.some(lead => lead.initial_management_task_id === id)) {
+        throw taskError(409, "The original task linked as a lead next step cannot be removed.");
+      }
+      Object.assign(task, { removed_at: now, removed_by: actor, removal_reason: values.reason });
     }
   }
   if (old) Object.assign(old, task);
