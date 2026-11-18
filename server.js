@@ -5306,7 +5306,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
-  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen|remove)$/i);
+  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen|remove|resolve_duplicate)$/i);
   if ((req.method === "GET" && url.pathname === "/api/management-tasks") || (req.method === "POST" && managementTaskAction)) {
     if (!["admin", "salesman"].includes(user.role)) return sendJson(res, 403, { error: "Management tasks are not available to your role." });
     try {
@@ -5325,7 +5325,7 @@ async function handleApi(req, res, url) {
       const [, id, rawAction] = managementTaskAction;
       const action = rawAction.toLowerCase();
       if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) return sendJson(res, 400, { error: "Invalid task ID." });
-      if ((["assign", "edit", "remind", "remove"].includes(action) ? "admin" : "salesman") !== user.role) {
+      if ((["assign", "edit", "remind", "remove", "resolve_duplicate"].includes(action) ? "admin" : "salesman") !== user.role) {
         return sendJson(res, 403, { error: "This task action is not available to your role." });
       }
       const input = await readBody(req);
@@ -5334,9 +5334,12 @@ async function handleApi(req, res, url) {
       const values = validateManagementTask(action, input, todayInDubai);
       if (supabaseEnabled) {
         const removing = action === "remove";
-        const task = await rest(removing ? "rpc/remove_management_task" : "rpc/save_management_task", {
+        const resolving = action === "resolve_duplicate";
+        const task = await rest(resolving ? "rpc/resolve_management_task_duplicate" : removing ? "rpc/remove_management_task" : "rpc/save_management_task", {
           method: "POST", ...supabaseDataOptions(user.token),
-          body: removing ? { p_id: id, p_expected_version: values.expected_version, p_reason: values.reason }
+          body: resolving ? { p_id: id, p_expected_version: values.expected_version, p_retained_id: values.retained_task_id,
+            p_retained_version: values.retained_version, p_reason: values.reason, p_confirmed: values.confirmed }
+            : removing ? { p_id: id, p_expected_version: values.expected_version, p_reason: values.reason }
             : { p_action: action, p_id: id, p_input: values }
         });
         return sendJson(res, 200, task);
@@ -5350,7 +5353,7 @@ async function handleApi(req, res, url) {
     } catch (error) {
       const message = String(error.message || "");
       if (/^Task not found\.?$/.test(message)) return sendJson(res, 404, { error: "Task not found." });
-      if (/^(This task changed|(?:Completed|Removed) tasks are read-only|Only open tasks can be removed|The original task linked as a lead next step|A task notice was sent recently|The salesman no longer has access|This task request has already been used)/.test(message)) {
+      if (/^(This task changed|Choose the current initial task|Choose an open retained task|(?:Completed|Removed) tasks are read-only|Only open tasks can be removed|The original task linked as a lead next step|A task notice was sent recently|The salesman no longer has access|This task request has already been used)/.test(message)) {
         return sendJson(res, 409, { error: message });
       }
       if ([400, 403, 409].includes(error.status)) {

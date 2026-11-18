@@ -62,21 +62,29 @@ function validateManagementTask(action, body, today) {
     }
     Object.assign(values, { status, remarks });
   }
-  if (action === "remove") {
+  if (action === "remove" || action === "resolve_duplicate") {
     const reason = str("reason");
     if ([...reason].length < 10 || !limited(reason, 4000)) throw taskError(400, "Enter a removal reason of 10 to 4000 characters.");
     values.reason = reason;
+  }
+  if (action === "resolve_duplicate") {
+    const retained = str("retained_task_id");
+    if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(retained)
+      || !Number.isSafeInteger(input.retained_version) || input.retained_version < 1 || input.confirmed !== true) {
+      throw taskError(400, "Choose a retained task and confirm the duplicate.");
+    }
+    Object.assign(values, { retained_task_id: retained, retained_version: input.retained_version, confirmed: true });
   }
   return values;
 }
 
 function saveLocalManagementTask(db, user, action, id, values, now) {
-  if ((["assign", "edit", "remind", "remove"].includes(action) && user.role !== "admin")
-    || (action === "remove" && user.status !== "active")
+  if ((["assign", "edit", "remind", "remove", "resolve_duplicate"].includes(action) && user.role !== "admin")
+    || (["remove", "resolve_duplicate"].includes(action) && user.status !== "active")
     || (["progress", "seen"].includes(action) && user.role !== "salesman")) throw taskError(403, "This task action is not available to your role.");
   const actor = String(user.id), actorName = user.name || "User";
   const old = db.management_tasks.find(task => task.id === id);
-  let task;
+  let task, resolvedLead, resolution;
   if (action === "assign") {
     if (old) {
       if (old.assigned_by === actor && old.assignee_id === values.assignee_id) return old;
@@ -110,6 +118,22 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
     } else if (action === "progress") {
       Object.assign(task, { status: values.status, remarks: values.remarks, progress_at: now,
         completed_at: values.status === "completed" ? now : null, seen_at: now });
+    } else if (action === "resolve_duplicate") {
+      if (!["not_started", "in_progress"].includes(old.status)) throw taskError(409, "Only open tasks can be removed.");
+      const linked = db.leads.find(lead => lead.initial_management_task_id === id);
+      const retained = db.management_tasks.find(item => item.id === values.retained_task_id);
+      if (!linked || String(linked.id) !== old.lead_id) throw taskError(409, "Choose the current initial task to resolve.");
+      if (!retained || retained.id === id || retained.lead_id !== old.lead_id || retained.assignee_id !== old.assignee_id
+        || retained.removed_at || !["not_started", "in_progress"].includes(retained.status)) {
+        throw taskError(409, "Choose an open retained task on the same lead and salesman. Cross-lead cleanup needs separate review.");
+      }
+      if (retained.version !== values.retained_version) throw taskError(409, "This task changed. Refresh before trying again.");
+      if (!db.users.some(person => String(person.id) === old.assignee_id && person.role === "salesman" && person.status === "active")
+        || !ownsLinkedLead(db, old.assignee_id, old.lead_id)) throw taskError(409, "The salesman no longer has access to this task.");
+      resolvedLead = { id: linked.id, initial_management_task_id: retained.id, updated_at: now };
+      resolution = { previous_initial_task_id: id, retained_task_id: retained.id, retained_version: retained.version };
+      Object.assign(task, { removed_at: now, removed_by: actor, removal_reason: values.reason, duplicate_of_task_id: retained.id });
+      Object.assign(linked, resolvedLead);
     } else if (action === "remove") {
       if (!["not_started", "in_progress"].includes(old.status)) throw taskError(409, "Only open tasks can be removed.");
       if (db.leads.some(lead => lead.initial_management_task_id === id)) {
@@ -120,8 +144,8 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
   }
   if (old) Object.assign(old, task);
   else db.management_tasks.unshift(task);
-  db.management_task_events.push({ id: randomUUID(), task_id: id, action, actor_id: actor, actor_name: actorName, at: now, snapshot: { ...task } });
-  return task;
+  db.management_task_events.push({ id: randomUUID(), task_id: id, action, actor_id: actor, actor_name: actorName, at: now, snapshot: { ...task, ...resolution } });
+  return resolvedLead ? { ...task, resolved_lead: resolvedLead } : task;
 }
 
 module.exports = { taskError, canReadManagementTask, validateManagementTask, saveLocalManagementTask,

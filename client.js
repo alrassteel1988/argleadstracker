@@ -15102,11 +15102,18 @@ function renderManagementTaskWorkspace() {
   }));
 }
 
+function managementTaskDuplicateCandidates(task) {
+  return managementTasks.rows.filter(item => item.id !== task.id && item.lead_id === task.lead_id
+    && item.assignee_id === task.assignee_id && !item.removed_at && ["not_started", "in_progress"].includes(item.status));
+}
+
 function renderManagementTaskRow(task) {
   const id = escapeHtml(task.id);
   const [tone, timing] = managementTaskTiming(task);
-  const canRemove = ["not_started", "in_progress"].includes(task.status)
-    && !state.leads.some(lead => lead.initial_management_task_id === task.id);
+  const initial = state.leads.some(lead => lead.initial_management_task_id === task.id);
+  const canRemove = ["not_started", "in_progress"].includes(task.status) && !initial;
+  const candidates = initial ? managementTaskDuplicateCandidates(task) : [];
+  const retained = task.duplicate_of_task_id && managementTasks.rows.find(item => item.id === task.duplicate_of_task_id);
   return `<details data-mg-row="${id}" ${managementTasks.openRows.has(task.id) ? "open" : ""}>
     <summary class="mg-task-row"><span class="mg-task-row-title"><strong>${escapeHtml(task.title)}</strong><small>${task.lead_name ? escapeHtml(task.lead_name) + " &middot; " : ""}Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))}</small></span>
       <span class="mg-task-row-person">${escapeHtml(task.assignee_name)}</span><time class="mg-task-row-date" datetime="${escapeHtml(task.due_date)}">${escapeHtml(formatDisplayDate(task.due_date))}</time>
@@ -15115,7 +15122,7 @@ function renderManagementTaskRow(task) {
     <div class="mg-task-details"><div><strong>Management instructions &middot; ${escapeHtml(task.assigned_by_name)}</strong><p>${escapeHtml(task.instructions)}</p>
       ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">Open linked lead</button>` : ""}</div>
       <div><strong>Salesman remarks</strong><p>${task.progress_at ? escapeHtml(managementTaskDateTime(task.progress_at)) + " &middot; " : ""}${escapeHtml(task.remarks || "No remarks yet.")}</p></div>
-      ${task.removed_at ? `<div><strong>Removal reason</strong><p>${escapeHtml(task.removal_reason)}</p></div>` : task.status === "completed" ? "" : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button>${canRemove ? `<button type="button" class="ghost-button" data-mg-remove="${id}">Remove task</button>` : ""}</div>`}</div>
+      ${task.removed_at ? `<div><strong>Removal reason</strong><p>${escapeHtml(task.removal_reason)}</p>${task.duplicate_of_task_id ? `<p>Retained task: ${escapeHtml(retained?.title || task.duplicate_of_task_id)}</p>` : ""}</div>` : task.status === "completed" ? "" : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button>${canRemove ? `<button type="button" class="ghost-button" data-mg-remove="${id}">Remove task</button>` : ""}${initial ? `<button type="button" class="ghost-button" data-mg-resolve="${id}" ${candidates.length ? "" : "disabled"}>Resolve duplicate</button><p>Protected initial next step. ${candidates.length ? "Retain another open task on this lead to resolve a duplicate." : "No eligible replacement on this lead. Tasks on other lead records require separate duplicate-lead review."}</p>` : ""}</div>`}</div>
   </details>`;
 }
 
@@ -15247,6 +15254,28 @@ function openManagementTaskForm(task) {
   dialog.showModal();
 }
 
+function openManagementTaskDuplicateResolution(task) {
+  if (state.currentUser?.role !== "admin" || task.removed_at || !["not_started", "in_progress"].includes(task.status)
+    || !state.leads.some(lead => lead.initial_management_task_id === task.id)) return;
+  const candidates = managementTaskDuplicateCandidates(task);
+  if (!candidates.length) return;
+  const form = document.querySelector("#managementTaskForm");
+  form.dataset.action = "resolve_duplicate";
+  form.dataset.taskId = task.id;
+  form.dataset.version = task.version;
+  form.innerHTML = `<header class="mg-task-dialog-header"><h2 id="managementTaskFormTitle">Resolve duplicate task</h2><button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close task form" title="Close">&times;</button></header>
+    <div class="mg-task-form-fields">
+      <p><strong>${escapeHtml(task.title)}</strong> &middot; ${escapeHtml(task.lead_name)} &middot; ${escapeHtml(task.assignee_name)}<br><small>Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))} (Dubai time)</small></p>
+      <p>The selected task becomes this lead's linked next step. This duplicate is removed from the salesman's list; its history and reason are retained. No lead records are merged.</p>
+      <label>Task to retain<select name="retained_task_id" required><option value="">Choose an open task on this lead</option>${candidates.map(item => `<option value="${escapeHtml(item.id)}" data-version="${item.version}">${escapeHtml(item.title)} &middot; assigned ${escapeHtml(managementTaskAssignedTime(item.created_at))} &middot; due ${escapeHtml(formatDisplayDate(item.due_date))}</option>`).join("")}</select></label>
+      <p data-mg-retained-preview aria-live="polite"></p>
+      <label>Resolution reason<textarea name="reason" rows="3" minlength="10" maxlength="4000" required></textarea></label>
+      <label class="mg-task-confirm"><input type="checkbox" name="confirmed" required><span>I confirm these tasks duplicate the same work on this lead.</span></label>
+      <p role="status" class="mg-task-message" hidden></p>
+    </div><footer class="mg-task-form-actions"><button type="button" class="ghost-button" data-mg-close>Keep both tasks</button><button type="submit" class="danger-button">Resolve duplicate</button></footer>`;
+  form.closest("dialog").showModal();
+}
+
 function openManagementTaskRemoval(task) {
   if (state.currentUser?.role !== "admin" || !["not_started", "in_progress"].includes(task.status) || task.removed_at) return;
   const form = document.querySelector("#managementTaskForm");
@@ -15271,9 +15300,13 @@ async function saveManagementTask(action, id, values, errorHost) {
   try {
     const saved = await api(`/api/management-tasks/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify(values) });
     if (workspace !== managementTasks) return false;
-    workspace.rows = [...workspace.rows.filter(task => task.id !== saved.id), saved];
+    const { resolved_lead, ...savedTask } = saved;
+    workspace.rows = [...workspace.rows.filter(task => task.id !== saved.id), savedTask];
+    if (action === "resolve_duplicate" && resolved_lead) {
+      state.leads = state.leads.map(lead => String(lead.id) === String(resolved_lead.id) ? { ...lead, ...resolved_lead } : lead);
+    }
     workspace.update = null;
-    workspace.message = { assign: "Task assigned.", edit: "Task updated.", remove: "Task removed. History retained.", remind: "Reminder sent in the CRM.", progress: "Task status saved.", seen: "Notice marked as read." }[action];
+    workspace.message = { assign: "Task assigned.", edit: "Task updated.", remove: "Task removed. History retained.", resolve_duplicate: "Duplicate resolved. Linked next step and history retained.", remind: "Reminder sent in the CRM.", progress: "Task status saved.", seen: "Notice marked as read." }[action];
     renderManagementTasks({ refreshFocus: true });
     return true;
   } catch (error) {
@@ -15300,10 +15333,10 @@ async function saveManagementTask(action, id, values, errorHost) {
 }
 
 document.addEventListener("click", event => {
-  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remove],[data-mg-remind],[data-mg-progress],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
+  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remove],[data-mg-resolve],[data-mg-remind],[data-mg-progress],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
   if (!button) return;
   const data = button.dataset, drawer = document.querySelector("#managementTasksDrawer");
-  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemove, data.mgRemind, data.mgProgress, data.mgSeen].includes(item.id));
+  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemove, data.mgResolve, data.mgRemind, data.mgProgress, data.mgSeen].includes(item.id));
   if ("mgClose" in data) { button.closest("dialog")?.close(); return; }
   if (managementTasks.pending) return;
   if ("mgOpen" in data) openManagementTaskDrawer(data.mgOpen);
@@ -15323,6 +15356,7 @@ document.addEventListener("click", event => {
     renderManagementTaskWorkspace();
   } else if ("mgAssign" in data || data.mgEdit && task) openManagementTaskForm(task);
   else if (data.mgRemove && task) openManagementTaskRemoval(task);
+  else if (data.mgResolve && task) openManagementTaskDuplicateResolution(task);
   else if ((data.mgRemind || data.mgSeen) && task) {
     button.disabled = true;
     saveManagementTask(data.mgRemind ? "remind" : "seen", task.id, { expected_version: task.version });
@@ -15340,6 +15374,12 @@ document.addEventListener("click", event => {
 });
 
 document.querySelector("#managementTaskForm")?.addEventListener("change", event => {
+  if (event.target.name === "retained_task_id") {
+    const selected = managementTasks.rows.find(task => task.id === event.target.value);
+    event.currentTarget.querySelector("[data-mg-retained-preview]").textContent = selected
+      ? selected.title + " | Assigned " + managementTaskAssignedTime(selected.created_at) + " | Due " + formatDisplayDate(selected.due_date) : "";
+    return;
+  }
   if (event.target.name !== "assignee_id") return;
   const select = event.currentTarget.elements.lead_id;
   select.replaceChildren(new Option("No linked lead", ""));
@@ -15354,6 +15394,10 @@ document.querySelector("#managementTaskForm")?.addEventListener("submit", async 
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form));
   if (form.dataset.version) values.expected_version = Number(form.dataset.version);
+  if (form.dataset.action === "resolve_duplicate") {
+    values.retained_version = Number(form.elements.retained_task_id.selectedOptions[0]?.dataset.version);
+    values.confirmed = form.elements.confirmed.checked;
+  }
   const button = form.querySelector('[type="submit"]');
   button.disabled = true;
   const saved = await saveManagementTask(form.dataset.action, form.dataset.taskId, values, form.querySelector(".mg-task-message"));

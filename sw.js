@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v169-management-task-removal";
+const CACHE_VERSION = "arg-pwa-v170-linked-task-resolution";
 const APP_SHELL = [
   "/",
   "/index.html",
