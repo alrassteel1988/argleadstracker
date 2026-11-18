@@ -102,6 +102,11 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
       body: { company_name: "Own E2E Lead", assigned_salesman: "E2E Salesman", stage: "PROSPECT", territory: "UAE-North" }
     });
     assert.equal(ownLead.response.status, 201);
+    const adminCreation = ownLead.data.activities.filter(activity => activity.lead_creation);
+    assert.equal(adminCreation.length, 1);
+    assert.equal(adminCreation[0].created_by, adminLogin.data.user.id);
+    assert.equal(adminCreation[0].created_by_role, "admin");
+    assert.equal(adminCreation[0].text, "New Lead Account creation");
 
     const otherLead = await request(baseUrl, "/api/leads", {
       method: "POST",
@@ -203,6 +208,45 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(salesmanCreatedLead.data.assigned_salesman, "E2E Salesman");
     assert.equal(salesmanCreatedLead.data.territory, "UAE-North");
     assert.equal(salesmanCreatedLead.data.created_by, salesmanAccount.data.id);
+    const creation = salesmanCreatedLead.data.activities.filter(activity => activity.lead_creation);
+    assert.equal(creation.length, 1);
+    assert.equal(creation[0].text, "New Lead Account creation");
+    assert.equal(creation[0].created_by, salesmanAccount.data.id);
+    assert.equal(creation[0].created_by_name, "E2E Salesman");
+    assert.equal(creation[0].created_by_role, "salesman");
+    const reminder = salesmanCreatedLead.data.activities.find(activity => activity.reminder);
+    assert.equal(reminder.created_by, salesmanAccount.data.id);
+    assert.equal(reminder.created_by_name, "E2E Salesman");
+    const editCreation = await request(baseUrl, `/api/leads/${salesmanCreatedLead.data.id}`, {
+      method: "PATCH", token: adminToken, csrfToken: adminCsrfToken, body: { activities: [] }
+    });
+    assert.equal(editCreation.response.status, 409, JSON.stringify(editCreation.data));
+    const persistedCreation = await request(baseUrl, `/api/leads/${salesmanCreatedLead.data.id}`, { token: adminToken });
+    assert.deepEqual(persistedCreation.data.activities.filter(activity => activity.lead_creation), creation);
+    const deleteCreation = await request(baseUrl, `/api/leads/${salesmanCreatedLead.data.id}/delete-requests`, {
+      method: "POST", token: adminToken, csrfToken: adminCsrfToken,
+      body: { target_type: "activity", activity_id: creation[0].id, reason: "Duplicate activity" }
+    });
+    assert.equal(deleteCreation.response.status, 409, JSON.stringify(deleteCreation.data));
+    const importBody = { duplicate_mode: "skip", rows: [{ row_number: 2, data: {
+      company_name: "Cobalt Ridge Import Laboratory", assigned_salesman: "E2E Salesman", stage: "PROSPECT"
+    } }] };
+    const imported = await request(baseUrl, "/api/leads/import", {
+      method: "POST", token: adminToken, csrfToken: adminCsrfToken, body: importBody
+    });
+    assert.equal(imported.response.status, 200, JSON.stringify(imported.data));
+    assert.equal(imported.data.imported, 1);
+    const importedCreation = imported.data.leads[0].activities.filter(item => item.lead_creation);
+    assert.equal(importedCreation.length, 1);
+    assert.equal(importedCreation[0].created_by, adminLogin.data.user.id, "The importer is the creator, not the assignee");
+    const updatedImport = await request(baseUrl, "/api/leads/import", {
+      method: "POST", token: adminToken, csrfToken: adminCsrfToken,
+      body: { ...importBody, duplicate_mode: "update" }
+    });
+    assert.equal(updatedImport.response.status, 200, JSON.stringify(updatedImport.data));
+    assert.equal(updatedImport.data.updated, 1);
+    assert.deepEqual(updatedImport.data.leads[0].activities.filter(item => item.lead_creation), importedCreation,
+      "Updating an existing imported lead preserves its original creation event");
 
     const salesmanLeadsAfterCreate = await request(baseUrl, "/api/leads", { token: salesmanToken });
     assert.equal(salesmanLeadsAfterCreate.response.status, 200);

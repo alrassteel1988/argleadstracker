@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v175-management-task-layout";
+const CACHE_VERSION = "arg-pwa-v176-lead-creation-activity";
 const APP_SHELL = [
   "/",
   "/index.html",

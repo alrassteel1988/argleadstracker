@@ -2026,12 +2026,12 @@ function activityTranscriptMarkup(activity) {
 }
 
 function activityEditButton(leadId, activityIndex, activity = {}) {
-  if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
+  if (activityIndex == null || activityIndex < 0 || activity.delete_request || activity.lead_creation) return "";
   return `<button class="small-action" type="button" data-edit-activity-lead="${escapeHtml(leadId)}" data-edit-activity-index="${escapeHtml(activityIndex)}" data-edit-activity-id="${escapeHtml(activity.id || "")}">Edit</button>`;
 }
 
 function activityDeleteButton(leadId, activityIndex, activity = {}) {
-  if (activityIndex == null || activityIndex < 0 || activity.delete_request) return "";
+  if (activityIndex == null || activityIndex < 0 || activity.delete_request || activity.lead_creation) return "";
   const pending = activity.deletion_status === "pending";
   return `<button class="small-action" type="button" data-delete-activity-lead="${escapeHtml(leadId)}" data-delete-activity-index="${escapeHtml(activityIndex)}" data-delete-activity-id="${escapeHtml(activity.id || "")}" ${pending ? "disabled" : ""}>${pending ? "Deletion Pending" : "Request Deletion"}</button>`;
 }
@@ -6103,8 +6103,8 @@ function renderMetrics() {
 }
 
 function hasLeadContactedActivity(lead) {
-  const activities = Array.isArray(lead?.activities) ? lead.activities.filter(activity => !activity?.delete_request && !isReminderActivity(activity)) : [];
-  return activities.length > 0 || Boolean(String(lead?.last_activity || "").trim());
+  const activities = Array.isArray(lead?.activities) ? lead.activities.filter(activity => !activity?.delete_request && !activity?.lead_creation && !isReminderActivity(activity)) : [];
+  return activities.length > 0 || (!(lead?.activities || []).some(activity => activity.lead_creation) && Boolean(String(lead?.last_activity || "").trim()));
 }
 
 function isOpenPipelineStage(stage) {
@@ -6884,7 +6884,7 @@ function salesmanPerformanceRows() {
     const generatedLeads = state.leads.filter(lead => leadGeneratedBySalesman(lead, person));
     const filteredStageLeads = stage === "all" ? assignedLeads : assignedLeads.filter(lead => lead.stage === stage);
     const activities = assignedLeads.flatMap(lead => Array.isArray(lead.activities) ? lead.activities : [])
-      .filter(activity => !activity.delete_request);
+      .filter(activity => !activity.delete_request && !activity.lead_creation);
     const followupsCompleted = activities.filter(completedFollowupActivity).length;
     const upcomingFollowups = assignedLeads.flatMap(remindersForLead)
       .filter(reminder => !reminder.due_date || reminder.due_date >= today()).length;
@@ -8086,8 +8086,10 @@ function adminReferenceActivityRows() {
     const creator = people.find(person => String(person.id || person.user_id) === String(activity.created_by || ""));
     const assignedBy = people.find(person => String(person.id || person.user_id) === String(activity.assigned_by || activity.task_created_by || ""));
     const manager = person => ["admin", "manager", "director"].includes(String(person?.role || "").toLowerCase());
-    const origin = manager(creator) || manager(assignedBy) ? "Management" : creator?.role === "salesman" ? "Self" : "Not recorded";
-    return { ...activity, origin, actor: activity.created_by_name || creator?.name || activity.logged_by || "Not recorded",
+    const authorRole = activity.lead_creation && activity.created_by ? activity.created_by_role : creator?.role;
+    const origin = manager({ role: authorRole }) || manager(assignedBy) ? "Management" : authorRole === "salesman" ? "Self" : "Not recorded";
+    return { ...activity, origin, actor: activity.created_by_name || creator?.name || creator?.full_name || activity.logged_by || "Not recorded",
+      recorded: Boolean(activity.lead_creation),
       closed: activity.transaction_status === "closed", cancelled: activity.followup_resolution === "cancelled",
       retired: Boolean(activity.followup_retired), remarks: String(activity.transaction_remarks || "").trim(),
       outcome: String(activity.transaction_outcome || ""), date: String(activity.at || activity.created_at || "").slice(0, 10) };
@@ -8105,7 +8107,7 @@ function adminReferenceFilterActivity(rows) {
       && (f.person === "all" || row.actor === f.person)
       && (f.date === "all" || age !== null && (f.date === "7" ? age >= 0 && age <= 7 : f.date === "30" ? age >= 0 && age <= 30 : age > 30))
       && (f.linked === "all" || (f.linked === "quote" ? Boolean(row.quotation_ref) : f.linked === "pmr" ? Boolean(row.pmr_id || row.pmr_ref) : !row.quotation_ref && !row.pmr_id && !row.pmr_ref))
-      && (f.status === "all" || (f.status === "missing" ? !row.remarks && !row.retired
+      && (f.status === "all" || (f.status === "recorded" ? row.recorded : row.recorded ? false : f.status === "missing" ? !row.remarks && !row.retired
         : f.status === "cancelled" ? row.cancelled : f.status === "completed" ? row.followup_resolution === "completed"
         : f.status === "pending" ? !row.closed && !row.cancelled && !row.retired
         : f.status === "closed" ? row.closed : row.closed && (f.status === "done" ? /^done/i.test(row.outcome) : /^not reached/i.test(row.outcome))));
@@ -8158,6 +8160,7 @@ function renderReferenceAdminActivity() {
   const people = new Map();
   let closed = 0, pending = 0, missing = 0, done = 0, notReached = 0;
   for (const row of all) {
+    if (row.recorded) continue;
     const person = people.get(row.actor) || { total: 0, closed: 0 };
     person.total++;
     if (row.closed) {
@@ -8176,15 +8179,15 @@ function renderReferenceAdminActivity() {
     ["origin", "Origin", [["all", "All origins"], ["Management", "Assigned by management"], ["Self", "Self-generated"], ["Not recorded", "Not recorded"]]],
     ["person", "Logged by", uniqueOptions("actor")],
     ["linked", "Quote &middot; PMR", [["all", "All entries"], ["quote", "Has quote reference"], ["pmr", "PMR linked"], ["neither", "Neither"]]],
-    ["status", "Status & remarks", [["all", "All statuses"], ["pending", "Pending"], ["completed", "Completed"], ["cancelled", "Cancelled"], ["closed", "Closed (all)"], ["done", "Closed - done"], ["not-reached", "Closed - not reached"], ["missing", "No remarks"]]]
+    ["status", "Status & remarks", [["all", "All statuses"], ["recorded", "Recorded"], ["pending", "Pending"], ["completed", "Completed"], ["cancelled", "Cancelled"], ["closed", "Closed (all)"], ["done", "Closed - done"], ["not-reached", "Closed - not reached"], ["missing", "No remarks"]]]
   ];
   const tags = definitions.filter(([key]) => f[key] !== "all").map(([key, label, options]) => `<button class="admin-ref-tag" type="button" data-admin-clear-filter="${key}">${label}: ${escapeHtml(options.find(([value]) => value === f[key])?.[1] || f[key])} &times;</button>`).join("")
     + (f.sort === "oldest" ? '<button class="admin-ref-tag" type="button" data-admin-clear-filter="sort">Sort: Oldest first &times;</button>' : "");
-  const statusLabel = row => row.cancelled ? "Cancelled" : row.followup_resolution === "completed" ? "Completed"
+  const statusLabel = row => row.recorded ? "Recorded" : row.cancelled ? "Cancelled" : row.followup_resolution === "completed" ? "Completed"
     : row.closed ? "Closed" : row.retired ? "Resolved reminder" : "Pending";
   const preview = (value, className = "") => `<span class="admin-activity-preview ${className}" title="${escapeHtml(value)}">${escapeHtml(value)}</span>`;
   const renderRow = row => {
-    const noRemarks = !row.remarks && !row.retired;
+    const noRemarks = !row.remarks && !row.retired && !row.recorded;
     const tone = row.cancelled || /^not reached/i.test(row.outcome) ? "danger" : row.closed || row.followup_resolution === "completed" ? "teal" : row.retired ? "" : "warning";
     const note = row.note || row.text || "No notes";
     const date = formatDisplayDate(row.date);
@@ -8198,7 +8201,7 @@ function renderReferenceAdminActivity() {
       <td data-label="Logged by">${preview(row.actor, row.actor === "Not recorded" ? "admin-activity-unknown" : "")}</td>
       <td data-label="Notes">${preview(note)}</td>
       <td data-label="Quote &middot; PMR"><div class="admin-activity-links">${row.quotation_ref ? preview(row.quotation_ref, "admin-activity-quote") : ""}${row.pmr_id || row.pmr_ref ? '<span class="admin-ref-tag teal">PMR linked</span>' : ""}${!row.quotation_ref && !row.pmr_id && !row.pmr_ref ? "&mdash;" : ""}</div></td>
-      <td data-label="Status & remarks"><div class="admin-ref-status"><span class="admin-ref-tag ${row.cancelled ? "danger" : row.closed || row.followup_resolution === "completed" ? "teal" : row.retired ? "" : "warning"}">${statusLabel(row)}</span><span class="admin-activity-preview admin-activity-remarks" title="${escapeHtml([row.outcome, row.remarks].filter(Boolean).join(" - ") || (noRemarks ? "No remarks" : ""))}">${row.outcome ? `<strong class="${tone}">${escapeHtml(row.outcome)}</strong>` : ""}${row.remarks ? `${row.outcome ? " &mdash; " : ""}${escapeHtml(row.remarks)}` : noRemarks ? '<strong class="danger">No remarks</strong>' : ""}</span><button class="text-button admin-activity-history" type="button" aria-label="History and details" title="History and details" data-admin-activity-history="${escapeHtml(row.lead_id)}" data-activity-id="${escapeHtml(row.id || "")}" data-index="${row.activity_index}">${adminActivityIcon("history")}</button></div></td>
+      <td data-label="Status & remarks"><div class="admin-ref-status"><span class="admin-ref-tag ${row.recorded ? "" : row.cancelled ? "danger" : row.closed || row.followup_resolution === "completed" ? "teal" : row.retired ? "" : "warning"}">${statusLabel(row)}</span><span class="admin-activity-preview admin-activity-remarks" title="${escapeHtml([row.outcome, row.remarks].filter(Boolean).join(" - ") || (noRemarks ? "No remarks" : ""))}">${row.outcome ? `<strong class="${tone}">${escapeHtml(row.outcome)}</strong>` : ""}${row.remarks ? `${row.outcome ? " &mdash; " : ""}${escapeHtml(row.remarks)}` : noRemarks ? '<strong class="danger">No remarks</strong>' : ""}</span><button class="text-button admin-activity-history" type="button" aria-label="History and details" title="History and details" data-admin-activity-history="${escapeHtml(row.lead_id)}" data-activity-id="${escapeHtml(row.id || "")}" data-index="${row.activity_index}">${adminActivityIcon("history")}</button></div></td>
     </tr>`;
   };
   const showing = pages > 1 ? `${offset + 1}&ndash;${offset + rows.length} of ${filtered.length}${filtered.length === all.length ? "" : ` (${all.length} total)`}` : `${filtered.length} of ${all.length}`;
@@ -8207,8 +8210,9 @@ function renderReferenceAdminActivity() {
   const emptyMessage = loading ? "Loading activities..." : unavailable ? escapeHtml(state.leadsError) : all.length ? "No activities match these filters." : personal ? "No activity logged on your assigned leads." : "No activities recorded.";
   const count = n => personal && (loading || unavailable) ? "&mdash;" : n;
   const cancelled = all.filter(row => row.cancelled).length;
+  const followupTotal = all.filter(row => !row.recorded).length;
   host.innerHTML = `<section class="admin-ref-activity-stats" aria-label="Activity summary">
-    <article class="admin-ref-stat teal"><span>Activities closed</span><div><strong>${count(closed)}</strong> <b>/ ${count(all.length)}</b>${personal ? "" : ` <small>${done} done &middot; ${notReached} not reached</small>`}</div>${personal && (loading || unavailable) ? "" : adminReferenceProgress(closed, all.length)}</article>
+    <article class="admin-ref-stat teal"><span>Activities closed</span><div><strong>${count(closed)}</strong> <b>/ ${count(followupTotal)}</b>${personal ? "" : ` <small>${done} done &middot; ${notReached} not reached</small>`}</div>${personal && (loading || unavailable) ? "" : adminReferenceProgress(closed, followupTotal)}</article>
     <article class="admin-ref-stat warning"><span>Still pending</span><div><strong>${count(pending)}</strong> <small>Awaiting next step</small></div></article>
     <button class="admin-ref-stat danger admin-activity-missing" type="button" data-admin-activity-filter="status" data-value="${f.status === "missing" ? "all" : "missing"}" aria-pressed="${f.status === "missing"}"><span>No remarks</span><div><strong>${count(missing)}</strong> <small>Unexplained &rsaquo;</small></div></button>
     ${personal ? `<article class="admin-ref-stat"><span>Cancelled</span><strong>${count(cancelled)}</strong></article>`
@@ -10881,7 +10885,7 @@ function recordRelationshipHealth(lead) {
   const known = !closed && days !== null && Number.isFinite(cadence) && cadence > 0;
   const tone = !known ? "unknown" : days > cadence * 1.6 ? "red" : days > cadence ? "amber" : "green";
   const recent = (lead.activities || []).filter(activity => {
-    if (activity.followup_resolution === "cancelled") return false;
+    if (activity.lead_creation || activity.followup_resolution === "cancelled") return false;
     const elapsed = recordDaysSince(activity.at);
     return elapsed !== null && elapsed <= 60;
   });
@@ -13707,6 +13711,7 @@ function renderWeeklyActivityLog(activities) {
 }
 
 function activityTableStatus(activity) {
+  if (activity.lead_creation) return { label: "Recorded", tone: "neutral" };
   const type = String(activity.type || "Note");
   const dueDate = String(activity.reminder_due_date || activity.due_date || "").slice(0, 10);
   const reminder = type.toLowerCase() === "reminder";

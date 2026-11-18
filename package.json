@@ -5,7 +5,8 @@
   "description": "Shared web and mobile CRM platform for ARG Leads Tracker.",
   "scripts": {
     "build": "node -e \"console.log('No asset compilation required for ARG Leads Tracker')\"",
-    "verify": "npm run check && npm run test:sales-lead-summary-auth-loading && npm test && npm run test:lead-reassignment && npm run test:management-tasks && npm run test:ui:tokens && npm run build",
+    "verify": "npm run check && npm run test:sales-lead-summary-auth-loading && npm run test:lead-creation-activity && npm test && npm run test:lead-reassignment && npm run test:management-tasks && npm run test:ui:tokens && npm run build",
+    "test:lead-creation-activity": "node --test tests/lead-creation-activity.test.cjs",
     "test:lead-reassignment": "node tests/lead-reassignment-api.test.js && node --test tests/lead-reassignment-database.test.cjs",
     "test:management-tasks": "node --test tests/management-tasks.test.cjs",
     "start": "node server.js",
@@ -36,6 +37,7 @@
     "node": "24.x"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "@playwright/test": "^1.62.1"
   }
 }
