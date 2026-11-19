@@ -2226,39 +2226,70 @@ function normalizePmr(input, lead, user) {
   };
 }
 
-function resolvePmrActivityLink(input, lead) {
-  const activities = ensureActivityIds(lead.activities);
-  const selectedActivityId = String(input.activity_id || "").trim();
-  if (selectedActivityId) {
-    const existingActivity = activities.find(activity => String(activity.id || "") === selectedActivityId);
-    if (!existingActivity) {
-      const error = new Error("Linked meeting activity was not found on this lead. Refresh and choose the activity again.");
-      error.status = 400;
-      throw error;
-    }
-    return {
-      activityId: selectedActivityId,
-      activities,
-      existingActivity
-    };
-  }
-  return {
-    activityId: newRecordId("act"),
-    activities,
-    existingActivity: null
-  };
+const PMR_MEETING_TYPES = ["In-Person Meeting", "Site Visit", "Video Call", "Phone Call"];
+const pmrKey = value => String(value || "").trim().toLowerCase();
+const isPmrFilingEvent = activity => pmrKey(activity?.type) === "pmr filed";
+
+function pmrError(message, status = 400) {
+  return Object.assign(new Error(message), { status });
 }
 
-function pmrTimelineActivity({ activityId, pmr, payload, existingActivity }) {
+function pmrDate(value) {
+  const day = String(value || "").slice(0, 10);
+  const parsed = new Date(day);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(+parsed) &&
+    parsed.toISOString().slice(0, 10) === day ? day : "";
+}
+
+function resolvePmrActivityLink(input, lead, user) {
+  const activities = Array.isArray(lead.activities) ? lead.activities : [];
+  const today = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const selected = String(input.activity_id || "").trim();
+  const existingActivity = selected ? activities.find(activity => activity?.id === selected) : null;
+  const draftId = String(input.id || "");
+  const eventId = /^[\w-]{8,100}$/.test(draftId)
+    ? `pmr-act-${crypto.createHash("sha256").update(JSON.stringify([lead.id, user.id, draftId])).digest("hex")}`
+    : newRecordId("act");
+  const activityId = selected || eventId;
+  const meetingType = existingActivity?.type || input.meeting_type || "In-Person Meeting";
+  const substantiveCall = input.substantive_call === true || input.substantive_call === "on";
+  const meetingDate = pmrDate(selected ? existingActivity?.at : input.meeting_date || today);
+  if (!meetingDate || meetingDate > today) throw pmrError("Choose a completed customer meeting with a valid date no later than today.");
+  if (selected) {
+    const type = pmrKey(meetingType);
+    const status = [existingActivity.status, existingActivity.transaction_status, existingActivity.followup_resolution].map(pmrKey);
+    const outcome = pmrKey(existingActivity.transaction_outcome || existingActivity.outcome);
+    const completed = status.some(value => ["completed", "closed", "done"].includes(value)) || existingActivity.followup_completed === true || /^done\b/.test(outcome);
+    const scheduled = existingActivity.due_date || existingActivity.due_at || existingActivity.reminder || existingActivity.next_action_date || existingActivity.followup_label;
+    const connected = ["spoke to customer", "done - spoke to customer", "connected"].includes(outcome);
+    if (existingActivity.archived || existingActivity.reminder || existingActivity.delete_request || existingActivity.deletion_status === "pending" ||
+        existingActivity.correction || status.some(value => ["cancelled", "canceled", "scheduled", "planned", "in progress", "in_progress", "not reached", "failed"].includes(value)) ||
+        /not reached|no answer|voicemail|wrong number|invalid number|meeting booked/.test(outcome) ||
+        (type === "phone call" ? !connected || !substantiveCall
+          : !["in-person meeting", "site visit", "video call", "video meeting", "customer meeting", "meeting", "visit"].includes(type) || (!completed && scheduled))) {
+      throw pmrError("Choose a completed customer meeting, visit, video meeting, or a confirmed substantive call.");
+    }
+  } else if (!PMR_MEETING_TYPES.includes(meetingType) || (meetingType === "Phone Call" && !substantiveCall)) {
+    throw pmrError("Choose a meeting type and confirm that any phone call was substantive.");
+  }
+  return { activityId, eventId, activities, existingActivity, meetingType, meetingDate, substantiveCall };
+}
+
+function pmrTimelineActivity({ activityId, eventId, pmr, payload, existingActivity, meetingType, user }) {
   const hasVoiceNote = Boolean(pmr.voice_note_url || pmr.voice_note_id);
   const hasTranscript = Boolean(pmr.voice_note_transcript);
   const selectedExisting = Boolean(existingActivity);
   const baseText = `PMR filed. Heat score ${pmr.relationship_heat_score}/5. Director action: ${pmr.director_action_required}.${hasVoiceNote ? " Voice note attached." : ""}${hasTranscript ? " AI transcript saved." : ""}`;
-  return {
-    id: selectedExisting ? newRecordId("act") : activityId,
-    at: pmr.meeting_date || new Date().toISOString().slice(0, 10),
-    type: selectedExisting ? "PMR Filed" : "In-Person Meeting",
-    text: selectedExisting ? `${baseText} Linked to meeting activity: ${activitySummary(existingActivity)}.` : `${baseText} Meeting activity created from PMR.`,
+  return normalizeWorkflowActivity({
+    id: eventId,
+    at: selectedExisting ? pmr.created_at.slice(0, 10) : pmr.meeting_date,
+    type: selectedExisting ? "PMR Filed" : meetingType,
+    text: baseText,
+    created_by: user.id,
+    created_by_name: publicUser(user).name || user.email,
+    transaction_status: "closed",
+    status: "completed",
+    ...(meetingType === "Phone Call" && !selectedExisting ? { transaction_outcome: "Done - spoke to customer" } : {}),
     pmr_linked: true,
     pmr_id: pmr.id,
     activity_id: activityId,
@@ -2273,7 +2304,7 @@ function pmrTimelineActivity({ activityId, pmr, payload, existingActivity }) {
     voice_note_size_bytes: pmr.voice_note_size_bytes,
     voice_note_transcript: pmr.voice_note_transcript,
     quotation_ref: String(payload.quotation_ref || "").trim()
-  };
+  }, user);
 }
 
 function latestPmr(db, leadId) {
@@ -3795,7 +3826,7 @@ async function queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled) 
 }
 async function persistActivityCollection(db, user, lead, activities, supabaseEnabled) {
   const normalized = ensureActivityIds(activities);
-  const lastActivity = normalized.find(activity => !activity.delete_request && !activity.archived
+  const lastActivity = normalized.find(activity => !isPmrFilingEvent(activity) && !activity.delete_request && !activity.archived
     && activity.followup_resolution !== "cancelled" && !activity.followup_label)?.at
     || lead.last_activity
     || "";
@@ -7909,32 +7940,27 @@ async function handleApi(req, res, url) {
       }
       if (req.method === "POST") {
         const payload = await readBody(req);
-        const link = resolvePmrActivityLink(payload, lead);
-        const pmrBody = toSupabasePmr({ ...payload, activity_id: link.activityId }, lead, user);
-        const pmrs = await rest("pmrs?select=*", {
-          method: "POST",
-          ...supabaseDataOptions(user.token),
-          headers: { Prefer: "return=representation" },
-          body: pmrBody
-        });
-        const pmr = fromSupabasePmr(pmrs[0]);
-        const activity = pmrTimelineActivity({
-          activityId: link.activityId,
-          pmr,
-          payload,
-          existingActivity: link.existingActivity
-        });
-        const updated = await rest(`leads?id=eq.${encodeURIComponent(lead.id)}&select=*`, {
-          method: "PATCH",
-          ...supabaseDataOptions(user.token),
-          headers: { Prefer: "return=representation" },
-          body: {
-            last_activity: activity.at,
-            activities: [activity, ...link.activities],
-            tags: [lead.tags, pmr.compliance_requirements, pmr.competitors_mentioned].filter(Boolean).join(", ")
+        const link = resolvePmrActivityLink(payload, lead, user);
+        const input = { ...payload, activity_id: link.activityId, meeting_date: link.meetingDate };
+        const pmr = normalizePmr(input, lead, publicUser(user));
+        try {
+          const result = await rest("rpc/file_lead_pmr", {
+            method: "POST", ...supabaseDataOptions(user.token),
+            body: {
+              p_lead_id: lead.id,
+              p_pmr: toSupabasePmr(input, lead, user),
+              p_event: pmrTimelineActivity({ ...link, pmr, payload, user }),
+              p_previous_activities: link.activities,
+              p_substantive_call: link.substantiveCall
+            }
+          });
+          return sendJson(res, result.duplicate ? 200 : 201, { pmr: fromSupabasePmr(result.pmr), lead: fromSupabaseLead(result.lead) });
+        } catch (error) {
+          if (error.status === 404 && /file_lead_pmr/.test(error.message)) {
+            return sendJson(res, 503, { error: "PMR saving is not configured in this environment." });
           }
-        });
-        return sendJson(res, 201, { pmr, lead: fromSupabaseLead(updated[0]) });
+          throw error;
+        }
       }
     }
     const lead = db.leads.find(item => item.id === pmrMatch[1]);
@@ -7944,21 +7970,22 @@ async function handleApi(req, res, url) {
     }
     if (req.method === "POST") {
       const payload = await readBody(req);
-      const link = resolvePmrActivityLink(payload, lead);
-      lead.activities = link.activities;
-      const pmr = normalizePmr({ ...payload, activity_id: link.activityId }, lead, publicUser(user));
-      const activity = pmrTimelineActivity({
-        activityId: link.activityId,
-        pmr,
-        payload,
-        existingActivity: link.existingActivity
-      });
-      db.pmrs.unshift(pmr);
-      lead.activities.unshift(activity);
-      lead.last_activity = activity.at;
-      lead.tags = [lead.tags, pmr.compliance_requirements, pmr.competitors_mentioned].filter(Boolean).join(", ");
-      writeDb(db);
-      return sendJson(res, 201, { pmr, lead: leadWithDerivedFields(lead) });
+      const freshDb = readDb();
+      const current = freshDb.leads.find(item => item.id === lead.id);
+      if (!current || !leadBelongsToUser(current, user)) return sendJson(res, 404, { error: "Company not found" });
+      const link = resolvePmrActivityLink(payload, current, user);
+      const prior = freshDb.pmrs.find(pmr => pmr.company_id === current.id && pmr.activity_id === link.activityId);
+      const priorEvent = link.activities.find(activity => activity?.id === link.eventId);
+      if (prior && priorEvent?.pmr_id === prior.id) return sendJson(res, 200, { pmr: prior, lead: leadWithDerivedFields(current) });
+      if (prior || priorEvent) throw pmrError("A PMR has already been filed for this meeting.", 409);
+      const pmr = normalizePmr({ ...payload, id: newRecordId("pmr"), activity_id: link.activityId, meeting_date: link.meetingDate }, current, publicUser(user));
+      const activity = pmrTimelineActivity({ ...link, pmr, payload, user });
+      freshDb.pmrs.unshift(pmr);
+      current.activities = [activity, ...link.activities];
+      if (!link.existingActivity && pmr.meeting_date > (pmrDate(current.last_activity) || "")) current.last_activity = pmr.meeting_date;
+      current.tags = [current.tags, pmr.compliance_requirements, pmr.competitors_mentioned].filter(Boolean).join(", ");
+      writeDb(freshDb);
+      return sendJson(res, 201, { pmr, lead: leadWithDerivedFields(current) });
     }
   }
 
