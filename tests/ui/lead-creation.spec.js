@@ -60,6 +60,13 @@ test("registration shows the actual creator in Admin Activity without inventing 
     await expect(managed.locator('[data-label="Type"]')).toHaveText("New Lead creation");
     await expect(managed.locator('[data-label="Logged by"]')).toHaveText("Demo Admin");
     await expect(managed.locator('[data-label="Origin"]')).toContainText("Management");
+    await managed.getByRole("button",{name:"History and details",exact:true}).click();
+    const adminDetails=page.locator("#activityDetailsDialog");
+    await expect(adminDetails).toContainText("Created on");
+    await expect(adminDetails).toContainText("New Lead creation");
+    await expect(adminDetails).not.toContainText("Next action date");
+    await expect(adminDetails).not.toContainText("Outcome & remarks");
+    await adminDetails.getByRole("button",{name:"Close activity details",exact:true}).click();
     await expect(recorded.filter({ hasText: blankCompany }).locator('[data-label="Type"]')).toHaveText("New Lead creation");
     const salesRows = log.locator(".admin-ref-activity-table tbody tr").filter({ hasText: salesCompany });
     await expect(salesRows).toHaveCount(2);
@@ -86,6 +93,14 @@ test("registration shows the actual creator in Admin Activity without inventing 
       await expect(row.locator('[data-label="Status & remarks"]')).toContainText("Recorded");
     }
     await expect(personal.locator(".admin-ref-activity-table tbody tr").filter({ hasText: adminCompany })).toHaveCount(0);
+    await ownCreations.filter({hasText:salesCompany}).getByRole("button",{name:"History and details",exact:true}).click();
+    const personalDetails=sales.locator("#activityDetailsDialog");
+    await expect(personalDetails).toContainText("Created on");
+    await expect(personalDetails).toContainText("New Lead creation");
+    await expect(personalDetails).not.toContainText("To Call");
+    await expect(personalDetails).not.toContainText("Next action date");
+    await expect(personalDetails).not.toContainText("Outcome & remarks");
+    await personalDetails.getByRole("button",{name:"Close activity details",exact:true}).click();
     await capture(sales, info, "salesman-lead-creation-attribution");
     expect(await sales.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await sales.goto(`/leads/${registered.id}?tab=activities`);

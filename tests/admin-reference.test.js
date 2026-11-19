@@ -35,6 +35,28 @@ assert.equal(created.type, "New Lead creation", "The Admin Type column uses the 
 assert.equal(registration.type, "Lead creation", "Display labels must not rewrite protected saved history");
 assert.equal(created.origin, "Self", "Creator snapshots survive profile-list omissions");
 assert.equal(created.recorded, true);
+const detailButton = () => ({classList:{toggle(name,value){this[name]=value;}},dataset:{}});
+const detailElements = {activityDetailsDialog:{showModal(){}},activityDetailsTitle:{},
+  activityDetailsBody:{querySelectorAll:()=>[]},editActivityFromDetails:detailButton(),
+  requestActivityDeletionFromDetails:detailButton(),cancelActivityDeletionFromDetails:detailButton()};
+Object.assign(context,{els:detailElements,currentView:"activity",isSalesmanRole:()=>false,
+  resolveActivity:()=>({lead:{company_name:"Creation fixture",next_action:"To Call",assigned_salesman:"Current owner",activities:[registration]},activity:registration}),
+  pageTitleMarkup:value=>String(value),escapeHtml:value=>String(value),formatDisplayDate:value=>String(value),formatDateTime:value=>String(value)});
+vm.runInContext(fn("openActivityDetails"),context);
+context.openActivityDetails("lead",0,"creation");
+assert.match(detailElements.activityDetailsBody.innerHTML, /<span>Created on<\/span>/);
+assert.match(detailElements.activityDetailsBody.innerHTML, /<span>Type<\/span><strong>New Lead creation<\/strong>/);
+assert.doesNotMatch(detailElements.activityDetailsBody.innerHTML, /Next action|To Call|Outcome &amp; remarks|No remarks recorded/,
+  "A creation audit must not inherit the current plan or appear to require a follow-up outcome");
+context.currentView="pipeline";
+context.openActivityDetails("lead",0,"creation");
+assert.equal(detailElements.editActivityFromDetails.classList.hidden,true,"Creation stays read-only outside the Activity log");
+assert.equal(detailElements.requestActivityDeletionFromDetails.classList.hidden,true);
+context.currentView="activity";
+context.resolveActivity=()=>({lead:{company_name:"Ordinary fixture",next_action:"To Call",activities:[]},
+  activity:{id:"ordinary",type:"Phone Call",at:"2026-11-01"}});
+context.openActivityDetails("lead",0,"ordinary");
+assert.match(detailElements.activityDetailsBody.innerHTML, /<span>Next action<\/span><strong>To Call<\/strong>/);
 const otherSnapshot = { ...registration, id: "unverified-role", lead_creation: false, type: "Call", created_by_role: "admin" };
 state.leads[0].activities.push(otherSnapshot);
 assert.equal(context.adminReferenceActivityRows().find(row => row.id === "unverified-role").origin, "Not recorded",
@@ -88,7 +110,7 @@ state.currentUser.id = "other";
 assert.equal(context.adminReferenceActivityRows().length, 0, "Another signed-in Salesman cannot inherit the previous account's log");
 assert.match(source, /renderReferenceAdminShell\(\)/);
 assert.match(source, /data-admin-activity-history/);
-assert.match(source, /readOnlyLog = currentView === "activity" && \(state\.currentUser\?\.role === "admin" \|\| isSalesmanRole\(\)\)/);
+assert.match(source, /readOnlyLog = creation \|\| currentView === "activity" && \(state\.currentUser\?\.role === "admin" \|\| isSalesmanRole\(\)\)/);
 assert.match(css, /html:has\(body\.admin-reference-mode\)/, "Sticky navigation must not be trapped in a body scroll container");
 assert.match(css, /\.admin-ref-mobile-filters/, "Mobile filter access must not depend on table columns");
 context.percentOf = (count, total) => total ? Math.round(count / total * 100) : 0;

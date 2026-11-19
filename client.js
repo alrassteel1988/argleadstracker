@@ -2129,21 +2129,26 @@ function openActivityDetails(leadId, activityIndex, activityId = "") {
     && item.request_status === "pending"
   ));
   activityDetailsSelection = { leadId, activityIndex, activity, pendingRequest };
-  els.activityDetailsTitle.innerHTML = pageTitleMarkup(`${activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`);
+  const creation = Boolean(activity.lead_creation);
+  const creationOrigin = activity.created_by_role === "salesman" ? "Self"
+    : ["admin", "manager", "director"].includes(activity.created_by_role) ? "Management" : "Not recorded";
+  els.activityDetailsTitle.innerHTML = pageTitleMarkup(`${creation ? "New Lead creation" : activity.activity_purpose || activity.type || "Activity"} · ${lead.company_name}`);
   const attachments = (activity.attachments || []).filter(item => !item.removed_at);
   const history = activity.audit_history || [];
-  const readOnlyLog = currentView === "activity" && (state.currentUser?.role === "admin" || isSalesmanRole());
+  const readOnlyLog = creation || currentView === "activity" && (state.currentUser?.role === "admin" || isSalesmanRole());
   els.activityDetailsBody.innerHTML = `
     <div class="activity-detail-grid">
       <div class="activity-detail-field"><span>Company</span><strong>${escapeHtml(lead.company_name)}</strong></div>
       <div class="activity-detail-field"><span>Recorded by</span><strong>${escapeHtml(activity.created_by_name || activity.salesman_name || lead.assigned_salesman || "User")}</strong></div>
-      <div class="activity-detail-field"><span>Next action</span><strong>${escapeHtml(activity.next_action_plan || lead.next_action || "Not added")}</strong></div>
+      ${creation ? `<div class="activity-detail-field"><span>Created on</span><strong>${escapeHtml(formatDateTime(activity.created_at || activity.at || ""))}</strong></div>
+      <div class="activity-detail-field"><span>Type</span><strong>New Lead creation</strong></div>
+      <div class="activity-detail-field"><span>Origin</span><strong>${escapeHtml(creationOrigin)}</strong></div>` : `<div class="activity-detail-field"><span>Next action</span><strong>${escapeHtml(activity.next_action_plan || lead.next_action || "Not added")}</strong></div>
       <div class="activity-detail-field"><span>Next action date</span><strong>${escapeHtml(formatDisplayDate(activity.next_action_date || activity.at || ""))}</strong></div>
-      <div class="activity-detail-field"><span>Purpose</span><strong>${escapeHtml(activity.activity_purpose || activity.type || "Activity")}</strong></div>
+      <div class="activity-detail-field"><span>Purpose</span><strong>${escapeHtml(activity.activity_purpose || activity.type || "Activity")}</strong></div>`}
       <div class="activity-detail-field"><span>Version</span><strong>${escapeHtml(activity.version || 1)}</strong></div>
     </div>
     <section class="activity-detail-section"><h3>Notes</h3><p>${escapeHtml(activity.note || activity.notes || activity.text || "No notes added.")}</p></section>
-    ${readOnlyLog ? `<section class="activity-detail-section"><h3>Outcome &amp; remarks</h3>${activity.transaction_outcome ? `<strong>${escapeHtml(activity.transaction_outcome)}</strong>` : ""}<p>${escapeHtml(activity.transaction_remarks || "No remarks recorded.")}</p>${activity.transaction_updated_at ? `<small>${escapeHtml([activity.transaction_updated_by_name, formatDateTime(activity.transaction_updated_at)].filter(Boolean).join(" - "))}</small>` : ""}</section>` : ""}
+    ${readOnlyLog && !creation ? `<section class="activity-detail-section"><h3>Outcome &amp; remarks</h3>${activity.transaction_outcome ? `<strong>${escapeHtml(activity.transaction_outcome)}</strong>` : ""}<p>${escapeHtml(activity.transaction_remarks || "No remarks recorded.")}</p>${activity.transaction_updated_at ? `<small>${escapeHtml([activity.transaction_updated_by_name, formatDateTime(activity.transaction_updated_at)].filter(Boolean).join(" - "))}</small>` : ""}</section>` : ""}
     <section class="activity-detail-section">
       <h3>Attachments (${attachments.length})</h3>
       <div class="activity-attachment-list">
