@@ -12942,6 +12942,8 @@ body.salesman-dashboard-mode .open-article-link {
 .enrichment-strip {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   min-height: 38px;
   padding: 9px 12px;
   border: 1px solid var(--line);
@@ -12954,6 +12956,23 @@ body.salesman-dashboard-mode .open-article-link {
   font-size: var(--text-label);
   font-weight: var(--weight-regular);
   line-height: var(--leading-label);
+}
+
+.form-grid .lead-lookup-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.form-grid .lead-lookup-toggle input {
+  width: 16px;
+  min-height: 16px;
+  margin: 0;
+}
+
+.form-grid .lead-lookup-toggle[hidden] {
+  display: none;
 }
 
 .enrichment-status.success {

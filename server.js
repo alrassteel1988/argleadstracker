@@ -2969,7 +2969,8 @@ async function updateEnrichment(token, userId, leadId, provider, status, details
 
 function hasGoogleFields(input) {
   return Boolean(
-    input.google_place_id
+    input.enrichment_source === "manual"
+    || input.google_place_id
     || input.google_maps_url
     || ["enriched", "partial", "not_found"].includes(String(input.enrichment_status || ""))
   );
@@ -3864,6 +3865,7 @@ function storageKeyForActivityAttachment(leadId, activityId, filename) {
 }
 
 function scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled }) {
+  if (lead.enrichment_source === "manual") return;
   setTimeout(async () => {
     const startedAt = Date.now();
     try {
