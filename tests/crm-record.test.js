@@ -45,7 +45,8 @@ vm.createContext(routeContext);
 for (const name of ["isLeadRoutePath", "parseAppRoute"]) vm.runInContext(client.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0], routeContext);
 assert.equal(routeContext.parseAppRoute({pathname:"/leads/example/overview",search:""}).leadId,"example");
 assert.equal(routeContext.parseAppRoute({pathname:"/leads/example/overview",search:""}).tab,"overview");
-const overviewHelpers = client.slice(client.indexOf("function recordDaysSince("), client.indexOf("function renderDrawerOverview("));
+const overviewHelpers = client.slice(client.indexOf("function recordDaysSince("), client.indexOf("function renderDrawerOverview(")) +
+  client.slice(client.indexOf("function pmrKey("), client.indexOf("function pmrActivityLinks("));
 const context = {
   state: {selectedId: "other", leadAiSummary: null, currentUser: {role: "admin"}}, summaryText: String,
   today: () => "2026-10-27",
@@ -55,7 +56,10 @@ const context = {
   activityTypeClass: value => `activity-${value}`,
   renderDrawerNotes: () => '<section class="drawer-notes-view">Existing notes editor</section>',
   drawerStageLabel: String,
-  lead: {id:'test"<id>', contact_person:'<script>contact</script>', activities:[{type:'Call"<script>', text:'<img src=x onerror=alert(1)>', at:'2026-10-20'}]}
+  lead: {id:'test"<id>', contact_person:'<script>contact</script>', activities:[
+    {type:'Call"<script>', text:'<img src=x onerror=alert(1)>', at:'2026-10-20'},
+    {type:"PMR Filed", text:"Audit-only PMR filing", at:"2026-10-21"}
+  ]}
 };
 const emptyOverview = vm.runInNewContext(`${overviewHelpers}\ndesktopLeadOverviewMarkup(lead)`, context);
 assert.ok(emptyOverview.includes("No next step set"));
@@ -66,6 +70,7 @@ assert.ok(!emptyOverview.includes("<script>") && !emptyOverview.includes("<img")
 assert.ok(!emptyOverview.includes('href="#"'), "Missing contact methods must not create dead links");
 assert.match(emptyOverview, /record-overview-health/);
 assert.match(emptyOverview, /Contact timing uses the current status and tier cadence/);
+assert.doesNotMatch(emptyOverview, /Audit-only PMR filing/);
 assert.equal((emptyOverview.match(/data-company-ai-action=/g) || []).length, 4);
 const mobileNext = vm.runInNewContext(`${overviewHelpers}\nmobileLeadNextStepMarkup({...lead, next_action:'To Call', next_action_date:'2026-10-20'})`, context);
 assert.ok(mobileNext.includes("5 days overdue"));

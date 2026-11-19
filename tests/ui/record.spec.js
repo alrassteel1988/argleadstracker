@@ -29,6 +29,40 @@ test("lead reassignment requires Admin and displays the saved handoff", async ({
   await expect(history).toContainText("Transfer the test lead for continued follow-up.");
 });
 
+test("PMR links only held meetings and leaves one customer activity row", async ({ page }, info) => {
+  await login(page, info);
+  const leadId = "ui-lead-1";
+  await page.evaluate(async lead => {
+    for (const [type, text] of [["Site Visit", "Synthetic visit held with purchasing"], ["Email", "Synthetic email mentioning a site visit"]]) {
+      await api(`/api/leads/${lead}/activities`, { method: "POST", body: JSON.stringify({ type, text }) });
+    }
+  }, leadId);
+  await page.goto(`/leads/${leadId}?tab=pmr`);
+  await page.getByRole("button", { name: "File New PMR" }).click();
+  const dialog = page.locator("#pmrDialog");
+  const picker = dialog.getByLabel("Meeting activity");
+  await expect(picker.locator("option")).toHaveText([
+    "Choose a completed meeting", /Site Visit.*Synthetic visit held/, "Record an unlogged meeting"
+  ]);
+  await picker.selectOption("__new_meeting__");
+  await dialog.getByLabel("Meeting type").selectOption("Phone Call");
+  await expect(dialog.getByRole("checkbox", { name: /customer was reached/ })).toBeVisible();
+  await picker.selectOption({ index: 1 });
+  await expect(dialog.getByLabel("Meeting date")).not.toBeEditable();
+  await expect(dialog.getByRole("checkbox", { name: /customer was reached/ })).toBeHidden();
+  await dialog.locator('[name="notes"]').fill("Customer requested a quotation for structural steel.");
+  await dialog.getByRole("button", { name: "Save PMR" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator(".drawer-pmr")).toContainText("Customer requested a quotation");
+  await page.locator('.lead-detail-tabs [data-drawer-tab="activities"]').click();
+  await expect(page.locator(".drawer-activity").filter({ hasText: "Synthetic visit held" })).toHaveCount(1);
+  await expect(page.locator(".drawer-activity").filter({ hasText: "PMR Filed" })).toHaveCount(0);
+  await page.getByRole("button", { name: "View PMR", exact: true }).click();
+  await expect(page.locator(".drawer-pmr")).toContainText("Customer requested a quotation");
+  await page.getByRole("button", { name: "File New PMR" }).click();
+  await expect(picker.locator("option")).toHaveText(["Choose a completed meeting", "Record an unlogged meeting"]);
+});
+
 test("scheduled outcome and cancellation save real history and a replacement", async ({ page }, info) => {
   const role = await login(page, info);
   const mobile = info.project.name.endsWith("mobile");
