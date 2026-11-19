@@ -194,7 +194,10 @@ async function verify() {
       secondary_contact_mobile: "+12025550101", secondary_contact_email: "backup@example.test",
       tags: "synthetic", quotation_ref: "TEST-123", estimated_monthly_volume: "25 MT/month"
     };
-    const ordinaryEdit = await request("admin", {...editForm, ...leadDetails,
+    const blockedScheduleEdit = await request("admin", {...editForm, ...leadDetails});
+    assert.equal(blockedScheduleEdit.status, 409, "Full Edit Lead cannot clear an active schedule outside its audited controls");
+    assert.equal(patches.length, 2);
+    const ordinaryEdit = await request("admin", {...editForm, ...leadDetails, next_action:lead.next_action, next_action_date:lead.next_action_date,
       contact_person: "Test Contact", email: "buyer@example.test", first_order_date: "2026-12-01"});
     assert.equal(ordinaryEdit.status, 200, JSON.stringify(ordinaryEdit.body));
     assert.equal(Object.hasOwn(patches[2], "lead_status"), false);
@@ -205,7 +208,8 @@ async function verify() {
     assert.equal(ordinaryEdit.body.first_order_date, "2026-12-01");
     const oldDetails = { first_order_date: "2026-12-01", estimated_monthly_volume: "125 MT", products_services_remarks: "Previously saved steel requirements." };
     Object.assign(lead, oldDetails);
-    const editWithoutRetiredFields = { ...editForm, assigned_salesman: "New Owner", sector: "Piling" };
+    const editWithoutRetiredFields = { ...editForm, assigned_salesman: "New Owner", sector: "Piling",
+      next_action:lead.next_action, next_action_date:lead.next_action_date };
     for (const field of Object.keys(oldDetails)) delete editWithoutRetiredFields[field];
     const preservedDetails = await request("admin", editWithoutRetiredFields);
     assert.equal(preservedDetails.status, 200, JSON.stringify(preservedDetails.body));
