@@ -1848,6 +1848,9 @@ body.admin-activity-mode #appShell #adminReferenceActivity .admin-activity-searc
 .admin-activity-links { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; min-width: 0; }
 #adminReferenceActivity .admin-ref-tag { padding: 1px 6px; font-size: 11px; font-weight: 650; align-items: center; gap: 3px; }
 #adminReferenceActivity .admin-ref-tag svg { width: 11px; height: 11px; }
+#adminReferenceActivity .admin-activity-origin { max-width: 100%; box-sizing: border-box; }
+#adminReferenceActivity .admin-activity-origin > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+#adminReferenceActivity .admin-activity-origin svg { flex: 0 0 auto; }
 #adminReferenceActivity .admin-ref-tag.danger { color: #a6221a; background: #fcebea; }
 #adminReferenceActivity .admin-activity-history { display: inline-grid; place-items: center; width: 24px; min-width: 24px; height: 24px; min-height: 24px; margin-inline-start: auto; flex: 0 0 auto; }
 #adminReferenceActivity .admin-ref-calendar { margin-top: 0; font-size: 12px; }

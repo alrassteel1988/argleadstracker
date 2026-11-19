@@ -113,6 +113,8 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(adminCreation[0].created_by, adminLogin.data.user.id);
     assert.equal(adminCreation[0].created_by_role, "admin");
     assert.equal(adminCreation[0].text, "New Lead Account creation");
+    assert.ok(ownLead.data.initial_management_task_id);
+    assert.equal(ownLead.data.activities.filter(item => item.reminder).length, 0, "An Admin assignment must not duplicate its linked task as a reminder");
 
     const otherLead = await request(baseUrl, "/api/leads", {
       method: "POST",
@@ -230,7 +232,7 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     const editCreation = await request(baseUrl, `/api/leads/${salesmanCreatedLead.data.id}`, {
       method: "PATCH", token: adminToken, csrfToken: adminCsrfToken, body: { activities: [] }
     });
-    assert.equal(editCreation.response.status, 409, JSON.stringify(editCreation.data));
+    assert.equal(editCreation.response.status, 400, "Generic lead writes must reject embedded activity history before any mutation");
     const persistedCreation = await request(baseUrl, `/api/leads/${salesmanCreatedLead.data.id}`, { token: adminToken });
     assert.deepEqual(persistedCreation.data.activities.filter(activity => activity.lead_creation), creation);
     const deleteCreation = await request(baseUrl, `/api/leads/${salesmanCreatedLead.data.id}/delete-requests`, {
@@ -401,13 +403,36 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(directDeleteAsSalesman.response.status, 403);
 
+    const forgedAuthor = { created_by: adminLogin.data.user.id, created_by_name: "Pretend Admin", created_by_role: "admin" };
+    const forgedLeadCreate = await request(baseUrl, "/api/leads", {
+      method: "POST", token: salesmanToken, csrfToken: salesmanCsrfToken,
+      body: { company_name: "Forged E2E Lead", activities: [{ ...forgedAuthor, type: "Note" }] }
+    });
+    assert.equal(forgedLeadCreate.response.status, 400);
+    const loggedReminder = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
+      method: "POST", token: salesmanToken, csrfToken: salesmanCsrfToken,
+      body: { ...forgedAuthor, type: "Reminder", due_date: "2099-01-01", activity_required: "Test follow-up reminder" }
+    });
+    assert.equal(loggedReminder.response.status, 201);
+    assert.equal(loggedReminder.data.activity.created_by, salesmanAccount.data.id);
+    assert.equal(loggedReminder.data.activity.created_by_name, "E2E Salesman");
+    assert.equal(loggedReminder.data.activity.created_by_role, "salesman");
+    const forgedLeadPatch = await request(baseUrl, `/api/leads/${ownLead.data.id}`, {
+      method: "PATCH", token: salesmanToken, csrfToken: salesmanCsrfToken,
+      body: { activities: [{ ...forgedAuthor, type: "Note", text: "Forged activity" }] }
+    });
+    assert.equal(forgedLeadPatch.response.status, 400);
+
     const activity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
-      body: { type: "Note", text: "Salesman wants to revise this later" }
+      body: { ...forgedAuthor, type: "Note", text: "Salesman wants to revise this later" }
     });
     assert.equal(activity.response.status, 201);
+    assert.equal(activity.data.activity.created_by, salesmanAccount.data.id);
+    assert.equal(activity.data.activity.created_by_name, "E2E Salesman");
+    assert.equal(activity.data.activity.created_by_role, "salesman");
 
     const correction = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/0`, {
       method: "PATCH",
@@ -417,8 +442,12 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(correction.response.status, 201, JSON.stringify(correction.data));
     assert.equal(correction.data.activity.type, "Correction");
+    assert.equal(correction.data.activity.created_by, salesmanAccount.data.id);
     assert.equal(correction.data.activity.target_activity_id, activity.data.activity.id);
     assert(correction.data.lead.activities.some(item => item.id === activity.data.activity.id));
+    const persistedReminder = correction.data.lead.activities.find(item => item.id === loggedReminder.data.activity.id);
+    assert.equal(persistedReminder.created_by_name, "E2E Salesman");
+    assert.equal(persistedReminder.created_by_role, "salesman");
 
     const directActivityDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/1`, {
       method: "DELETE",

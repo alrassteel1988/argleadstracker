@@ -1,4 +1,4 @@
-const { activityAuditEvent } = require("./activityWorkflowService");
+const { activityAuditEvent, activityAuthorFields } = require("./activityWorkflowService");
 
 const REASONS = Object.freeze({
   completed: ["Spoke to customer", "Meeting booked", "Quote requested", "Left voicemail", "No answer", "Wrong number"],
@@ -92,7 +92,7 @@ function resolveLocalLeadFollowup(lead, user, values, now) {
   const at = completed ? new Date(values.done_at).toISOString() : now;
   const replacement = values.next_type ? {
     id: `${id}-next`, type: "Reminder", reminder: true, reminder_status: "scheduled", reminder_type: "General follow-up",
-    at: now, created_at: now, created_by: user.id, created_by_name: actor, version: 1,
+    at: now, created_at: now, ...activityAuthorFields(user), version: 1,
     due_date: values.next_date, due_time: "09:00", activity_required: PLANS[values.next_type],
     text: values.next_note || values.next_type, followup_label: values.next_type
   } : null;
@@ -103,7 +103,7 @@ function resolveLocalLeadFollowup(lead, user, values, now) {
   event.at = now;
   const activity = {
     id, type: completed ? (/email/i.test(values.expected_action) ? "Email" : /visit|meeting/i.test(values.expected_action) ? "Meeting" : "Phone Call") : "Follow-up cancelled",
-    at, activity_date: dubaiDate(at), created_at: now, updated_at: now, version: 1, created_by: user.id, created_by_name: actor,
+    at, activity_date: dubaiDate(at), created_at: now, updated_at: now, version: 1, ...activityAuthorFields(user),
     followup_resolution: values.status, followup_action: values.expected_action, followup_due_date: values.expected_due,
     resolved_reminder_id: original?.id || "", resolved_legacy_reminder: Boolean(original && !original.id),
     transaction_status: completed ? "closed" : "cancelled", transaction_outcome: values.reason,
