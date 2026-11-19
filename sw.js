@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v179-enrichment-identity";
+const CACHE_VERSION = "arg-pwa-v180-activity-origin";
 const APP_SHELL = [
   "/",
   "/index.html",
