@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { runAudit, startAdminAudit, completeAdminAudit, localAuditChanges } = require("./src/services/adminAuditService");
 
 function bootstrapEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -422,6 +423,12 @@ function readDb() {
 }
 
 function writeDb(db) {
+  if (fs.existsSync(DB_PATH)) {
+    const before = JSON.parse(fs.readFileSync(DB_PATH, "utf8").replace(/^\uFEFF/, ""));
+    const supplied = db.admin_audit_events || [];
+    db.admin_audit_events = [...new Map([...(before.admin_audit_events || []), ...supplied]
+      .map(event => [event.id, event])).values(), ...localAuditChanges(before, db)];
+  }
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
@@ -522,9 +529,14 @@ function currentUser(req, db) {
   }
 }
 
+async function sendAuditedResponse(res, status, headers, body) {
+  await completeAdminAudit(status, headers);
+  res.writeHead(status, headers);
+  res.end(body);
+}
+
 function sendJson(res, status, data) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(data));
+  return sendAuditedResponse(res, status, { "Content-Type": "application/json; charset=utf-8" }, JSON.stringify(data));
 }
 
 function setResponseHeaders(res, headers) {
@@ -610,7 +622,7 @@ async function enforceRateLimit(req, res, db, supabaseEnabled, {
   if (!result.allowed) {
     res.setHeader("Retry-After", String(Math.max(1, result.retryAfterSeconds)));
     rateLimitTelemetry("rate_limit_exceeded", scope, result.subjectHash, result);
-    sendJson(res, 429, {
+    await sendJson(res, 429, {
       error: "Too many requests. Please wait before trying again.",
       retry_after_seconds: Math.max(1, result.retryAfterSeconds)
     });
@@ -647,13 +659,12 @@ function loginFailureDelay(attemptCount) {
 
 function sendDownload(res, contentType, filename, body) {
   const buffer = Buffer.isBuffer(body) ? body : Buffer.from(String(body), "utf8");
-  res.writeHead(200, {
+  return sendAuditedResponse(res, 200, {
     "Content-Type": contentType,
     "Content-Disposition": `attachment; filename="${filename}"`,
     "Cache-Control": "no-store",
     "Content-Length": buffer.length
-  });
-  res.end(buffer);
+  }, buffer);
 }
 
 function readBody(req, maxBytes = 6_000_000) {
@@ -825,20 +836,19 @@ function localUserFromVoiceNoteGrant(url, db, noteId) {
   return user ? { user, reason: "authorized" } : { user: null, reason: "inactive_user" };
 }
 
-function sendVoiceNoteFile(res, noteId) {
+async function sendVoiceNoteFile(res, noteId) {
   const id = safeVoiceNoteId(noteId);
   if (!id) {
-    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-    return res.end("Invalid voice note");
+    return sendAuditedResponse(res, 400, { "Content-Type": "text/plain; charset=utf-8" }, "Invalid voice note");
   }
   ensureVoiceNoteDir();
   const fileName = fs.readdirSync(VOICE_NOTE_DIR).find(name => name.startsWith(`${id}.`));
   if (!fileName) {
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    return res.end("Voice note not found");
+    return sendAuditedResponse(res, 404, { "Content-Type": "text/plain; charset=utf-8" }, "Voice note not found");
   }
   const filePath = path.join(VOICE_NOTE_DIR, fileName);
   const fileSize = fs.statSync(filePath).size;
+  await completeAdminAudit(200, { "Content-Disposition": "inline" });
   res.writeHead(200, {
     "Content-Type": audioContentType(filePath),
     "Content-Length": fileSize,
@@ -860,6 +870,7 @@ async function handleVoiceNoteDownload(req, res, url, { supabaseEnabled, db }) {
     user = grant.user;
     authenticationReason = grant.reason;
   }
+  await startAdminAudit(user);
   if (!user) {
     recordVoiceNoteAccess(req, {
       noteId,
@@ -932,12 +943,11 @@ async function handleVoiceNoteDownload(req, res, url, { supabaseEnabled, db }) {
       action: "download_redirect",
       outcome: "allowed"
     });
-    res.writeHead(302, {
+    return sendAuditedResponse(res, 302, {
       Location: signedUrl,
       "Cache-Control": "private, no-store",
       Pragma: "no-cache"
     });
-    return res.end();
   }
 
   const fileExists = fs.existsSync(VOICE_NOTE_DIR) &&
@@ -5157,6 +5167,35 @@ async function assistantDueDrafts(db, user, supabaseEnabled) {
   return drafts.map(item => dueIds.includes(item.id) ? { ...item, status: "Ready for Review" } : item);
 }
 
+async function handleAuditedApi(req, res, url) {
+  return runAudit(req, url, async event => {
+    if (isSupabaseConfigured()) {
+      await serviceRest("security.admin_audit", "rpc/append_admin_access_event", { method: "POST", body: { p_event: event } });
+    } else {
+      const db = readDb();
+      db.admin_audit_events = [...(db.admin_audit_events || []), { ...event, at: new Date().toISOString() }];
+      writeDb(db);
+    }
+  }, async () => {
+    try {
+      return await handleApi(req, res, url);
+    } catch (error) {
+      if (res.headersSent) { res.destroy(); return; }
+      if (error.code !== "audit_unavailable") {
+        try { return await sendJson(res, error.status || 500, {
+          error: error.message || "Server error", ...(error.details ? { details: error.details } : {})
+        }); }
+        catch (auditError) { error = auditError; }
+      }
+      res.removeHeader("Content-Length");
+      res.removeHeader("Content-Disposition");
+      res.removeHeader("Location");
+      res.writeHead(503, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ code: "audit_unavailable", error: error.message }));
+    }
+  });
+}
+
 async function handleApi(req, res, url) {
   const supabaseEnabled = isSupabaseConfigured();
   if (req.method === "GET" && url.pathname === "/api/cron/fetch-market-intelligence") {
@@ -5202,6 +5241,7 @@ async function handleApi(req, res, url) {
     const payload = await readBody(req);
     const email = String(payload.email || "").trim().toLowerCase();
     const normalizedAccount = normalizeAccountIdentifier(email) || "missing-account";
+    await startAdminAudit(null, hashRateLimitSubject("admin-audit-login", normalizedAccount, RATE_LIMIT_HASH_SECRET));
     const ipLimit = await enforceRateLimit(req, res, db, supabaseEnabled, {
       scope: "login:ip",
       subject: clientIp(req),
@@ -5218,6 +5258,7 @@ async function handleApi(req, res, url) {
       try {
         const session = await signIn(email, String(payload.password || ""));
         const user = await currentSupabaseUser({ headers: { authorization: `Bearer ${session.access_token}` } });
+        await startAdminAudit(user);
         if (!user) return sendJson(res, 403, { error: "Your profile is not active. Contact the administrator." });
         await resetDurableRateLimit(db, supabaseEnabled, "login:account", normalizedAccount);
         return sendJson(res, 200, { token: session.access_token, refresh_token: session.refresh_token, user });
@@ -5235,6 +5276,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 401, { error: "Invalid email or password." });
     }
     user.last_login_at = new Date().toISOString();
+    await startAdminAudit(user);
     user.updated_at = new Date().toISOString();
     writeDb(db);
     await resetDurableRateLimit(db, supabaseEnabled, "login:account", normalizedAccount);
@@ -5249,6 +5291,7 @@ async function handleApi(req, res, url) {
     try {
       const session = await refreshSession(refreshToken);
       const user = await currentSupabaseUser({ headers: { authorization: `Bearer ${session.access_token}` } });
+      await startAdminAudit(user);
       if (!user) return sendJson(res, 403, { error: "Your profile is not active. Contact the administrator." });
       return sendJson(res, 200, { token: session.access_token, refresh_token: session.refresh_token, user: publicUser(user) });
     } catch (error) {
@@ -5265,8 +5308,26 @@ async function handleApi(req, res, url) {
   }
 
   const user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
+  await startAdminAudit(user);
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
   if (!await enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)) return;
+
+  if (req.method === "GET" && url.pathname === "/api/admin/audit-events") {
+    if (user.role !== "admin") return sendJson(res, 403, { error: "Active Admin access required." });
+    const limit = Number(url.searchParams.get("limit") || 50);
+    const before = url.searchParams.get("before");
+    const beforeId = url.searchParams.get("before_id");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100
+      || (before && !/^\d{4}-\d{2}-\d{2}T.*Z$/.test(before)) || (before && !Number.isFinite(Date.parse(before)))
+      || (beforeId && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(beforeId))
+      || Boolean(before) !== Boolean(beforeId)) return sendJson(res, 400, { error: "Invalid audit pagination." });
+    const events = supabaseEnabled
+      ? await rest("rpc/list_admin_audit_events", { method: "POST", ...supabaseDataOptions(user.token),
+        body: { p_limit: limit, p_before: before, p_before_id: beforeId } })
+      : (readDb().admin_audit_events || []).filter(event => !before || event.at < before || (event.at === before && event.id < beforeId))
+        .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).slice(0, limit);
+    return sendJson(res, 200, events);
+  }
 
   const handoffNoticeMatch = url.pathname.match(/^\/api\/lead-handoff-notices\/([a-z0-9-]{1,80})$/i);
   if ((req.method === "GET" && url.pathname === "/api/lead-handoff-notices") || (req.method === "PATCH" && handoffNoticeMatch)) {
@@ -5362,9 +5423,8 @@ async function handleApi(req, res, url) {
     try { part = require("./src/services/emailProfileService").readProfilePart(url.searchParams.get("part")); }
     catch { return sendJson(res, 503, { error: "Company profile is temporarily unavailable." }); }
     if (!part) return sendJson(res, 400, { error: "Invalid company profile part." });
-    res.writeHead(200, { "Content-Type": "application/octet-stream", "Cache-Control": "private, no-store",
-      "X-Profile-Parts": String(part.parts), "X-Profile-Size": String(part.size) });
-    return res.end(part.buffer);
+    return sendAuditedResponse(res, 200, { "Content-Type": "application/octet-stream", "Cache-Control": "private, no-store",
+      "X-Profile-Parts": String(part.parts), "X-Profile-Size": String(part.size) }, part.buffer);
   }
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
@@ -6735,8 +6795,7 @@ async function handleApi(req, res, url) {
         activity.transaction_outcome, activity.transaction_remarks, activity.transaction_next_attempt,
         activity.transaction_updated_by_name, activity.transaction_updated_at].map(cell).join(",");
     });
-    res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="overdue-activities.csv"', "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" });
-    return res.end(`\ufeff${columns.map(cell).join(",")}\r\n${rows.join("\r\n")}\r\n`);
+    return sendAuditedResponse(res, 200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="overdue-activities.csv"', "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" }, `\ufeff${columns.map(cell).join(",")}\r\n${rows.join("\r\n")}\r\n`);
   }
 
   if (req.method === "GET" && url.pathname === "/api/activities") {
@@ -7025,8 +7084,7 @@ async function handleApi(req, res, url) {
     }
     if (!body) return sendJson(res, 404, { code: "pdf_missing", error: "PDF file not found, please re-upload." });
     if (url.searchParams.get("download")) return sendDownload(res, "application/pdf", filename, body);
-    res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${filename}"`, "Cache-Control": "private, no-store" });
-    return res.end(body);
+    return sendAuditedResponse(res, 200, { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${filename}"`, "Cache-Control": "private, no-store" }, body);
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/lead-intelligence/process") {
@@ -7653,8 +7711,7 @@ async function handleApi(req, res, url) {
         300,
         user.token
       );
-      res.writeHead(302, { Location: signedUrl, "Cache-Control": "no-store" });
-      return res.end();
+      return sendAuditedResponse(res, 302, { Location: signedUrl, "Cache-Control": "no-store" });
     }
     const localPath = path.normalize(path.join(DATA_DIR, attachment.storage_key));
     if (!localPath.startsWith(ACTIVITY_ATTACHMENT_DIR) || !fs.existsSync(localPath)) {
@@ -8209,12 +8266,12 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (url.pathname.startsWith("/api/")) {
-      await handleApi(req, res, url);
+      await handleAuditedApi(req, res, url);
     } else {
       serveStatic(req, res, url);
     }
   } catch (error) {
-    sendJson(res, error.status || 500, {
+    await sendJson(res, error.status || 500, {
       error: error.message || "Server error",
       ...(error.details ? { details: error.details } : {})
     });
@@ -8228,7 +8285,7 @@ if (require.main === module) {
   });
 }
 
-server.handleApi = handleApi;
+server.handleApi = handleAuditedApi;
 server.publicStaticFileForPath = publicStaticFileForPath;
 server.normalizeLead = normalizeLead;
 server.normalizePmr = normalizePmr;

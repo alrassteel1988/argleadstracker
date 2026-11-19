@@ -24,6 +24,12 @@ require.cache[require.resolve("../supabase-client")].exports = {
   ...supabase,
   isSupabaseConfigured: () => true,
   isSupabaseAdminConfigured: () => false,
+  serviceRest: async (operation, resource, options) => {
+    assert.equal(operation, "security.admin_audit");
+    assert.equal(resource, "rpc/append_admin_access_event");
+    assert.equal(options.method, "POST");
+    return options.body.p_event.id;
+  },
   currentSupabaseUser: async req => {
     const token = supabase.bearerToken(req);
     return users[token] ? { ...users[token], token } : null;
