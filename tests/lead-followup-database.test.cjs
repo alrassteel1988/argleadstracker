@@ -15,7 +15,7 @@ async function test() {
   const db = new PGlite();
   try {
     await db.exec(`
-      create role anon; create role authenticated;
+      create role anon; create role authenticated; create role service_role;
       create schema auth;
       create function auth.uid() returns uuid language sql stable as
         $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
@@ -43,13 +43,14 @@ async function test() {
     await db.exec(policies.slice(0, policies.indexOf("alter table public.profiles enable row level security;")));
     await db.exec(policies.slice(policies.indexOf('create policy "F04 leads read"'), policies.indexOf('drop policy if exists "F04 contacts read"')));
     await db.exec(fs.readFileSync(path.join(migrations, "20261112062358_resolve_lead_followup.sql"), "utf8"));
+    await db.exec(fs.readFileSync(path.join(migrations, "20261116094621_targeted_activity_outcomes.sql"), "utf8"));
     const input = { request_id: "b2822dec-4323-4f57-b782-c50801606e0f", status: "cancelled", reason: "Duplicate activity",
       remarks: "Same synthetic follow-up already scheduled.", expected_action: "To Call", expected_due: "2026-01-01",
       expected_updated_at: "2026-01-02T00:00:00Z", expected_revision: "" };
-    const save = async (user, values) => {
+    const save = async (user, values, rpc = "resolve_lead_followup") => {
       await db.exec("set role authenticated");
       await db.query("select set_config('request.jwt.claim.sub', $1, false)", [user]);
-      return (await db.query("select public.resolve_lead_followup($1, $2) as saved", [leadId, JSON.stringify(values)])).rows[0].saved;
+      return (await db.query(`select public.${rpc}($1, $2) as saved`, [leadId, JSON.stringify(values)])).rows[0].saved;
     };
     await assert.rejects(save(other, input), /Follow-up unavailable/);
     await assert.rejects(save(inactive, input), /Active Admin or salesman required/);
@@ -76,8 +77,45 @@ async function test() {
     const duplicate = await save(admin, cancellation);
     assert.equal(duplicate.duplicate, true);
     assert.deepEqual(duplicate.lead.activities, cancelled.lead.activities);
+    await db.exec("reset role");
+    const independent = { ...original, id: "older", activity_required: "To Visit", version: 2 };
+    const contacted = { ...original, id: "older-call", due_date: "2026-01-02" };
+    const planEntry = { id: "plan-entry", type: "Phone Call", next_action_plan: "To Call", next_action_date: original.due_date };
+    const updated = (await db.query(`update public.leads set next_action = 'To Call', next_action_date = '2026-01-01',
+      activities = $2 where id = $1 returning updated_at`,
+    [leadId, JSON.stringify([original, independent, contacted, planEntry])])).rows[0];
+    const targeted = { ...input, activity_id: independent.id, expected_action: "To Visit",
+      expected_activity_version: 2, expected_updated_at: updated.updated_at };
+    const target = (user, values) => save(user, values, "resolve_overdue_activity");
+    await assert.rejects(target(other, targeted), /Follow-up unavailable/);
+    await assert.rejects(target(inactive, targeted), /Active Admin or salesman/);
+    await assert.rejects(target(owner, { ...targeted, expected_activity_version: 1 }), /activity changed/i);
+    await assert.rejects(target(owner, { ...targeted, activity_id: original.id, expected_activity_version: 1, expected_action: "To Call" }), /lead's next step/);
+    await assert.rejects(target(owner, { ...targeted, activity_id: planEntry.id, expected_activity_version: 1, expected_action: "Phone Call" }), /records a lead plan/);
+    await assert.rejects(target(owner, { ...targeted, next_type: "To Call", next_date: "2099-01-01" }), /Invalid overdue activity/);
+    await assert.rejects(db.query("update public.leads set activities = $2 where id = $1", [
+      leadId, JSON.stringify([{ resolved_activity_id: independent.id, followup_resolution: "completed", created_by: admin }])
+    ]), /Use the follow-up controls/);
+    const resolved = await target(owner, targeted);
+    assert.equal(resolved.lead.next_action_date, original.due_date);
+    assert.equal(resolved.lead.last_activity, cancelled.lead.last_activity);
+    assert.equal(resolved.activity.resolved_activity_id, independent.id);
+    assert.equal(resolved.activity.audit_history[0].actor_id, owner);
+    assert.deepEqual(resolved.lead.activities.slice(1), [original, independent, contacted, planEntry]);
+    await assert.rejects(db.query("update public.leads set activities = activities - 0 where id = $1", [leadId]), /Use the follow-up controls/);
+    assert.equal((await target(owner, targeted)).duplicate, true);
+    await assert.rejects(target(owner, { ...targeted, remarks: "Different notes with the same request." }), /request already used/);
+    const attempt = { ...targeted, request_id: "b2822dec-4323-4f57-b782-c50801606e11",
+      activity_id: contacted.id, expected_activity_version: 1, expected_action: "To Call", expected_due: contacted.due_date,
+      expected_updated_at: resolved.lead.updated_at, status: "completed", reason: "No answer", done_at: "2026-01-04T09:00+04:00" };
+    await assert.rejects(target(admin, { ...attempt, done_at: "2099-01-04T09:00+04:00" }), /Invalid overdue activity/);
+    const attempted = await target(admin, attempt);
+    assert.equal(attempted.activity.done_by, admin);
+    assert.equal(attempted.activity.transaction_outcome, "No answer");
+    assert.equal(attempted.lead.next_action_date, original.due_date);
     await db.exec("reset role; set role anon");
     await assert.rejects(db.query("select public.resolve_lead_followup($1, $2)", [leadId, JSON.stringify(input)]), /permission denied/);
+    await assert.rejects(db.query("select public.resolve_overdue_activity($1, $2)", [leadId, JSON.stringify(targeted)]), /permission denied/);
     console.log("PASS local PostgreSQL: assignment, inactive user, Admin actor, validation, stale saves, replacement, and idempotency");
   } finally {
     await db.close();

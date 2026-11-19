@@ -2966,24 +2966,40 @@ function renderTodayWorkspace(workspace) {
 
 let neglectedWorkspace = null;
 let neglectedToolsOpen = false;
-let neglectedActivityFilter = "all";
-let neglectedActivityEditor = null;
-const neglectedOutcomes = {
-  pending: ["Call back requested", "Meeting or visit scheduled", "Will try again", "Waiting for customer reply"],
-  closed: ["Done - spoke to customer", "Done - visit or meeting held", "Not reached - no answer", "Not reached - wrong or invalid number", "Not interested", "Company closed or moved"]
-};
+let neglectedActivityFilter = "pending";
+const NEGLECTED_STATUS = { pending: "Overdue", completed: "Outcomes logged", cancelled: "Cancelled" };
 
 function neglectedActivityRows(leads, referenceDate) {
   const rows = [];
   for (const lead of leads || []) {
     const activities = Array.isArray(lead.activities) ? lead.activities : [];
+    const active = activeLeadForOverdue(lead);
+    const current = activities.filter(item => item && matchesCurrentReminder(item, lead)
+      && isOpenScheduledActivity(item) && !findActivityResolution(item, activities));
     for (const activity of activities) {
       if (!activity || activity.archived || activity.delete_request || activity.deletion_status === "pending") continue;
-      const due = String(activity.next_action_date || activity.reminder_due_date || (activity.reminder ? activity.due_date : "") || "").slice(0, 10);
+      const standaloneEvent = activity.followup_resolution && !(activity.resolved_reminder_id || activity.resolved_activity_id || activity.resolved_legacy_reminder);
+      if (activity.followup_resolution && !standaloneEvent) continue;
+      // Structured log entries save the current plan on the lead; they are not a second scheduled item.
+      if (!activity.followup_resolution && !isReminderActivity(activity) && activity.next_action_plan) continue;
+      const due = standaloneEvent ? activity.followup_due_date : scheduledActivityDue(activity);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(`${due}T00:00:00Z`)) || new Date(`${due}T00:00:00Z`).toISOString().slice(0, 10) !== due || due >= referenceDate) continue;
       const id = String(activity.id || "").trim();
       const stable = Boolean(id && activities.filter(item => item && String(item.id || "") === id).length === 1);
-      rows.push({ lead, activity, due, stable, status: activity.transaction_status === "closed" ? "closed" : "pending" });
+      const resolution = standaloneEvent ? activity : findActivityResolution(activity, activities);
+      const cancelled = resolution?.followup_resolution === "cancelled"
+        || [activity.reminder_status, activity.transaction_status].some(value => String(value || "").toLowerCase() === "cancelled");
+      const status = cancelled ? "cancelled" : resolution || !isOpenScheduledActivity(activity) ? "completed" : "pending";
+      if (status === "pending" && !active) continue;
+      const canMatchSavedPlan = rawCurrentReminderDate(activity) === due && due === lead.next_action_date
+        && String(activity.activity_required || activity.text || "").trim().toLowerCase() === String(lead.next_action || "").trim().toLowerCase();
+      rows.push({ lead, activity, resolution, due, stable, status, nextStep: current.length === 1 && current[0] === activity && canMatchSavedPlan });
+    }
+    if (active && lead.next_action_date && lead.next_action_date < referenceDate) {
+      const reminder = remindersForLead(lead).find(item => item.synthetic);
+      if (reminder && !activities.some(item => item && matchesCurrentReminder(item, lead) && item.deletion_status === "pending")) {
+        rows.push({ lead, activity: reminder, due: reminder.due_date, nextStep: true, status: "pending" });
+      }
     }
   }
   return rows.sort((a, b) => a.due.localeCompare(b.due));
@@ -2991,36 +3007,38 @@ function neglectedActivityRows(leads, referenceDate) {
 
 function renderNeglectedActivities(workspace) {
   const manager = !isSalesmanRole();
-  if (neglectedActivityEditor && neglectedActivityEditor.owner !== String(state.currentUser?.id)) neglectedActivityEditor = null;
-  const referenceDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const referenceDate = managementTaskDate();
   const unavailable = !state.leadsLoaded;
   const rows = unavailable ? [] : neglectedActivityRows(state.leads, referenceDate);
-  const closed = rows.filter(row => row.status === "closed").length;
-  const done = rows.filter(row => row.status === "closed" && String(row.activity.transaction_outcome || "").startsWith("Done -")).length;
-  const notReached = rows.filter(row => row.status === "closed" && String(row.activity.transaction_outcome || "").startsWith("Not reached -")).length;
-  const missing = rows.filter(row => !String(row.activity.transaction_remarks || "").trim()).length;
-  const visible = rows.map((row, index) => ({ ...row, index })).filter(row => neglectedActivityFilter === "all" || row.status === neglectedActivityFilter);
-  const outcomeLabel = status => status === "pending" ? "Where does it stand?" : "Why is it closed?";
+  const counts = { pending: 0, completed: 0, cancelled: 0 };
+  for (const row of rows) counts[row.status]++;
+  const missing = rows.filter(row => row.status === "pending" && !String(row.activity.transaction_remarks || "").trim()).length;
+  const visible = rows.filter(row => row.status === neglectedActivityFilter);
   workspace.innerHTML = `
     <div class="neglected-v2-head"><div><button type="button" data-workspace-view="dashboard" class="neglected-v2-back">Dashboard</button><span> / Neglected accounts</span><h2>Who have I <em>neglected?</em></h2><p>Overdue activity follow-ups, based on their scheduled dates.</p></div>${manager ? `<button type="button" class="ghost-button" data-neglected-export>Export for management</button>` : ""}</div>
-    <div class="neglected-v2-stats"><article><span>Overdue activities</span><strong>${unavailable ? "—" : rows.length}</strong></article><article><span>Follow-ups closed</span><strong>${unavailable ? "—" : `${closed} / ${rows.length}`}</strong>${unavailable ? "" : `<progress max="${Math.max(1, rows.length)}" value="${closed}" aria-label="Follow-ups closed"></progress>`}</article><article><span>Still pending</span><strong>${unavailable ? "—" : rows.length - closed}</strong>${unavailable ? "" : `<small>Closed: ${done} done · ${notReached} not reached</small>`}</article><article><span>Missing remarks</span><strong>${unavailable ? "—" : missing}</strong></article></div>
-    <section class="neglected-v2-list" aria-label="Overdue follow-ups"><div class="neglected-v2-filters">${["all", "pending", "closed"].map(filter => `<button type="button" data-neglected-filter="${filter}" aria-pressed="${neglectedActivityFilter === filter}" ${unavailable ? "disabled" : ""}>${filter[0].toUpperCase() + filter.slice(1)} · ${unavailable ? "—" : filter === "all" ? rows.length : filter === "closed" ? closed : rows.length - closed}</button>`).join("")}</div>
+    <div class="neglected-v2-stats">${[["Overdue activities", counts.pending], ["Outcomes logged", counts.completed], ["Cancelled", counts.cancelled], ["Overdue without remarks", missing]].map(([label, value]) => `<article><span>${label}</span><strong>${unavailable ? "—" : value}</strong></article>`).join("")}</div>
+    <section class="neglected-v2-list" aria-label="Follow-ups and outcomes"><div class="neglected-v2-filters">${Object.keys(counts).map(filter => `<button type="button" data-neglected-filter="${filter}" aria-pressed="${neglectedActivityFilter === filter}" ${unavailable ? "disabled" : ""}>${NEGLECTED_STATUS[filter]} · ${unavailable ? "—" : counts[filter]}</button>`).join("")}</div>
     ${state.leadsLoading && !state.leadsLoaded ? `<p role="status">Loading follow-ups...</p>` : state.leadsError && !state.leadsLoaded ? `<p role="alert">${escapeHtml(state.leadsError)}</p><button type="button" data-neglected-retry>Retry</button>` : !visible.length ? `<p class="neglected-v2-empty">No overdue activities match this filter.</p>` : visible.map(row => {
       const a = row.activity;
-      const editing = neglectedActivityEditor && neglectedActivityEditor.leadId === String(row.lead.id) && neglectedActivityEditor.activityId === String(a.id);
-      const editor = editing ? neglectedActivityEditor : null;
+      const details = row.resolution || a;
+      const pending = row.status === "pending";
+      const canUpdate = !manager && pending && canResolveStandaloneFollowup(row.lead)
+        && (row.nextStep || (row.stable && !matchesCurrentReminder(a, row.lead)));
       const days = Math.floor((Date.parse(`${referenceDate}T00:00:00Z`) - Date.parse(`${row.due}T00:00:00Z`)) / 86400000);
-      return `<article class="neglected-v2-row"><div class="neglected-v2-row-main"><div><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(row.lead.id)}">${escapeHtml(row.lead.company_name || "Unnamed company")}</button><p>${escapeHtml(a.activity_purpose || a.type || "Activity")} · due ${escapeHtml(row.due)}</p></div><strong class="neglected-v2-overdue">${days} d overdue</strong><div class="neglected-v2-switch" aria-label="Follow-up status">${["pending", "closed"].map(status => `<button type="button" data-neglected-status="${status}" data-neglected-index="${row.index}" aria-pressed="${row.status === status}" ${manager || !row.stable ? "disabled" : ""}>${status === "pending" ? "Pending" : "Closed"}</button>`).join("")}</div><div class="neglected-v2-remark">${a.transaction_remarks ? `<strong>${escapeHtml(a.transaction_outcome || "Update")}</strong><p>${escapeHtml(a.transaction_remarks)}</p><small>${escapeHtml(a.transaction_updated_by_name || "User")} · ${escapeHtml(String(a.transaction_updated_at || "").slice(0, 10))}${a.transaction_next_attempt ? ` · next attempt ${escapeHtml(a.transaction_next_attempt)}` : ""}</small>` : `<span>No remarks</span>`}${!row.stable ? `<small>Activity needs a permanent ID before editing.</small>` : ""}</div>${!manager ? `<div class="neglected-v2-actions">${row.lead.phone ? `<a class="primary-button" href="tel:${escapeHtml(String(row.lead.phone).replace(/[^+\d*#,;]/g, ""))}" aria-label="Call ${escapeHtml(row.lead.company_name || "company")}">Call</a>` : `<button type="button" disabled title="No phone number saved">Call</button>`}<button type="button" class="ghost-button" data-neglected-task="${escapeHtml(row.lead.id)}">Task</button>${row.stable ? `<button type="button" class="ghost-button" data-neglected-edit="${row.index}">${a.transaction_remarks ? "Edit remarks" : "Add remarks"}</button>` : ""}</div>` : ""}</div>
-      ${editor ? `<form class="neglected-v2-editor" data-neglected-form><label>${outcomeLabel(editor.status)}<select name="outcome" required><option value="">Choose...</option>${neglectedOutcomes[editor.status].map(outcome => `<option value="${escapeHtml(outcome)}" ${editor.outcome === outcome ? "selected" : ""}>${escapeHtml(outcome)}</option>`).join("")}</select></label>${editor.status === "pending" ? `<label>Next attempt<input type="date" name="next_attempt" value="${escapeHtml(editor.nextAttempt)}" required></label>` : ""}<label>Remarks <span>required</span><textarea name="remarks" maxlength="4000" required placeholder="Add a note for management">${escapeHtml(editor.remarks)}</textarea></label><div><button type="submit" class="primary-button" data-neglected-save disabled>Save update</button><button type="button" class="ghost-button" data-neglected-cancel>Cancel</button><p role="alert">${escapeHtml(editor.error || "")}</p></div></form>` : ""}</article>`;
+      const target = `data-neglected-target="${escapeHtml(row.lead.id)}" data-neglected-activity="${escapeHtml(a.id || "")}" data-neglected-due="${escapeHtml(row.due)}"`;
+      const phone = String(row.lead.phone || "").replace(/[^+\d*#,;]/g, "");
+      return `<article class="neglected-v2-row"><div class="neglected-v2-row-main">
+        <div><button type="button" class="crm-neglected-company" data-neglected-lead="${escapeHtml(row.lead.id)}">${escapeHtml(row.lead.company_name || "Unnamed company")}</button><p>${escapeHtml(scheduledActivityAction(a))} · due ${escapeHtml(row.due)}</p></div>
+        <strong class="${pending ? "neglected-v2-overdue" : ""}">${pending ? `${days} d overdue` : row.status === "cancelled" ? "Cancelled" : "Outcome logged"}</strong>
+        <div class="neglected-v2-remark">${details.transaction_remarks ? `<strong>${escapeHtml(details.transaction_outcome || "Update")}</strong><p>${escapeHtml(details.transaction_remarks)}</p><small>${escapeHtml(details.transaction_updated_by_name || "User")} · ${escapeHtml(String(details.transaction_updated_at || "").slice(0, 10))}</small>` : "<span>No remarks</span>"}</div>
+        <div class="neglected-v2-actions">${!manager && pending ? `
+          ${phone ? `<a class="ghost-button" href="tel:${escapeHtml(phone)}" aria-label="Call ${escapeHtml(row.lead.company_name || "company")}">Call</a>` : ""}
+          <button type="button" class="ghost-button" data-neglected-task="${escapeHtml(row.lead.id)}">Task</button>
+          ${canUpdate ? `<button type="button" class="primary-button" ${target} data-neglected-resolve="completed">Log outcome</button><button type="button" class="ghost-button record-cancel-followup" ${target} data-neglected-resolve="cancelled">Cancel follow-up</button>` : "<small>Open lead to review</small>"}
+        ` : ""}</div>
+      </div></article>`;
     }).join("")}</section><form class="neglected-v2-assistant"><label class="sr-only" for="neglectedQuestion">Ask the AI Assistant</label><input id="neglectedQuestion" placeholder="Ask the AI Assistant about these accounts" maxlength="4000"><span class="neglected-assistant-host"></span></form>`;
-  const form = workspace.querySelector("[data-neglected-form]");
-  if (form) updateNeglectedSaveButton(form);
   arrangeAssistantLauncher(false);
-}
-
-function updateNeglectedSaveButton(form) {
-  const button = form.querySelector("[data-neglected-save]");
-  if (button) button.disabled = !form.elements.outcome.value || !form.elements.remarks.value.trim() || Boolean(form.elements.next_attempt && !form.elements.next_attempt.value);
 }
 
 async function loadNeglectedWorkspace(request) {
@@ -5148,7 +5166,7 @@ function smartSearchFollowupLine(lead, overdueCount = 0) {
 function smartSearchLeadResult(lead, query, tokens) {
   const normalizedStage = normalizeStageKey(lead.stage, "NEW");
   const reminders = remindersForLead(lead);
-  const overdueCount = overdueReminderItemsForLead(lead).length + (leadHasOverdueNextAction(lead) ? 1 : 0);
+  const overdueCount = activeLeadForOverdue(lead) ? reminders.filter(reminder => reminder.due_date && reminder.due_date < today()).length : 0;
   const noFollowup = !lead.next_action_date;
   const staleDays = daysSince(lead.last_activity || lead.updated_at || lead.created_at);
   const dormant = normalizedStage === "DORMANT" || staleDays >= 60;
@@ -5384,7 +5402,8 @@ function activeLeadForOverdue(lead) {
 }
 
 function leadHasOverdueNextAction(lead) {
-  return Boolean(lead?.next_action_date) && String(lead.next_action_date).slice(0, 10) < today() && activeLeadForOverdue(lead);
+  return Boolean(lead?.next_action_date && lead.next_action) && String(lead.next_action_date).slice(0, 10) < managementTaskDate()
+    && activeLeadForOverdue(lead) && hasOpenNextAction(lead);
 }
 
 function activityDueDate(activity = {}) {
@@ -5401,20 +5420,58 @@ function isCompletedReminder(activity = {}) {
     || String(activity.reminder_status || "").toLowerCase() === "completed";
 }
 
+function isOpenScheduledActivity(activity = {}) {
+  const terminal = ["closed", "completed", "cancelled"];
+  return !activity.archived && !activity.delete_request && activity.deletion_status !== "pending"
+    && !activity.followup_resolution && !isCompletedReminder(activity)
+    && !terminal.includes(String(activity.reminder_status || "").toLowerCase())
+    && !terminal.includes(String(activity.transaction_status || "").toLowerCase());
+}
+
+function scheduledActivityDue(activity = {}) {
+  return String(activity.next_action_date || activity.reminder_due_date || (isReminderActivity(activity) ? activity.due_date : "") || "").slice(0, 10);
+}
+
+function scheduledActivityAction(activity = {}) {
+  return String(activity.activity_required || activity.followup_action || (isReminderActivity(activity) && activity.text)
+    || activity.activity_purpose || activity.type || "Activity").trim();
+}
+
+function matchesCurrentReminder(activity, lead) {
+  return isReminderActivity(activity) && activityDueDate(activity) === lead.next_action_date
+    && scheduledActivityAction(activity).toLowerCase() === String(lead.next_action || "").trim().toLowerCase();
+}
+
+function rawCurrentReminderDate(activity) {
+  return String(activity.due_date || activity.reminder_due_date || "");
+}
+
+function findActivityResolution(activity, activities) {
+  return activities.find(event => event?.followup_resolution && (activity.id
+    ? event.resolved_activity_id === activity.id || event.resolved_reminder_id === activity.id
+    : isReminderActivity(activity) && event.resolved_legacy_reminder && event.followup_due_date === activityDueDate(activity)
+      && String(event.followup_action || "").trim().toLowerCase() === scheduledActivityAction(activity).toLowerCase()));
+}
+
 function followupRetiredReminder(activity, activities) {
-  return activities.some(event => event.followup_resolution && (activity.id ? event.resolved_reminder_id === activity.id
-    : event.resolved_legacy_reminder && event.followup_due_date === (activity.due_date || activity.reminder_due_date)
-      && String(event.followup_action || "").toLowerCase() === String(activity.activity_required || activity.text || "").trim().toLowerCase()));
+  return Boolean(findActivityResolution(activity, activities));
+}
+
+function hasOpenNextAction(lead) {
+  const activities = lead.activities || [];
+  const matching = activities.filter(activity => activity && matchesCurrentReminder(activity, lead));
+  return !matching.length || matching.some(activity => isOpenScheduledActivity(activity) && !followupRetiredReminder(activity, activities));
 }
 
 function overdueReminderItemsForLead(lead) {
   if (!activeLeadForOverdue(lead)) return [];
   return (lead.activities || [])
     .map((activity, activity_index) => ({ activity, activity_index }))
-    .filter(({ activity }) => isReminderActivity(activity) && !isCompletedReminder(activity) && !followupRetiredReminder(activity, lead.activities || []))
+    .filter(({ activity }) => activity && isReminderActivity(activity) && isOpenScheduledActivity(activity)
+      && !followupRetiredReminder(activity, lead.activities || []))
     .filter(({ activity }) => {
       const dueDate = activityDueDate(activity);
-      return dueDate && dueDate < today();
+      return dueDate && dueDate < managementTaskDate();
     })
     .map(({ activity, activity_index }) => ({
       id: `${lead.id}:reminder:${activity.id || activity_index}`,
@@ -5432,7 +5489,7 @@ function overdueReminderItemsForLead(lead) {
 
 function overdueLeadItems() {
   return state.leads
-    .filter(leadHasOverdueNextAction)
+    .filter(lead => leadHasOverdueNextAction(lead) && remindersForLead(lead).some(reminder => reminder.synthetic))
     .map(lead => ({
       id: `${lead.id}:lead`,
       kind: "lead",
@@ -8651,7 +8708,7 @@ function lossReasonPromptDueLeads() {
 function actionableSalesmanLeads() {
   return salesmanDashboardLeads()
     .filter(lead => !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage)))
-    .filter(lead => String(lead.next_action_date || "").slice(0, 10))
+    .filter(lead => lead.next_action_date && hasOpenNextAction(lead))
     .sort((a, b) =>
       String(a.next_action_date || "").localeCompare(String(b.next_action_date || ""))
       || compareNewestLeadFirst(a, b)
@@ -8663,7 +8720,7 @@ function salesmanDashboardSummaryDatasets() {
   const scheduled = actionableSalesmanLeads();
   const overdueCalls = scheduled.filter(leadHasOverdueNextAction);
   const dueToday = scheduled.filter(lead =>
-    String(lead.next_action_date || "").slice(0, 10) === today()
+    String(lead.next_action_date || "").slice(0, 10) === managementTaskDate()
   );
   const byStage = stageKey => myLeads.filter(lead => normalizeStageKey(lead.stage) === stageKey);
   return {
@@ -8788,8 +8845,8 @@ function renderSalesmanSimplifiedDashboard() {
   const queue = actionableSalesmanLeads();
   const overdue = datasets.overdueCalls;
   const dueToday = datasets.dueToday;
-  const overdueFollowups = leads.filter(lead => !CLOSED_STAGE_KEYS.has(normalizeStageKey(lead.stage)))
-    .flatMap(remindersForLead).filter(reminder => reminder.due_date && daysUntil(reminder.due_date) < 0).length;
+  const overdueFollowups = leads.filter(activeLeadForOverdue)
+    .flatMap(remindersForLead).filter(reminder => reminder.due_date && reminder.due_date < managementTaskDate()).length;
   renderSalespersonReferencePanels(datasets);
   const pipelineCounts = {
     NEW: datasets.stageNew.length,
@@ -8808,7 +8865,7 @@ function renderSalesmanSimplifiedDashboard() {
     const summaryLoading = state.leadsLoading && !state.leadsLoaded;
     const summaryUnavailable = Boolean(state.leadsError && !state.leadsLoaded);
     els.salesmanSimplifiedMetrics.innerHTML = [
-      { type: "salesmanOverdueCalls", icon: "overdueCalls", label: "Overdue leads", value: overdue.length, meta: `${overdueFollowups} overdue follow-ups${overdue.length ? ` · oldest next action ${daysOverdue(overdue[0].next_action_date)} days` : ""}`, action: "See details", tone: "danger" },
+      { type: "salesmanOverdueCalls", icon: "overdueCalls", label: "Overdue leads", value: overdue.length, meta: `${overdueFollowups} overdue follow-up${overdueFollowups === 1 ? "" : "s"}${overdue.length ? ` · oldest next action ${daysOverdue(overdue[0].next_action_date)} days` : ""}`, action: "See details", tone: "danger" },
       { type: "salesmanDueToday", icon: "dueToday", label: "Due today", value: dueToday.length, meta: dueToday.length ? `${dueToday[0].company_name || "Next lead"} is due today` : "Nothing scheduled", action: "View today's list", tone: "warm" },
       { type: "salesmanMyLeads", icon: "myLeads", label: "My leads", value: leads.length, meta: "Total assigned to you", action: "View summary", tone: "info" }
     ].map(card => `
@@ -11066,6 +11123,12 @@ function canResolveLeadNextStep(lead) {
     : Boolean(user.name && String(lead.assigned_salesman || "").trim().toLowerCase() === user.name.trim().toLowerCase()));
 }
 
+function canResolveStandaloneFollowup(lead) {
+  const user = state.currentUser;
+  return Boolean(user && !lead.pending_sync && (user.role === "admin" ||
+    (user.role === "salesman" && String(lead.assigned_to || "") === String(user.id))));
+}
+
 function recordFollowupActions(lead) {
   const id = escapeHtml(lead.id);
   if (lead.initial_management_task_id && !lead.next_action_date && isSalesmanRole()) {
@@ -11099,7 +11162,7 @@ function recordFollowupTitle(activity) {
 }
 
 function recordFollowupConfirmation(lead) {
-  const event = (lead.activities || []).find(activity => activity.followup_resolution);
+  const event = (lead.activities || []).find(activity => activity.followup_resolution && activity.followup_scope !== "activity");
   if (!event || (lead.next_action_date || "") !== (event.replacement_due_date || "")) return "";
   if (event.replacement_id && !(lead.activities || []).some(activity =>
     activity.id === event.replacement_id && activity.activity_required === lead.next_action && activity.due_date === lead.next_action_date)) return "";
@@ -11110,8 +11173,8 @@ function recordFollowupConfirmation(lead) {
   </div>`;
 }
 
-function openLeadFollowupDialog(lead, status) {
-  if (!canResolveLeadNextStep(lead) || !Object.hasOwn(LEAD_FOLLOWUP_REASONS, status)) return;
+function openLeadFollowupDialog(lead, status, target = null) {
+  if (!(target ? canResolveStandaloneFollowup(lead) : canResolveLeadNextStep(lead)) || !Object.hasOwn(LEAD_FOLLOWUP_REASONS, status)) return;
   const dialog = document.getElementById("leadFollowupDialog");
   if (dialog.open) return;
   const cancelled = status === "cancelled";
@@ -11120,11 +11183,14 @@ function openLeadFollowupDialog(lead, status) {
   let lastSubmission = "";
   let requestId = "";
   const userId = state.currentUser.id;
-  const expected = { expected_action: lead.next_action, expected_due: lead.next_action_date,
+  const expected = { expected_action: target ? scheduledActivityAction(target.activity) : lead.next_action,
+    expected_due: target?.due || lead.next_action_date,
+    ...(target ? { activity_id: target.activity.id, expected_activity_version: Number(target.activity.version ?? 1) } : {}),
+    ...(currentView === "neglected" ? { overdue_only: true } : {}),
     expected_revision: (lead.activities || []).find(activity => activity.followup_resolution)?.id || "",
     expected_updated_at: lead.updated_at || "" };
   const contact = [lead.contact_person, lead.primary_contact_title].filter(Boolean).join(" - ");
-  const subtitle = [normalizeNextActionPlan(lead.next_action), contact, `due ${formatDisplayDate(lead.next_action_date)}`].filter(Boolean).join(" · ");
+  const subtitle = [normalizeNextActionPlan(expected.expected_action), contact, `due ${formatDisplayDate(expected.expected_due)}`].filter(Boolean).join(" · ");
   dialog.dataset.resolution = status;
   dialog.innerHTML = `<form class="lead-followup-form">
     <header>
@@ -11146,14 +11212,14 @@ function openLeadFollowupDialog(lead, status) {
         <textarea name="remarks" maxlength="4000" rows="3" required aria-describedby="leadFollowupCount" placeholder="${cancelled ? "Explain why this activity should not go ahead." : "What happened during this follow-up?"}"></textarea>
       </label>
       <small id="leadFollowupCount" class="lead-followup-count"></small>
-      <div class="lead-followup-next">
+      ${target ? "" : `<div class="lead-followup-next">
         <label class="lead-followup-check"><input type="checkbox" name="schedule"> ${cancelled ? "Schedule a replacement activity" : "Schedule the next step"}</label>
         <div class="lead-followup-next-fields" hidden>
           <label>Type<select name="next_type" disabled required><option value="">Choose type</option><option>Send quotation</option><option value="To Call">Call</option><option value="To Send Email">Email</option><option value="To Visit">Site visit</option></select></label>
           <label>Due date<input name="next_date" type="date" min="${now.slice(0, 10)}" disabled required></label>
           <label>Note<input name="next_note" type="text" maxlength="500" disabled></label>
         </div>
-      </div>
+      </div>`}
       ${cancelled ? '<p class="lead-followup-notice">Cancellation stays in lead history and the Admin Activity log. It is not counted as completed.</p>' : ""}
       <p class="lead-followup-error" role="alert" hidden></p>
     </div>
@@ -11169,8 +11235,10 @@ function openLeadFollowupDialog(lead, status) {
   let saving = false;
   let stale = false;
   function validate() {
-    schedule.hidden = !fields.schedule.checked;
-    schedule.querySelectorAll("input, select").forEach(field => { field.disabled = schedule.hidden; });
+    if (schedule) {
+      schedule.hidden = !fields.schedule.checked;
+      schedule.querySelectorAll("input, select").forEach(field => { field.disabled = schedule.hidden; });
+    }
     const length = [...fields.remarks.value.trim()].length;
     count.textContent = length >= min ? `${length} characters` : `At least ${min} characters required (${length}/${min})`;
     count.classList.toggle("is-valid", length >= min);
@@ -13140,7 +13208,7 @@ function renderActionPlanPanel() {
 
 function allActivities(leads = state.leads) {
   return leads.flatMap(lead => (lead.activities || []).map((activity, index) => ({ ...activity, company_name: lead.company_name, lead_id: lead.id, activity_index: index,
-    followup_retired: isReminderActivity(activity) && followupRetiredReminder(activity, lead.activities) })))
+    followup_retired: followupRetiredReminder(activity, lead.activities) })))
     .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
 
@@ -13276,11 +13344,12 @@ function remindersForLead(lead) {
   const resolutions = (lead.activities || []).filter(activity => activity.followup_resolution);
   const stored = (lead.activities || [])
     .map((activity, activity_index) => ({ activity, activity_index }))
-    .filter(({ activity }) => isReminderActivity(activity) && !activity.archived && !activity.delete_request
-      && !["completed", "cancelled"].includes(activity.reminder_status)
+    .filter(({ activity }) => isReminderActivity(activity) && isOpenScheduledActivity(activity)
       && !followupRetiredReminder(activity, resolutions))
     .map(({ activity, activity_index }) => ({
       ...activity,
+      due_date: activityDueDate(activity),
+      due_time: activityDueTime(activity),
       lead_id: lead.id,
       activity_index,
       company_name: lead.company_name,
@@ -13288,11 +13357,8 @@ function remindersForLead(lead) {
       title: activity.title || `${activity.reminder_type || "Follow-up"}: ${lead.company_name}`
     }))
     .filter(activity => !completed.has(reminderKey(activity)));
-  const hasNextActionReminder = stored.some(activity =>
-    activity.due_date === lead.next_action_date
-    && String(activity.activity_required || activity.text || "").includes(String(lead.next_action || ""))
-  );
-  if (!hasNextActionReminder && lead.next_action_date && lead.next_action) {
+  const hasNextActionReminder = stored.some(activity => matchesCurrentReminder(activity, lead));
+  if (!hasNextActionReminder && lead.next_action_date && lead.next_action && hasOpenNextAction(lead)) {
     stored.unshift({
       lead_id: lead.id,
       company_name: lead.company_name,
@@ -17627,15 +17693,6 @@ els.aiActionResult?.addEventListener("click", event => {
 });
 
 document.querySelector("#aiWorkspaceView")?.addEventListener("input", event => {
-  if (currentView === "neglected" && event.target.closest("[data-neglected-form]")) {
-    const form = event.target.closest("[data-neglected-form]");
-    if (neglectedActivityEditor) {
-      neglectedActivityEditor.remarks = form.elements.remarks.value;
-      neglectedActivityEditor.nextAttempt = form.elements.next_attempt?.value || "";
-    }
-    updateNeglectedSaveButton(form);
-    return;
-  }
   if (currentView !== "draft-email" || !emailDraftState || emailDraftState.owner !== String(state.currentUser?.id)) return;
   const field = event.target.dataset.emailField;
   if (!["to", "cc", "subject", "body"].includes(field)) return;
@@ -17648,15 +17705,6 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("input", event => {
 });
 
 document.querySelector("#aiWorkspaceView")?.addEventListener("change", event => {
-  if (currentView === "neglected" && event.target.closest("[data-neglected-form]")) {
-    const form = event.target.closest("[data-neglected-form]");
-    if (neglectedActivityEditor) {
-      neglectedActivityEditor.outcome = form.elements.outcome.value;
-      neglectedActivityEditor.nextAttempt = form.elements.next_attempt?.value || "";
-    }
-    updateNeglectedSaveButton(form);
-    return;
-  }
   if (currentView === "draft-email") {
     if (event.target.hasAttribute("data-email-profile") && emailDraftState) {
       emailDraftState.includeProfile = event.target.checked;
@@ -17704,32 +17752,6 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("submit", async eve
     event.target.querySelector("#aiAssistantLauncher")?.click();
     return;
   }
-  if (event.target.matches("[data-neglected-form]")) {
-    event.preventDefault();
-    const editor = neglectedActivityEditor;
-    if (!isSalesmanRole() || !editor || editor.owner !== String(state.currentUser?.id)) return;
-    const form = event.target;
-    if (!form.reportValidity() || !form.elements.remarks.value.trim()) return;
-    form.querySelector("[data-neglected-save]").disabled = true;
-    try {
-      const result = await api(`/api/leads/${encodeURIComponent(editor.leadId)}/activities/${encodeURIComponent(editor.activityId)}/transaction`, {
-        method: "PATCH", body: JSON.stringify({ status: editor.status, outcome: form.elements.outcome.value, remarks: form.elements.remarks.value.trim(), next_attempt: form.elements.next_attempt?.value || "", version: editor.version })
-      });
-      if (editor.owner !== String(state.currentUser?.id) || neglectedActivityEditor !== editor) return;
-      const lead = state.leads.find(item => String(item.id) === editor.leadId);
-      const index = lead?.activities?.findIndex(item => String(item.id) === editor.activityId) ?? -1;
-      if (index >= 0) lead.activities[index] = result.activity;
-      neglectedActivityEditor = null;
-      renderAiWorkspace();
-      setToast("Follow-up updated.", "success");
-    } catch (error) {
-      if (neglectedActivityEditor === editor) {
-        editor.error = error.message || "Unable to save the update.";
-        renderAiWorkspace();
-      }
-    }
-    return;
-  }
   if (!event.target.matches(".crm-onetap-assistant")) return;
   event.preventDefault();
   event.target.querySelector("#aiAssistantLauncher")?.click();
@@ -17746,12 +17768,6 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
   }
   if (currentView === "neglected" && button.dataset.neglectedFilter) {
     neglectedActivityFilter = button.dataset.neglectedFilter;
-    neglectedActivityEditor = null;
-    renderAiWorkspace();
-    return;
-  }
-  if (currentView === "neglected" && button.hasAttribute("data-neglected-cancel")) {
-    neglectedActivityEditor = null;
     renderAiWorkspace();
     return;
   }
@@ -17760,13 +17776,14 @@ document.querySelector("#aiWorkspaceView")?.addEventListener("click", async even
     catch (error) { setToast(error.message || "Export failed.", "error"); }
     return;
   }
-  if (currentView === "neglected" && isSalesmanRole() && (button.dataset.neglectedStatus || button.hasAttribute("data-neglected-edit"))) {
-    const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    const row = neglectedActivityRows(state.leads, date)[Number(button.dataset.neglectedIndex ?? button.dataset.neglectedEdit)];
-    if (!row || !row.stable) return;
-    const status = button.dataset.neglectedStatus || row.status;
-    neglectedActivityEditor = { owner: String(state.currentUser.id), leadId: String(row.lead.id), activityId: String(row.activity.id), version: Number(row.activity.version || 1), status, outcome: status === row.status ? row.activity.transaction_outcome || "" : "", remarks: row.activity.transaction_remarks || "", nextAttempt: status === "pending" ? row.activity.transaction_next_attempt || "" : "", error: "" };
-    renderAiWorkspace();
+  if (currentView === "neglected" && isSalesmanRole() && button.dataset.neglectedResolve) {
+    const { neglectedTarget, neglectedActivity, neglectedDue, neglectedResolve } = button.dataset;
+    const lead = state.leads.find(item => String(item.id) === neglectedTarget);
+    if (!lead || !canResolveStandaloneFollowup(lead)) return;
+    const matches = neglectedActivityRows([lead], managementTaskDate()).filter(row => row.status === "pending"
+      && row.due === neglectedDue && String(row.activity.id || "") === neglectedActivity
+      && (row.nextStep || (row.stable && !matchesCurrentReminder(row.activity, lead))));
+    if (matches.length === 1) openLeadFollowupDialog(lead, neglectedResolve, matches[0].nextStep ? null : matches[0]);
     return;
   }
   if (currentView === "draft-email" && Object.keys(button.dataset).some(key => key.startsWith("email"))) {
