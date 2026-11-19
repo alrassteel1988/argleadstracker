@@ -2,7 +2,31 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
-const { canReadManagementTask, saveLocalManagementTask, validateManagementTask } = require("../src/services/managementTaskService");
+const { canReadManagementTask, saveLocalManagementTask, validateManagementTask, requestsInitialManagementTask,
+  initialManagementTaskInput, nextManagementWorkingDate } = require("../src/services/managementTaskService");
+
+test("new Admin lead task titles and next Monday-Saturday working date use Dubai time", () => {
+  const cases = [
+    ["2026-11-19T08:00:00Z", "2026-11-20"],
+    ["2026-11-20T08:00:00Z", "2026-11-21"],
+    ["2026-11-21T08:00:00Z", "2026-11-23"],
+    ["2026-11-22T08:00:00Z", "2026-11-23"],
+    ["2026-11-20T20:01:00Z", "2026-11-23"],
+    ["2026-12-31T20:01:00Z", "2027-01-02"]
+  ];
+  for (const [now, expected] of cases) assert.equal(nextManagementWorkingDate(now), expected);
+  const lead = { id: "fixture", notes: "Ask about the steel requirement.", next_action_date: "2099-01-01" };
+  assert.equal(requestsInitialManagementTask({ assigned_to: "rep" }, { role: "admin" }), true);
+  assert.equal(requestsInitialManagementTask({ assigned_to: "rep" }, { role: "salesman" }), false);
+  assert.equal(requestsInitialManagementTask({ assigned_salesman: "Unassigned" }, { role: "admin" }), false);
+  for (const title of ["New Lead Outreach", "Respond to Initial RFQ"]) {
+    const task = initialManagementTaskInput({ ...lead, initial_management_task_title: title }, "rep", cases[2][0]);
+    assert.equal(task.title, title);
+    assert.equal(task.due_date, "2026-11-23");
+  }
+  assert.equal(initialManagementTaskInput(lead, "rep", cases[0][0]).title, "New Lead Outreach");
+  assert.throws(() => initialManagementTaskInput({ ...lead, initial_management_task_title: "Invented task" }, "rep", cases[0][0]), { status: 400 });
+});
 
 const admin = { id: "00000000-0000-4000-8000-000000000001", role: "admin", status: "active", name: "Demo Admin" };
 const rep = { id: "00000000-0000-4000-8000-000000000002", role: "salesman", status: "active", name: "Demo Salesman" };
@@ -396,6 +420,51 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     assert.deepEqual(resolutionAudit, [{ actor_id: admin.id, previous: task2, retained: keep }]);
     await saveAuditFixture("reassign");
     await saveAuditFixture("close");
+    await db.exec(`alter table public.leads add column activities jsonb not null default '[]';
+      alter table public.leads add constraint leads_status_blueprint_check
+        check (lead_status in ('PROSPECT', 'DORMANT')) not valid;`);
+    await db.query("update public.leads set activities=$1::jsonb where id=$2", [JSON.stringify([
+      { id: "saved-activity", type: "Phone Call", created_by: rep.id, text: "Keep the saved outcome." }
+    ]), lead]);
+    const existingState = async () => (await db.query(`select
+      (select jsonb_agg(to_jsonb(l) order by id) from public.leads l) as leads,
+      (select jsonb_agg(to_jsonb(t) order by id) from public.management_tasks t) as tasks,
+      (select jsonb_agg(to_jsonb(e) order by id) from private.management_task_events e) as events`)).rows;
+    const beforeRegistrationChange = await existingState();
+    await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118100838_lead_registration_task_choices.sql"), "utf8"));
+    assert.deepEqual(await existingState(), beforeRegistrationChange, "Migration must not rewrite any saved lead, task or history");
+    for (const at of ["2026-11-20T08:00:00Z", "2026-11-21T08:00:00Z", "2026-11-22T08:00:00Z", "2026-11-20T20:01:00Z", "2026-12-31T20:01:00Z"]) {
+      const due = (await db.query("select private.next_management_working_date($1)::text as due", [at])).rows[0].due;
+      assert.equal(due, nextManagementWorkingDate(at));
+    }
+    await as(rep);
+    await assert.rejects(() => atomic("Unauthorized registration", { initial_management_task_id: "b0000000-0000-4000-8000-000000000011", next_action: "Respond to Initial RFQ", created_by: rep.id }), { code: "42501" });
+    await assert.rejects(() => db.query("select private.next_management_working_date(now())"), { code: "42501" });
+    await as(admin);
+    const companyCount = (await db.query("select count(*)::int as n from public.companies")).rows[0].n;
+    await assert.rejects(() => atomic("Bad task title", { initial_management_task_id: "b0000000-0000-4000-8000-000000000012", next_action: "Invented task" }), { code: "22023" });
+    assert.equal((await db.query("select count(*)::int as n from public.companies")).rows[0].n, companyCount);
+    for (const [index, title] of ["New Lead Outreach", "Respond to Initial RFQ", "To Call"].entries()) {
+      const taskId = `b0000000-0000-4000-8000-00000000002${index}`;
+      const saved = await atomic(`New workflow fixture ${index}`, { initial_management_task_id: taskId, next_action: title,
+        next_action_date: "2000-01-01", notes: "Preserve these new-lead notes." });
+      assert.equal(saved.next_action, "");
+      assert.equal(saved.next_action_date, null);
+      assert.equal(saved.lead_status, "PROSPECT", "The same blueprint constraint must still accept the default stage");
+      const task = (await db.query("select * from public.management_tasks where id=$1", [taskId])).rows[0];
+      assert.equal(task.title, title === "To Call" ? "New Lead Outreach" : title);
+      assert.equal(task.due_date.toISOString().slice(0, 10), nextManagementWorkingDate(task.created_at));
+      assert.match(task.instructions, /Preserve these new-lead notes/);
+      await assert.rejects(() => db.query("update public.leads set initial_management_task_id=null where id=$1", [saved.id]), { code: "42501" });
+      await as(rep);
+      assert.equal((await list()).filter(item => item.id === taskId).length, 1);
+      await as(peer);
+      assert.equal((await list()).some(item => item.id === taskId), false);
+      await as(admin);
+    }
+    await db.exec("reset role");
+    const newAudit = (await db.query("select actor_id, snapshot->>'title' as title from private.management_task_events where task_id::text like 'b0000000-0000-4000-8000-00000000002%' order by task_id")).rows;
+    assert.deepEqual(newAudit.map(item => [item.actor_id, item.title]), ["New Lead Outreach", "Respond to Initial RFQ", "New Lead Outreach"].map(title => [admin.id, title]));
   } finally {
     await db.close();
   }

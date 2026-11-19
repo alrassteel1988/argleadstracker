@@ -203,6 +203,16 @@ async function verify() {
     assert.equal(ordinaryEdit.body.contact_person, "Test Contact");
     assert.equal(ordinaryEdit.body.email, "buyer@example.test");
     assert.equal(ordinaryEdit.body.first_order_date, "2026-12-01");
+    const oldDetails = { first_order_date: "2026-12-01", estimated_monthly_volume: "125 MT", products_services_remarks: "Previously saved steel requirements." };
+    Object.assign(lead, oldDetails);
+    const editWithoutRetiredFields = { ...editForm, assigned_salesman: "New Owner", sector: "Piling" };
+    for (const field of Object.keys(oldDetails)) delete editWithoutRetiredFields[field];
+    const preservedDetails = await request("admin", editWithoutRetiredFields);
+    assert.equal(preservedDetails.status, 200, JSON.stringify(preservedDetails.body));
+    for (const [field, value] of Object.entries(oldDetails)) {
+      assert.equal(preservedDetails.body[field], value, `Removing the form control must preserve saved ${field}`);
+      assert.equal(Object.hasOwn(patches.at(-1), field), false);
+    }
     const clearOrderDate = await request("next", {first_order_date: ""});
     assert.equal(clearOrderDate.status, 200);
     assert.equal(clearOrderDate.body.first_order_date, null);

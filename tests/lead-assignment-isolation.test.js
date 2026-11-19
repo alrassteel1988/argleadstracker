@@ -104,6 +104,20 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
       body: { company_name: "ACA Steel Constructions Contracting LLC", stage: "PROSPECT" }
     });
     assert.equal(createdByAlex.response.status, 201, JSON.stringify(createdByAlex.data));
+    assert.equal(createdByAlex.data.next_action, "");
+    assert.equal(createdByAlex.data.next_action_date, null);
+    assert.equal(createdByAlex.data.activities.length, 0, "An omitted Salesman follow-up must not manufacture a reminder");
+    assert.ok(!createdByAlex.data.initial_management_task_id);
+
+    const incompleteFollowup = await request(baseUrl, "/api/leads", { method: "POST", ...alex,
+      body: { company_name: "Synthetic missing date", next_action: "To Call" } });
+    assert.equal(incompleteFollowup.response.status, 400);
+    const plannedFollowup = await request(baseUrl, "/api/leads", { method: "POST", ...alex,
+      body: { company_name: "Synthetic explicit followup", next_action: "To Call", next_action_date: "2099-01-01",
+        initial_management_task_title: "Respond to Initial RFQ" } });
+    assert.equal(plannedFollowup.response.status, 201, JSON.stringify(plannedFollowup.data));
+    assert.equal(plannedFollowup.data.activities.filter(item => item.reminder).length, 1);
+    assert.ok(!plannedFollowup.data.initial_management_task_id, "A Salesman cannot manufacture a management assignment");
 
     const salesmanCannotReassign = await request(baseUrl, `/api/leads/${encodeURIComponent(createdByAlex.data.id)}`, {
       method: "PATCH",
