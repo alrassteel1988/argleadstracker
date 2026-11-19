@@ -290,7 +290,9 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(structuredActivity.data.activity.activity_purpose, "Quotation Follow Up");
     assert.equal(structuredActivity.data.activity.created_by, salesmanAccount.data.id);
     assert(structuredActivity.data.activity.created_at);
-    assert.equal(structuredActivity.data.lead.next_action, "To Send Email");
+    assert.equal(structuredActivity.data.lead.next_action, "To Send Email", "A first explicit schedule remains allowed after optional blank Step 3");
+    assert.equal(structuredActivity.data.lead.next_action_date, "2026-07-30");
+    assert.equal(structuredActivity.data.schedule_unchanged, false);
 
     const structuredActivityRetry = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
@@ -318,6 +320,68 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(adminStructuredActivity.response.status, 201, JSON.stringify(adminStructuredActivity.data));
     assert.equal(adminStructuredActivity.data.activity.created_by, adminLogin.data.user.id);
     assert.equal(adminStructuredActivity.data.lead.next_action, "To Visit");
+    assert.equal(adminStructuredActivity.data.lead.next_action_date, "2026-08-03");
+    assert.equal(adminStructuredActivity.data.schedule_unchanged, false);
+
+    const repSession = { token: salesmanToken, csrfToken: salesmanCsrfToken };
+    const adminSession = { token: adminToken, csrfToken: adminCsrfToken };
+    const policyLead = await request(baseUrl, "/api/leads", {
+      ...repSession, method: "POST", body: { company_name: "Synthetic Schedule Policy Lead", next_action: "To Call",
+        next_action_date: "2099-03-10", stage: "PROSPECT", territory: "UAE-North" }
+    });
+    assert.equal(policyLead.response.status, 201);
+    const policyLeadPath = `/api/leads/${policyLead.data.id}`;
+    assert.equal((await request(baseUrl, policyLeadPath, {
+      ...repSession, method: "PATCH", body: { next_action_date: "2099-03-11" }
+    })).response.status, 409);
+    const schedulePath = `${policyLeadPath}/activity-schedule`;
+    const schedule = await request(baseUrl, schedulePath, repSession);
+    assert.equal(schedule.response.status, 200);
+    assert.equal(schedule.data.needs_review, false);
+    const changeBody = { operation: "submit", expected_updated_at: schedule.data.updated_at, expected_plan_id: schedule.data.plan.id,
+      date: "2099-03-11", time: "11:00", priority: "High", agenda: "Review steel requirements",
+      reason: "Customer prefers tomorrow morning." };
+    const changed = await request(baseUrl, schedulePath, { ...repSession, method: "POST", body: changeBody });
+    assert.equal(changed.response.status, 200, JSON.stringify(changed.data));
+    assert.equal(changed.data.lead.next_action_date, "2099-03-11");
+    assert.equal(changed.data.lead.activity_schedule.original_due_date, "2099-03-10");
+    assert.equal((await request(baseUrl, schedulePath, { ...repSession, method: "POST", body: changeBody })).response.status, 409);
+    const reminder = changed.data.lead.activities.find(item => item.reminder && item.due_date === "2099-03-11");
+    assert.equal(reminder.created_by, salesmanLogin.data.user.id);
+    const deleteSchedule = await request(baseUrl, `${policyLeadPath}/delete-requests`, {
+      ...repSession, method: "POST", body: { target_type: "activity", activity_id: reminder.id,
+        reason: "Synthetic duplicate follow-up reminder." }
+    });
+    assert.equal(deleteSchedule.response.status, 201, JSON.stringify(deleteSchedule.data));
+    const pendingSchedule = await request(baseUrl, schedulePath, repSession);
+    const blockedEdit = await request(baseUrl, schedulePath, {
+      ...repSession, method: "POST", body: { ...changeBody, expected_updated_at: pendingSchedule.data.updated_at, date: "2099-03-12" }
+    });
+    assert.equal(blockedEdit.response.status, 409);
+    assert.match(blockedEdit.data.error, /deletion is pending/i);
+    const decisionEndpoint = `${policyLeadPath}/delete-requests/${deleteSchedule.data.request.id}`;
+    const decideSchedule = operation => request(baseUrl, `${decisionEndpoint}/${operation}`, {
+      ...adminSession, method: "POST", body: { admin_password: "AdminPass123!" }
+    });
+    const removedSchedule = await decideSchedule("approve");
+    assert.equal(removedSchedule.response.status, 200, JSON.stringify(removedSchedule.data));
+    assert.equal(removedSchedule.data.lead.activity_schedule, null);
+    assert.equal((await request(baseUrl, schedulePath, repSession)).response.status, 409);
+    assert.equal((await decideSchedule("restore")).response.status, 200);
+    const restoredSchedule = await request(baseUrl, schedulePath, repSession);
+    assert.equal(restoredSchedule.response.status, 200);
+    assert.deepEqual(restoredSchedule.data.plan, changed.data.lead.activity_schedule);
+    const revised = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/${structuredActivity.data.activity.id}`, {
+      ...repSession, method: "PATCH", body: { ...structuredActivityPayload, version: 1,
+        notes: "Revised note with corrected quote information.", correction_reason: "Original quote details were incorrect." }
+    });
+    assert.equal(revised.response.status, 201, JSON.stringify(revised.data));
+    assert.equal(revised.data.activity.audit_history[0].before.notes, structuredActivityPayload.notes);
+    assert.equal(revised.data.lead.activities.find(item => item.id === structuredActivity.data.activity.id).notes, structuredActivityPayload.notes);
+    assert.equal((await request(baseUrl, "/api/activity-schedule-report", repSession)).response.status, 403);
+    const managementReport = await request(baseUrl, "/api/activity-schedule-report", adminSession);
+    assert.equal(managementReport.response.status, 200);
+    assert.equal(managementReport.data.rows.find(row => row.name === "E2E Salesman").changed, 1);
 
     const handoffWithoutNote = await request(baseUrl, `/api/leads/${otherLead.data.id}`, {
       method: "PATCH",
@@ -357,15 +421,16 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
       method: "POST",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
-      body: { type: "Note", text: "Salesman wants to revise this later" }
+      body: { type: "Phone Call", text: "Salesman wants to revise this later", created_by: adminLogin.data.user.id }
     });
     assert.equal(activity.response.status, 201);
+    assert.equal(activity.data.activity.created_by, salesmanAccount.data.id);
 
     const correction = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/0`, {
       method: "PATCH",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
-      body: { type: "Note", text: "Corrected note appended without changing the original" }
+      body: { type: "Phone Call", text: "Corrected call appended without changing the original" }
     });
     assert.equal(correction.response.status, 201, JSON.stringify(correction.data));
     assert.equal(correction.data.activity.type, "Correction");
@@ -380,14 +445,30 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(directActivityDelete.response.status, 405);
 
-    const activityDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
+    const deletionPath = `/api/leads/${ownLead.data.id}/delete-requests`;
+    const deletionBody = { target_type: "activity", activity_id: activity.data.activity.id, reason: "Duplicate activity entry" };
+    const adminDecision = { method: "POST", token: adminToken, csrfToken: adminCsrfToken, body: { admin_password: "AdminPass123!" } };
+    assert.equal((await request(baseUrl, deletionPath, { ...adminDecision, body: deletionBody })).response.status, 403);
+    assert.equal((await request(baseUrl, deletionPath, {
+      method: "POST", token: salesmanToken, csrfToken: salesmanCsrfToken, body: { ...deletionBody, reason: "Short" }
+    })).response.status, 400);
+
+    const activityDeleteRequest = await request(baseUrl, deletionPath, {
       method: "POST",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
-      body: { target_type: "activity", activity_index: 1, reason: "Duplicate activity entry" }
+      body: deletionBody
     });
     assert.equal(activityDeleteRequest.response.status, 201, JSON.stringify(activityDeleteRequest.data));
     assert.equal(activityDeleteRequest.data.request.request_status, "pending");
+    const decisionPath = `${deletionPath}/${activityDeleteRequest.data.request.id}`;
+    const pendingIndex = activityDeleteRequest.data.lead.activities.findIndex(item => item.id === deletionBody.activity_id);
+    assert.equal((await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/${pendingIndex}`, {
+      method: "PATCH", token: salesmanToken, csrfToken: salesmanCsrfToken, body: { type: "Phone Call", text: "Should be locked" }
+    })).response.status, 409);
+    assert.equal((await request(baseUrl, "/api/activity-deletion-requests", { token: salesmanToken })).response.status, 403);
+    assert.equal((await request(baseUrl, "/api/activity-deletion-requests", { token: adminToken })).response.status, 200);
+    assert.equal((await request(baseUrl, `${decisionPath}/reject`, adminDecision)).response.status, 400);
 
     const approveWithoutPassword = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${activityDeleteRequest.data.request.id}/approve`, {
       method: "POST",
@@ -397,15 +478,56 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(approveWithoutPassword.response.status, 403);
 
-    const approveActivityDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${activityDeleteRequest.data.request.id}/approve`, {
-      method: "POST",
-      token: adminToken,
-      csrfToken: adminCsrfToken,
-      body: { admin_password: "AdminPass123!" }
+    const decisions = await Promise.all([
+      request(baseUrl, `${decisionPath}/approve`, adminDecision),
+      request(baseUrl, `${decisionPath}/approve`, adminDecision)
+    ]);
+    assert.deepEqual(decisions.map(result => result.response.status).sort(), [200, 409], JSON.stringify(decisions.map(result => result.data)));
+    const approved = decisions.find(result => result.response.status === 200).data;
+    const archived = approved.lead.activities.find(item => item.id === deletionBody.activity_id);
+    assert.equal(archived.archived, true);
+    assert(archived.audit_history.some(event => event.action === "activity_archived"));
+    const restored = await request(baseUrl, `${decisionPath}/restore`, adminDecision);
+    assert.equal(restored.response.status, 200, JSON.stringify(restored.data));
+    const restoredActivity = restored.data.lead.activities.find(item => item.id === deletionBody.activity_id);
+    assert(!restoredActivity.archived);
+    assert(restoredActivity.audit_history.some(event => event.action === "activity_restored"));
+
+    const legacyDb = JSON.parse(fs.readFileSync(dbPath, "utf8"));
+    const legacyLead = legacyDb.leads.find(item => item.id === ownLead.data.id);
+    const legacyAt = new Date().toISOString();
+    for (const [suffix, creator] of [["unattributed", null], ["wrong-creator", adminLogin.data.user.id]]) {
+      legacyLead.activities.push(
+        { id: `legacy-entry-${suffix}`, type: "Phone Call", at: legacyAt,
+          deletion_status: "pending", ...(creator ? { created_by: creator } : {}) },
+        { id: `legacy-request-${suffix}`, type: "Activity Review Request", at: legacyAt,
+          requested_at: legacyAt, requested_by: salesmanAccount.data.id, delete_request: true,
+          target_type: "activity", target_activity_id: `legacy-entry-${suffix}`,
+          request_status: "pending", reason: "Legacy duplicate request" }
+      );
+    }
+    fs.writeFileSync(dbPath, JSON.stringify(legacyDb));
+    for (const suffix of ["unattributed", "wrong-creator"]) {
+      const response = await request(baseUrl, `${deletionPath}/legacy-request-${suffix}/approve`, adminDecision);
+      assert.equal(response.response.status, 409, `Approval must reject legacy ${suffix} requests`);
+      assert.match(response.data.error, /recorded creator/i);
+    }
+    const legacyQueue = await request(baseUrl, "/api/activity-deletion-requests", { token: adminToken });
+    const legacyRows = legacyQueue.data.filter(item => item.id.startsWith("legacy-request-"));
+    assert.equal(legacyRows.length, 2);
+    assert(legacyRows.every(item => item.target_available && !item.can_approve && item.approval_block_reason));
+    const legacyReject = await request(baseUrl, `${deletionPath}/legacy-request-unattributed/reject`, {
+      ...adminDecision, body: { ...adminDecision.body, note: "The original creator was not recorded." }
     });
-    assert.equal(approveActivityDelete.response.status, 200, JSON.stringify(approveActivityDelete.data));
-    assert(approveActivityDelete.data.lead.activities.some(item => item.id === activity.data.activity.id));
-    assert(approveActivityDelete.data.lead.activities.some(item => item.type === "Activity Review"));
+    assert.equal(legacyReject.response.status, 200);
+    assert.equal(legacyReject.data.request.request_status, "rejected");
+    assert(!legacyReject.data.lead.activities.find(item => item.id === "legacy-entry-unattributed").archived);
+    const legacyWithdraw = await request(baseUrl, `${deletionPath}/legacy-request-wrong-creator/cancel`, {
+      method: "POST", token: salesmanToken, csrfToken: salesmanCsrfToken
+    });
+    assert.equal(legacyWithdraw.response.status, 200);
+    assert.equal(legacyWithdraw.data.request.request_status, "cancelled");
+    assert(!legacyWithdraw.data.lead.activities.find(item => item.id === "legacy-entry-wrong-creator").archived);
 
     const meetingActivity = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities`, {
       method: "POST",
@@ -453,36 +575,9 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
       csrfToken: salesmanCsrfToken,
       body: { target_type: "lead", reason: "Created during test by mistake" }
     });
-    assert.equal(leadDeleteRequest.response.status, 201);
-
-    const rejectLeadDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${leadDeleteRequest.data.request.id}/reject`, {
-      method: "POST",
-      token: adminToken,
-      csrfToken: adminCsrfToken,
-      body: { admin_password: "AdminPass123!", note: "Keep for follow-up" }
-    });
-    assert.equal(rejectLeadDelete.response.status, 200);
-    assert.equal(rejectLeadDelete.data.request.request_status, "rejected");
-
-    const secondLeadDeleteRequest = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests`, {
-      method: "POST",
-      token: salesmanToken,
-      csrfToken: salesmanCsrfToken,
-      body: { target_type: "lead", reason: "Confirmed duplicate" }
-    });
-    assert.equal(secondLeadDeleteRequest.response.status, 201);
-
-    const approveLeadDelete = await request(baseUrl, `/api/leads/${ownLead.data.id}/delete-requests/${secondLeadDeleteRequest.data.request.id}/approve`, {
-      method: "POST",
-      token: adminToken,
-      csrfToken: adminCsrfToken,
-      body: { admin_password: "AdminPass123!" }
-    });
-    assert.equal(approveLeadDelete.response.status, 200);
-    assert.equal(approveLeadDelete.data.deleted, true);
-
-    const deletedLeadHidden = await request(baseUrl, "/api/leads", { token: adminToken });
-    assert(!deletedLeadHidden.data.some(lead => lead.id === ownLead.data.id));
+    assert.equal(leadDeleteRequest.response.status, 400);
+    const retainedLeads = await request(baseUrl, "/api/leads", { token: adminToken });
+    assert(retainedLeads.data.some(lead => lead.id === ownLead.data.id));
 
     console.log("PASS admin/salesman HTTP permission boundaries");
   } finally {

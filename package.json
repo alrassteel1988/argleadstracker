@@ -5,10 +5,12 @@
   "description": "Shared web and mobile CRM platform for ARG Leads Tracker.",
   "scripts": {
     "build": "node -e \"console.log('No asset compilation required for ARG Leads Tracker')\"",
-    "verify": "npm run check && npm run test:lead-enrichment-form && npm run test:sales-lead-summary-auth-loading && npm test && npm run test:lead-reassignment && npm run test:management-tasks && npm run test:ui:tokens && npm run build",
+    "verify": "npm run check && npm run test:lead-enrichment-form && npm run test:sales-lead-summary-auth-loading && npm test && npm run test:activity-schedule && npm run test:lead-reassignment && npm run test:management-tasks && npm run test:ui:tokens && npm run build",
     "test:lead-enrichment-form": "node --check tests/lead-enrichment-form.test.js && node tests/lead-enrichment-form.test.js",
     "test:lead-reassignment": "node tests/lead-reassignment-api.test.js && node --test tests/lead-reassignment-database.test.cjs",
     "test:management-tasks": "node --test tests/management-tasks.test.cjs && node --test tests/lead-registration-database.test.cjs && node tests/lead-registration-api.test.cjs",
+    "test:activity-schedule": "node --test tests/activity-schedule-governance.test.cjs",
+    "test:activity-schedule-db": "node -e \"process.env.CRM_TEST_SCHEDULE_GOVERNANCE='1'; require('./tests/lead-followup-database.test.cjs')\"",
     "start": "node server.js",
     "test:ui:baseline": "playwright test --config=playwright.ui.config.js",
     "test:ui:meeting": "node -e \"process.env.CRM_UI_SUITE='meeting'; require('child_process').execFileSync(process.execPath, ['node_modules/playwright/cli.js', 'test', '--config=playwright.ui.config.js'], { stdio: 'inherit' })\"",

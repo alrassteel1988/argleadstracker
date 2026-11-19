@@ -400,3 +400,67 @@
     flex-direction: column;
   }
 }
+.deletion-requests-view {
+  color: #0b2545;
+}
+
+.deletion-requests-view h1 { margin: 8px 0; }
+#deletionQueueCounts { margin-bottom: 14px; color: #465466; }
+#deletionQueueDigest { margin-bottom: 14px; color: #465466; }
+#deletionQueueDigest summary { min-height: 44px; cursor: pointer; color: #0d3b6d; font-weight: 600; }
+#deletionQueueDigest ul { max-height: 12rem; overflow-y: auto; }
+
+.deletion-queue-tabs,
+.deletion-queue-filters,
+.deletion-row-actions,
+.deletion-review-footer,
+#deletionReviewButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.deletion-queue-tabs { margin-bottom: 10px; }
+.deletion-queue-tabs button[aria-pressed="true"] { background: #0b3b75; color: #fff; }
+.deletion-queue-filters { margin-bottom: 12px; }
+.deletion-queue-filters input { flex: 1 1 230px; min-width: 0; }
+.deletion-queue-filters select { max-width: 100%; }
+
+#activityDeletionQueueBody {
+  overflow: hidden;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.deletion-request-row {
+  display: grid;
+  grid-template-columns: 20px minmax(90px, .75fr) minmax(120px, 1.1fr) minmax(120px, 1.2fr) minmax(120px, 1.2fr) minmax(114px, auto);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-inline-start: 3px solid transparent;
+  overflow-wrap: anywhere;
+}
+
+.deletion-request-row + .deletion-request-row { border-top: 1px solid #e5ebf2; }
+.deletion-request-row.waiting { background: #fff8eb; border-inline-start-color: #a56509; }
+.deletion-request-row.late { background: #fdf0ef; border-inline-start-color: #a72220; }
+.deletion-request-row small { display: block; margin-top: 4px; color: #465466; }
+.deletion-row-actions { justify-content: end; }
+.deletion-request-row input[type="checkbox"] { width: 17px; height: 17px; }
+
+#activityDeletionQueueDialog { width: min(660px, calc(100% - 24px)); }
+.deletion-review-content { padding: 16px; overflow-wrap: anywhere; }
+#deletionReviewFields:not([hidden]) { display: grid; gap: 12px; }
+#deletionReviewFields label { display: grid; gap: 4px; }
+#deletionReviewMessage:empty { display: none; }
+#deletionReviewMessage { color: #9b1c1c; }
+.deletion-review-footer { padding: 12px 16px; border-top: 1px solid #e5ebf2; justify-content: space-between; }
+
+@media (max-width: 1040px) {
+  .deletion-request-row { grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr); }
+  .deletion-request-row > :nth-child(n+4) { grid-column: 2 / -1; }
+  .deletion-row-actions { justify-content: start; }
+}
