@@ -155,6 +155,7 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
       create schema auth; grant usage on schema auth to authenticated;
       create function auth.uid() returns uuid language sql as $$
         select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+      create function auth.jwt() returns jsonb language sql as $$select '{"email":"synthetic@example.test"}'::jsonb$$;
       create table public.profiles (id uuid primary key, role text, status text, full_name text);
       create table public.leads (id uuid primary key, assigned_to uuid, company_name text);`);
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261112070450_management_assigned_tasks.sql"), "utf8"));
@@ -433,6 +434,8 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
     const beforeRegistrationChange = await existingState();
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118100838_lead_registration_task_choices.sql"), "utf8"));
     assert.deepEqual(await existingState(), beforeRegistrationChange, "Migration must not rewrite any saved lead, task or history");
+    await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118122627_lead_creation_activity_audit.sql"), "utf8"));
+    assert.deepEqual(await existingState(), beforeRegistrationChange, "Creation audit must not backfill existing leads or tasks");
     for (const at of ["2026-11-20T08:00:00Z", "2026-11-21T08:00:00Z", "2026-11-22T08:00:00Z", "2026-11-20T20:01:00Z", "2026-12-31T20:01:00Z"]) {
       const due = (await db.query("select private.next_management_working_date($1)::text as due", [at])).rows[0].due;
       assert.equal(due, nextManagementWorkingDate(at));
@@ -451,6 +454,10 @@ test("SQL task writer and RLS on a disposable PostgreSQL fixture", { skip: !proc
       assert.equal(saved.next_action, "");
       assert.equal(saved.next_action_date, null);
       assert.equal(saved.lead_status, "PROSPECT", "The same blueprint constraint must still accept the default stage");
+      assert.equal(saved.activities.length, 1, "One creation event, not a second reminder for the linked task");
+      assert.equal(saved.activities[0].id, `lead-created-${saved.id}`);
+      assert.equal(saved.activities[0].created_by, admin.id);
+      assert.equal(saved.activities[0].created_by_role, "admin");
       const task = (await db.query("select * from public.management_tasks where id=$1", [taskId])).rows[0];
       assert.equal(task.title, title === "To Call" ? "New Lead Outreach" : title);
       assert.equal(task.due_date.toISOString().slice(0, 10), nextManagementWorkingDate(task.created_at));

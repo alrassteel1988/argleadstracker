@@ -42,6 +42,10 @@ const {
   ACTIVITY_DELETION_REASONS,
   MAX_ACTIVITY_ATTACHMENT_BYTES,
   activityAuditEvent,
+  activityAuthorFields,
+  assertLeadCreationActivitiesUnchanged,
+  isLeadCreationActivity,
+  withLeadCreationActivity,
   normalizeWorkflowActivity,
   safeOriginalFilename,
   updateWorkflowActivity,
@@ -422,6 +426,14 @@ function readDb() {
 }
 
 function writeDb(db) {
+  if (fs.existsSync(DB_PATH)) {
+    const saved = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+    const previousLeads = new Map((saved.leads || []).map(lead => [lead.id, lead]));
+    for (const lead of db.leads || []) {
+      const previous = previousLeads.get(lead.id);
+      if (previous) assertLeadCreationActivitiesUnchanged(previous.activities, lead.activities);
+    }
+  }
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
@@ -1421,6 +1433,7 @@ function normalizeReminderActivity(input, lead, user) {
     id: input.id || newRecordId("act"),
     at: new Date().toISOString().slice(0, 10),
     type: "Reminder",
+    ...activityAuthorFields(user),
     text: `${reminderType}: ${action}`,
     reminder: true,
     reminder_type: reminderType,
@@ -1444,7 +1457,7 @@ function activitySummary(activity = {}) {
 }
 
 function activityCorrection(existing, input, lead, user) {
-  if (!existing || existing.delete_request) {
+  if (!existing || existing.delete_request || isLeadCreationActivity(existing)) {
     const error = new Error("This activity cannot be corrected through this flow.");
     error.status = 400;
     throw error;
@@ -1587,6 +1600,9 @@ function normalizeDeleteRequest(input, lead, user, activities) {
       const error = new Error("Activity not found.");
       error.status = 404;
       throw error;
+    }
+    if (isLeadCreationActivity(activities[activityIndex])) {
+      throw Object.assign(new Error("Lead creation history is read-only."), { status: 409 });
     }
     if (activities[activityIndex].delete_request) {
       const error = new Error("Delete request entries cannot be deleted through this flow.");
@@ -3796,7 +3812,7 @@ async function queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled) 
 async function persistActivityCollection(db, user, lead, activities, supabaseEnabled) {
   const normalized = ensureActivityIds(activities);
   const lastActivity = normalized.find(activity => !activity.delete_request && !activity.archived
-    && activity.followup_resolution !== "cancelled" && !activity.followup_label)?.at
+    && !isLeadCreationActivity(activity) && activity.followup_resolution !== "cancelled" && !activity.followup_label)?.at
     || lead.last_activity
     || "";
   return persistLeadPatch(db, user, lead.id, { activities: normalized, last_activity: lastActivity }, supabaseEnabled);
@@ -3809,6 +3825,7 @@ function activityById(lead, activityId) {
 }
 
 function canManageActivity(user, lead, activity) {
+  if (isLeadCreationActivity(activity)) return false;
   if (isDirectorOrAdmin(user)) return true;
   if (!leadBelongsToUser(lead, user)) return false;
   return !activity.created_by
@@ -4013,7 +4030,7 @@ function addLocalHandoffNotices(db, leadId, event) {
 
 async function saveSupabaseLead(token, user, input) {
   const initialTask = requestsInitialManagementTask(input, user);
-  const lead = toSupabaseLead(input, user, { initialTask, newRegistration: true });
+  const lead = withLeadCreationActivity(toSupabaseLead(input, user, { initialTask, newRegistration: true }), user);
   if (initialTask) {
     const identity = lead.assigned_to ? `id=eq.${encodeURIComponent(lead.assigned_to)}` : `full_name=eq.${encodeURIComponent(lead.assigned_salesman)}`;
     const reps = await rest(`profiles?${identity}&role=eq.salesman&status=eq.active&select=id,full_name&limit=2`, supabaseDataOptions(token));
@@ -4204,7 +4221,7 @@ async function importSupabaseLeadRows(token, user, rows, mode, importedAt) {
           if (index >= 0) existing[index] = fromSupabaseLead(patched[0]);
         }
       } else {
-        const lead = toSupabaseLead(data, user);
+        const lead = withLeadCreationActivity(toSupabaseLead(data, user), user);
         if (isAdmin(user) && !lead.assigned_to) {
           lead.assigned_to = await resolveSalesmanId(token, lead.assigned_salesman);
         }
@@ -4250,6 +4267,9 @@ function importLocalLeadRows(db, user, rows, mode, importedAt) {
     }
     const lead = withAutomaticReminder(normalizeLead(data), user);
     lead.id = `lead-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    lead.created_by = user.id;
+    lead.created_by_name = activityAuthorFields(user).created_by_name;
+    lead.activities = withLeadCreationActivity(lead, user).activities;
     db.leads.unshift(lead);
     imported.push(leadWithDerivedFields(lead));
   });
@@ -6864,6 +6884,7 @@ async function handleApi(req, res, url) {
       localDb.leads.unshift(lead);
       saveLocalManagementTask(localDb, user, "assign", lead.initial_management_task_id, values, now);
     } else localDb.leads.unshift(lead);
+    lead.activities = withLeadCreationActivity(lead, user).activities;
     writeDb(localDb);
     scheduleLeadAutoEnrichment({ db: localDb, user, lead, req, supabaseEnabled });
     await queueLeadIntelligenceForNewLead(localDb, user, lead, supabaseEnabled);
@@ -7123,6 +7144,7 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const existing = await getSupabaseLead(user.token, leadMatch[1], user);
       if (!existing) return leadNotFound(res);
+      if (Object.hasOwn(payload, "activities")) assertLeadCreationActivitiesUnchanged(existing.activities, payload.activities);
       const reassign = requestedLeadReassignment(payload, existing);
       if (reassign && !isAdmin(user)) return sendJson(res, 403, { error: "Only an Admin can reassign a lead." });
       if (reassign && requestedLeadStageChange(payload, existing)) {
@@ -7199,6 +7221,7 @@ async function handleApi(req, res, url) {
     }
     const lead = db.leads.find(item => item.id === leadMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
+    if (Object.hasOwn(payload, "activities")) assertLeadCreationActivitiesUnchanged(lead.activities, payload.activities);
     const reassign = requestedLeadReassignment(payload, lead);
     if (reassign && !isAdmin(user)) return sendJson(res, 403, { error: "Only an Admin can reassign a lead." });
     if (reassign && requestedLeadStageChange(payload, lead)) {

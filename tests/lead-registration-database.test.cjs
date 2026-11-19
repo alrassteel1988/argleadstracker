@@ -5,7 +5,7 @@ const { join } = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE || "@electric-sql/pglite");
 
-test("new lead RPC preserves RLS and rolls company and lead back together on the blueprint schema", async () => {
+for (const creationAudit of [false, true]) test(`new lead RPC preserves RLS and atomicity on the blueprint schema (creation audit: ${creationAudit})`, async () => {
   const db = new PGlite();
   const admin = randomUUID(), sales = randomUUID(), peer = randomUUID(), inactive = randomUUID();
   try {
@@ -14,6 +14,7 @@ test("new lead RPC preserves RLS and rolls company and lead back together on the
     await db.exec(`create role anon; create role authenticated; create role service_role;
       create schema auth; grant usage on schema auth to authenticated;
       create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+      create function auth.jwt() returns jsonb language sql as $$select '{"email":"synthetic@example.test"}'::jsonb$$;
       create table public.profiles(id uuid primary key,role text,status text,full_name text,territory text);
       create table public.companies(id uuid primary key default gen_random_uuid(),company_name text not null,created_by uuid,
         google_rating numeric,opening_hours jsonb,enriched_at timestamptz,enrichment_updated_at timestamptz);
@@ -48,6 +49,7 @@ test("new lead RPC preserves RLS and rolls company and lead back together on the
     }
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118111941_atomic_new_lead_registration.sql"), "utf8"));
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118113937_registration_rls_readback.sql"), "utf8"));
+    if (creationAudit) await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118122627_lead_creation_activity_audit.sql"), "utf8"));
     const as = async (id, role="authenticated") => {
       await db.exec(`set role ${role}`);
       await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id || ""]);
@@ -79,13 +81,24 @@ test("new lead RPC preserves RLS and rolls company and lead back together on the
     assert.equal(saved.lead_status,"PROSPECT");
     assert.equal(saved.next_action,"");
     assert.equal(saved.next_action_date,null);
-    assert.deepEqual(saved.activities,[]);
+    assert.equal(saved.activities.length, creationAudit ? 1 : 0);
+    if (creationAudit) {
+      assert.equal(saved.activities[0].id, `lead-created-${saved.id}`);
+      assert.equal(saved.activities[0].created_by, sales);
+      assert.equal(saved.activities[0].created_by_name, "Salesman");
+      assert.equal(saved.activities[0].created_by_role, "salesman");
+      assert.equal(saved.activities[0].transaction_status, "recorded");
+    }
     assert.equal(saved.notes,"Synthetic notes retained.");
     assert.equal(saved.products_services_remarks,"Old optional company columns may be absent.");
     const reused = await save(input("Reused visible company",{company_id:saved.company_id,next_action:"To Call",next_action_date:"2099-01-01",
       activities:[{id:"reminder",type:"Reminder",created_by:sales}]}));
     assert.equal(reused.company_id,saved.company_id);
-    assert.equal(reused.activities.length,1);
+    assert.equal(reused.activities.length, creationAudit ? 2 : 1);
+    if (creationAudit) {
+      assert.equal(reused.activities.filter(item => item.lead_creation).length, 1);
+      assert.equal(reused.activities.filter(item => item.type === "Reminder").length, 1);
+    }
     assert.deepEqual(await counts(), {companies:1,leads:2});
 
     await as(peer);

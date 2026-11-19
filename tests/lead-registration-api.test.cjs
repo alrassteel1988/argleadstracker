@@ -13,7 +13,7 @@ const users = {
 const writes = [];
 let postgres;
 let registrationError;
-const fixtureColumns = new Set(["id", "company_id", "created_by", "assigned_to", "lead_status"]);
+const fixtureColumns = new Set(["id", "company_id", "created_by", "assigned_to", "lead_status", "activities"]);
 const fixtureTypes = {
   google_rating: "numeric", google_review_count: "integer", hunter_confidence_score: "numeric", estimated_value: "numeric",
   latitude: "double precision", longitude: "double precision", next_action_date: "date", last_activity: "date", first_order_date: "date",
@@ -87,11 +87,12 @@ async function create(token, body) {
     await postgres.exec(`create role anon; create role authenticated; create role service_role;
       create schema auth; grant usage on schema auth to authenticated;
       create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+      create function auth.jwt() returns jsonb language sql as $$select '{"email":"synthetic@example.test"}'::jsonb$$;
       create table public.profiles(id uuid primary key,full_name text,territory text,role text,status text);
       create table public.companies(id uuid primary key default gen_random_uuid(),company_name text not null,created_by uuid,
         enriched_at timestamptz,enrichment_updated_at timestamptz);
       create table public.leads(id uuid primary key default gen_random_uuid(),company_id uuid references public.companies(id),
-        created_by uuid,assigned_to uuid,lead_status text not null default 'NEW'); ${constraint}
+        created_by uuid,assigned_to uuid,lead_status text not null default 'NEW',activities jsonb default '[]'); ${constraint}
       alter table public.profiles enable row level security;
       alter table public.companies enable row level security;
       alter table public.leads enable row level security;
@@ -108,6 +109,7 @@ async function create(token, body) {
     await postgres.query("insert into public.profiles values($1,$2,$3,'salesman','active')", [users.sales.id,users.sales.name,users.sales.territory]);
     await postgres.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118111941_atomic_new_lead_registration.sql"), "utf8"));
     await postgres.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118113937_registration_rls_readback.sql"), "utf8"));
+    await postgres.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118122627_lead_creation_activity_audit.sql"), "utf8"));
   }
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   try {
@@ -122,7 +124,9 @@ async function create(token, body) {
       assert.equal(sent.assigned_to, users.sales.id);
       assert.equal(sent.notes, "Retain the buyer instructions.");
       assert.ok(sent.initial_management_task_id);
-      assert.equal(sent.activities.length, 0);
+      assert.equal(sent.activities.length, 1);
+      assert.equal(sent.activities[0].lead_creation, true);
+      assert.equal(sent.activities[0].created_by, users.admin.id);
       assert.ok(!Object.hasOwn(sent, "initial_management_task_title"), "UI-only field must not leak into SQL columns");
     }
     assert.equal(writes.length, 2, "Admin registration must use only the atomic company/lead/task RPC");
@@ -137,7 +141,11 @@ async function create(token, body) {
       const sent = writes.at(-1).body.p_lead;
       assert.equal(sent.next_action, "");
       assert.equal(sent.next_action_date, null);
-      assert.deepEqual(sent.activities, []);
+      assert.equal(sent.activities.length, 1);
+      assert.equal(sent.activities[0].lead_creation, true);
+      assert.equal(sent.activities[0].created_by, users.sales.id);
+      assert.equal(saved.body.activities.length, 1);
+      if (postgres) assert.equal(saved.body.activities[0].id, `lead-created-${saved.body.id}`);
       assert.equal(sent.assigned_to, users.sales.id);
       assert.ok(!sent.initial_management_task_id);
     }

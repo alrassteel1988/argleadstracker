@@ -106,7 +106,8 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(createdByAlex.response.status, 201, JSON.stringify(createdByAlex.data));
     assert.equal(createdByAlex.data.next_action, "");
     assert.equal(createdByAlex.data.next_action_date, null);
-    assert.equal(createdByAlex.data.activities.length, 0, "An omitted Salesman follow-up must not manufacture a reminder");
+    assert.equal(createdByAlex.data.activities.filter(item => item.reminder).length, 0, "An omitted Salesman follow-up must not manufacture a reminder");
+    assert.equal(createdByAlex.data.activities.filter(item => item.lead_creation).length, 1, "Blank Step 3 must still record lead creation");
     assert.ok(!createdByAlex.data.initial_management_task_id);
 
     const incompleteFollowup = await request(baseUrl, "/api/leads", { method: "POST", ...alex,
