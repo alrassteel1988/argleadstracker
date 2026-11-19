@@ -9,6 +9,7 @@ test("Neglected follow-up activity rows are responsive and management is read-on
   await page.route("**/api/leads", async route => {
     const response = await route.fetch();
     const leads = await response.json();
+    leads.forEach(lead => { lead.next_action = ""; lead.next_action_date = null; lead.activities = []; });
     if (leads.length) leads[0].activities = [
       {id:"demo-one", type:"Phone Call", next_action_date:"2020-01-01", version:1},
       {id:"demo-two", type:"Email", next_action_date:"2020-01-02", transaction_status:"closed", transaction_remarks:"Synthetic remark", transaction_outcome:"Done - spoke to customer"}
@@ -16,49 +17,73 @@ test("Neglected follow-up activity rows are responsive and management is read-on
     await route.fulfill({response, json:leads});
   });
   await page.goto("/?view=neglected");
-  await expect(page.locator(".neglected-v2-row")).toHaveCount(2);
-  await expect(page.locator(".neglected-v2-stats")).toContainText("1 / 2");
+  await expect(page.locator(".neglected-v2-row")).toHaveCount(1);
+  await expect(page.locator("[data-neglected-filter=completed]")).toContainText("Outcomes logged · 1");
   if (role === "salesman") {
     await expect(page.locator("[data-neglected-export]")).toHaveCount(0);
     expect(await page.evaluate(async () => (await authenticatedFetch("/api/management/overdue-activities.csv")).status)).toBe(403);
-    await page.locator("[data-neglected-edit]").first().click();
-    await expect(page.locator("[data-neglected-save]")).toBeDisabled();
-    await page.locator("[data-neglected-form] select").selectOption("Will try again");
-    await page.locator("[data-neglected-form] textarea").fill("Synthetic follow-up");
-    await expect(page.locator("[data-neglected-save]")).toBeDisabled();
-    await page.locator("[data-neglected-form] input[type=date]").fill("2026-11-01");
-    await expect(page.locator("[data-neglected-save]")).toBeEnabled();
+    await page.getByRole("button", { name: "Cancel follow-up", exact: true }).click();
+    const dialog = page.locator("#leadFollowupDialog");
+    await expect(dialog.getByRole("button", { name: "Cancel activity" })).toBeDisabled();
+    await dialog.getByRole("radio", { name: "Duplicate activity" }).check();
+    await dialog.locator("textarea").fill("Too short");
+    await expect(dialog.getByRole("button", { name: "Cancel activity" })).toBeDisabled();
+    await dialog.locator("textarea").fill("Synthetic duplicate follow-up");
+    await expect(dialog.getByRole("button", { name: "Cancel activity" })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Keep activity" }).click();
   } else {
     await expect(page.locator("[data-neglected-export]")).toBeVisible();
-    await expect(page.locator("[data-neglected-edit]")).toHaveCount(0);
+    await expect(page.locator("[data-neglected-resolve]")).toHaveCount(0);
     expect(await page.evaluate(async () => (await authenticatedFetch("/api/leads/ui-lead-1/activities/demo-one/transaction", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({})})).status)).toBe(403);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   await capture(page, info, "neglected-activity-review", {fullPage:true});
 });
 
-test("Neglected follow-up update persists in the isolated local database", async ({page}, info) => {
+test("Neglected cancellation and outcome persist without changing another next step", async ({page}, info) => {
   const role = await login(page, info);
   test.skip(role !== "salesman", "Only assigned salesmen may update transactions.");
   const lead = await page.evaluate(async () => (await api("/api/leads"))[0]);
-  const created = await page.evaluate(async leadId => api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
-    method: "POST", body: JSON.stringify({type:"Reminder", reminder:true, due_date:"2020-01-01", activity_required:"Synthetic follow-up"})
-  }), lead.id);
-  await page.goto("/?view=neglected");
-  // Reminder type and due date identify the synthetic record even when the text is not shown.
-  const target = page.locator(".neglected-v2-row").filter({hasText:"2020-01-01"}).first();
-  await expect(target).toBeVisible();
-  await target.locator("[data-neglected-edit]").click();
-  const form = page.locator("[data-neglected-form]");
-  await form.locator("select").selectOption("Will try again");
-  await form.locator("textarea").fill("Synthetic saved remark");
-  await form.locator("input[type=date]").fill("2026-11-01");
-  await form.locator("[data-neglected-save]").click();
-  await expect(target).toContainText("Synthetic saved remark");
-  await page.reload();
-  await expect(page.locator(".neglected-v2-row").filter({hasText:"2020-01-01"}).first()).toContainText("Synthetic saved remark");
-  const persisted = await page.evaluate(async leadId => (await api("/api/leads")).find(item => item.id === leadId), lead.id);
-  expect(persisted.activities.find(item => item.id === created.activity.id).transaction_remarks).toBe("Synthetic saved remark");
+  const getLead = () => page.evaluate(async leadId => (await api("/api/leads")).find(item => item.id === leadId), lead.id);
+  for (const [due, status, action, reason, submit] of [
+    ["2020-01-03", "cancelled", "Cancel follow-up", "Duplicate activity", "Cancel activity"],
+    ["2020-01-04", "completed", "Log outcome", "No answer", "Save & mark completed"]
+  ]) {
+    const created = await page.evaluate(async ({ leadId, due }) => api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
+      method: "POST", body: JSON.stringify({type:"Reminder", reminder:true, due_date:due, activity_required:"Synthetic follow-up"})
+    }), { leadId: lead.id, due });
+    const before = await getLead();
+    await page.goto("/?view=neglected");
+    const row = page.locator(".neglected-v2-row").filter({ hasText: due });
+    await row.getByRole("button", { name: action, exact: true }).click();
+    const dialog = page.locator("#leadFollowupDialog");
+    await dialog.getByRole("radio", { name: reason, exact: true }).check();
+    await dialog.locator("textarea").fill("Synthetic saved follow-up remark");
+    await dialog.getByRole("button", { name: submit, exact: true }).click();
+    await expect(row).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator("[data-neglected-filter=pending]")).toHaveAttribute("aria-pressed", "true");
+    await page.locator(`[data-neglected-filter=${status}]`).click();
+    await expect(row).toContainText("Synthetic saved follow-up remark");
+    await expect(row.locator("[data-neglected-resolve]")).toHaveCount(0);
+    const persisted = await getLead();
+    expect(persisted.next_action_date).toBe(before.next_action_date);
+    expect(persisted.next_action).toBe(before.next_action);
+    expect(persisted.activities.find(item => item.resolved_activity_id === created.activity.id)?.followup_resolution).toBe(status);
+  }
+  const current = await getLead();
+  await page.locator("[data-neglected-filter=pending]").click();
+  const nextStep = page.locator(".neglected-v2-row").filter({ hasText: current.company_name }).filter({ hasText: current.next_action_date });
+  await nextStep.getByRole("button", { name: "Cancel follow-up", exact: true }).click();
+  const dialog = page.locator("#leadFollowupDialog");
+  await expect(dialog.getByText("Schedule a replacement activity")).toBeVisible();
+  await dialog.getByRole("radio", { name: "No longer relevant", exact: true }).check();
+  await dialog.locator("textarea").fill("Synthetic cancellation of the current next step");
+  await dialog.getByRole("button", { name: "Cancel activity", exact: true }).click();
+  await expect(nextStep).toHaveCount(0);
+  const cleared = await getLead();
+  expect(cleared.next_action_date).toBeNull();
+  expect(cleared.activities.filter(item => item.followup_resolution)).toHaveLength(3);
 });
 
 test("Neglected activity loading errors, retry, empty results and responsive actions", async ({page}, info) => {
@@ -71,8 +96,8 @@ test("Neglected activity loading errors, retry, empty results and responsive act
     if (mode === "error") return route.fulfill({status:503, json:{error:"Synthetic lead service unavailable"}});
     const response = await route.fetch();
     const leads = await response.json();
-    if (mode === "empty") leads.forEach(lead => { lead.activities = []; });
-    else if (leads.length) leads[0].activities = [{id:"demo-retry", type:"Phone Call", next_action_date:"2020-01-01"}];
+    leads.forEach(lead => { lead.activities = []; lead.next_action = ""; lead.next_action_date = null; });
+    if (mode !== "empty" && leads.length) leads[0].activities = [{id:"demo-retry", type:"Phone Call", next_action_date:"2020-01-01"}];
     await route.fulfill({response, json:leads});
   });
   await page.evaluate(async () => { state.leadsLoaded = false; state.leads = []; try { await loadLeads(); } catch {} renderAiWorkspace(); });

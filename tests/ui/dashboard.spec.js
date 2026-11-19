@@ -3,6 +3,39 @@ const { capture, login, blockExternalTraffic } = require("./helpers");
 
 test.beforeEach(async ({ page }) => blockExternalTraffic(page));
 
+test("cancelled reminders stay out of the salesman overdue count", async ({ page }, info) => {
+  test.skip(!info.project.name.startsWith("salesman"), "Salesman dashboard only");
+  await login(page, info);
+  await page.route("**/api/leads", async route => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    const leads = await response.json();
+    const base = leads[0];
+    const dueDate = "2020-01-01";
+    await route.fulfill({ response, json: [
+      { ...base, id: "ui-cancelled", company_name: "Cancelled test company", stage: "PROSPECT",
+        next_action: "To Visit", next_action_date: dueDate, activities: [
+          { id: "cancelled-outcome", followup_resolution: "cancelled", resolved_reminder_id: "resolved-reminder",
+            followup_action: "To Call", followup_due_date: dueDate },
+          { id: "resolved-reminder", type: "Reminder", activity_required: "To Call", due_date: dueDate },
+          { id: "cancelled-legacy", type: "Reminder", activity_required: "To Visit",
+            due_date: dueDate, transaction_status: "cancelled" }
+        ] },
+      { ...base, id: "ui-pending", company_name: "Active test company", stage: "PROSPECT",
+        next_action: "To Call", next_action_date: dueDate, activities: [
+          { id: "pending-legacy", type: "Reminder", activity_required: " to call ",
+            reminder_due_date: dueDate, transaction_status: "pending" }
+        ] }
+    ] });
+  });
+  await page.reload();
+  const metric = page.locator('[data-summary-card="salesmanOverdueCalls"]');
+  await expect(metric.locator("strong")).toHaveText("1");
+  await expect(metric.locator("small")).toContainText(/^1 overdue follow-up ·/);
+  await expect(page.locator("#salespersonFocusList")).toContainText("Active test company");
+  await expect(page.locator("#salespersonFocusList")).not.toContainText("Cancelled test company");
+});
+
 test("salesman priority controls and responsive headline layout", async ({page}, info) => {
   if (!info.project.name.startsWith('salesman')) return;
   await login(page, info);

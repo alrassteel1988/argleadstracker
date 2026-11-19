@@ -190,27 +190,38 @@ console.log("PASS AI workspace routes, existing action reuse and escaped caller-
     { id: 'two', next_action_date: '2020-01-02', transaction_status: 'closed', transaction_remarks: 'Done' },
     { next_action_date: '2020-01-03' },
     { id: 'future', next_action_date: '2099-01-01' },
+    { id: 'plan-note', next_action_plan: 'To Call', next_action_date: '2020-01-01' },
     { id: 'deleted', next_action_date: '2020-01-01', deletion_status: 'pending' }
   ] }];
-  const state = { currentUser: { id: 'u' }, leads, leadsLoaded: true };
-  const context = { state, isSalesmanRole: () => true, arrangeAssistantLauncher: () => {}, Intl, Date };
+  const state = { currentUser: { id: 'u', role: 'salesman' }, leads, leadsLoaded: true };
+  leads[0].assigned_to = 'u';
+  const context = { state, isSalesmanRole: () => true, arrangeAssistantLauncher: () => {},
+    activeLeadForOverdue: () => true, managementTaskDate: () => '2026-10-27', Intl, Date };
   vm.createContext(context);
-  vm.runInContext(`${client.match(/function escapeHtml\([^]*?\n\}/)[0]}; ${client.match(/function neglectedActivityRows\([^]*?\n\}/)[0]}; ${client.match(/function renderNeglectedActivities\([^]*?\n\}/)[0]}; let neglectedActivityFilter='all', neglectedActivityEditor=null; const neglectedOutcomes={pending:[],closed:[]}; rows=neglectedActivityRows; render=renderNeglectedActivities;`, context);
+  const functions = ['escapeHtml', 'isReminderActivity', 'activityDueDate', 'isCompletedReminder', 'isOpenScheduledActivity',
+    'scheduledActivityDue', 'scheduledActivityAction', 'matchesCurrentReminder', 'rawCurrentReminderDate', 'findActivityResolution',
+    'canResolveStandaloneFollowup', 'neglectedActivityRows', 'renderNeglectedActivities'];
+  vm.runInContext(`${functions.map(name => client.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0]).join("\n")}
+    ${client.match(/const NEGLECTED_STATUS[^\n]+/)[0]}
+    let neglectedActivityFilter='pending'; rows=neglectedActivityRows; render=renderNeglectedActivities;`, context);
   const rows = context.rows(leads, '2026-10-27');
   assert.equal(rows.length, 3);
   assert.equal(rows[0].status, 'pending');
-  assert.equal(rows[1].status, 'closed');
+  assert.equal(rows[1].status, 'completed');
   assert.equal(rows[2].stable, false);
   const workspace = { innerHTML: '', querySelector: () => null };
   context.render(workspace);
   assert.match(workspace.innerHTML, /&lt;img src=x&gt;/);
   assert.doesNotMatch(workspace.innerHTML, /<img/);
-  assert.match(workspace.innerHTML, /Activity needs a permanent ID/);
+  assert.match(workspace.innerHTML, /Log outcome/);
+  assert.match(workspace.innerHTML, /Cancel follow-up/);
+  assert.match(workspace.innerHTML, /Open lead to review/);
+  assert.doesNotMatch(workspace.innerHTML, /data-neglected-resolve[^>]+data-neglected-activity=""/);
   assert.doesNotMatch(workspace.innerHTML, /data-neglected-export/);
   context.isSalesmanRole = () => false;
   context.render(workspace);
   assert.match(workspace.innerHTML, /data-neglected-export/);
-  assert.doesNotMatch(workspace.innerHTML, /data-neglected-edit/);
+  assert.doesNotMatch(workspace.innerHTML, /data-neglected-resolve/);
   console.log('PASS overdue activity rows and management read-only controls');
 }
 

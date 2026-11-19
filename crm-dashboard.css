@@ -1069,7 +1069,7 @@ body.neglected-mode .neglected-v2-filters button, body.neglected-mode .neglected
 body.neglected-mode .neglected-v2-filters button[aria-pressed="true"] { background: #0b3b75; color: white; }
 body.neglected-mode .neglected-v2-switch button[aria-pressed="true"] { background: #e0f2f1; color: #146964; font-weight: 700; }
 body.neglected-mode .neglected-v2-row { padding: 16px; border-bottom: 1px solid #e3e8ef; }
-body.neglected-mode .neglected-v2-row-main { display: grid; grid-template-columns: minmax(160px, 1.4fr) auto minmax(145px, auto) minmax(160px, 1fr) auto; align-items: center; gap: 14px; }
+body.neglected-mode .neglected-v2-row-main { display: grid; grid-template-columns: minmax(160px, 1.4fr) auto minmax(150px, 1fr) auto; align-items: center; gap: 14px; }
 body.neglected-mode .neglected-v2-row-main > * { min-width: 0; overflow-wrap: anywhere; }
 body.neglected-mode .neglected-v2-overdue, body.neglected-mode .neglected-v2-editor label span { color: #b91c1c; }
 body.neglected-mode .neglected-v2-switch, body.neglected-mode .neglected-v2-actions { display: flex; gap: 4px; flex-wrap: wrap; }

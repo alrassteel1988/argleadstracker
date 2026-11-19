@@ -7574,6 +7574,9 @@ async function handleApi(req, res, url) {
     if (found.activity.deletion_status === "pending") {
       return sendJson(res, 409, { error: "This activity has a pending deletion request and cannot be edited until management completes the review." });
     }
+    if (found.activity.followup_resolution || isResolvedReminder(found.activity, found.activities)) {
+      return sendJson(res, 409, { error: "This follow-up is already resolved. Its original entry is kept in history." });
+    }
     if (!canManageActivity(user, lead, found.activity)) {
       return sendJson(res, 403, { error: "You cannot add attachments to this activity." });
     }
@@ -7676,10 +7679,10 @@ async function handleApi(req, res, url) {
     const freshDb = supabaseEnabled ? null : readDb();
     const lead = await accessibleLeadById(freshDb, user, leadId, supabaseEnabled);
     if (!lead) return leadNotFound(res);
-    if (!canResolveLeadFollowup(user, lead)) return sendJson(res, 403, { error: "Only an Admin or the assigned salesman can resolve this follow-up." });
+    if (!canResolveLeadFollowup(user, lead, values)) return sendJson(res, 403, { error: "Only an Admin or the assigned salesman can resolve this follow-up." });
     try {
       if (supabaseEnabled) {
-        const result = await rest("rpc/resolve_lead_followup", {
+        const result = await rest(values.activity_id ? "rpc/resolve_overdue_activity" : "rpc/resolve_lead_followup", {
           method: "POST", ...supabaseDataOptions(user.token),
           body: { p_lead_id: leadId, p_input: values }
         });
@@ -7692,7 +7695,7 @@ async function handleApi(req, res, url) {
       }
       return sendJson(res, result.duplicate ? 200 : 201, { ...result, lead: leadWithDerivedFields(result.lead) });
     } catch (error) {
-      if (/next step (changed|has already)|More than one reminder|request already used/i.test(error.message)) {
+      if (/next step (changed|has already)|More than one reminder|request already used|activity changed|activity is the lead|activity records a lead plan/i.test(error.message)) {
         return sendJson(res, 409, { error: error.message });
       }
       if (error.status === 404 && supabaseEnabled) return sendJson(res, 503, { error: "Follow-up saving is not configured in this environment." });
@@ -7719,7 +7722,8 @@ async function handleApi(req, res, url) {
     const matches = activities.filter(activity => activity && String(activity.id || "") === activityId);
     if (matches.length !== 1 || !activityId) return sendJson(res, 409, { error: "This activity needs a unique, permanent ID before it can be updated." });
     const activity = matches[0];
-    if (activity.archived || activity.delete_request || activity.deletion_status === "pending") return sendJson(res, 409, { error: "This activity cannot be updated." });
+    if (activity.archived || activity.delete_request || activity.deletion_status === "pending"
+      || activity.followup_resolution || isResolvedReminder(activity, activities)) return sendJson(res, 409, { error: "This activity cannot be updated." });
     if (!canManageActivity(user, lead, activity)) return sendJson(res, 403, { error: "You cannot edit this activity." });
     let updated;
     try { updated = updateActivityTransaction(activity, values, user, version); }
