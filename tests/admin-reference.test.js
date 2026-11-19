@@ -31,6 +31,8 @@ const registration = { id: "creation", lead_creation: true, type: "Lead creation
 state.leads[0].activities.push(registration);
 const created = context.adminReferenceActivityRows().find(row => row.id === "creation");
 assert.equal(created.actor, "Actual Registrar", "Use the stored creator, not the assigned salesman");
+assert.equal(created.type, "New Lead creation", "The Admin Type column uses the requested creation label");
+assert.equal(registration.type, "Lead creation", "Display labels must not rewrite protected saved history");
 assert.equal(created.origin, "Self", "Creator snapshots survive profile-list omissions");
 assert.equal(created.recorded, true);
 const otherSnapshot = { ...registration, id: "unverified-role", lead_creation: false, type: "Call", created_by_role: "admin" };

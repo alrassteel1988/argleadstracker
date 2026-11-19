@@ -215,6 +215,10 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(creation[0].created_by_name, "E2E Salesman");
     assert.equal(creation[0].created_by_role, "salesman");
     const reminder = salesmanCreatedLead.data.activities.find(activity => activity.reminder);
+    assert.equal(salesmanCreatedLead.data.activities.length, 2, "Registration and its explicit follow-up are separate activities");
+    assert.notEqual(reminder.id, creation[0].id);
+    assert.equal(reminder.type, "Reminder");
+    assert.equal(creation[0].reminder, undefined, "Creation must never become a follow-up task");
     assert.equal(reminder.created_by, salesmanAccount.data.id);
     assert.equal(reminder.created_by_name, "E2E Salesman");
     const editCreation = await request(baseUrl, `/api/leads/${salesmanCreatedLead.data.id}`, {

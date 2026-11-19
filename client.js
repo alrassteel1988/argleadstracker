@@ -8088,7 +8088,8 @@ function adminReferenceActivityRows() {
     const manager = person => ["admin", "manager", "director"].includes(String(person?.role || "").toLowerCase());
     const authorRole = activity.lead_creation && activity.created_by ? activity.created_by_role : creator?.role;
     const origin = manager({ role: authorRole }) || manager(assignedBy) ? "Management" : authorRole === "salesman" ? "Self" : "Not recorded";
-    return { ...activity, origin, actor: activity.created_by_name || creator?.name || creator?.full_name || activity.logged_by || "Not recorded",
+    return { ...activity, type: activity.lead_creation ? "New Lead creation" : activity.type,
+      origin, actor: activity.created_by_name || creator?.name || creator?.full_name || activity.logged_by || "Not recorded",
       recorded: Boolean(activity.lead_creation),
       closed: activity.transaction_status === "closed", cancelled: activity.followup_resolution === "cancelled",
       retired: Boolean(activity.followup_retired), remarks: String(activity.transaction_remarks || "").trim(),

@@ -6,7 +6,8 @@ Release candidate on `codex/lead-creation-activity-release`, based on fetched `o
 
 ## Acceptance And Implementation
 
-- Each successful new CRM lead registration has one activity with Type `Lead creation` and the exact Notes text `New Lead Account creation`.
+- Each successful new CRM lead registration has one protected activity displayed as Type `New Lead creation` and the exact Notes text `New Lead Account creation`. The stored canonical type remains `Lead creation`; display formatting does not rewrite saved history.
+- A Salesman's explicitly entered Step 3 action/date creates a separate `Reminder` activity with its own ID, actual creator and `Self` origin. Creation remains a Recorded event, not a pending follow-up. PR #72 supplies optional blank Step 3 and transactional registration; this PR does not bundle those changes.
 - Its actor ID, name, role and timestamp come from authenticated server context. Admin registration records the Admin, not the assigned Salesman. Imports record the importing Admin; updating an existing imported lead does not add another creation event.
 - New automatic reminders also store their actual creator. Existing unknown activity authors remain unknown; current lead ownership is never used to invent historical authorship.
 - The Activity log shows creation as `Recorded`, with `Self` or `Management` origin and the creator in `Logged by`. Creation events are excluded from pending/missing-remarks/closed follow-up totals, contact conversion and activity-performance counts.
@@ -24,7 +25,7 @@ The root cause was two separate omissions: automatic reminders had no creator fi
 - `playwright.ui.config.js`, `tests/ui/lead-creation.spec.js`: separate local synthetic Admin/Salesman browser workflow.
 - `tests/lead-creation-activity.test.cjs`, `tests/admin-reference.test.js`, `tests/admin-salesman-permissions.e2e.test.js`: actor, spoofing, role, history, import, failed-save and status regressions.
 - `tests/ui/management-tasks.spec.js`: initial-task creation now expects its one administrative creation event, not zero activities.
-- `index.html`, `sw.js` and three cache assertion tests: client/cache revision `lead-creation-activity` / `arg-pwa-v176-lead-creation-activity`; caching protections and PR #73 layout unchanged.
+- `index.html`, `sw.js` and three cache assertion tests: client/cache revision `new-lead-creation-activity` / `arg-pwa-v178-new-lead-creation`; caching protections and PR #73 layout unchanged.
 
 ## Verification
 
@@ -59,8 +60,14 @@ Before migration, after migration and after rehearsal, counts and aggregate row 
 
 Commit/push and a separate PR are authorized. On 19 November 2026, after the explicit action-time confirmation, staging's service-role key was saved as a Vercel Secret for `codex/lead-creation-activity-release` only. The filtered Vercel list verified exactly three branch overrides: Secret `SUPABASE_SERVICE_ROLE_KEY`, Config `NEXT_PUBLIC_SUPABASE_ANON_KEY` and Config `NEXT_PUBLIC_SUPABASE_URL`, each marked Preview with that branch. Production and shared variables were not changed, and Redeploy was not clicked. Values were not included in logs or files. Feature publication and hosted verification are tracked separately in the PR; a successful configuration save is not deployment or workflow proof.
 
-Review overlap with PR #69 before combining; this branch has only the reminder helper overlap and creation-specific behavior. PR #72 remains separate and conflicting with main. Its transactional registration repairs are not included here. In current main, `normalizeStageValue` maps Prospect to `NEW`, while the blueprint constraint accepts `PROSPECT`, `OUTREACH`, `ENGAGED`, `SAMPLING`, `ACTIVE` and `DORMANT`. The ordinary Salesman path also creates the company before inserting the lead. Do not run a knowingly failing hosted registration that could leave an orphan company, select another stage to mask it, or bypass caller permissions. Resolve/retest that prerequisite before claiming full hosted Admin/Salesman form acceptance.
+Review overlap with PR #69 before combining; this branch has only the reminder helper overlap and creation-specific behavior. PR #72 remains separate; its conflict reconciliation at `621a1f9` and hosted Admin/Salesman staging tests passed on 19 November 2026, but it is not released. Its transactional registration repairs are not included here. In current main, `normalizeStageValue` maps Prospect to `NEW`, while the blueprint constraint accepts `PROSPECT`, `OUTREACH`, `ENGAGED`, `SAMPLING`, `ACTIVE` and `DORMANT`. The ordinary Salesman path also creates the company before inserting the lead. Do not run a knowingly failing hosted registration that could leave an orphan company, select another stage to mask it, or bypass caller permissions. Release/retest that prerequisite before claiming full hosted Admin/Salesman form acceptance for this PR.
 
 Local SQL tests use the exact blueprint status set and prove an invalid `NEW` status rolls back their transactional test function. This does not prove that the baseline nontransactional HTTP save path is repaired. Hosted role-session verification, a fresh Preview matched to the feature commit, and current-head GitHub checks remain unperformed. No two persistent synthetic leads have been created for the hosted test yet.
+
+## Display Label And Separate Follow-up Regression: 19 November 2026
+
+The requested Admin Type label is now `New Lead creation` for protected creation events only. Raw saved type remains `Lead creation`; no historical entry or SQL migration was changed by this follow-up. `node tests/admin-reference.test.js` first failed with actual `Lead creation` versus expected `New Lead creation`, then passed after the projection-only fix.
+
+`node tests/admin-salesman-permissions.e2e.test.js`, full `npm run verify` with PGlite enabled, and both Admin desktop/mobile Playwright projects passed. Browser assertions verify exactly two rows for the Salesman's synthetic lead: one Recorded creation and one separately scheduled Reminder, distinct IDs, actual creator and Self origin. Admin creation shows Management and the Admin creator. No Production or hosted business records were changed by this follow-up. PR #72's optional Step 3 and atomic registration remain a separate release prerequisite. Local screenshot artifacts are under `.tmp/lead-creation-ui/after/`; they are not hosted acceptance proof.
 
 Production schema/backup review, migration approval and human release are separate gates. No Production operation, merge or manual deployment occurred. No existing `Not recorded` entries were repaired or guessed.

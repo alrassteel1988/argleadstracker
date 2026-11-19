@@ -23,6 +23,10 @@ test("registration shows the actual creator in Admin Activity without inventing 
       if (admin) await target.locator("#formSalesman").selectOption("Demo Salesman");
       await target.locator("#leadStepNext").click();
       await target.locator("#leadStepNext").click();
+      if (!admin) {
+        await target.locator("#formNextAction").selectOption("To Call");
+        await target.locator('#leadForm [name="next_action_date"]').fill("2099-01-01");
+      }
       const saving = target.waitForResponse(response => response.url().endsWith("/api/leads") && response.request().method() === "POST");
       await target.locator("#leadSubmitButton").click();
       const response = await saving;
@@ -40,15 +44,24 @@ test("registration shows the actual creator in Admin Activity without inventing 
     const recorded = log.locator(".admin-ref-activity-table tbody tr").filter({ hasText: "New Lead Account creation" });
     await expect(recorded).toHaveCount(2);
     const self = recorded.filter({ hasText: salesCompany });
-    await expect(self.locator('[data-label="Type"]')).toHaveText("Lead creation");
+    await expect(self.locator('[data-label="Type"]')).toHaveText("New Lead creation");
     await expect(self.locator('[data-label="Logged by"]')).toHaveText("Demo Salesman");
     await expect(self.locator('[data-label="Origin"]')).toContainText("Self");
     await expect(self.locator('[data-label="Status & remarks"]')).toContainText("Recorded");
     await expect(self).not.toContainText("No remarks");
     const managed = recorded.filter({ hasText: adminCompany });
-    await expect(managed.locator('[data-label="Type"]')).toHaveText("Lead creation");
+    await expect(managed.locator('[data-label="Type"]')).toHaveText("New Lead creation");
     await expect(managed.locator('[data-label="Logged by"]')).toHaveText("Demo Admin");
     await expect(managed.locator('[data-label="Origin"]')).toContainText("Management");
+    const salesRows = log.locator(".admin-ref-activity-table tbody tr").filter({ hasText: salesCompany });
+    await expect(salesRows).toHaveCount(2);
+    const followup = salesRows.filter({ has: page.locator('[data-label="Type"]', { hasText: /^Reminder$/ }) });
+    await expect(followup).toHaveCount(1);
+    await expect(followup.locator('[data-label="Logged by"]')).toHaveText("Demo Salesman");
+    await expect(followup.locator('[data-label="Origin"]')).toContainText("Self");
+    await expect(followup).toContainText("To Call");
+    expect(registered.activities.filter(item => item.reminder)).toHaveLength(1);
+    expect(registered.activities.find(item => item.reminder).id).not.toBe(registered.activities.find(item => item.lead_creation).id);
     await expect(log.locator(".admin-ref-stat.warning strong")).toHaveText(String(beforePending + 1));
     await expect(log.locator(".admin-activity-missing strong")).toHaveText(String(beforeMissing + 1));
     await expect(log.locator(".admin-ref-stat.teal b")).toHaveText("/ 19");
