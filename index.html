@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=dashboard-summary-modals-1">
+  <link rel="stylesheet" href="/styles.css?v=enrichment-identity-review">
   <link rel="stylesheet" href="/salesman-dashboard-live-leads.css?v=5-compact">
   <link rel="stylesheet" href="/lead-detail-readability.css?v=7-badge-contrast">
   <link rel="stylesheet" href="/activity-readability.css?v=8-admin-density">
@@ -1107,6 +1107,7 @@
               <label class="company-field wide">Company name<input name="company_name" id="leadCompanyName" required></label>
               <div class="wide duplicate-warning hidden" id="duplicateWarning" aria-live="polite"></div>
               <div class="wide enrichment-strip">
+                <label class="lead-lookup-toggle" id="leadGoogleLookupControl"><input type="checkbox" id="leadGoogleLookup" checked>Automatic company lookup</label>
                 <span class="enrichment-status" id="leadEnrichmentStatus" aria-live="polite">Type a company name to fetch Google business info.</span>
               </div>
               <label>Assigned salesman<select name="assigned_salesman" id="formSalesman"></select></label>
@@ -1814,7 +1815,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=lead-registration-main"></script>
+  <script src="/client.js?v=enrichment-identity-review"></script>
   </body>
 </html>
 

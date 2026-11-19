@@ -1,3 +1,4 @@
+const { normalise, jaroWinkler } = require("./src/utils/fuzzyMatch");
 const requestLog = new Map();
 const googleCache = new Map();
 const GOOGLE_CACHE_MS = 15 * 60 * 1000;
@@ -240,16 +241,22 @@ async function searchGooglePlaces(keyword, location, rateKey) {
 }
 
 function matchScore(place, companyName) {
-  const target = String(companyName || "").trim().toLowerCase();
-  const name = String(place.company_name || "").trim().toLowerCase();
+  const target = normalise(companyName);
+  const name = normalise(place.company_name);
   if (!target || !name) return 0;
   if (name === target) return 100;
+  const generic = /^(al|the|steel|fabrication|fabricators?|piling|foundations?|engineering|technical|general|works|building|contractors?|marine|industrial|uae|dubai|sharjah|abu|dhabi)$/;
+  const identity = target.split(" ").filter(word => word.length > 1 && !generic.test(word));
+  const candidateWords = new Set(name.split(" "));
+  if (!identity.length || !identity.every(word => candidateWords.has(word))) return 0;
   if (name.includes(target) || target.includes(name)) return 80;
-  return target.split(/\s+/).filter(part => part.length > 2 && name.includes(part)).length * 10;
+  return jaroWinkler(target, name) >= 0.85 ? 80 : 0;
 }
 
 function bestPlaceMatch(matches, companyName) {
-  return [...matches].sort((a, b) => matchScore(b, companyName) - matchScore(a, companyName))[0] || null;
+  const eligible = new Map(matches.filter(place => (place.google_place_id || place.place_id) && matchScore(place, companyName) >= 80)
+    .map(place => [place.google_place_id || place.place_id, place]));
+  return eligible.size === 1 ? [...eligible.values()][0] : null;
 }
 
 async function fetchGooglePlaceDetails(placeId, rateKey) {
@@ -331,8 +338,11 @@ async function enrichCompanyFromGoogle({ companyName, location = "", country = "
   if (cached) return cached;
   const matches = await searchGooglePlaces(name, queryLocation, rateKey);
   const best = bestPlaceMatch(matches, name);
-  if (!best) {
-    return setCache(key, {
+  if (best) {
+    const details = await fetchGooglePlaceDetails(best.google_place_id || best.place_id, rateKey);
+    if (matchScore(details, name) >= 80) return setCache(key, details);
+  }
+  return setCache(key, {
       company_name: name,
       legal_name: "",
       year_established: "",
@@ -342,10 +352,7 @@ async function enrichCompanyFromGoogle({ companyName, location = "", country = "
       enrichment_status: "not_found",
       enriched_at: new Date().toISOString(),
       enrichment_updated_at: new Date().toISOString()
-    });
-  }
-  const details = await fetchGooglePlaceDetails(best.google_place_id || best.place_id, rateKey);
-  return setCache(key, details);
+  });
 }
 
 const googleLeadFields = [

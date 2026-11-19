@@ -630,6 +630,8 @@ const leadAiSummaryCache = new Map();
 let leadEnrichmentTimer = null;
 let leadEnrichmentKey = "";
 let leadCompanyInputKey = "";
+let leadEnrichmentRevision = 0;
+const leadEnrichmentChanges = new Map();
 let activitySearchTimer = null;
 let quotationValidationTimer = null;
 let duplicateCheckTimer = null;
@@ -3887,10 +3889,13 @@ function clearLeadAutoEnrichmentFields() {
     if (!field) return;
     field.value = "";
     leadFormTouched.delete(fieldName);
+    leadEnrichmentChanges.delete(fieldName);
   });
 }
 
 function resetLeadEnrichmentSession({ clearFields = false } = {}) {
+  leadEnrichmentRevision += 1;
+  leadEnrichmentChanges.clear();
   clearTimeout(leadEnrichmentTimer);
   leadEnrichmentTimer = null;
   leadEnrichmentKey = "";
@@ -4124,6 +4129,8 @@ function renderLeadFormWizard() {
   const panels = [...els.leadForm.querySelectorAll("[data-lead-step-panel]")];
   const steps = [...els.leadForm.querySelectorAll("[data-lead-step]")];
   const optionalStep = !state.editingLeadId && state.currentUser?.role === "salesman";
+  const lookupControl = document.getElementById("leadGoogleLookupControl");
+  if (lookupControl) lookupControl.hidden = Boolean(state.editingLeadId);
   const assignee = String(els.formSalesman?.value || "").trim();
   const initialTask = !state.editingLeadId && state.currentUser?.role === "admin" && assignee && assignee.toLowerCase() !== "unassigned";
   const taskChoice = document.getElementById("leadInitialTaskChoice");
@@ -4235,11 +4242,33 @@ function resetLeadFormForNewLead() {
   renderLeadFormWizard();
 }
 
+function leadGoogleLookupEnabled() {
+  if (state.editingLeadId) return state.leads.find(lead => lead.id === state.editingLeadId)?.enrichment_source !== "manual";
+  return document.getElementById("leadGoogleLookup")?.checked !== false;
+}
+
+function handleLeadLookupChange() {
+  leadEnrichmentRevision += 1;
+  clearTimeout(leadEnrichmentTimer);
+  leadEnrichmentKey = "";
+  if (leadGoogleLookupEnabled()) {
+    scheduleLeadCompanyEnrichment();
+    return;
+  }
+  leadEnrichmentChanges.forEach(({ before, after }, name) => {
+    const field = els.leadForm.elements[name];
+    if (field && field.value === after) field.value = before;
+  });
+  leadEnrichmentChanges.clear();
+  setEnrichmentStatus("Manual entry. Automatic company lookup is off.");
+}
+
 function applyLeadEnrichment(enrichment, { overwrite = false } = {}) {
   const conflicts = [];
   Object.entries(enrichmentFieldMap).forEach(([source, target]) => {
     const field = els.leadForm.elements[target];
     if (!field) return;
+    if (target === "company_name" && !overwrite) return;
     const next = formValue(enrichment[source]);
     if (!next) return;
     const current = String(field.value || "").trim();
@@ -4257,18 +4286,23 @@ function applyLeadEnrichment(enrichment, { overwrite = false } = {}) {
   const allowOverwrite = overwrite || !conflicts.length || window.confirm(
     `Google Places found updated data for ${conflicts.join(", ")}. Apply it and replace those edited field(s)?`
   );
+  if (!allowOverwrite) return false;
 
   Object.entries(enrichmentFieldMap).forEach(([source, target]) => {
     const field = els.leadForm.elements[target];
     if (!field) return;
+    if (target === "company_name" && !overwrite) return;
     const next = formValue(enrichment[source]);
     if (!next) return;
     const current = String(field.value || "").trim();
     const isConflict = conflicts.includes(target);
     if (overwrite || !current || (allowOverwrite && isConflict) || !userReviewFields.has(target)) {
+      const previous = leadEnrichmentChanges.get(target);
+      leadEnrichmentChanges.set(target, { before: previous?.after === current ? previous.before : current, after: next });
       field.value = next;
     }
   });
+  return true;
 }
 
 function leadEnrichmentRequestKey(companyName, location) {
@@ -4358,23 +4392,29 @@ function clientDuplicateCandidates(companyName, leads, duplicateThreshold = 0.85
 }
 
 function handleLeadCompanyNameInput() {
+  leadEnrichmentRevision += 1;
   const companyKey = leadCompanyOnlyKey(els.leadForm.elements.company_name.value);
   if (companyKey !== leadCompanyInputKey) {
     leadCompanyInputKey = companyKey;
     leadEnrichmentKey = "";
-    clearLeadAutoEnrichmentFields();
+    if (leadGoogleLookupEnabled()) clearLeadAutoEnrichmentFields();
   }
   scheduleDuplicateCheck();
   scheduleLeadCompanyEnrichment();
 }
 
 function handleLeadLocationInput() {
+  leadEnrichmentRevision += 1;
   leadEnrichmentKey = "";
   scheduleLeadCompanyEnrichment();
 }
 
 function scheduleLeadCompanyEnrichment() {
   clearTimeout(leadEnrichmentTimer);
+  if (!leadGoogleLookupEnabled()) {
+    setEnrichmentStatus("Manual entry. Automatic company lookup is off.");
+    return;
+  }
   const companyName = els.leadForm.elements.company_name.value.trim();
   const location = els.leadForm.elements.location.value.trim() || els.leadForm.elements.territory.value.trim();
   if (!companyName) {
@@ -4463,6 +4503,8 @@ function scheduleDuplicateCheck() {
 }
 
 async function enrichLeadFormCompany(companyName, location) {
+  if (!leadGoogleLookupEnabled()) return;
+  const revision = leadEnrichmentRevision;
   const key = leadEnrichmentRequestKey(companyName, location);
   if (key === leadEnrichmentKey) return;
   leadEnrichmentKey = key;
@@ -4478,16 +4520,21 @@ async function enrichLeadFormCompany(companyName, location) {
     }
     const latestCompanyName = els.leadForm.elements.company_name.value.trim();
     const latestLocation = els.leadForm.elements.location.value.trim() || els.leadForm.elements.territory.value.trim();
-    if (leadEnrichmentRequestKey(latestCompanyName, latestLocation) !== key) return;
+    if (!leadGoogleLookupEnabled() || revision !== leadEnrichmentRevision
+      || leadEnrichmentRequestKey(latestCompanyName, latestLocation) !== key) return;
     const enrichment = result.enrichment || {};
-    applyLeadEnrichment(enrichment);
+    if (applyLeadEnrichment(enrichment) === false) {
+      setEnrichmentStatus("Google suggestion not applied. Your fields were kept.");
+      return;
+    }
     const status = enrichment.enrichment_status || "partial";
     if (status === "not_found") {
-      setEnrichmentStatus("No Google Places match found. You can continue manually.", "error");
+      setEnrichmentStatus("No verified Google company match. Continue with manual entry.", "error");
     } else {
       setEnrichmentStatus(`Google business info ${status}. Review fields before saving.`, "success");
     }
   } catch (error) {
+    if (!leadGoogleLookupEnabled() || revision !== leadEnrichmentRevision) return;
     leadEnrichmentKey = "";
     setEnrichmentStatus(error.message, "error");
   }
@@ -17252,6 +17299,7 @@ els.placesForm.addEventListener("submit", async event => {
     document.querySelectorAll("[data-place-index]").forEach(button => {
       button.addEventListener("click", () => {
         const place = result.matches[Number(button.dataset.placeIndex)];
+        leadEnrichmentRevision += 1;
         clearLeadAutoEnrichmentFields();
         applyLeadEnrichment(place, { overwrite: true });
         leadCompanyInputKey = leadCompanyOnlyKey(els.leadForm.elements.company_name.value);
@@ -18128,6 +18176,7 @@ els.salesmanForm.addEventListener("submit", async event => {
 
 els.leadForm.querySelectorAll("input, textarea, select").forEach(field => {
   field.addEventListener("input", () => {
+    leadEnrichmentChanges.delete(field.name);
     if (field.name) leadFormTouched.add(field.name);
     if (["next_action", "next_action_date"].includes(field.name)) {
       els.leadForm.elements.next_action.setCustomValidity("");
@@ -18146,6 +18195,7 @@ renderLeadFormWizard();
 
 els.leadForm.elements.company_name.addEventListener("input", handleLeadCompanyNameInput);
 els.leadForm.elements.location.addEventListener("input", handleLeadLocationInput);
+document.getElementById("leadGoogleLookup")?.addEventListener("change", handleLeadLookupChange);
 
 document.querySelector("#recordLeadVoice").addEventListener("click", () => {
   toggleVoiceRecording({
@@ -18159,6 +18209,10 @@ els.leadForm.addEventListener("submit", async event => {
   event.preventDefault();
   const formData = new FormData(els.leadForm);
   const payload = Object.fromEntries(formData.entries());
+  if (!state.editingLeadId && !leadGoogleLookupEnabled()) {
+    payload.enrichment_source = "manual";
+    payload.enrichment_status = "pending";
+  }
   payload.product_interest = formData.getAll("product_interest").map(value => String(value || "").trim()).filter(Boolean).join(", ");
   payload.estimated_value = Number(payload.estimated_value || 0);
   if (!state.editingLeadId && state.currentUser?.role === "salesman"

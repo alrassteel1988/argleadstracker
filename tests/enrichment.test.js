@@ -69,6 +69,58 @@ async function run(name, test) {
     assert.equal(result.company_name, "No Match LLC");
   });
 
+  await run("shared industry words do not identify a company", async () => {
+    let detailCalls = 0;
+    global.fetch = async url => {
+      const place = { id: "places/unrelated", displayName: { text: "Granite Vale Piling Foundation LLC" },
+        websiteUri: "https://granite-vale.example", formattedAddress: "Unrelated synthetic address",
+        internationalPhoneNumber: "+971 4 000 0000", googleMapsUri: "https://maps.example/unrelated" };
+      if (String(url).includes("places:searchText")) return jsonResponse({ places: [place] });
+      detailCalls += 1;
+      return jsonResponse(place);
+    };
+    const result = await enrichCompanyFromGoogle({ companyName: "Amber Harbor Piling Foundation", rateKey: "identity" });
+    assert.equal(result.enrichment_status, "not_found", "An unrelated industry peer must be rejected");
+    assert.equal(result.company_name, "Amber Harbor Piling Foundation");
+    assert.equal(result.google_place_id, undefined);
+    assert.equal(result.phone, undefined);
+    assert.equal(result.website, undefined);
+    assert.equal(detailCalls, 0);
+  });
+
+  await run("detail lookup must still identify the requested company", async () => {
+    global.fetch = async url => String(url).includes("places:searchText")
+      ? jsonResponse({ places: [{ id: "places/changed", displayName: { text: "Amber Harbor Steel LLC" } }] })
+      : jsonResponse({ id: "places/changed", displayName: { text: "Granite Vale Steel LLC" },
+        websiteUri: "https://granite-vale.example", formattedAddress: "Wrong synthetic business" });
+    const result = await enrichCompanyFromGoogle({ companyName: "Amber Harbor Steel", rateKey: "changed-detail" });
+    assert.equal(result.enrichment_status, "not_found");
+    assert.equal(result.company_name, "Amber Harbor Steel");
+    assert.equal(result.google_place_id, undefined);
+    assert.equal(result.address, undefined);
+  });
+
+  await run("ambiguous same-name businesses require manual entry", async () => {
+    global.fetch = async url => String(url).includes("places:searchText")
+      ? jsonResponse({ places: ["one", "two"].map(id => ({ id: `places/${id}`, displayName: { text: "Amber Harbor Steel LLC" } })) })
+      : jsonResponse({ id: "places/one", displayName: { text: "Amber Harbor Steel LLC" } });
+    const result = await enrichCompanyFromGoogle({ companyName: "Amber Harbor Steel", rateKey: "ambiguous" });
+    assert.equal(result.enrichment_status, "not_found");
+    assert.equal(result.google_place_id, undefined);
+  });
+
+  await run("legacy fallback also rejects unrelated businesses", async () => {
+    global.fetch = async url => {
+      if (String(url).includes("places:searchText")) return jsonResponse({ error: { message: "Method blocked" } }, 403);
+      assert(String(url).includes("textsearch/json"), "Unrelated legacy candidates must not reach detail lookup");
+      return jsonResponse({ status: "OK", results: [{ place_id: "legacy-unrelated", name: "Granite Vale Piling Foundation" }] });
+    };
+    const result = await enrichCompanyFromGoogle({ companyName: "Amber Harbor Piling Foundation", rateKey: "legacy-identity" });
+    assert.equal(result.enrichment_status, "not_found");
+    assert.equal(result.company_name, "Amber Harbor Piling Foundation");
+    assert.equal(result.google_place_id, undefined);
+  });
+
   await run("partial Google Places data", async () => {
     global.fetch = async url => {
       if (String(url).includes("places:searchText")) {
