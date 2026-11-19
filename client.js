@@ -108,7 +108,7 @@ const state = {
     storageMode: ""
   },
   leadFormStep: 0,
-  leadFormDetailsOpen: { company: false, contact: false, followup: false },
+  leadFormDetailsOpen: { company: false, contact: false },
   leadDrawerOpen: false,
   leadDrawerTab: "overview",
   leadDrawerLoading: false,
@@ -3900,7 +3900,7 @@ function resetLeadEnrichmentSession({ clearFields = false } = {}) {
 
 function resetLeadWizardState() {
   state.leadFormStep = 0;
-  state.leadFormDetailsOpen = { company: false, contact: false, followup: false };
+  state.leadFormDetailsOpen = { company: false, contact: false };
 }
 
 function setLeadFormMode(mode = "create") {
@@ -4102,8 +4102,7 @@ function syncLeadWizardDetailsFromValues() {
   if (!els.leadForm) return;
   const groups = {
     company: ["tier", "country_emirate", "location", "legal_name", "year_established", "industry", "business_category", "address", "website", "google_maps_url"],
-    contact: ["primary_contact_title", "estimated_value", "product_interest", "secondary_contact_name", "secondary_contact_title", "secondary_contact_mobile", "secondary_contact_email", "tags", "quotation_ref"],
-    followup: ["estimated_monthly_volume", "first_order_date", "products_services_remarks"]
+    contact: ["primary_contact_title", "estimated_value", "product_interest", "secondary_contact_name", "secondary_contact_title", "secondary_contact_mobile", "secondary_contact_email", "tags", "quotation_ref"]
   };
   Object.entries(groups).forEach(([key, fields]) => {
     state.leadFormDetailsOpen[key] = fields.some(name => {
@@ -4124,12 +4123,30 @@ function renderLeadFormWizard() {
   const step = Number(state.leadFormStep || 0);
   const panels = [...els.leadForm.querySelectorAll("[data-lead-step-panel]")];
   const steps = [...els.leadForm.querySelectorAll("[data-lead-step]")];
+  const optionalStep = !state.editingLeadId && state.currentUser?.role === "salesman";
+  const assignee = String(els.formSalesman?.value || "").trim();
+  const initialTask = !state.editingLeadId && state.currentUser?.role === "admin" && assignee && assignee.toLowerCase() !== "unassigned";
+  const taskChoice = document.getElementById("leadInitialTaskChoice");
+  if (taskChoice) {
+    taskChoice.hidden = !initialTask;
+    taskChoice.querySelector("select").disabled = !initialTask;
+  }
+  ["leadNextActionField", "leadNextActionDateField"].forEach(id => {
+    const field = document.getElementById(id);
+    if (!field) return;
+    const control = field.querySelector("input,select");
+    field.hidden = Boolean(initialTask);
+    control.disabled = Boolean(initialTask);
+    control.setCustomValidity("");
+  });
+  const stepLabel = steps[2]?.querySelector("strong");
+  if (stepLabel) stepLabel.textContent = optionalStep ? "Next Step (optional)" : "Next Step";
   const nextStepHelp = document.getElementById("leadNextStepHelp");
   if (nextStepHelp) {
-    const assignee = String(els.formSalesman?.value || "").trim();
-    nextStepHelp.textContent = state.currentUser?.role === "admin" && !state.editingLeadId && assignee && assignee.toLowerCase() !== "unassigned"
-      ? "This next action will be assigned as a Management Task and linked from the salesperson's Focus list."
-      : "Lock the next action, then save only the notes or extra follow-up detail that will help the team move cleanly.";
+    nextStepHelp.textContent = initialTask
+      ? "Assigned as a Management Task, linked from Focus, and due the next working day (Monday to Saturday, Dubai time)."
+      : optionalStep ? "Optional: add a follow-up action and date, or save without scheduling one."
+      : "Add the next action and notes for this lead.";
   }
   panels.forEach((panel, index) => {
     const active = index === step;
@@ -4143,7 +4160,7 @@ function renderLeadFormWizard() {
     button.classList.toggle("complete", complete);
     button.setAttribute("aria-current", active ? "step" : "false");
   });
-  ["company", "contact", "followup"].forEach(key => {
+  ["company", "contact"].forEach(key => {
     const open = Boolean(state.leadFormDetailsOpen[key]);
     els.leadForm.querySelectorAll(`[data-lead-details-group="${key}"]`).forEach(node => {
       node.classList.toggle("hidden", !open);
@@ -4155,7 +4172,7 @@ function renderLeadFormWizard() {
   });
   els.leadStepBack?.classList.toggle("hidden", step === 0);
   els.leadStepNext?.classList.toggle("hidden", step >= panels.length - 1);
-  els.leadSubmitButton?.classList.toggle("hidden", step < panels.length - 1);
+  els.leadSubmitButton?.classList.toggle("hidden", step < (optionalStep ? 1 : panels.length - 1));
   if (els.leadStepNext) {
     const labels = ["Continue to Contact", "Continue to Next Step", "Next"];
     els.leadStepNext.textContent = labels[step] || "Next";
@@ -4166,7 +4183,7 @@ function leadStepFieldNames(step = state.leadFormStep) {
   const map = [
     ["company_name", "assigned_salesman", "territory", "sector"],
     ["contact_person", "phone", "email", "stage", "priority"],
-    ["next_action", "next_action_date", "activity_purpose", "notes"]
+    ["initial_management_task_title", "next_action", "next_action_date", "activity_purpose", "notes"]
   ];
   return map[step] || [];
 }
@@ -4207,10 +4224,11 @@ function resetLeadFormForNewLead() {
     if (els.formTerritory) els.formTerritory.value = state.currentUser.territory || els.formTerritory.value;
   }
   if (els.leadForm.elements.next_action_date) {
-    els.leadForm.elements.next_action_date.value = state.currentUser?.role === "admin" ? managementTaskDate() : today();
+    els.leadForm.elements.next_action_date.value = state.currentUser?.role === "salesman" ? "" : managementTaskDate();
   }
   renderLeadProductInterestOptions();
   ensureLeadFormSelectValue("next_action", NEXT_ACTION_PLAN_OPTIONS[0], NEXT_ACTION_PLAN_OPTIONS[0]);
+  if (state.currentUser?.role === "salesman") els.leadForm.elements.next_action.value = "";
   ensureLeadFormSelectValue("activity_purpose", ACTIVITY_PURPOSE_OPTIONS[0], ACTIVITY_PURPOSE_OPTIONS[0]);
   renderDuplicateWarning();
   setEnrichmentStatus("Type a company name to fetch Google business info.");
@@ -16626,7 +16644,7 @@ async function loadWorkspace() {
   fillSelect(document.querySelector("#pmrPotentialValue"), state.settings.pmr?.potentialValue || []);
   fillSelect(document.querySelector("#pmrDirectorAction"), state.settings.pmr?.directorAction || []);
   fillSelect(document.querySelector("#pmrAccountStatus"), state.settings.pmr?.accountStatus || []);
-  els.leadForm.elements.next_action_date.value = today();
+  els.leadForm.elements.next_action_date.value = state.currentUser?.role === "salesman" ? "" : today();
   await loadConfigurationAgentState();
   await loadLeads({ authInitialized: true });
   await loadWeeklyReportWorkspace();
@@ -18111,12 +18129,17 @@ els.salesmanForm.addEventListener("submit", async event => {
 els.leadForm.querySelectorAll("input, textarea, select").forEach(field => {
   field.addEventListener("input", () => {
     if (field.name) leadFormTouched.add(field.name);
+    if (["next_action", "next_action_date"].includes(field.name)) {
+      els.leadForm.elements.next_action.setCustomValidity("");
+      els.leadForm.elements.next_action_date.setCustomValidity("");
+    }
   });
 });
 els.leadForm.addEventListener("change", event => {
   const field = event.target;
   if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)) return;
   if (field.name) leadFormTouched.add(field.name);
+  if (field.name === "assigned_salesman") renderLeadFormWizard();
 });
 renderLeadProductInterestOptions();
 renderLeadFormWizard();
@@ -18138,6 +18161,14 @@ els.leadForm.addEventListener("submit", async event => {
   const payload = Object.fromEntries(formData.entries());
   payload.product_interest = formData.getAll("product_interest").map(value => String(value || "").trim()).filter(Boolean).join(", ");
   payload.estimated_value = Number(payload.estimated_value || 0);
+  if (!state.editingLeadId && state.currentUser?.role === "salesman"
+    && Boolean(String(payload.next_action || "").trim()) !== Boolean(String(payload.next_action_date || "").trim())) {
+    setLeadFormStep(2);
+    const missing = els.leadForm.elements[payload.next_action ? "next_action_date" : "next_action"];
+    missing.setCustomValidity("Enter both a next action plan and a date, or leave both blank.");
+    missing.reportValidity();
+    return;
+  }
   if (!state.editingLeadId && !isAdminOrManager() && state.currentUser) {
     payload.assigned_salesman = state.currentUser.name || state.currentUser.email || payload.assigned_salesman;
     payload.territory = state.currentUser.territory || payload.territory;
