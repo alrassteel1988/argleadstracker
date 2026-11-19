@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const path = require("path");
+const { isDeepStrictEqual } = require("node:util");
 
 const MAX_ACTIVITY_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const ACTIVITY_ATTACHMENT_TYPES = Object.freeze({
@@ -93,6 +94,42 @@ function activityAuditEvent(action, user, details = {}) {
   };
 }
 
+function activityAuthorFields(user) {
+  return {
+    created_by: user.id,
+    created_by_name: [user.name, user.full_name, user.email].find(value => typeof value === "string" && value.trim())?.trim() || "User",
+    created_by_role: user.role
+  };
+}
+
+function isLeadCreationActivity(activity) {
+  return Boolean(activity?.lead_creation) || ["Lead creation", "Lead Created"].includes(activity?.type)
+    || String(activity?.id || "").startsWith("lead-created-");
+}
+
+function withLeadCreationActivity(lead, user, at = new Date().toISOString()) {
+  const author = activityAuthorFields(user);
+  const event = {
+    id: `lead-created-${lead.id || crypto.randomUUID()}`,
+    at, created_at: at, updated_at: at, version: 1,
+    type: "Lead creation", text: "New Lead Account creation",
+    lead_creation: true, immutable_append: true,
+    attachments: [], archived: false, deletion_status: "",
+    transaction_status: "recorded", ...author,
+    audit_history: [{ id: `lead-created-audit-${lead.id || author.created_by}`, action: "activity_created",
+      actor_id: author.created_by, actor_name: author.created_by_name, at }]
+  };
+  return { ...lead, activities: [event, ...(lead.activities || []).filter(activity => !isLeadCreationActivity(activity))] };
+}
+
+function assertLeadCreationActivitiesUnchanged(previous, next) {
+  const before = (previous || []).filter(isLeadCreationActivity);
+  const after = (next || []).filter(isLeadCreationActivity);
+  if (before.length !== after.length || before.some(event => after.filter(item => isDeepStrictEqual(item, event)).length !== 1)) {
+    throw Object.assign(new Error("Lead creation history is read-only."), { status: 409 });
+  }
+}
+
 function normalizeWorkflowActivity(activity, user = null) {
   const now = new Date().toISOString();
   const createdAt = activity.created_at || now;
@@ -160,6 +197,10 @@ module.exports = {
   ACTIVITY_DELETION_REASONS,
   MAX_ACTIVITY_ATTACHMENT_BYTES,
   activityAuditEvent,
+  activityAuthorFields,
+  assertLeadCreationActivitiesUnchanged,
+  isLeadCreationActivity,
+  withLeadCreationActivity,
   activityEditableFields,
   normalizeWorkflowActivity,
   safeOriginalFilename,

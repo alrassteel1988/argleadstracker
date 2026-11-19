@@ -246,7 +246,8 @@ test("Admin lead creation assigns one task shared by Focus and Management Tasks"
     expect(lead.initial_management_task_id).toBeTruthy();
     expect(lead.assigned_to).toBe("ui-salesman");
     expect(lead.next_action_date).toBeNull();
-    expect(lead.activities).toHaveLength(0);
+    expect(lead.activities).toHaveLength(1);
+    expect(lead.activities[0].lead_creation).toBe(true);
     const tasks = await page.evaluate(id => api("/api/management-tasks").then(rows => rows.filter(item => item.lead_id === id)), lead.id);
     expect(tasks).toHaveLength(1);
     expect(tasks[0].id).toBe(lead.initial_management_task_id);

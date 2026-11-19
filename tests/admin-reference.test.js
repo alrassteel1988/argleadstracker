@@ -26,6 +26,27 @@ assert.equal(rows[0].origin, "Management");
 assert.equal(rows[1].origin, "Self");
 assert.equal(rows[2].origin, "Not recorded", "Unknown provenance must not be fabricated as Self");
 assert.equal(rows[0].closed, false, "Legacy activities default Pending");
+const registration = { id: "creation", lead_creation: true, type: "Lead creation", text: "New Lead Account creation",
+  created_by: "new-rep", created_by_name: "Actual Registrar", created_by_role: "salesman", at: "2026-11-01", transaction_status: "recorded" };
+state.leads[0].activities.push(registration);
+const created = context.adminReferenceActivityRows().find(row => row.id === "creation");
+assert.equal(created.actor, "Actual Registrar", "Use the stored creator, not the assigned salesman");
+assert.equal(created.type, "New Lead creation", "The Admin Type column uses the requested creation label");
+assert.equal(registration.type, "Lead creation", "Display labels must not rewrite protected saved history");
+assert.equal(created.origin, "Self", "Creator snapshots survive profile-list omissions");
+assert.equal(created.recorded, true);
+const otherSnapshot = { ...registration, id: "unverified-role", lead_creation: false, type: "Call", created_by_role: "admin" };
+state.leads[0].activities.push(otherSnapshot);
+assert.equal(context.adminReferenceActivityRows().find(row => row.id === "unverified-role").origin, "Not recorded",
+  "An arbitrary legacy role field must not invent management provenance");
+state.leads[0].activities.pop();
+for (const status of ["pending", "missing", "closed", "completed", "cancelled", "done", "not-reached"]) {
+  adminReference.activity.status = status;
+  assert.equal(context.adminReferenceFilterActivity([created]).length, 0, status);
+}
+adminReference.activity.status = "recorded";
+assert.equal(context.adminReferenceFilterActivity([created]).length, 1);
+state.leads[0].activities.pop();
 adminReference.activity.status = "closed";
 assert.equal(context.adminReferenceFilterActivity(rows).length, 1);
 adminReference.activity.search = "requirements";
