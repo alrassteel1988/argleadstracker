@@ -1,5 +1,24 @@
 # PR 69 Release Reconciliation
 
+## Reminder and Legacy Correction Follow-up: 20 November 2026
+
+Replaced the lead drawer's native reminder prompts with an in-page dialog using existing form styles.
+The dialog retains failed entries, disables duplicate submission, and reuses its client activity ID
+on a retry. Legacy notes/reminders now open the append-only correction dialog instead of the
+structured-activity editor. Original entries are retained verbatim; corrections carry authenticated
+authorship and a target ID. A mismatched target/index returns 409 without appending to another entry.
+Protected creation events remain read-only and existing structured activity rules are unchanged.
+
+Before reconciliation with the newly released lifecycle feature, `npm.cmd run verify` passed with
+the disposable PGlite fixture enabled. The new `CRM_UI_SUITE=activity-entry` browser suite passed
+both Admin desktop/mobile projects, each with an independent Salesman session. It checks reminder
+failure/retry, actor attribution, preserved originals, append-only corrections and narrow layouts.
+The initial sandbox browser startup stalled; only its identified test processes were stopped and
+the local-only suite was rerun successfully with normal process permissions. No Production test,
+record change, migration, merge or manual deployment was performed.
+
+Current-main reconciliation and fresh hosted staging acceptance remain required before release.
+
 ## After PR 74: 19 November 2026
 
 Reconciled the existing PR 69 branch in an isolated worktree starting from current released main `0072f1f106e59bae85ad02e434e00de9e9796b4b` (PR 74). The previous PR head `bb8d12425c726535c70d49da48e39a0c4bf901f8` is retained as a merge parent; no force push or main update is needed. Local branch: `codex/activity-author-after-74`; remote publication target remains `codex/activity-origin-author`. No other pending PR is combined.

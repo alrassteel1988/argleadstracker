@@ -1290,11 +1290,28 @@
       </form>
     </dialog>
 
-    <dialog id="activityEditDialog">
+    <dialog id="leadReminderDialog" aria-labelledby="leadReminderTitle">
+      <form class="lead-form" id="leadReminderForm">
+        <div class="dialog-header">
+          <div><h2 id="leadReminderTitle">Add <em class="crm-title-accent">Reminder</em></h2><strong id="leadReminderName"></strong></div>
+          <button type="button" class="ghost-button" id="closeLeadReminder">Close</button>
+        </div>
+        <input name="lead_id" type="hidden">
+        <div class="form-grid">
+          <label class="wide">Reminder note<textarea name="activity_required" rows="3" maxlength="2000" required></textarea></label>
+          <label>Due date<input name="due_date" type="date" required></label>
+          <label>Due time<input name="due_time" type="time" value="09:00" required></label>
+        </div>
+        <span class="form-message" id="leadReminderMessage" role="status" aria-live="polite"></span>
+        <button class="primary-button" type="submit">Save Reminder</button>
+      </form>
+    </dialog>
+
+    <dialog id="activityEditDialog" aria-labelledby="activityEditTitle">
       <form method="dialog" class="lead-form" id="activityEditForm">
         <div class="dialog-header">
           <div>
-            <h2>Add Activity <em class="crm-title-accent">Correction</em></h2>
+            <h2 id="activityEditTitle">Add Activity <em class="crm-title-accent">Correction</em></h2>
             <p>Activity history is append-only. This creates a new correction entry and keeps the original record unchanged.</p>
           </div>
           <button type="button" class="ghost-button" id="closeActivityEditForm">Close</button>
@@ -1302,6 +1319,7 @@
         <div class="form-grid">
           <input name="lead_id" type="hidden">
           <input name="activity_index" type="hidden">
+          <input name="activity_id" type="hidden">
           <label>Corrected activity date<input name="at" type="date" required></label>
           <label>Corrected type
             <select name="type">
@@ -1815,7 +1833,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=activity-author-after-creation"></script>
+  <script src="/client.js?v=activity-author-legacy-ui"></script>
   </body>
 </html>
 

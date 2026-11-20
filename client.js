@@ -605,6 +605,10 @@ const els = {
   closeMobileMap: document.querySelector("#closeMobileMap"),
   mobileMapList: document.querySelector("#mobileMapList"),
   activityEditDialog: document.querySelector("#activityEditDialog"),
+  leadReminderDialog: document.querySelector("#leadReminderDialog"),
+  leadReminderForm: document.querySelector("#leadReminderForm"),
+  leadReminderName: document.querySelector("#leadReminderName"),
+  leadReminderMessage: document.querySelector("#leadReminderMessage"),
   activityEditForm: document.querySelector("#activityEditForm"),
   activityEditMessage: document.querySelector("#activityEditMessage"),
   activityEditReminderFields: document.querySelector("#activityEditReminderFields"),
@@ -2112,6 +2116,29 @@ function resolveActivity(leadId, activityIndex, activityId = "") {
 function openActivityEdit(leadId, activityIndex, activityId = "", trigger = null) {
   const { lead, activity } = resolveActivity(leadId, activityIndex, activityId);
   if (!lead || !activity) return;
+  if (activity.lead_creation || activity.delete_request) return;
+  if (!activity.next_action_plan || !activity.next_action_date || !activity.activity_purpose) {
+    const index = (lead.activities || []).findIndex(item => item === activity || activity.id && String(item.id) === String(activity.id));
+    if (index < 0 || !els.activityEditForm || !els.activityEditDialog) return;
+    const form = els.activityEditForm;
+    form.reset();
+    form.elements.lead_id.value = lead.id;
+    form.elements.activity_index.value = String(index);
+    form.elements.activity_id.value = activity.id || "";
+    form.elements.at.value = String(activity.at || today()).slice(0, 10);
+    const type = String(activity.type || "Note");
+    form.elements.type.value = [...form.elements.type.options].some(option => option.value === type) ? type : "Note";
+    form.elements.text.value = "";
+    form.elements.reminder_type.value = activity.reminder_type || "General follow-up";
+    form.elements.due_date.value = String(activity.due_date || "").slice(0, 10);
+    form.elements.due_time.value = activity.due_time || "09:00";
+    form.elements.activity_required.value = activity.activity_required || activity.text || "";
+    els.activityEditReminderFields.classList.toggle("hidden", type.toLowerCase() !== "reminder");
+    setMessage(els.activityEditMessage, "");
+    els.activityEditDialog.showModal();
+    form.elements.text.focus();
+    return;
+  }
   openActivityModal(leadId, trigger, activity);
 }
 
@@ -12334,28 +12361,58 @@ async function saveActivityModal() {
 }
 
 async function addDrawerReminder(leadId) {
-  const activity_required = window.prompt("Reminder note:");
-  if (!activity_required?.trim()) return;
-  const due_date = window.prompt("Reminder date (YYYY-MM-DD):", today());
-  if (!due_date?.trim()) return;
+  const lead = state.leads.find(item => String(item.id) === String(leadId));
+  if (!lead || !els.leadReminderForm || !els.leadReminderDialog) return;
+  const form = els.leadReminderForm;
+  if (form.dataset.saving === "true") return;
+  form.reset();
+  form.dataset.clientId = clientId("act");
+  form.elements.lead_id.value = lead.id;
+  form.elements.due_date.value = today();
+  els.leadReminderName.textContent = lead.company_name;
+  setMessage(els.leadReminderMessage, "");
+  els.leadReminderDialog.showModal();
+  form.elements.activity_required.focus();
+}
+
+async function saveDrawerReminder(event) {
+  event.preventDefault();
+  const form = els.leadReminderForm;
+  if (!form || form.dataset.saving === "true" || !form.reportValidity()) return;
+  const data = new FormData(form);
+  const leadId = String(data.get("lead_id") || "");
+  const note = String(data.get("activity_required") || "").trim();
+  if (!note) return setMessage(els.leadReminderMessage, "Add a reminder note.", "error");
+  const submit = form.querySelector('button[type="submit"]');
+  const close = document.querySelector("#closeLeadReminder");
+  form.dataset.saving = "true";
+  submit.disabled = true;
+  close.disabled = true;
+  setMessage(els.leadReminderMessage, "Saving reminder...");
   try {
     await api(`/api/leads/${encodeURIComponent(leadId)}/activities`, {
       method: "POST",
       body: JSON.stringify({
+        id: form.dataset.clientId,
         type: "Reminder",
         reminder: true,
         reminder_type: "General follow-up",
-        activity_required: activity_required.trim(),
-        text: activity_required.trim(),
-        due_date: due_date.trim(),
-        due_time: "09:00"
+        activity_required: note,
+        text: note,
+        due_date: String(data.get("due_date") || ""),
+        due_time: String(data.get("due_time") || "09:00")
       })
     });
-    setToast("Reminder added.", "success");
     await loadLeads();
+    els.leadReminderDialog.close();
     openLeadDrawer(leadId, "reminders");
+    setToast("Reminder added.", "success");
   } catch (error) {
-    setToast(error.message, "error");
+    setMessage(els.leadReminderMessage, error.message || "Reminder could not be confirmed. Your entries were preserved.", "error");
+  } finally {
+    form.dataset.saving = "false";
+    submit.disabled = false;
+    close.disabled = false;
   }
 }
 
@@ -17245,6 +17302,11 @@ document.querySelector("#closePmrForm").addEventListener("click", () => {
   els.pmrDialog.close();
 });
 document.querySelector("#closeActivityEditForm")?.addEventListener("click", () => els.activityEditDialog.close());
+document.querySelector("#closeLeadReminder")?.addEventListener("click", () => els.leadReminderDialog.close());
+els.leadReminderForm?.addEventListener("submit", saveDrawerReminder);
+els.leadReminderDialog?.addEventListener("cancel", event => {
+  if (els.leadReminderForm?.dataset.saving === "true") event.preventDefault();
+});
 els.formStage?.addEventListener("change", async event => {
   if (!state.editingLeadId) return;
   const lead = state.leads.find(item => item.id === state.editingLeadId);
@@ -17342,9 +17404,21 @@ els.placesForm.addEventListener("submit", async event => {
 
 els.activityEditForm?.addEventListener("submit", async event => {
   event.preventDefault();
+  if (els.activityEditForm.dataset.saving === "true" || !els.activityEditForm.reportValidity()) return;
   const payload = Object.fromEntries(new FormData(els.activityEditForm).entries());
   const leadId = payload.lead_id;
-  const activityIndex = payload.activity_index;
+  const lead = state.leads.find(item => String(item.id) === String(leadId));
+  const activityIndex = payload.activity_id
+    ? (lead?.activities || []).findIndex(item => String(item.id) === payload.activity_id)
+    : Number(payload.activity_index);
+  if (!lead || !Number.isInteger(activityIndex) || activityIndex < 0) {
+    return setMessage(els.activityEditMessage, "This activity changed. Refresh before appending a correction.", "error");
+  }
+  const submit = els.activityEditForm.querySelector('button[type="submit"]');
+  const close = document.querySelector("#closeActivityEditForm");
+  els.activityEditForm.dataset.saving = "true";
+  submit.disabled = true;
+  close.disabled = true;
   setMessage(els.activityEditMessage, "Appending correction...");
   try {
     await api(`/api/leads/${encodeURIComponent(leadId)}/activities/${encodeURIComponent(activityIndex)}`, {
@@ -17353,6 +17427,7 @@ els.activityEditForm?.addEventListener("submit", async event => {
         at: payload.at,
         type: payload.type,
         text: payload.text,
+        target_activity_id: payload.activity_id,
         reminder: String(payload.type || "").toLowerCase() === "reminder",
         reminder_type: payload.reminder_type,
         due_date: payload.due_date,
@@ -17365,7 +17440,14 @@ els.activityEditForm?.addEventListener("submit", async event => {
     await loadLeads();
   } catch (error) {
     setMessage(els.activityEditMessage, error.message, "error");
+  } finally {
+    els.activityEditForm.dataset.saving = "false";
+    submit.disabled = false;
+    close.disabled = false;
   }
+});
+els.activityEditDialog?.addEventListener("cancel", event => {
+  if (els.activityEditForm?.dataset.saving === "true") event.preventDefault();
 });
 
 function hideLoginPassword() {

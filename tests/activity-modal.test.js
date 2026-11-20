@@ -31,6 +31,14 @@ assert(html.includes('id="activityCancelVoice"'));
 
 assert(client.includes("function openActivityModal("));
 assert(client.includes("function saveActivityModal("));
+assert(html.includes('id="leadReminderForm"'));
+assert(html.includes('aria-labelledby="leadReminderTitle"'));
+assert(html.includes('aria-labelledby="activityEditTitle"'));
+const reminderEntry = client.match(/async function addDrawerReminder\(leadId\) \{[\s\S]*?\n\}/)?.[0];
+assert(reminderEntry);
+assert(!reminderEntry.includes("window.prompt"), "Reminder entry must not depend on native prompts");
+assert(client.includes("target_activity_id: payload.activity_id"));
+assert(server.includes("input.target_activity_id"), "A stale legacy index must not correct another entry");
 assert(client.includes("structured_activity: true"));
 assert(client.includes("transcribeRecording(new Blob("));
 assert(client.includes('join(existing ? "\\n" : "")'));

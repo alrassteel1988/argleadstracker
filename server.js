@@ -1463,6 +1463,9 @@ function activityCorrection(existing, input, lead, user) {
     error.status = 400;
     throw error;
   }
+  if (input.target_activity_id && String(input.target_activity_id) !== String(existing.id)) {
+    throw Object.assign(new Error("This activity changed. Refresh before appending a correction."), { status: 409 });
+  }
   const text = String(input.text || input.activity_required || "").trim();
   if (!text) {
     const error = new Error("Add a correction note. Existing activity entries are append-only.");
@@ -7859,7 +7862,7 @@ async function handleApi(req, res, url) {
     if (supabaseEnabled) {
       const lead = await getSupabaseLead(user.token, activityEditMatch[1], user);
       if (!lead) return leadNotFound(res);
-      const activities = ensureActivityIds(lead.activities);
+      const activities = Array.isArray(lead.activities) ? lead.activities : [];
       if (!activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
       const correction = activityCorrection(activities[activityIndex], payload, lead, user);
       const leads = await rest(`leads?id=eq.${encodeURIComponent(activityEditMatch[1])}&select=*`, {
@@ -7872,13 +7875,13 @@ async function handleApi(req, res, url) {
     }
     const lead = db.leads.find(item => item.id === activityEditMatch[1]);
     if (!lead || !leadBelongsToUser(lead, user)) return leadNotFound(res);
-    lead.activities = ensureActivityIds(lead.activities);
-    if (!lead.activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
-    const correction = activityCorrection(lead.activities[activityIndex], payload, lead, user);
-    lead.activities.unshift(correction);
+    const activities = Array.isArray(lead.activities) ? lead.activities : [];
+    if (!activities[activityIndex]) return sendJson(res, 404, { error: "Activity not found." });
+    const correction = activityCorrection(activities[activityIndex], payload, lead, user);
+    lead.activities = [correction, ...activities];
     lead.last_activity = correction.at;
     writeDb(db);
-    return sendJson(res, 201, { lead, activity: correction, corrected_activity: lead.activities[activityIndex + 1] });
+    return sendJson(res, 201, { lead, activity: correction, corrected_activity: activities[activityIndex] });
   }
 
   if (req.method === "DELETE" && activityEditMatch) {

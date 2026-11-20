@@ -434,11 +434,16 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     assert.equal(activity.data.activity.created_by_name, "E2E Salesman");
     assert.equal(activity.data.activity.created_by_role, "salesman");
 
+    const staleCorrection = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/0`, {
+      method: "PATCH", token: salesmanToken, csrfToken: salesmanCsrfToken,
+      body: { target_activity_id: "different-entry", type: "Note", text: "Must not attach to a stale index" }
+    });
+    assert.equal(staleCorrection.response.status, 409);
     const correction = await request(baseUrl, `/api/leads/${ownLead.data.id}/activities/0`, {
       method: "PATCH",
       token: salesmanToken,
       csrfToken: salesmanCsrfToken,
-      body: { type: "Note", text: "Corrected note appended without changing the original" }
+      body: { target_activity_id: activity.data.activity.id, type: "Note", text: "Corrected note appended without changing the original" }
     });
     assert.equal(correction.response.status, 201, JSON.stringify(correction.data));
     assert.equal(correction.data.activity.type, "Correction");
