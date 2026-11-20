@@ -8,6 +8,8 @@ const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE || "@electric-sql/
 test("archive lifecycle, RLS, duplicate review and immutable audit are transactional", async () => {
   const db = new PGlite();
   const admin=randomUUID(), sales=randomUUID(), peer=randomUUID(), lead=randomUUID(), company=randomUUID();
+  const attachmentPaths = [`activity-attachments/${lead}/synthetic/file.txt`, `lead-intelligence/${lead.toUpperCase()}/synthetic.pdf`];
+  const controlPath = `${sales}/unlinked-synthetic.webm`;
   try {
     await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
       create schema auth; grant usage on schema auth to authenticated;
@@ -27,7 +29,9 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
       create table public.pmrs(id uuid primary key default gen_random_uuid(),lead_id uuid references public.leads(id) on delete cascade,created_by uuid,notes text,voice_note_path text);
       create schema storage; grant usage on schema storage to authenticated;
       create table storage.objects(name text primary key,owner_id uuid); alter table storage.objects enable row level security;
-      create policy own_storage on storage.objects for all to authenticated using(owner_id=auth.uid()) with check(owner_id=auth.uid());
+      create policy own_storage on storage.objects for all to authenticated
+        using(owner_id=auth.uid() or exists(select 1 from public.profiles where id=auth.uid() and role='admin' and status='active'))
+        with check(owner_id=auth.uid() or exists(select 1 from public.profiles where id=auth.uid() and role='admin' and status='active'));
       grant select,insert,update,delete on storage.objects to authenticated;
       alter table public.pmrs enable row level security;
       create policy pmr_creator on public.pmrs for all to authenticated using(created_by=auth.uid()) with check(created_by=auth.uid());
@@ -52,10 +56,19 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
     await db.query("insert into public.management_tasks(lead_id,assignee_id,title,due_date) values($1,$2,'Preserved task','2099-01-01')",[lead,sales]);
     await db.query("insert into public.pmrs(lead_id,created_by,notes,voice_note_path) values($1,$2,'Synthetic saved history','voice-notes/synthetic.webm')",[lead,sales]);
     await db.query("insert into storage.objects values('voice-notes/synthetic.webm',$1)",[sales]);
+    for (const name of [...attachmentPaths,controlPath]) await db.query("insert into storage.objects values($1,$2)",[name,sales]);
     await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261118111941_atomic_new_lead_registration.sql"),"utf8"));
     await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261118113937_registration_rls_readback.sql"),"utf8"));
     await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261118122627_lead_creation_activity_audit.sql"),"utf8"));
     await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261120050707_lead_lifecycle_archive.sql"),"utf8"));
+    const storagePrivileges = async () => (await db.query(`select prosecdef,proconfig,
+      has_function_privilege('anon',oid,'execute') anon,
+      has_function_privilege('authenticated',oid,'execute') authenticated,
+      has_function_privilege('service_role',oid,'execute') service
+      from pg_proc where oid='private.lifecycle_storage_visible(text)'::regprocedure`)).rows[0];
+    const previousStoragePrivileges = await storagePrivileges();
+    await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261120075756_lifecycle_attachment_storage_boundary.sql"),"utf8"));
+    assert.deepEqual(await storagePrivileges(),previousStoragePrivileges,"Storage fix must preserve the existing helper privileges and fixed search path");
     const as=async id=>{ await db.exec("set role authenticated"); await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]); };
     const change=async(action,input={})=>(await db.query("select public.change_lead_lifecycle($1,$2,$3::jsonb) result",[lead,action,JSON.stringify(input)])).rows[0].result;
     const check=async(input)=>(await db.query("select public.check_lead_duplicates($1::jsonb,null) result",[JSON.stringify(input)])).rows[0].result.matches;
@@ -69,7 +82,14 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
     assert.equal((await db.query("select * from public.companies")).rows.length,0);
     assert.equal((await db.query("select * from public.management_tasks")).rows.length,0);
     assert.equal((await db.query("select * from public.pmrs")).rows.length,0,"Original authorship must not reveal archived PMRs");
-    assert.equal((await db.query("select * from storage.objects")).rows.length,0,"File ownership must not bypass archive isolation");
+    assert.equal((await db.query("select * from storage.objects where name='voice-notes/synthetic.webm'")).rows.length,0,"File ownership must not bypass archive isolation");
+    assert.equal((await db.query("select * from storage.objects where name=any($1)",[attachmentPaths])).rows.length,0,"An uploader must not see archived lead-scoped attachments");
+    assert.equal((await db.query("update storage.objects set owner_id=owner_id where name=any($1) returning name",[attachmentPaths])).rows.length,0);
+    assert.equal((await db.query("delete from storage.objects where name=any($1) returning name",[attachmentPaths])).rows.length,0);
+    for (const name of [`activity-attachments/${lead}/new.txt`,"activity-attachments/not-a-uuid/file.txt",`activity-attachments/${randomUUID()}/missing.txt`]) {
+      await assert.rejects(()=>db.query("insert into storage.objects values($1,$2)",[name,sales]),{code:"42501"});
+    }
+    assert.equal((await db.query("select * from storage.objects where name=$1",[controlPath])).rows.length,1,"Unlinked uploads retain their existing access");
     await assert.rejects(()=>change("restore",{reason:"Not authorized"}),{code:"42501"});
     await as(peer);
     for (const input of [{company_name:" HARBOR LLC "},{company_name:"Harbor Trading Co."},{phone:"0501234567"},{phone:"00971501234567"},{email:"contact@example.TEST"}]) {
@@ -82,6 +102,7 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
     const review=(await db.query("select public.request_lead_duplicate_review($1,null,'Please review synthetic duplicate',false) r",[input])).rows[0].r;
     await assert.rejects(()=>db.query("select public.decide_lead_duplicate_review($1,true,'Unauthorized')",[review.id]),{code:"42501"});
     await as(admin);
+    assert.equal((await db.query("select * from storage.objects where name=any($1)",[attachmentPaths])).rows.length,2,"Existing Admin storage access remains available for archive review");
     await db.query("select public.decide_lead_duplicate_review($1,true,'Approved synthetic new lead')",[review.id]);
     await as(peer); await create("Harbor FZCO");
     await assert.rejects(()=>create("Harbor FZCO"),{code:"23505"});
@@ -97,7 +118,9 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
     assert.equal((await db.query("select * from public.leads")).rows.length,1);
     assert.equal((await db.query("select status,due_date::text from public.management_tasks")).rows[0].status,"not_started");
     assert.equal((await db.query("select due_date::text from public.management_tasks")).rows[0].due_date,"2099-01-01");
-    assert.equal((await db.query("select * from storage.objects")).rows.length,1,"Restore re-enables the existing authorized file access");
+    assert.equal((await db.query("select * from storage.objects where name='voice-notes/synthetic.webm'")).rows.length,1,"Restore re-enables the existing authorized file access");
+    assert.equal((await db.query("select * from storage.objects where name=any($1)",[attachmentPaths])).rows.length,2,"Restore re-enables lead-scoped attachments without rewriting objects");
+    await db.query("insert into storage.objects values($1,$2)",[`activity-attachments/${lead}/restored.txt`,sales]);
     await as(admin);
     await assert.rejects(()=>change("purge",{reason:"Test cleanup",company_name:"Harbor L.L.C."}),{code:"42501"});
     await change("archive",{reason:"Synthetic duplicate"});
@@ -108,7 +131,8 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
     assert.ok(["close","archive","restore","purge"].every(action=>audit.some(row=>row.action===action)));
     await assert.rejects(()=>db.query("update public.lead_lifecycle_events set reason='Altered'"),{code:"42501"});
     await as(sales);
-    assert.equal((await db.query("select * from storage.objects")).rows.length,0,"Purging a PMR must not reopen orphaned voice-note access");
+    assert.equal((await db.query("select * from storage.objects where name='voice-notes/synthetic.webm'")).rows.length,0,"Purging a PMR must not reopen orphaned voice-note access");
+    assert.equal((await db.query("select * from storage.objects where name like 'activity-attachments/%' or name like 'lead-intelligence/%'")).rows.length,0,"Purging a lead must not reopen owner access to orphaned attachments");
     await db.exec("reset role");
     assert.equal((await db.query("select count(*)::int n from public.notifications where type='lead_closed'")).rows[0].n,3);
     assert.equal((await db.query("select count(*)::int n from public.leads where id=$1",[lead])).rows[0].n,0);
