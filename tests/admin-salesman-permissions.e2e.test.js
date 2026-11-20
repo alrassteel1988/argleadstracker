@@ -527,10 +527,19 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
       body: { admin_password: "AdminPass123!" }
     });
     assert.equal(approveLeadDelete.response.status, 200);
-    assert.equal(approveLeadDelete.data.deleted, true);
+    assert.equal(approveLeadDelete.data.archived, true);
 
     const deletedLeadHidden = await request(baseUrl, "/api/leads", { token: adminToken });
     assert(!deletedLeadHidden.data.some(lead => lead.id === ownLead.data.id));
+    const archivedList = await request(baseUrl, "/api/archived-leads", { token: adminToken });
+    assert(archivedList.data.some(lead => lead.id === ownLead.data.id && lead.is_archived));
+    const noSalesArchive = await request(baseUrl, "/api/archived-leads", { token: salesmanToken });
+    assert.equal(noSalesArchive.response.status,403);
+    const archivedDirect = await request(baseUrl, `/api/leads/${ownLead.data.id}`, {token:salesmanToken});
+    assert.equal(archivedDirect.response.status,404);
+    const restored = await request(baseUrl, `/api/leads/${ownLead.data.id}/restore`, { method:"POST",token:adminToken,csrfToken:adminCsrfToken,
+      body:{reason:"Synthetic reopening approved"} });
+    assert.equal(restored.response.status,200); assert.equal(restored.data.stage,"NEW");
 
     console.log("PASS admin/salesman HTTP permission boundaries");
   } finally {

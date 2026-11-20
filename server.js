@@ -2,6 +2,8 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const leadLifecycle = require("./src/services/leadLifecycleService");
+const { handleLeadLifecycle } = require("./src/services/leadLifecycleRoutes");
 
 function bootstrapEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -181,7 +183,7 @@ const RATE_LIMIT_SECRET_CONFIGURED = Boolean(process.env.RATE_LIMIT_HASH_SECRET 
 const RATE_LIMIT_HASH_SECRET = process.env.RATE_LIMIT_HASH_SECRET || SESSION_SECRET;
 const RATE_LIMIT_TENANT_ID = String(process.env.RATE_LIMIT_TENANT_ID || "arg-leads-tracker").trim();
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
-const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "DORMANT", "LOST"];
+const COMPANY_STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "DORMANT", "LOST", leadLifecycle.CLOSED];
 const COMPANY_SECTORS = ["Fabricator", "Contractor", "Trader", "Marine", "Piling", "Oil & Gas", "Trailer", "PEB", "Other"];
 const COMPANY_TIERS = ["1", "2", "3"];
 const GCC_TERRITORIES = ["UAE-North", "UAE-South", "Saudi", "Kuwait", "Bahrain", "Oman", "Mixed"];
@@ -1103,6 +1105,7 @@ function normalizePmrAnalysisDraft(input = {}) {
 }
 
 function normalizeStageValue(value, fallback = "NEW") {
+  if (leadLifecycle.isClosed(value)) return leadLifecycle.CLOSED;
   const normalized = String(value || "").trim().toUpperCase();
   const aliases = {
     PROSPECT: "NEW",
@@ -1824,6 +1827,7 @@ function userLeadNames(user) {
 }
 
 function leadBelongsToUser(lead, user) {
+  if (leadLifecycle.archived(lead) && !isAdmin(user)) return false;
   if (isDirectorOrAdmin(user)) return true;
   if (!lead || !user) return false;
   const assignedTo = String(lead.assigned_to || "").trim();
@@ -1834,7 +1838,7 @@ function leadBelongsToUser(lead, user) {
 }
 
 function visibleLeadsForUser(leads, user) {
-  return isDirectorOrAdmin(user) ? leads : (leads || []).filter(lead => leadBelongsToUser(lead, user));
+  return (leads || []).filter(lead => !leadLifecycle.archived(lead) && leadBelongsToUser(lead, user));
 }
 
 function activityDateValue(activity) {
@@ -2400,6 +2404,7 @@ function toSupabaseLead(input, user, { initialTask = false, newRegistration = fa
     secondary_contact_email: lead.secondary_contact_email,
     hunter_confidence_score: input.hunter_confidence_score == null ? null : Number(input.hunter_confidence_score),
     lead_status: lead.stage,
+    ...(leadLifecycle.isClosed(lead.stage) ? leadLifecycle.validateClose(input) : {}),
     notes: lead.notes,
     territory: salesmanScoped && profileTerritory ? profileTerritory : lead.territory,
     assigned_salesman: salesmanScoped && profileName ? profileName : lead.assigned_salesman,
@@ -3802,6 +3807,7 @@ async function processOneLeadIntelligenceJob(db, supabaseEnabled, { fetchImpl = 
 }
 
 async function queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled) {
+  if (leadLifecycle.archived(lead)) return;
   if (!LEAD_INTELLIGENCE_AUTO_QUEUE) return null;
   try {
     return await queueLeadIntelligenceReport(db, user, lead, supabaseEnabled, { reason: "auto_new_lead" });
@@ -3882,6 +3888,7 @@ function storageKeyForActivityAttachment(leadId, activityId, filename) {
 }
 
 function scheduleLeadAutoEnrichment({ db, user, lead, req, supabaseEnabled }) {
+  if (leadLifecycle.archived(lead)) return;
   if (lead.enrichment_source === "manual") return;
   setTimeout(async () => {
     const startedAt = Date.now();
@@ -4029,7 +4036,7 @@ function addLocalHandoffNotices(db, leadId, event) {
 }
 
 async function saveSupabaseLead(token, user, input) {
-  const initialTask = requestsInitialManagementTask(input, user);
+  const initialTask = !leadLifecycle.isClosed(input.stage || input.lead_status) && requestsInitialManagementTask(input, user);
   const lead = withLeadCreationActivity(toSupabaseLead(input, user, { initialTask, newRegistration: true }), user);
   if (initialTask) {
     const identity = lead.assigned_to ? `id=eq.${encodeURIComponent(lead.assigned_to)}` : `full_name=eq.${encodeURIComponent(lead.assigned_salesman)}`;
@@ -4257,8 +4264,14 @@ function importLocalLeadRows(db, user, rows, mode, importedAt) {
       skipped += 1;
       return;
     }
+    try {
+      if (duplicate && leadLifecycle.archived(duplicate.lead)) throw leadLifecycle.failure(409, "Restore the archived lead before importing updates.");
+      if (leadLifecycle.isClosed(data.stage)) leadLifecycle.validateClose(data);
+      leadLifecycle.assertLocalDuplicates(db, user, data, duplicate && mode === "update" ? duplicate.lead.id : "");
+    } catch (error) { failedRows.push({ row_number: rowNumber, data, reason: error.message }); return; }
     if (duplicate && mode === "update") {
       Object.assign(duplicate.lead, normalizeLead({ ...duplicate.lead, ...data }));
+      if (leadLifecycle.isClosed(data.stage)) leadLifecycle.localLifecycle(db,user,duplicate.lead,"close",data);
       duplicate.lead.imported_at = importedAt;
       duplicate.lead.imported_by = user.id;
       updated += 1;
@@ -4270,6 +4283,7 @@ function importLocalLeadRows(db, user, rows, mode, importedAt) {
     lead.created_by = user.id;
     lead.created_by_name = activityAuthorFields(user).created_by_name;
     lead.activities = withLeadCreationActivity(lead, user).activities;
+    if (leadLifecycle.isClosed(data.stage)) leadLifecycle.localLifecycle(db,user,lead,"close",data);
     db.leads.unshift(lead);
     imported.push(leadWithDerivedFields(lead));
   });
@@ -5287,6 +5301,8 @@ async function handleApi(req, res, url) {
   const user = supabaseEnabled ? await currentSupabaseUser(req) : currentUser(req, db);
   if (!user) return sendJson(res, 401, { error: "Authentication required." });
   if (!await enforceAuthenticatedRateLimits(req, res, url, db, user, supabaseEnabled)) return;
+  if (await handleLeadLifecycle(req, res, url, { db, user, supabaseEnabled, rest, readBody, sendJson, writeDb,
+    verifyAdminPassword, leadBelongsToUser })) return;
 
   const handoffNoticeMatch = url.pathname.match(/^\/api\/lead-handoff-notices\/([a-z0-9-]{1,80})$/i);
   if ((req.method === "GET" && url.pathname === "/api/lead-handoff-notices") || (req.method === "PATCH" && handoffNoticeMatch)) {
@@ -6732,7 +6748,13 @@ async function handleApi(req, res, url) {
       owner_type: duplicateOwnerType(match, user),
       owner_name: match.assigned_salesman || "Unassigned"
     }));
-    return sendJson(res, 200, { matches });
+    return sendJson(res, 200, { matches: matches.map(match => {
+      const original = leads.find(lead => lead.id === match.id);
+      if (original && !isAdmin(user) && (leadLifecycle.archived(original) || !leadBelongsToUser(original, user))) {
+        return leadLifecycle.publicMatch(original, user);
+      }
+      return match;
+    }) });
   }
 
   if (req.method === "GET" && url.pathname === "/api/management/overdue-activities.csv") {
@@ -6826,6 +6848,8 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/leads") {
     const rawPayload = prepareLeadPayloadForUser(await readBody(req), user);
     const payload = await googleEnrichPayload(rawPayload, req);
+    if (leadLifecycle.isClosed(payload.stage || payload.lead_status)) leadLifecycle.validateClose(payload);
+    if (!supabaseEnabled && leadLifecycle.assertLocalDuplicates(db, user, payload)) payload.allow_duplicate = true;
     if (!payload.allow_duplicate) {
       const duplicateSource = supabaseEnabled
         ? (await rest("leads?select=id,company_name,assigned_salesman,assigned_to,website,google_place_id,phone,territory,lead_status", supabaseDataOptions(user.token))).map(fromSupabaseLead)
@@ -6840,7 +6864,9 @@ async function handleApi(req, res, url) {
         const owner_type = duplicateOwnerType(duplicate.lead, user);
         return sendJson(res, 409, {
           error: owner_type === "other_salesman" ? "This lead appears to already be registered by another salesman." : "Probable duplicate company found.",
-          duplicate: {
+          duplicate: owner_type === "other_salesman" ? {
+            company_name: duplicate.lead.company_name, owner_name: duplicate.lead.assigned_salesman || "Unassigned", owner_type
+          } : {
             id: duplicate.lead.id,
             company_name: duplicate.lead.company_name,
             assigned_salesman: duplicate.lead.assigned_salesman,
@@ -6859,10 +6885,11 @@ async function handleApi(req, res, url) {
       await queueLeadIntelligenceForNewLead(db, user, lead, supabaseEnabled);
       return sendJson(res, 201, lead);
     }
-    const createInitialTask = requestsInitialManagementTask(payload, user);
+    const createInitialTask = !leadLifecycle.isClosed(payload.stage || payload.lead_status) && requestsInitialManagementTask(payload, user);
     const normalized = normalizeNewLead(payload, user);
     const lead = createInitialTask ? normalized : withAutomaticReminder(normalized, user);
     const localDb = createInitialTask ? readDb() : db;
+    if (localDb !== db) leadLifecycle.assertLocalDuplicates(localDb, user, payload);
     lead.created_by = user.id;
     lead.created_by_name = user.name || user.email || "User";
     if (!isDirectorOrAdmin(user)) {
@@ -6885,10 +6912,11 @@ async function handleApi(req, res, url) {
       saveLocalManagementTask(localDb, user, "assign", lead.initial_management_task_id, values, now);
     } else localDb.leads.unshift(lead);
     lead.activities = withLeadCreationActivity(lead, user).activities;
+    if (leadLifecycle.isClosed(payload.stage || payload.lead_status)) leadLifecycle.localLifecycle(localDb, user, lead, "close", payload);
     writeDb(localDb);
     scheduleLeadAutoEnrichment({ db: localDb, user, lead, req, supabaseEnabled });
     await queueLeadIntelligenceForNewLead(localDb, user, lead, supabaseEnabled);
-    return sendJson(res, 201, leadWithDerivedFields(lead));
+    return sendJson(res, 201, leadLifecycle.archived(lead) && !isAdmin(user) ? {id:lead.id,is_archived:true} : leadWithDerivedFields(lead));
   }
 
   if (req.method === "POST" && url.pathname === "/api/leads/import") {
@@ -7140,6 +7168,23 @@ async function handleApi(req, res, url) {
   const leadMatch = url.pathname.match(/^\/api\/leads\/([^/]+)$/);
   if (req.method === "PATCH" && leadMatch) {
     let payload = await readBody(req);
+    const lifecycleLead = await accessibleLeadById(db, user, leadMatch[1], supabaseEnabled);
+    if (!lifecycleLead) return leadNotFound(res);
+    if (leadLifecycle.archived(lifecycleLead)) return sendJson(res, 409, { error: "Restore this archived lead before editing it." });
+    const controlled = ["is_archived", "archived_at", "archived_by", "archive_reason", "closed_at", "closed_by", "restored_at", "restored_by"];
+    if (controlled.some(key => Object.hasOwn(payload, key))) return sendJson(res, 403, { error: "Use the authorized archive, close or restore action." });
+    if (!leadLifecycle.isClosed(payload.stage || payload.lead_status) && ["closed_reason", "closed_note", "closed_by_name", "archived_by_name"].some(key => Object.hasOwn(payload, key))) {
+      return sendJson(res, 403, { error: "Closure history is server controlled." });
+    }
+    if (leadLifecycle.isClosed(payload.stage || payload.lead_status)) {
+      leadLifecycle.validateClose(payload);
+    }
+    if (!supabaseEnabled && ["company_name", "phone", "email", "contact_email"].some(key => Object.hasOwn(payload, key))) {
+      const candidate = { ...lifecycleLead, ...payload };
+      if (JSON.stringify(leadLifecycle.identity(candidate)) !== JSON.stringify(leadLifecycle.identity(lifecycleLead))) {
+        leadLifecycle.assertLocalDuplicates(db, user, candidate, lifecycleLead.id);
+      }
+    }
     delete payload.initial_management_task_id;
     if (supabaseEnabled) {
       const existing = await getSupabaseLead(user.token, leadMatch[1], user);
@@ -7182,7 +7227,7 @@ async function handleApi(req, res, url) {
         "steel_products_likely_needed", "competitors_likely_using", "certifications",
         "estimated_scale", "estimated_annual_revenue", "key_personnel", "recent_projects",
         "products_services_remarks", "enrichment_source", "enrichment_status", "enriched_at", "enrichment_updated_at",
-        "lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by",
+        "lost_reason", "lost_reason_detail", "lost_competitor", "lost_at", "lost_by", "closed_reason", "closed_note",
         "auto_enrichment", "latitude", "longitude", "activities",
         ...(!target ? ["sector", "tier", "country_emirate", "primary_contact_title", "secondary_contact_name",
           "secondary_contact_title", "secondary_contact_mobile", "secondary_contact_email", "tags", "quotation_ref",
@@ -7214,6 +7259,11 @@ async function handleApi(req, res, url) {
         delete updates.activities;
         const saved = await saveSupabaseLeadHandoff(user.token, existing, target, note, updates);
         return sendJson(res, 200, fromSupabaseLead(saved));
+      }
+      if (leadLifecycle.isClosed(updates.lead_status)) {
+        const closed = await rest("rpc/close_edited_lead", {method:"POST",token:user.token,
+          body:{p_id:existing.id,p_expected:existing.updated_at,p_updates:updates}});
+        return sendJson(res,200,closed);
       }
       const leads = await patchSupabaseLeadWithOptionalFallback(user.token, leadMatch[1], updates);
       if (!leads[0]) return leadNotFound(res);
@@ -7273,30 +7323,16 @@ async function handleApi(req, res, url) {
       }
     }
     if (!stageProvided) for (const field of LEAD_LOST_FIELDS) delete payload[field];
+    const closing = leadLifecycle.isClosed(payload.stage || payload.lead_status);
+    if (closing) for (const key of ["stage","lead_status","status"]) delete payload[key];
     Object.assign(lead, payload);
+    if (closing) leadLifecycle.localLifecycle(db,user,lead,"close",payload);
     writeDb(db);
-    return sendJson(res, 200, leadWithDerivedFields(lead));
+    return sendJson(res, 200, closing && !isAdmin(user) ? {id:lead.id,is_archived:true} : leadWithDerivedFields(lead));
   }
 
   if (req.method === "DELETE" && leadMatch) {
-    const payload = await readBody(req);
-    if (!isAdmin(user)) {
-      return sendJson(res, 403, { error: "Salesman delete actions require admin approval. Use Request Delete instead." });
-    }
-    if (!await verifyAdminPassword(user, payload.admin_password, supabaseEnabled)) {
-      return sendJson(res, 403, { error: "Admin password confirmation is required to delete a lead." });
-    }
-    if (supabaseEnabled) {
-      const existing = await getSupabaseLead(user.token, leadMatch[1], user);
-      if (!existing) return leadNotFound(res);
-      await rest(`leads?id=eq.${encodeURIComponent(leadMatch[1])}`, { method: "DELETE", ...supabaseDataOptions(user.token) });
-      return sendJson(res, 200, { ok: true });
-    }
-    const index = db.leads.findIndex(item => item.id === leadMatch[1]);
-    if (index < 0 || !leadBelongsToUser(db.leads[index], user)) return leadNotFound(res);
-    db.leads.splice(index, 1);
-    writeDb(db);
-    return sendJson(res, 200, { ok: true });
+    return sendJson(res, isAdmin(user) ? 409 : 403, { error: "Permanent deletion is available only through confirmed deletion in Archived Leads." });
   }
 
   const deleteRequestMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/delete-requests$/);
@@ -7384,8 +7420,10 @@ async function handleApi(req, res, url) {
       if (String(requestActivity.requested_by) === String(user.id)) return sendJson(res, 403, { error: "You cannot approve or reject your own request." });
       if (action === "reject" && !String(payload.note || "").trim()) return sendJson(res, 400, { error: "Add a rejection comment." });
       if (action === "approve" && requestActivity.target_type === "lead") {
-        await rest(`leads?id=eq.${encodeURIComponent(leadId)}`, { method: "DELETE", ...supabaseDataOptions(user.token) });
-        return sendJson(res, 200, { ok: true, deleted: true });
+        if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required to archive a lead." });
+        await rest("rpc/change_lead_lifecycle", { method: "POST", token: user.token,
+          body: { p_id: leadId, p_action: "archive", p_input: { reason: requestActivity.reason || "Approved lead archive request" } } });
+        return sendJson(res, 200, { ok: true, archived: true });
       }
       const reviewedRequest = {
         ...requestActivity,
@@ -7455,9 +7493,10 @@ async function handleApi(req, res, url) {
     if (String(requestActivity.requested_by) === String(user.id)) return sendJson(res, 403, { error: "You cannot approve or reject your own request." });
     if (action === "reject" && !String(payload.note || "").trim()) return sendJson(res, 400, { error: "Add a rejection comment." });
     if (action === "approve" && requestActivity.target_type === "lead") {
-      db.leads = db.leads.filter(item => item.id !== leadId);
+      if (!isAdmin(user)) return sendJson(res, 403, { error: "Admin access required to archive a lead." });
+      leadLifecycle.localLifecycle(db, user, lead, "archive", { reason: requestActivity.reason || "Approved lead archive request" });
       writeDb(db);
-      return sendJson(res, 200, { ok: true, deleted: true });
+      return sendJson(res, 200, { ok: true, archived: true });
     }
     const reviewedRequest = {
       ...requestActivity,
@@ -7518,6 +7557,16 @@ async function handleApi(req, res, url) {
   const stageMatch = url.pathname.match(/^\/api\/leads\/([^/]+)\/stage$/);
   if (req.method === "PATCH" && stageMatch) {
     const payload = await readBody(req);
+    const lifecycleLead = await accessibleLeadById(db, user, stageMatch[1], supabaseEnabled);
+    if (!lifecycleLead) return leadNotFound(res);
+    if (leadLifecycle.archived(lifecycleLead)) return sendJson(res, 409, { error: "Restore the archived lead first." });
+    if (leadLifecycle.isClosed(payload.stage)) {
+      leadLifecycle.validateClose(payload);
+      if (supabaseEnabled) await rest("rpc/change_lead_lifecycle", { method: "POST", token: user.token,
+        body: { p_id: lifecycleLead.id, p_action: "close", p_input: payload } });
+      else { leadLifecycle.localLifecycle(db, user, lifecycleLead, "close", payload); writeDb(db); }
+      return sendJson(res, 200, { id: lifecycleLead.id, is_archived: true });
+    }
     if (supabaseEnabled) {
       const lead = await getSupabaseLead(user.token, stageMatch[1], user);
       if (!lead) return leadNotFound(res);

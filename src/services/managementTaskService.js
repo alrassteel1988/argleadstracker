@@ -9,7 +9,7 @@ function taskError(status, message) {
 }
 
 function ownsLinkedLead(db, salesmanId, leadId) {
-  return !leadId || db.leads.some(lead => String(lead.id) === leadId && String(lead.assigned_to || "") === salesmanId);
+  return !leadId || db.leads.some(lead => !lead.is_archived && String(lead.id) === leadId && String(lead.assigned_to || "") === salesmanId);
 }
 
 function canReadManagementTask(db, user, task) {
@@ -93,6 +93,9 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
     || (["progress", "seen"].includes(action) && user.role !== "salesman")) throw taskError(403, "This task action is not available to your role.");
   const actor = String(user.id), actorName = user.name || "User";
   const old = db.management_tasks.find(task => task.id === id);
+  const linkedId = action === "assign" ? values.lead_id : old?.lead_id;
+  if (linkedId && db.leads.some(lead => lead.id === linkedId && lead.is_archived)) throw taskError(409, "Tasks on archived leads are suspended. Restore the lead first.");
+  if (action !== "assign" && linkedId && !db.leads.some(lead => lead.id === linkedId)) throw taskError(409, "The linked lead is no longer available; this task is suspended.");
   let task, resolvedLead, resolution;
   if (action === "assign") {
     if (old) {
