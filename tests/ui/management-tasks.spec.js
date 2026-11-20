@@ -26,7 +26,7 @@ test("assign, progress and complete a management task across roles", async ({ pa
   await form.getByRole("button", { name: "Assign task" }).click();
   await expect(form).toBeHidden();
   const row = workspace.locator("[data-mg-row]").filter({ hasText: title });
-  await expect(row).toContainText("Not started");
+  await expect(row).toContainText("Not Started");
   await capture(page, info, "admin-management-tasks");
   const id = await row.getAttribute("data-mg-row");
 
@@ -55,6 +55,9 @@ test("assign, progress and complete a management task across roles", async ({ pa
     await card.getByLabel("Progress remarks").fill(progressRemarks);
     await card.locator('button[type="submit"]').click();
     await expect(card).toContainText("Waiting for the buyer to call back.");
+    await card.getByRole("button",{name:"Add progress",exact:true}).click();
+    await card.getByLabel("Progress remarks").fill("The buyer confirmed the specification; waiting for quantities.");
+    await card.locator('.mg-task-progress-form button[type="submit"]').click();
     await workspace.getByRole("button", { name: "Refresh", exact: true }).click();
     await row.locator("summary").click();
     const details = row.locator(".mg-task-details");
@@ -89,7 +92,7 @@ test("assign, progress and complete a management task across roles", async ({ pa
         const select = row.querySelector("select");
         const range = document.createRange();
         range.selectNodeContents(action);
-        const fonts = [".mg-drawer-lead button", ".mg-drawer-task summary strong", ".mg-drawer-due b", ".mg-drawer-remarks p"]
+        const fonts = [".mg-drawer-lead button", ".mg-drawer-task > strong", ".mg-drawer-due b", ".mg-drawer-remarks p"]
           .map(selector => getComputedStyle(row.querySelector(selector)).fontSize);
         return { fonts, actionFont: getComputedStyle(action).fontSize, selectFont: getComputedStyle(select).fontSize,
           actionHeight: action.getBoundingClientRect().height, selectHeight: select.getBoundingClientRect().height,
@@ -121,9 +124,44 @@ test("assign, progress and complete a management task across roles", async ({ pa
     await expect(drawer).toContainText("0 pending of 1");
     await drawer.getByRole("button", { name: "Completed 1" }).click();
     await expect(card).toContainText(remarks);
+    const before = await sales.evaluate(async id => (await api("/api/management-tasks")).find(task => task.id === id), id);
+    await card.getByRole("button", { name: "Add remark", exact: true }).click();
+    const correction = "Correction: the contact is Mr. Jai, not Mr. Raj.";
+    await card.getByLabel("Additional remark", { exact: true }).fill(correction);
+    await card.locator('.mg-task-progress-form button[type="submit"]').click();
+    await expect(card.locator(".mg-task-remark-preview")).toHaveText(correction);
+    await card.locator(".mg-drawer-expanded > summary").click();
+    await expect(card.locator(".mg-task-timeline")).toContainText(remarks);
+    await expect(card.locator(".mg-task-timeline")).toContainText(correction);
+    await expect(card.locator(".mg-task-timeline")).toContainText("Additional remark");
+    await expect(card.locator(".mg-task-timeline")).toContainText("Progress update");
+    await expect(card.locator(".mg-task-timeline li")).toHaveCount(4);
+    await expect(card.locator(".mg-task-timeline button")).toHaveCount(0);
+    const after = await sales.evaluate(async id => (await api("/api/management-tasks")).find(task => task.id === id), id);
+    expect(after.status).toBe("completed"); expect(after.completed_at).toBe(before.completed_at);
+    expect(after.remarks).toBe(before.remarks);
+    expect(after.remark_history.slice(0,-1)).toEqual(before.remark_history);
+    const denied = await sales.evaluate(async ({id,remark}) => {
+      const errors=[];
+      for (const method of ["PATCH","DELETE"]) {
+        try { await api(`/api/management-tasks/${id}/remarks/${remark}`,{method,body:JSON.stringify({text:"Tampered"})}); }
+        catch(error) { errors.push(error.message); }
+      }
+      return errors;
+    }, {id,remark:after.remark_history[0].id});
+    expect(denied).toHaveLength(2); denied.forEach(error => expect(error).toContain("cannot be edited or deleted"));
+    await capture(sales, info, "completed-task-additional-remark", {fullPage:false});
     expect(await sales.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(info.project.use.viewport.width);
     await drawer.getByRole("button", { name: "Close management tasks" }).click();
     await expect(drawer).toBeHidden();
+    await sales.locator("#managementTasksMetric button").click();
+    await expect(drawer.locator('[data-mg-filter="all"]')).toHaveAttribute("aria-pressed","true");
+    await expect(card).toBeVisible();
+    await drawer.getByRole("button",{name:"Not Started 0",exact:true}).click();
+    await expect(drawer).toContainText("you have 1 completed task.");
+    await drawer.getByRole("button",{name:"View completed",exact:true}).click();
+    await expect(card).toBeVisible();
+    await drawer.getByRole("button", { name: "Close management tasks" }).click();
   } finally {
     await ctx.close();
   }
@@ -133,6 +171,16 @@ test("assign, progress and complete a management task across roles", async ({ pa
   await expect(row).toContainText("Completed");
   await row.locator("summary").click();
   await expect(row).toContainText(remarks);
+  await expect(row).toContainText("Correction: the contact is Mr. Jai, not Mr. Raj.");
+  await expect(workspace).toContainText("added an additional remark to completed task");
+  await workspace.getByRole("button",{name:"View remark",exact:true}).click();
+  await expect(workspace.getByRole("button",{name:"View remark",exact:true})).toHaveCount(0);
+  await expect(row).toHaveAttribute("open","");
+  const adminDenied = await page.evaluate(async id => {
+    try { await api(`/api/management-tasks/${id}/remarks/immutable`,{method:"DELETE",body:"{}"}); return "Unexpected success"; }
+    catch(error) { return error.message; }
+  },id);
+  expect(adminDenied).toContain("cannot be edited or deleted");
   await expect(row.getByRole("button", { name: "Edit task" })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(info.project.use.viewport.width);
 
@@ -148,6 +196,11 @@ test("assign, progress and complete a management task across roles", async ({ pa
     await other.locator("#managementTasksMetric button").click();
     await expect(other.locator("#managementTasksDrawer")).not.toContainText(title);
     await expect(other.locator(`[data-mg-card="${id}"]`)).toHaveCount(0);
+    const peerDenied = await other.evaluate(async id => {
+      try { await api(`/api/management-tasks/${id}/remark`,{method:"POST",body:JSON.stringify({expected_version:5,text:"Forged peer remark"})}); return "Unexpected success"; }
+      catch(error) { return error.message; }
+    },id);
+    expect(peerDenied).toContain("Task not found");
   } finally {
     await peer.close();
   }

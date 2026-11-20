@@ -4,6 +4,37 @@ const priorities = ["high", "medium", "low"];
 const statuses = ["not_started", "in_progress", "completed"];
 const initialTaskTitles = ["New Lead Outreach", "Respond to Initial RFQ"];
 
+function managementTaskRemarks(db, task) {
+  const saved = (db.management_task_remarks || []).filter(item => item.task_id === task.id);
+  const result = new Map(saved.map(item => [item.source_key || item.id, item]));
+  let previous = "not_started";
+  const events = (db.management_task_events || []).filter(item => item.task_id === task.id)
+    .sort((a, b) => (a.snapshot?.version || 0) - (b.snapshot?.version || 0) || Date.parse(a.at) - Date.parse(b.at) || String(a.id).localeCompare(String(b.id)));
+  for (const event of events) {
+    const snapshot = event.snapshot || {};
+    if (event.action === "progress") {
+      const source_key = `event:${event.id}`;
+      const type = snapshot.status === "completed" ? "completion"
+        : snapshot.status === "in_progress" && previous !== "in_progress" ? "started" : "progress_update";
+      if (!result.has(source_key)) result.set(source_key, { id: event.id, task_id: task.id,
+        author_id: event.actor_id, author_name: event.actor_name, type, text: snapshot.remarks || "", created_at: event.at, task_version: snapshot.version, source_key });
+    }
+    previous = snapshot.status || previous;
+  }
+  if (task.remarks && ![...result.values()].some(item => item.text === task.remarks
+    && Date.parse(item.created_at) === Date.parse(task.progress_at || task.completed_at || task.updated_at))) {
+    const source_key = `legacy:${task.id}`;
+    if (!result.has(source_key)) result.set(source_key, { id: source_key, task_id: task.id, author_id: null,
+      author_name: "Not recorded", type: task.status === "completed" ? "completion" : "progress_update",
+      text: task.remarks, created_at: task.progress_at || task.completed_at || task.updated_at || task.created_at, task_version: task.version, source_key });
+  }
+  return [...result.values()].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || (a.task_version || 0) - (b.task_version || 0) || String(a.id).localeCompare(String(b.id)));
+}
+
+function managementTaskWithRemarks(db, task) {
+  return { ...task, remark_history: managementTaskRemarks(db, task) };
+}
+
 function taskError(status, message) {
   return Object.assign(new Error(message), { status });
 }
@@ -71,6 +102,11 @@ function validateManagementTask(action, body, today) {
     }
     Object.assign(values, { status, remarks });
   }
+  if (action === "remark") {
+    const text = str("text");
+    if (!text || !limited(text, 4000)) throw taskError(400, "Enter an additional remark of 1 to 4000 characters.");
+    values.text = text;
+  }
   if (action === "remove" || action === "resolve_duplicate") {
     const reason = str("reason");
     if ([...reason].length < 10 || !limited(reason, 4000)) throw taskError(400, "Enter a removal reason of 10 to 4000 characters.");
@@ -90,7 +126,8 @@ function validateManagementTask(action, body, today) {
 function saveLocalManagementTask(db, user, action, id, values, now) {
   if ((["assign", "edit", "remind", "remove", "resolve_duplicate"].includes(action) && user.role !== "admin")
     || (["remove", "resolve_duplicate"].includes(action) && user.status !== "active")
-    || (["progress", "seen"].includes(action) && user.role !== "salesman")) throw taskError(403, "This task action is not available to your role.");
+    || (["progress", "seen", "remark"].includes(action) && user.role !== "salesman")
+    || user.status !== "active") throw taskError(403, "This task action is not available to your role.");
   const actor = String(user.id), actorName = user.name || "User";
   const old = db.management_tasks.find(task => task.id === id);
   let task, resolvedLead, resolution;
@@ -114,7 +151,11 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
       old.seen_at ||= now;
       return old;
     }
-    if (old.status === "completed") throw taskError(409, "Completed tasks are read-only.");
+    if (old.status === "completed" && action !== "remark") throw taskError(409, "Completed tasks are read-only.");
+    if (action === "remark" && old.status !== "completed") throw taskError(400, "Choose a completed task to add an additional remark.");
+    db.management_task_remarks ||= [];
+    const history = managementTaskRemarks(db, old);
+    for (const entry of history) if (!db.management_task_remarks.some(item => item.task_id === id && item.source_key === entry.source_key)) db.management_task_remarks.push(entry);
     task = { ...old, version: old.version + 1, updated_at: now };
     if (["edit", "remind"].includes(action) && (!db.users.some(person => String(person.id) === old.assignee_id && person.role === "salesman" && person.status === "active")
       || !ownsLinkedLead(db, old.assignee_id, old.lead_id))) throw taskError(409, "The salesman no longer has access to this task.");
@@ -127,6 +168,17 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
     } else if (action === "progress") {
       Object.assign(task, { status: values.status, remarks: values.remarks, progress_at: now,
         completed_at: values.status === "completed" ? now : null, seen_at: now });
+    } else if (action === "remark") {
+      const entry = { id: randomUUID(), task_id: id, author_id: actor, author_name: actorName,
+        type: "additional_remark", text: values.text, created_at: now, task_version: task.version };
+      db.management_task_remarks.push(entry);
+      db.notifications ||= [];
+      for (const manager of db.users.filter(person => person.role === "admin" && person.status === "active")) {
+        db.notifications.push({ id: randomUUID(), recipient_uid: String(manager.id), lead_id: null,
+          type: "management_task_remark", title: "Additional task remark", status: "pending", created_at: now,
+          message: `${actorName} added an additional remark to completed task: ${task.title}`,
+          payload: { task_id: id, remark_id: entry.id } });
+      }
     } else if (action === "resolve_duplicate") {
       if (!["not_started", "in_progress"].includes(old.status)) throw taskError(409, "Only open tasks can be removed.");
       const linked = db.leads.find(lead => lead.initial_management_task_id === id);
@@ -154,8 +206,14 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
   if (old) Object.assign(old, task);
   else db.management_tasks.unshift(task);
   db.management_task_events.push({ id: randomUUID(), task_id: id, action, actor_id: actor, actor_name: actorName, at: now, snapshot: { ...task, ...resolution } });
+  if (action === "progress") {
+    db.management_task_remarks ||= [];
+    for (const entry of managementTaskRemarks(db, task)) {
+      if (!db.management_task_remarks.some(item => item.task_id === id && item.source_key === entry.source_key)) db.management_task_remarks.push(entry);
+    }
+  }
   return resolvedLead ? { ...task, resolved_lead: resolvedLead } : task;
 }
 
 module.exports = { taskError, canReadManagementTask, validateManagementTask, saveLocalManagementTask,
-  requestsInitialManagementTask, initialManagementTaskInput, nextManagementWorkingDate };
+  requestsInitialManagementTask, initialManagementTaskInput, nextManagementWorkingDate, managementTaskWithRemarks, managementTaskRemarks };
