@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v191-task-conversation-followup";
+const CACHE_VERSION = "arg-pwa-v192-task-conversation-activity-author";
 const APP_SHELL = [
   "/",
   "/index.html",

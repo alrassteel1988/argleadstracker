@@ -2,8 +2,9 @@
 
 ## Scope
 
-Branch: `codex/task-conversation-followup`, based on released main
-`58b004e93d18364248fd19e0b6419f26bb746c8e` (PR #77).
+Branch: `codex/task-conversation-followup`, originally based on released main
+`58b004e93d18364248fd19e0b6419f26bb746c8e` (PR #77), reconciled with
+`1377bd7` (released PR #69).
 This feature is separate from PR #69. Publication and staging approval do not
 authorize a Production migration, merge or manual deployment.
 
@@ -140,16 +141,27 @@ local loopback access passed `npm.cmd run verify`, including PGlite fixtures.
 The HTTP fixture also verifies that caller-scoped `PT409` errors reach both
 conversation routes as 409 rather than 503. No permission guard was weakened.
 
-The follow-up migration is NOT applied to staging or Production by publishing
-this change. Obtain separate staging approval, recheck backup/schema, apply only
-that migration and repeat the hosted stale-draft test before release. Do not
-repeat that hosted conflict test on the original writer, which can leave another
-retrying backend. Fresh local verification does not close this hosted gate.
+After separate owner approval and fresh backup/schema checks, only the repair
+migration was applied to staging as ledger version `20261120114151`, name
+`task_conversation_conflict_response`. The latest completed staging backup was
+20 November at 06:51:32 Dubai time; its recovery limits remain as stated above.
+Read-back confirmed `PT409`, no retryable business errors in this writer,
+unchanged grants/fixed search paths, enabled history RLS/immutability, unchanged
+task/history counts and unchanged synthetic completion/instructions/deadline.
+A rolled-back authenticated Salesman call rejected the stale draft with `PT409`.
+Existing unrelated security-advisor findings were unchanged. Production has NOT
+received either feature migration. Hosted browser conflict retest remains a gate
+until recorded below; do not test the obsolete writer or infer hosted success
+from local verification alone.
 
-At the final baseline refresh, `origin/main` advanced to `1377bd7` (released
-PR #69) and PR #78 reported conflicts. This narrow repair does not resolve those
-unrelated UI/cache conflicts. Reconcile and verify against current main in a
-separate authorized step before owner review or release.
+The owner separately approved reconciling PR #78 with `1377bd7`. Both the
+released Activity author/reminder/correction safeguards and the new task
+conversation routes/forms are preserved. Conflict resolution combined the
+stylesheet revisions and browser-suite registrations, rotating the service
+worker to `arg-pwa-v192-task-conversation-activity-author` and client revision
+`task-conversation-activity-author`. Full verification with PGlite and the
+cross-role task-conversation desktop/mobile tests passed after reconciliation.
+Publishing this branch is not permission to merge or deploy.
 
 The new migration requires the released PR #77 task-remark history migration and
 PR #76 archive safeguards. It preserves every existing history row, adds nullable
