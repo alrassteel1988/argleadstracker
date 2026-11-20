@@ -2,8 +2,71 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
+const { runInNewContext } = require("node:vm");
 const { canReadManagementTask, saveLocalManagementTask, validateManagementTask, requestsInitialManagementTask,
   initialManagementTaskInput, nextManagementWorkingDate } = require("../src/services/managementTaskService");
+
+test("task drawer hides cached rows during refresh and ignores superseded reads", async () => {
+  const source = readFileSync(join(__dirname, "../client.js"), "utf8");
+  const requests = [], renders = [];
+  const workspace = { rows: [{ id: "archived-task" }], ready: true, loading: false, pending: false, generation: 0 };
+  const dialog = { open: false, showModal() { this.open = true; } };
+  const context = { managementTasks: workspace, state: { currentUser: { role: "salesman" } },
+    managementTaskDefaultFilter: () => "all",
+    document: { querySelector: () => dialog },
+    api: () => new Promise((resolve, reject) => requests.push({ resolve, reject })),
+    renderManagementTaskDrawer: () => renders.push(workspace.rows.map(row => row.id)),
+    renderManagementTasks: () => renders.push(workspace.rows.map(row => row.id)) };
+  const functions = source.slice(source.indexOf("async function loadManagementTasks("), source.indexOf("function openManagementTaskForm("));
+  runInNewContext(functions, context);
+  const oldRead = context.loadManagementTasks();
+  context.openManagementTaskDrawer();
+  assert.equal(dialog.open, true);
+  assert.equal(renders.some(rows => rows.includes("archived-task")), false, "Opening must not render cached task data");
+  assert.equal(workspace.ready, false);
+  assert.equal(requests.length, 2, "Opening must supersede an already in-flight read");
+  requests[0].resolve([{ id: "archived-task" }]);
+  await oldRead;
+  assert.equal(workspace.rows.length, 0, "A superseded response cannot repopulate task data");
+  assert.equal(workspace.loading, true, "An old read cannot unlock the new read");
+  requests[1].resolve([{ id: "active-task" }]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(Array.from(workspace.rows, row => row.id), ["active-task"]);
+  context.openManagementTaskDrawer();
+  assert.equal(workspace.rows.length, 0);
+  requests[2].reject(new Error("Synthetic unavailable response"));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(workspace.rows.length, 0, "Failed refresh must not restore cached rows");
+  assert.equal(workspace.ready, false);
+});
+
+test("task mutations cannot repopulate lifecycle-invalidated rows or strand a refresh", async () => {
+  const source = readFileSync(join(__dirname, "../client.js"), "utf8");
+  const requests = [];
+  const workspace = { rows: [], ready: true, loading: false, pending: false, generation: 0 };
+  const context = { managementTasks: workspace, state: { currentUser: { role: "salesman" } },
+    api: () => new Promise(resolve => requests.push(resolve)), renderManagementTasks: () => {} };
+  runInNewContext(source.slice(source.indexOf("async function loadManagementTasks("), source.indexOf("function openManagementTaskForm("))
+    + source.slice(source.indexOf("async function saveManagementTask("), source.indexOf('document.addEventListener("click", event => {', source.indexOf("async function saveManagementTask("))), context);
+  const oldRead = context.loadManagementTasks();
+  const save = context.saveManagementTask("seen", "active-task", {});
+  assert.equal(workspace.loading, false, "A mutation supersedes the old read without stranding its loading flag");
+  requests[1]({ id: "active-task" });
+  assert.equal(await save, true);
+  requests[0]([{ id: "stale-task" }]);
+  await oldRead;
+  assert.deepEqual(Array.from(workspace.rows, row => row.id), ["active-task"]);
+  const lateSave = context.saveManagementTask("seen", "active-task", {});
+  context.invalidateManagementTasks();
+  requests[2]({ id: "active-task" });
+  assert.equal(await lateSave, false);
+  assert.equal(workspace.rows.length, 0, "A pre-archive mutation response must not restore task visibility");
+  assert.equal(requests.length, 4, "The invalidated mutation must permit a new authorized read");
+  requests[3]([]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(workspace.ready, true);
+  assert.equal(workspace.rows.length, 0);
+});
 
 test("new Admin lead task titles and next Monday-Saturday working date use Dubai time", () => {
   const cases = [

@@ -3,6 +3,7 @@
 ## Scope
 
 Feature branch: `codex/task-remark-history`, based on released main `0072f1f`.
+Reconciled on 20 November with released main `240f3ab` after PR #76 merged.
 The owner approved a separate commit/PR and branch-only staging Preview setup. This document
 does not authorize a hosted migration, backfill, deployment or merge.
 PR #76 and all other pending PRs remain separate.
@@ -153,3 +154,22 @@ tests/admin-dashboard-layout.test.js
 tests/global-bauhaus-system.test.js
 docs/MANAGEMENT_TASK_REMARK_HISTORY.md
 ```
+
+### Released Lifecycle Compatibility
+
+The reconciliation preserves PR #76's task visibility invalidation, archived/orphaned task
+checks, duplicate review and registration rules. An additional regression reproduced a late
+Admin notice response marking an invalidated workspace ready. The response now checks the
+workspace generation after both network reads, and invalidation clears notices with task rows.
+The existing lifecycle stale-response fixture retains every assertion and supplies the new
+tab-selection helper in its isolated context. The first combined verification exposed that
+missing fixture dependency; final complete `npm.cmd run verify` passed with PGlite enabled.
+The reconciled desktop/mobile task suite passed 8 cases with 2 role-inapplicable skips.
+
+The approved history migration is applied in staging only. All 11 original progress snapshots
+were recovered with their dates/authors/text unchanged; original task and audit checksums match.
+A rolled-back staging rehearsal under existing Admin/Salesman database roles passed assignment,
+Started/Progress/Completion/Additional remark history, immutable SQL access, stale-version
+denial, unchanged completion evidence and notifications to every active Admin. Zero rehearsal
+records persist. No follow-up migration is needed. Fresh hosted browser acceptance and separate
+Production migration approval remain required; no merge or manual deployment is performed.

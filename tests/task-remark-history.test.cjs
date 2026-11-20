@@ -8,6 +8,26 @@ const { saveLocalManagementTask, validateManagementTask, managementTaskWithRemar
 const { PGlite } = require("@electric-sql/pglite");
 const migration = "20261120083750_management_task_remark_history.sql";
 
+test("late Admin notices cannot restore an invalidated task workspace", async () => {
+  const source = readFileSync(join(__dirname,"../client.js"),"utf8");
+  let resolveNotices;
+  const notices = new Promise(resolve => { resolveNotices = resolve; });
+  const workspace = { generation:0, rows:[], notices:[], ready:false, loading:false, pending:false };
+  const context = { managementTasks:workspace, state:{currentUser:{role:"admin"}},
+    api:async path => path === "/api/management-tasks" ? [{id:"stale-task"}] : notices,
+    renderManagementTasks() {}, managementTaskDefaultFilter:() => "all" };
+  const actions = vm.runInNewContext(source.slice(source.indexOf("async function loadManagementTasks()"),
+    source.indexOf("function openManagementTaskDrawer(")) + ";({loadManagementTasks,invalidateManagementTasks})",context);
+  const loading = actions.loadManagementTasks();
+  await new Promise(resolve => setImmediate(resolve));
+  actions.invalidateManagementTasks();
+  resolveNotices([{id:"stale-notice"}]);
+  await loading;
+  assert.equal(workspace.ready,false);
+  assert.equal(workspace.rows.length,0);
+  assert.equal(workspace.notices.length,0);
+});
+
 test("remarks append across progress and completion without altering completed evidence", () => {
   const admin = { id: randomUUID(), name: "Admin", role: "admin", status: "active" };
   const sales = { id: randomUUID(), name: "Salesman", role: "salesman", status: "active" };
