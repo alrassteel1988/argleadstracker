@@ -2,6 +2,55 @@ const { test, expect } = require("@playwright/test");
 const { login, blockExternalTraffic, capture } = require("./helpers");
 const { FIXTURE_PASSWORD } = require("./fixture-server");
 
+test("archived tasks stay hidden while the Salesman drawer refresh is delayed", async ({page,browser},info)=>{
+  test.skip(!info.project.name.startsWith("admin"),"Both roles in separate sessions");
+  test.setTimeout(120000);
+  await blockExternalTraffic(page); await login(page,info);
+  const context=await browser.newContext({baseURL:info.project.use.baseURL,viewport:info.project.use.viewport,
+    isMobile:info.project.use.isMobile,hasTouch:info.project.use.hasTouch,serviceWorkers:"block"});
+  let release;
+  try {
+    const sales=await context.newPage(); await blockExternalTraffic(sales); await login(sales,{project:{name:"salesman"}});
+    const fixture=await page.evaluate(()=>api('/api/leads',{method:'POST',body:JSON.stringify({
+      company_name:"Lifecycle Drawer Visibility Fixture",assigned_to:"ui-salesman",assigned_salesman:"Demo Salesman",
+      territory:"UAE-North",sector:"Fabricator",stage:"NEW",enrichment_source:"manual",
+      initial_management_task_title:"New Lead Outreach",notes:"Synthetic task retained during archive and restore."
+    })}));
+    const leadId=fixture.id, taskId=fixture.initial_management_task_id;
+    expect(taskId).toBeTruthy();
+    await sales.evaluate(async()=>{await loadLeads(); await loadManagementTasks();});
+    await sales.locator("#managementTasksMetric button").click();
+    const drawer=sales.locator("#managementTasksDrawer");
+    await expect(drawer.locator(`[data-mg-card="${taskId}"]`)).toBeVisible();
+    await drawer.getByRole("button",{name:"Close management tasks"}).click();
+    await sales.goto(`/leads/${leadId}`);
+    await expect(sales.locator("[data-lifecycle-close]")).toBeVisible();
+    await expect.poll(()=>sales.evaluate(()=>managementTasks.ready)).toBe(true);
+    const gate=new Promise(resolve=>{release=resolve;});
+    await sales.route("**/api/management-tasks",async route=>{await gate; await route.continue();});
+    await sales.locator("[data-lifecycle-close]").click();
+    const close=sales.getByRole("dialog",{name:"Closed - Not Interested",exact:true});
+    await close.getByLabel("Close reason").selectOption("No requirement");
+    await close.getByRole("button",{name:"Closed - Not Interested",exact:true}).click();
+    await expect(sales.locator("#pipelineListPanel")).toBeVisible();
+    // Open without navigating/reloading, preserving the cache that exposed the defect.
+    await sales.evaluate(()=>openManagementTaskDrawer());
+    await expect(drawer).toContainText("Loading management tasks");
+    await expect(drawer.locator("[data-mg-card]")).toHaveCount(0);
+    await expect(drawer.locator("#managementTasksDrawerCount")).toBeHidden();
+    await capture(sales,info,"archived-task-refresh-loading",{fullPage:false});
+    release();
+    await expect(drawer).toContainText("No management tasks have been assigned to you.");
+    const archived=await page.evaluate(()=>api('/api/archived-leads'));
+    expect(archived.some(lead=>lead.id===leadId)).toBe(true);
+    await page.evaluate(id=>api(`/api/leads/${id}/restore`,{method:'POST',body:JSON.stringify({reason:'Restore synthetic fixture after visibility regression'})}),leadId);
+    await drawer.getByRole("button",{name:"Close management tasks"}).click();
+    await sales.evaluate(()=>openManagementTaskDrawer());
+    await expect(drawer.locator(`[data-mg-card="${taskId}"]`)).toBeVisible();
+    await page.evaluate(id=>api(`/api/leads/${id}/archive`,{method:'POST',body:JSON.stringify({reason:'Retain synthetic regression fixture in archive'})}),leadId);
+  } finally {release?.(); await context.close();}
+});
+
 test("Admin and Salesman archive isolation, duplicate review and restore work on desktop/mobile", async ({page,browser},info)=>{
   test.skip(!info.project.name.startsWith("admin"),"Both roles tested in independent sessions");
   test.setTimeout(120000);

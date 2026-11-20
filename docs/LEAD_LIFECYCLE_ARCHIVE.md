@@ -19,7 +19,7 @@ Lead records are in `public.leads`, linked to `public.companies`. Existing relat
 - `client.js`, `styles.css`: role-specific actions, responsive dialogs, Archived Leads and management approval queues.
 - `index.html`, `sw.js`: versioned asset references and refreshed PWA cache.
 - `supabase/migrations/20261120050707_lead_lifecycle_archive.sql`: lifecycle schema and rules; applied to staging only after approval.
-- `supabase/migrations/20261120063951_initial_management_lead_rls_readback.sql`: follow-up for the Admin initial-task registration read-back; prepared only.
+- `supabase/migrations/20261120063951_initial_management_lead_rls_readback.sql`: follow-up for the Admin initial-task registration read-back; applied to staging only after approval.
 - `tests/lead-lifecycle.test.cjs`, `tests/lead-lifecycle-database.test.cjs`, `tests/ui/lead-lifecycle.spec.js`: focused local/synthetic coverage.
 - `tests/admin-salesman-permissions.e2e.test.js`, `tests/lead-enrichment-form.test.js`: approved archive behavior and enrichment isolation regression updates.
 - `tests/activity-dashboard-latest.test.js`, `tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`: updated cache assertions.
@@ -65,7 +65,7 @@ Apply these files in order on a new approved database:
 2. `supabase/migrations/20261120063951_initial_management_lead_rls_readback.sql`
 
 The first file was applied to staging `grxzqxqgtksunzfhtwox` on 20 November 2026 with explicit approval after backup/schema checks. Supabase recorded it as `20261120062232_lead_lifecycle_archive`.
-The follow-up is NOT applied to staging or Production. Both files remain unapplied to Production.
+The approved follow-up was applied to staging on 20 November 2026 and recorded as `20261120065009_initial_management_lead_rls_readback`. Both files remain unapplied to Production.
 
 Both files were generated with the Supabase CLI's local-only `migration new` command, then edited and exercised in disposable PGlite databases.
 The first adds the archive/closure/restore columns, immutable lifecycle events, duplicate reviews, private transactional command capabilities, validated RPCs, normalized indexes, and restrictive archive policies alongside existing RLS.
@@ -119,13 +119,15 @@ npx.cmd playwright test --config=playwright.ui.config.js --project=admin-desktop
 The lifecycle browser suite creates separate synthetic Admin/Salesman sessions and uses isolated local fixture databases.
 Coverage includes close reasons/notifications, archive isolation in UI/API/RLS/related PMRs and tasks, normalized duplicates, single-use review approval, restore/history preservation, orphan-company rollback, full edited-close data retention, trusted worker boundaries, and permanent-delete confirmation.
 Additional request tests prove the lead is byte-for-byte unchanged while deletion approval is pending, a Salesman cannot approve or restore directly, management receives the notification, rejection leaves the lead active, and Admin-approved removal/restoration preserves all activities.
+Task visibility regression coverage holds a drawer refresh open after closure: cached task rows, counts and actions stay hidden until the authorized read completes. Opening a drawer or changing lifecycle invalidates prior reads; late read/mutation responses cannot repopulate invalidated rows. A refreshed Salesman lead feed also invalidates tasks linked to records no longer visible. No task status, deadline, permissions or history is changed by this client-only invalidation.
 The initial-management registration regression uses the released Admin RPC and task triggers with the archive lookup policy. It reproduces SQLSTATE `42501` before the follow-up, then verifies one company/lead/task/audit event, preserved next-working-day scheduling, Salesman/peer isolation, denied forged callers, and rollback for invalid stages, task titles/assignees, duplicate task IDs and denied read-back. No permission bypass is used.
 Normal CRM verification remains required in addition to these focused tests.
 
 ## Release Gates and Boundaries
 
 - Staging schema/RPC checks and three separate rolled-back Admin/Salesman database-role rehearsals passed. These covered closure/broadcast, archive isolation, request/restore approval, normalized duplicates, single-use permits, task/history preservation and purge/audit guards. Read-back confirmed zero rehearsal companies/leads/tasks/requests remained.
-- The first hosted Preview test on commit `4e38cd3` saved one synthetic Salesman lead without a follow-up. The Admin initial-task save failed with SQLSTATE `42501`; read-back confirmed zero company/lead records for that failed Admin attempt. Do not retry or claim hosted workflow success until the follow-up migration is separately approved/applied and the fresh Preview is retested.
+- The first hosted Preview test on commit `4e38cd3` saved one synthetic Salesman lead without a follow-up. The Admin initial-task save failed with SQLSTATE `42501`; read-back confirmed zero company/lead records for that failed Admin attempt. After the approved follow-up, hosted Admin registration on `5ef9d36` passed with one company, one Prospect lead and one linked next-working-day task. The deletion-request, approval, duplicate-warning, restoration and closure workflows also passed; existing activity/task history was retained.
+- That hosted test found a transient stale Management Task display before refresh completed. This follow-up clears the task view during drawer refresh and lifecycle invalidation, with late-response guards. Fresh hosted verification of this UI fix remains required; earlier hosted results do not prove this follow-up.
 - The saved synthetic Salesman lead remains in staging as `PR76 Juniper Lifecycle Test 20Nov`; no deletion or reuse of that record is part of the follow-up fix.
 - Before release, rehearse the migration on the actual staging schema, run database advisors, and verify Admin/Salesman workflows on a fresh staging-only Preview, including two concurrent duplicate saves.
 - Review linked private-storage policies and any environment-specific tables not present in repository migrations. Restrictive policies are added to existing foreign keys; this cannot discover undocumented JSON references.

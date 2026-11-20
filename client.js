@@ -15287,7 +15287,7 @@ function renderManagementTasks({ refreshFocus = false } = {}) {
 async function loadManagementTasks() {
   const workspace = managementTasks;
   if (!["admin", "salesman"].includes(state.currentUser?.role) || workspace.loading || workspace.pending) return;
-  const generation = workspace.generation;
+  const generation = ++workspace.generation;
   workspace.loading = true;
   try {
     const rows = await api("/api/management-tasks");
@@ -15301,14 +15301,27 @@ async function loadManagementTasks() {
     workspace.rows = [];
     workspace.error = "Unavailable";
   } finally {
-    workspace.loading = false;
-    if (workspace === managementTasks && workspace.generation === generation) renderManagementTasks({ refreshFocus: true });
+    if (workspace === managementTasks && workspace.generation === generation) {
+      workspace.loading = false;
+      renderManagementTasks({ refreshFocus: true });
+    }
   }
+}
+
+function invalidateManagementTasks() {
+  managementTasks.generation += 1;
+  managementTasks.rows = [];
+  managementTasks.ready = false;
+  managementTasks.loading = false;
+  managementTasks.error = "";
+  managementTasks.update = null;
+  managementTasks.message = "";
 }
 
 function openManagementTaskDrawer(id = "") {
   if (state.currentUser?.role !== "salesman") return;
   const dialog = document.querySelector("#managementTasksDrawer");
+  invalidateManagementTasks();
   managementTasks.drawerFilter = id ? "all" : "pending";
   managementTasks.drawerQuery = "";
   managementTasks.drawerSort = "due";
@@ -15387,11 +15400,12 @@ function openManagementTaskRemoval(task) {
 async function saveManagementTask(action, id, values, errorHost) {
   const workspace = managementTasks;
   if (workspace.pending) return false;
-  workspace.generation += 1;
+  const generation = ++workspace.generation;
+  workspace.loading = false;
   workspace.pending = true;
   try {
     const saved = await api(`/api/management-tasks/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify(values) });
-    if (workspace !== managementTasks) return false;
+    if (workspace !== managementTasks || workspace.generation !== generation) return false;
     const { resolved_lead, ...savedTask } = saved;
     workspace.rows = [...workspace.rows.filter(task => task.id !== saved.id), savedTask];
     if (action === "resolve_duplicate" && resolved_lead) {
@@ -15402,7 +15416,7 @@ async function saveManagementTask(action, id, values, errorHost) {
     renderManagementTasks({ refreshFocus: true });
     return true;
   } catch (error) {
-    if (workspace !== managementTasks) return false;
+    if (workspace !== managementTasks || workspace.generation !== generation) return false;
     if (errorHost) {
       errorHost.textContent = error.message;
       errorHost.hidden = false;
@@ -15421,6 +15435,7 @@ async function saveManagementTask(action, id, values, errorHost) {
     return false;
   } finally {
     workspace.pending = false;
+    if (workspace === managementTasks && workspace.generation !== generation) loadManagementTasks();
   }
 }
 
@@ -16372,6 +16387,12 @@ async function loadLeads(options = {}) {
   if (currentView === "pipeline") renderLeadList();
   try {
     state.leads = await api("/api/leads");
+    if (state.currentUser?.role === "salesman" && managementTasks.rows.some(task => task.lead_id
+      && !state.leads.some(lead => lead.id === task.lead_id && !lead.is_archived))) {
+      invalidateManagementTasks();
+      renderManagementTasks({ refreshFocus: true });
+      loadManagementTasks();
+    }
     fetchLifecycleNotices();
     state.leadsLoaded = true;
     await mergePendingActivitiesIntoState();
@@ -18400,10 +18421,13 @@ async function runLeadLifecycle(lead, action) {
   if (!choice) return;
   try {
     await api(`/api/leads/${encodeURIComponent(lead.id)}/${action}`, { method: "POST", body: JSON.stringify({ ...choice, closed_note: choice.reason }) });
+    invalidateManagementTasks();
+    renderManagementTasks({ refreshFocus: true });
     state.selectedId = null;
     if (state.currentUser?.role === "admin" && ["close", "archive"].includes(action)) setView("archived");
     else if (currentView === "lead") setView("pipeline");
     await loadLeads();
+    await loadManagementTasks();
     if (currentView === "archived") await loadArchivedLeads();
     setToast(action === "restore" ? "Lead restored to Prospect." : "Lead updated.", "success");
   } catch (error) { setToast(error.message, "error"); }
