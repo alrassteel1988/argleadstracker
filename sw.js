@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v183-activity-legacy-ui";
+const CACHE_VERSION = "arg-pwa-v188-activity-author-lifecycle";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -653,7 +653,7 @@ function parseAppRoute(locationLike = window.location) {
   const pathname = locationLike.pathname || "/";
   const search = new URLSearchParams(locationLike.search || "");
   const requestedView = search.get("view") === "dashboard/neglected" ? "neglected" : search.get("view");
-  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "quotes", "accounts", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email"]);
+  const allowedViews = new Set(["dashboard", "pipeline", "salesmen", "activity", "tasks", "quotes", "accounts", "ai-actions", "focus", "neglected", "meeting-prep", "draft-email", "archived"]);
   const emailRoute = pathname.match(/^\/leads\/([^/]+)\/draft-email\/?$/);
   if (emailRoute) return { view: "draft-email", leadId: decodeURIComponent(emailRoute[1]), tab: "overview" };
   const meetingRoute = pathname.match(/^\/leads\/([^/]+)\/prepare-meeting\/?$/);
@@ -797,7 +797,7 @@ const KANBAN_STAGES = [
 ];
 const CANONICAL_STAGE_KEYS = KANBAN_STAGES.map(stage => stage.key);
 // Display labels never replace stored stage keys or workflow rules.
-const STAGE_DISPLAY_LABELS = Object.freeze({ NEW: "Prospect", CONTACTED: "Outreach", NEGOTIATION: "Engaged", WON: "Active", DORMANT: "Dormant", LOST: "Lost" });
+const STAGE_DISPLAY_LABELS = Object.freeze({ NEW: "Prospect", CONTACTED: "Outreach", NEGOTIATION: "Engaged", WON: "Active", DORMANT: "Dormant", LOST: "Lost", CLOSED_NOT_INTERESTED: "Closed \u2013 Not Interested" });
 const CANONICAL_STAGE_SET = new Set(CANONICAL_STAGE_KEYS);
 const CLOSED_STAGE_KEYS = new Set(["WON", "DORMANT", "LOST"]);
 
@@ -819,6 +819,7 @@ function isPrivilegedDashboardRole(role = state.currentUser?.role) {
 
 function normalizeStageKey(stage, fallback = "NEW") {
   const normalized = String(stage || "").trim().toUpperCase();
+  if (normalized === "CLOSED_NOT_INTERESTED") return normalized;
   return STAGE_ALIAS_MAP.get(normalized) || fallback;
 }
 
@@ -10656,6 +10657,10 @@ function resolveLostReason(value) {
 
 async function saveStageWithLostPrompt(lead, stage, existingLossData = null) {
   if (!lead) return { cancelled: true };
+  if (stage === "CLOSED_NOT_INTERESTED") {
+    await runLeadLifecycle(lead, "close");
+    return { cancelled: true };
+  }
   const wasLost = isLostStageValue(lead.stage);
   const willBeLost = isLostStageValue(stage);
   let lostData = existingLossData;
@@ -11726,6 +11731,11 @@ function renderLeadDrawer() {
       <button class="ghost-button record-mobile-edit" type="button" data-drawer-edit-lead="${escapeHtml(lead.id)}" aria-label="Edit lead" title="Edit lead"></button>
     </div>
     <header class="drawer-header lead-page-header">
+      <div class="lifecycle-actions">
+        <button class="ghost-button" type="button" data-lifecycle-close>Closed - Not Interested</button>
+        ${state.currentUser?.role === "salesman" ? `<button class="ghost-button" type="button" data-lifecycle-request-delete ${archiveRequestPending(lead.id) ? "disabled" : ""}>${archiveRequestPending(lead.id) ? "Deletion requested" : "Request for Deletion"}</button>` : ''}
+        ${state.currentUser?.role === "admin" ? '<button class="ghost-button" type="button" data-lifecycle-archive>Archive lead</button><button class="ghost-button" type="button" data-lifecycle-audit>Audit history</button>' : ''}
+      </div>
       <div class="drawer-title-row">
         <div class="drawer-avatar ${kanbanPriorityTone(lead.priority)}">${escapeHtml(leadInitial(lead))}</div>
         <div class="drawer-title-copy">
@@ -11934,6 +11944,11 @@ function bindLeadDrawerEvents() {
   document.querySelectorAll("[data-drawer-edit-lead]").forEach(button => {
     button.addEventListener("click", () => openLeadEdit(button.dataset.drawerEditLead));
   });
+  const lifecycleLead = state.leads.find(item => item.id === state.selectedId);
+  document.querySelector("[data-lifecycle-close]")?.addEventListener("click", () => runLeadLifecycle(lifecycleLead, "close"));
+  document.querySelector("[data-lifecycle-archive]")?.addEventListener("click", () => runLeadLifecycle(lifecycleLead, "archive"));
+  document.querySelector("[data-lifecycle-audit]")?.addEventListener("click", () => showLifecycleAudit(lifecycleLead));
+  document.querySelector("[data-lifecycle-request-delete]")?.addEventListener("click", () => requestLeadDeletion(lifecycleLead));
   document.querySelectorAll("[data-confirm-auto-enrichment]").forEach(button => {
     button.addEventListener("click", async () => {
       try {
@@ -15341,7 +15356,7 @@ function renderManagementTasks({ refreshFocus = false } = {}) {
 async function loadManagementTasks() {
   const workspace = managementTasks;
   if (!["admin", "salesman"].includes(state.currentUser?.role) || workspace.loading || workspace.pending) return;
-  const generation = workspace.generation;
+  const generation = ++workspace.generation;
   workspace.loading = true;
   try {
     const rows = await api("/api/management-tasks");
@@ -15355,14 +15370,27 @@ async function loadManagementTasks() {
     workspace.rows = [];
     workspace.error = "Unavailable";
   } finally {
-    workspace.loading = false;
-    if (workspace === managementTasks && workspace.generation === generation) renderManagementTasks({ refreshFocus: true });
+    if (workspace === managementTasks && workspace.generation === generation) {
+      workspace.loading = false;
+      renderManagementTasks({ refreshFocus: true });
+    }
   }
+}
+
+function invalidateManagementTasks() {
+  managementTasks.generation += 1;
+  managementTasks.rows = [];
+  managementTasks.ready = false;
+  managementTasks.loading = false;
+  managementTasks.error = "";
+  managementTasks.update = null;
+  managementTasks.message = "";
 }
 
 function openManagementTaskDrawer(id = "") {
   if (state.currentUser?.role !== "salesman") return;
   const dialog = document.querySelector("#managementTasksDrawer");
+  invalidateManagementTasks();
   managementTasks.drawerFilter = id ? "all" : "pending";
   managementTasks.drawerQuery = "";
   managementTasks.drawerSort = "due";
@@ -15441,11 +15469,12 @@ function openManagementTaskRemoval(task) {
 async function saveManagementTask(action, id, values, errorHost) {
   const workspace = managementTasks;
   if (workspace.pending) return false;
-  workspace.generation += 1;
+  const generation = ++workspace.generation;
+  workspace.loading = false;
   workspace.pending = true;
   try {
     const saved = await api(`/api/management-tasks/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify(values) });
-    if (workspace !== managementTasks) return false;
+    if (workspace !== managementTasks || workspace.generation !== generation) return false;
     const { resolved_lead, ...savedTask } = saved;
     workspace.rows = [...workspace.rows.filter(task => task.id !== saved.id), savedTask];
     if (action === "resolve_duplicate" && resolved_lead) {
@@ -15456,7 +15485,7 @@ async function saveManagementTask(action, id, values, errorHost) {
     renderManagementTasks({ refreshFocus: true });
     return true;
   } catch (error) {
-    if (workspace !== managementTasks) return false;
+    if (workspace !== managementTasks || workspace.generation !== generation) return false;
     if (errorHost) {
       errorHost.textContent = error.message;
       errorHost.hidden = false;
@@ -15475,6 +15504,7 @@ async function saveManagementTask(action, id, values, errorHost) {
     return false;
   } finally {
     workspace.pending = false;
+    if (workspace === managementTasks && workspace.generation !== generation) loadManagementTasks();
   }
 }
 
@@ -16065,7 +16095,9 @@ function renderDetail() {
         <button class="ghost-button" id="enrichLead" type="button">Enrich with Hunter</button>
         <button class="ghost-button" id="manualReenrichLead" type="button">Re-enrich Company</button>
         <button class="ghost-button" id="openPmrForm" type="button">File PMR</button>
-        <button class="ghost-button danger" id="deleteLead" type="button">${state.currentUser?.role === "admin" ? "Delete Lead" : "Request Delete Lead"}</button>
+        ${state.currentUser?.role === "admin" ? '<button class="ghost-button" id="archiveLead" type="button">Archive lead</button><button class="ghost-button" id="leadLifecycleAudit" type="button">Audit history</button>' : ''}
+        <button class="ghost-button danger" id="closeUninterestedLead" type="button">Closed - Not Interested</button>
+        ${state.currentUser?.role === "salesman" ? `<button class="ghost-button" type="button" id="requestLeadDeletion" ${archiveRequestPending(lead.id) ? "disabled" : ""}>${archiveRequestPending(lead.id) ? "Deletion requested" : "Request for Deletion"}</button>` : ''}
         <span class="form-message" id="detailMessage" aria-live="polite"></span>
       </div>
       ${linkedinControls(lead)}
@@ -16254,29 +16286,10 @@ function renderDetail() {
     openPmrForLead(lead.id);
   });
 
-  document.querySelector("#deleteLead").addEventListener("click", async () => {
-    const message = document.querySelector("#detailMessage");
-    if (state.currentUser?.role !== "admin") {
-      try {
-        await submitDeleteRequest(lead.id, "lead");
-        setMessage(message, "Delete request sent to admin.", "success");
-      } catch (error) {
-        setMessage(message, error.message, "error");
-      }
-      return;
-    }
-    if (!window.confirm(`Delete ${lead.company_name}? This cannot be undone.`)) return;
-    const password = adminPasswordPrompt("delete this lead");
-    if (!password) return;
-    setMessage(message, "Deleting lead...");
-    try {
-      await api(`/api/leads/${lead.id}`, { method: "DELETE", body: JSON.stringify({ admin_password: password }) });
-      state.selectedId = null;
-      await loadLeads();
-    } catch (error) {
-      setMessage(message, error.message, "error");
-    }
-  });
+  document.querySelector("#archiveLead")?.addEventListener("click", () => runLeadLifecycle(lead, "archive"));
+  document.querySelector("#closeUninterestedLead")?.addEventListener("click", () => runLeadLifecycle(lead, "close"));
+  document.querySelector("#leadLifecycleAudit")?.addEventListener("click", () => showLifecycleAudit(lead));
+  document.querySelector("#requestLeadDeletion")?.addEventListener("click", () => requestLeadDeletion(lead));
   bindActivityEditButtons();
   bindDeleteButtons();
 }
@@ -16337,6 +16350,7 @@ function arrangeLeadRecordControls() {
 }
 
 function applyView() {
+  applyLifecycleView();
   arrangeLeadRecordControls();
   if (state.currentUser && state.currentUser.role !== "admin" && ["quotes", "accounts"].includes(currentView)) currentView = "pipeline";
   if (isSalesmanRole() && currentView === "salesmen") {
@@ -16414,6 +16428,7 @@ function toggleMobileMenu() {
 }
 
 function setView(view) {
+  if (view === "archived" && state.currentUser?.role !== "admin") view = "dashboard";
   if (["quotes", "accounts"].includes(view) && state.currentUser?.role !== "admin") view = "pipeline";
   if (view !== "draft-email") state.emailRouteLeadId = "";
   if (view !== "meeting-prep") state.meetingRouteLeadId = "";
@@ -16428,6 +16443,7 @@ function setView(view) {
   if (view === "tasks") {
     loadWeeklyReportWorkspace(true).catch(error => setTasksMessage(error.message, "error"));
   }
+  if (view === "archived") loadArchivedLeads();
 }
 
 async function loadLeads(options = {}) {
@@ -16440,6 +16456,13 @@ async function loadLeads(options = {}) {
   if (currentView === "pipeline") renderLeadList();
   try {
     state.leads = await api("/api/leads");
+    if (state.currentUser?.role === "salesman" && managementTasks.rows.some(task => task.lead_id
+      && !state.leads.some(lead => lead.id === task.lead_id && !lead.is_archived))) {
+      invalidateManagementTasks();
+      renderManagementTasks({ refreshFocus: true });
+      loadManagementTasks();
+    }
+    fetchLifecycleNotices();
     state.leadsLoaded = true;
     await mergePendingActivitiesIntoState();
     if (!state.leads.some(lead => lead.id === state.selectedId)) {
@@ -16456,7 +16479,9 @@ async function loadLeads(options = {}) {
     await fetchAttentionFlags();
     await fetchMarketIntel();
     await fetchHandoffNotices();
+    await fetchArchiveRequests();
     render();
+    if (currentView === "archived") await loadArchivedLeads();
     if (currentView === "lead" && state.selectedId) {
       loadLeadDetailData(state.selectedId);
     }
@@ -16750,7 +16775,8 @@ async function loadWorkspace() {
   if (!isAdminOrManager()) {
     els.formSalesman.value = state.currentUser.name;
   }
-  fillSelect(els.formStage, state.settings.stages);
+  fillSelect(els.formStage, [...new Set([...state.settings.stages, "CLOSED_NOT_INTERESTED"])]);
+  [...els.formStage.options].filter(option => option.value === "CLOSED_NOT_INTERESTED").forEach(option => { option.textContent = "Closed \u2013 Not Interested"; });
   [els.formStage, els.performanceStageFilter, els.portfolioStageFilter].forEach(select => {
     if (!select) return;
     [...select.options].forEach(option => {
@@ -18332,6 +18358,15 @@ els.leadForm.addEventListener("submit", async event => {
     payload.assigned_salesman = state.currentUser.name || state.currentUser.email || payload.assigned_salesman;
     payload.territory = state.currentUser.territory || payload.territory;
   }
+  try {
+    if (payload.stage === "CLOSED_NOT_INTERESTED") {
+      const close = await lifecycleDialog({ title: "Closed - Not Interested", text: payload.company_name, closeReason: true,
+        actions: [["close", "Close and archive"]] });
+      if (!close) return;
+      Object.assign(payload, { closed_reason: close.closed_reason, closed_note: close.reason });
+    }
+    if (!await checkRegistrationDuplicates(payload, state.editingLeadId)) return;
+  } catch (error) { setEnrichmentStatus(error.message, "error"); return; }
   let lead;
   if (state.editingLeadId) {
     try {
@@ -18373,7 +18408,8 @@ els.leadForm.addEventListener("submit", async event => {
       state.editingLostData = null;
       els.leadDialog.close();
       await loadLeads();
-      openLeadDrawer(lead.id, "overview");
+      if (!lead.is_archived) openLeadDrawer(lead.id, "overview");
+      else setView(state.currentUser?.role === "admin" ? "archived" : "pipeline");
       setToast("Lead updated.", "success");
     } catch (error) {
       setEnrichmentStatus(error.message, "error");
@@ -18383,7 +18419,7 @@ els.leadForm.addEventListener("submit", async event => {
   try {
     lead = await api("/api/leads", { method: "POST", body: JSON.stringify(payload) });
   } catch (error) {
-    if (error.status === 409 && error.details?.duplicate) {
+    if (error.status === 409 && error.details?.duplicate && state.currentUser?.role === "admin") {
       const duplicate = error.details.duplicate;
       const isFromAnotherSalesman = duplicate.owner_type === "other_salesman";
       const ownerName = duplicate.owner_name || duplicate.assigned_salesman || "another account";
@@ -18401,8 +18437,208 @@ els.leadForm.addEventListener("submit", async event => {
   resetLeadFormForNewLead();
   els.leadDialog.close();
   await loadLeads();
-  openLeadDrawer(lead.id, "overview");
+  if (!lead.is_archived) openLeadDrawer(lead.id, "overview");
 });
+
+function lifecycleDialog({ title, text = "", actions = [], closeReason = false, requestReasons = [], confirmName = "", password = false, fields = true }) {
+  return new Promise(resolve => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "lead-lifecycle-dialog";
+    dialog.setAttribute("aria-labelledby", "lifecycleDialogTitle");
+    dialog.innerHTML = `<form class="lead-form"><header><h2 id="lifecycleDialogTitle">${escapeHtml(title)}</h2></header>
+      <p class="lifecycle-copy">${escapeHtml(text)}</p>
+      ${closeReason ? `<label>Close reason<select name="closed_reason" required><option value="">Choose a reason</option>${["No requirement", "Uses another supplier", "Business closed", "Other"].map(reason => `<option>${reason}</option>`).join("")}</select></label>` : ""}
+      ${requestReasons.length ? `<label>Request reason<select name="request_reason" required><option value="">Choose a reason</option>${requestReasons.map(reason=>`<option>${escapeHtml(reason)}</option>`).join("")}</select></label>` : ""}
+      ${fields ? `<label>${closeReason ? "Note" : "Reason / review note"}<textarea name="reason" maxlength="2000" ${closeReason ? "" : "required"}></textarea></label>` : ""}
+      ${confirmName ? `<label>Type ${escapeHtml(confirmName)} to confirm<input name="company_name" autocomplete="off" required></label>` : ""}
+      ${password ? '<label>Admin password<input name="admin_password" type="password" autocomplete="current-password" required></label>' : ""}
+      <footer><button class="ghost-button" type="button" data-cancel>${actions.length ? "Cancel" : "Close"}</button>${actions.map(([value, label]) => `<button class="primary-button" type="submit" name="action" value="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join("")}</footer></form>`;
+    const form = dialog.querySelector("form");
+    const finish = value => { dialog.close(); dialog.remove(); resolve(value); };
+    dialog.addEventListener("cancel", event => { event.preventDefault(); finish(null); });
+    form.querySelector("[data-cancel]").onclick = () => finish(null);
+    if (closeReason) form.elements.closed_reason.onchange = () => { form.elements.reason.required = form.elements.closed_reason.value === "Other"; };
+    form.onsubmit = event => {
+      event.preventDefault();
+      if (confirmName && form.elements.company_name.value !== confirmName) {
+        form.elements.company_name.setCustomValidity("Type the exact company name."); form.elements.company_name.reportValidity(); return;
+      }
+      finish({ ...Object.fromEntries(new FormData(form).entries()), action: event.submitter.value });
+    };
+    if (confirmName) form.elements.company_name.oninput = () => form.elements.company_name.setCustomValidity("");
+    document.body.append(dialog); dialog.showModal();
+  });
+}
+
+async function checkRegistrationDuplicates(payload, excludeId) {
+  const candidate = { company_name: payload.company_name, phone: payload.phone, email: payload.email || payload.contact_email,
+    ...(excludeId ? { exclude_id: excludeId } : {}) };
+  if (excludeId) {
+    const old = state.leads.find(lead => lead.id === excludeId);
+    if (old && ["company_name", "phone", "email"].every(key => String(candidate[key] || "") === String(old[key] || ""))) return true;
+  }
+  const { matches = [], approved } = await api("/api/lead-duplicate-check", { method: "POST", body: JSON.stringify(candidate) });
+  if (approved) { payload.allow_duplicate = true; return true; }
+  if (!matches.length) return true;
+  const admin = state.currentUser?.role === "admin";
+  const selfOnly = matches.every(match => match.self_owned && !match.is_archived);
+  const text = matches.map(match => match.is_archived
+    ? `${match.company_name}: This company was ${match.soft_deleted ? "soft-deleted following Admin approval (record retained)" : match.closed ? "marked Closed - Not Interested" : "archived"} on ${formatDateTime(match.closed_at)} by ${match.closed_by_name}. Reason: ${match.reason || "Not recorded"}.${match.closed_note ? ` ${match.closed_note}` : ""}`
+    : `${match.company_name}: This lead already exists and is assigned to ${match.owner_name}.`).join("\n\n");
+  const archivedMatches = matches.filter(match => match.is_archived && match.id);
+  const choice = await lifecycleDialog({ title: "Matching lead found", text,
+    actions: admin ? [...archivedMatches.map(match => [`restore:${match.id}`,`Restore old lead: ${match.company_name}`]), ["override", "Create anyway"]]
+      : selfOnly ? [["override","Continue with own active lead"]] : [...(matches.some(match=>match.is_archived) ? [["restore_request","Request Restore"]] : []), ["review", "Request Admin Review"]] });
+  if (!choice) return false;
+  if (choice.action === "restore_request") {
+    await api("/api/lead-restore-requests",{method:"POST",body:JSON.stringify({...candidate,reason:"New steel requirement",note:choice.reason})});
+    setEnrichmentStatus("Restore request sent to management. Only Admin can restore the existing lead.","success");
+    return false;
+  }
+  if (choice.action.startsWith("restore:")) {
+    const old = archivedMatches.find(match => match.id === choice.action.slice(8));
+    if (!old) return false;
+    await api(`/api/leads/${encodeURIComponent(old.id)}/restore`, { method: "POST", body: JSON.stringify({ reason: choice.reason }) });
+    els.leadDialog.close(); await loadLeads(); setToast("Existing lead restored to Prospect.", "success"); return false;
+  }
+  await api("/api/lead-duplicate-reviews", { method: "POST", body: JSON.stringify({ ...candidate, note: choice.reason, override: choice.action === "override" }) });
+  if (choice.action === "review") { setEnrichmentStatus("Admin review requested. The lead has not been saved.", "success"); return false; }
+  payload.allow_duplicate = true;
+  return true;
+}
+
+async function runLeadLifecycle(lead, action) {
+  const titles = { close: "Closed - Not Interested", archive: "Archive lead", restore: "Restore to Prospect", purge: "Delete permanently" };
+  const choice = await lifecycleDialog({ title: titles[action], text: action === "purge" ? `${lead.company_name}. This permanently deletes the archived lead. Its lifecycle audit will remain.`
+    : action === "close" ? `${lead.company_name}. This immediately archives the lead and sends a do-not-contact notification.` : lead.company_name,
+    closeReason: action === "close", confirmName: action === "purge" ? lead.company_name : "", password: action === "purge", actions: [[action, titles[action]]] });
+  if (!choice) return;
+  try {
+    await api(`/api/leads/${encodeURIComponent(lead.id)}/${action}`, { method: "POST", body: JSON.stringify({ ...choice, closed_note: choice.reason }) });
+    invalidateManagementTasks();
+    renderManagementTasks({ refreshFocus: true });
+    state.selectedId = null;
+    if (state.currentUser?.role === "admin" && ["close", "archive"].includes(action)) setView("archived");
+    else if (currentView === "lead") setView("pipeline");
+    await loadLeads();
+    await loadManagementTasks();
+    if (currentView === "archived") await loadArchivedLeads();
+    setToast(action === "restore" ? "Lead restored to Prospect." : "Lead updated.", "success");
+  } catch (error) { setToast(error.message, "error"); }
+}
+
+function archiveRequestPending(leadId) {
+  return (state.leadArchiveRequests || []).some(row=>row.lead_id===leadId && row.kind==="archive" && row.status==="pending");
+}
+async function fetchArchiveRequests() {
+  if (state.currentUser?.role!=="salesman") return;
+  const user=state.currentUser;
+  try { const rows=await api("/api/lead-archive-requests"); if(state.currentUser===user) state.leadArchiveRequests=rows; }
+  catch { if(state.currentUser===user) state.leadArchiveRequests=[]; }
+}
+async function requestLeadDeletion(lead) {
+  if (!lead || state.currentUser?.role!=="salesman") return;
+  const choice=await lifecycleDialog({title:"Request for Deletion",text:`${lead.company_name}. Management will review this request. The lead stays active until Admin approves.`,
+    requestReasons:["Disqualified","Not interested","Other"],actions:[["request","Send to management"]]});
+  if (!choice) return;
+  try {
+    await api(`/api/leads/${encodeURIComponent(lead.id)}/request-deletion`,{method:"POST",body:JSON.stringify({reason:choice.request_reason,note:choice.reason})});
+    await loadLeads(); setToast("Deletion request sent to management. No lead has been deleted or archived.","success");
+  } catch(error) {setToast(error.message,"error");}
+}
+
+function applyLifecycleView() {
+  const admin = state.currentUser?.role === "admin";
+  document.querySelectorAll('.sidebar [data-view="archived"]').forEach(node => node.classList.toggle("hidden", !admin));
+  if (!document.querySelector('.sidebar [data-view="archived"]')) {
+    const nav = document.querySelector('.sidebar [data-view="activity"]');
+    if (nav) { const button = document.createElement("button"); button.className = `nav-item${admin ? "" : " hidden"}`;
+      button.dataset.view = "archived"; button.textContent = "Archived Leads"; button.onclick = () => setView("archived"); nav.after(button); }
+  }
+  if (currentView === "archived" && !admin) currentView = "dashboard";
+  let host = document.querySelector("#archivedLeadsView");
+  if (!host) { host = document.createElement("section"); host.id = "archivedLeadsView"; host.className = "lead-lifecycle-view hidden"; els.tasksView.after(host); }
+  host.classList.toggle("hidden", currentView !== "archived" || !admin);
+}
+
+async function showLifecycleAudit(lead) {
+  try {
+    const rows = await api(lead ? `/api/leads/${encodeURIComponent(lead.id)}/lifecycle-audit` : "/api/lead-lifecycle-audit");
+    await lifecycleDialog({ title: "Lead audit history", text: rows.map(row => `${formatDateTime(row.at)} | ${row.company_name} | ${row.action} | ${row.user_name}: ${row.reason}${row.note || row.details?.note ? ` - ${row.note || row.details.note}` : ""}`).join("\n\n") || "No lifecycle events recorded.", fields: false });
+  } catch (error) { setToast(error.message, "error"); }
+}
+
+async function loadArchivedLeads() {
+  if (state.currentUser?.role !== "admin") return;
+  const host = document.querySelector("#archivedLeadsView");
+  if (!host) return;
+  host.textContent = "Loading archived leads...";
+  try {
+    const leads = await api("/api/archived-leads");
+    const reviews = await api("/api/lead-duplicate-reviews");
+    const requests = await api("/api/lead-archive-requests");
+    const owners = [...new Set(leads.map(lead => lead.assigned_salesman).filter(Boolean))];
+    host.innerHTML = `<h2>Archived Leads</h2><div class="lifecycle-toolbar"><input type="search" aria-label="Search archived leads" placeholder="Company, contact, phone or email"><select aria-label="Archived lead salesman"><option value="">All salesmen</option>${owners.map(name => `<option>${escapeHtml(name)}</option>`).join("")}</select><select aria-label="Archive status"><option value="">All statuses</option><option value="closed">Closed - Not Interested</option><option value="manual">Manually archived</option></select><button class="ghost-button" data-all-audit>Audit log</button></div><div class="lifecycle-table-scroll"><table><thead><tr>${["Company", "Contact", "Phone", "Email", "Salesman", "Status / reason", "Archived by", "Archived date", "Actions"].map(label => `<th>${label}</th>`).join("")}</tr></thead><tbody></tbody></table></div><section class="lifecycle-reviews lifecycle-duplicate-reviews"><h3>Duplicate reviews</h3></section>`;
+    const [search, owner, status] = host.querySelectorAll("input,select");
+    const renderRows = () => {
+      const shown = leads.filter(lead => (!owner.value || lead.assigned_salesman === owner.value)
+        && (!status.value || ((lead.stage || lead.lead_status) === "CLOSED_NOT_INTERESTED" ? "closed" : "manual") === status.value)
+        && [lead.company_name, lead.contact_person || lead.contact_name, lead.phone, lead.email || lead.contact_email, lead.archive_reason]
+          .some(value => String(value || "").toLowerCase().includes(search.value.toLowerCase())));
+      host.querySelector("tbody").innerHTML = shown.map(lead => `<tr>${[lead.company_name, lead.contact_person || lead.contact_name, lead.phone, lead.email || lead.contact_email,
+        lead.assigned_salesman, `${(lead.stage || lead.lead_status) === "CLOSED_NOT_INTERESTED" ? "Closed - Not Interested" : lead.stage || lead.lead_status} / ${lead.archive_reason || ""}${lead.closed_reason === "Other" ? `: ${lead.closed_note || ""}` : ""}`,
+        lead.archived_by_name || "CRM user", formatDateTime(lead.archived_at)].map((value,index) => `<td data-label="${["Company","Contact","Phone","Email","Salesman","Status / reason","Archived by","Archived date"][index]}">${escapeHtml(value || "")}</td>`).join("")}<td data-label="Actions"><div class="lifecycle-actions"><button class="ghost-button" data-restore="${escapeHtml(lead.id)}">Restore</button><button class="ghost-button" data-audit="${escapeHtml(lead.id)}">Audit</button><button class="ghost-button danger" data-purge="${escapeHtml(lead.id)}">Delete permanently</button></div></td></tr>`).join("") || '<tr><td colspan="9">No archived leads found.</td></tr>';
+      for (const action of ["restore", "purge", "audit"]) host.querySelectorAll(`[data-${action}]`).forEach(button => {
+        button.onclick = () => { const lead = leads.find(item => item.id === button.dataset[action]); return action === "audit" ? showLifecycleAudit(lead) : runLeadLifecycle(lead, action); };
+      });
+    };
+    search.oninput = owner.onchange = status.onchange = renderRows; renderRows();
+    host.querySelector("[data-all-audit]").onclick = () => showLifecycleAudit();
+    renderArchiveRequestQueue(host,requests,leads);
+    const queue = host.querySelector(".lifecycle-duplicate-reviews");
+    queue.insertAdjacentHTML("beforeend", reviews.filter(row => row.status === "pending").map(row => `<article><h4>${escapeHtml(row.company_name)}</h4><p>${escapeHtml(row.requested_by_name)}: ${escapeHtml(row.note)}</p><div class="lifecycle-actions"><button class="ghost-button" data-review="${escapeHtml(row.id)}" data-decision="approve">Approve new lead</button><button class="ghost-button" data-review="${escapeHtml(row.id)}" data-decision="reject">Reject</button>${(row.matched_lead_ids || []).filter(id => leads.some(lead => lead.id === id)).map(id => `<button class="ghost-button" data-review-id="${escapeHtml(row.id)}" data-review-restore="${escapeHtml(id)}">Restore old lead</button>`).join("")}</div></article>`).join("") || "<p>No pending reviews.</p>");
+    queue.querySelectorAll("[data-review]").forEach(button => { button.onclick = async () => {
+      const decision = await lifecycleDialog({ title: "Admin review decision", actions: [[button.dataset.decision, button.textContent]] }); if (!decision) return;
+      try { await api(`/api/lead-duplicate-reviews/${encodeURIComponent(button.dataset.review)}/${button.dataset.decision}`, { method: "POST", body: JSON.stringify({ reason: decision.reason }) }); await loadArchivedLeads(); }
+      catch (error) { setToast(error.message, "error"); }
+    }; });
+    queue.querySelectorAll("[data-review-restore]").forEach(button => { button.onclick = async () => {
+      const decision = await lifecycleDialog({title:"Restore old lead and resolve review",actions:[["restore","Restore to Prospect"]]});
+      if (!decision) return;
+      try { await api(`/api/lead-duplicate-reviews/${encodeURIComponent(button.dataset.reviewId)}/restore`, {method:"POST",body:JSON.stringify({lead_id:button.dataset.reviewRestore,reason:decision.reason})}); await loadLeads(); await loadArchivedLeads(); }
+      catch(error) {setToast(error.message,"error");}
+    }; });
+  } catch (error) { host.textContent = error.message; }
+}
+
+function renderArchiveRequestQueue(host,requests,archivedLeads) {
+  const queue=document.createElement("section"); queue.className="lifecycle-reviews"; queue.id="archiveRequestQueue";
+  queue.innerHTML=`<h3>Deletion and restore requests</h3>${requests.filter(row=>row.status==="pending").map(row=>`<article data-archive-request="${escapeHtml(row.id)}"><h4>${escapeHtml(row.company_name)} - ${row.kind==="archive"?"Deletion request":"Restore request"}</h4><p>${escapeHtml(row.requested_by_name)}: ${escapeHtml(row.reason)}\n${escapeHtml(row.note)}</p><div class="lifecycle-actions">${row.kind==="archive"?`<button class="ghost-button" data-request-decision="${escapeHtml(row.id)}" data-approve="true">Approve and archive</button>`:(row.candidate_ids || []).filter(id=>archivedLeads.some(lead=>lead.id===id)).map(id=>`<button class="ghost-button" data-request-decision="${escapeHtml(row.id)}" data-approve="true" data-restore-lead="${escapeHtml(id)}">Restore ${escapeHtml(archivedLeads.find(lead=>lead.id===id).company_name)}</button>`).join("")}<button class="ghost-button" data-request-decision="${escapeHtml(row.id)}" data-approve="false">Reject request</button></div></article>`).join("") || '<p>No pending deletion or restore requests.</p>'}`;
+  if (requests.some(row=>row.status==="pending")) host.insertBefore(queue,host.querySelector(".lifecycle-toolbar"));
+  else host.append(queue);
+  queue.querySelectorAll("[data-request-decision]").forEach(button=>{ button.onclick=async()=>{
+    const choice=await lifecycleDialog({title:button.textContent,actions:[["decide",button.textContent]]}); if(!choice) return;
+    try {await api(`/api/lead-archive-requests/${encodeURIComponent(button.dataset.requestDecision)}/decide`,{method:"POST",body:JSON.stringify({approve:button.dataset.approve==="true",lead_id:button.dataset.restoreLead || null,reason:choice.reason})}); await loadLeads();}
+    catch(error){setToast(error.message,"error");}
+  }; });
+}
+
+async function fetchLifecycleNotices() {
+  const user = state.currentUser;
+  if (!user) return;
+  try {
+    const rows = await api("/api/lead-lifecycle-notices");
+    if (state.currentUser !== user) return;
+    let host = document.querySelector("#leadLifecycleNotices");
+    if (!host) { host = document.createElement("aside"); host.id = "leadLifecycleNotices"; host.className = "lead-lifecycle-notices"; host.setAttribute("aria-label", "Lead notifications"); document.querySelector("#appShell .topbar").after(host); }
+    host.innerHTML = rows.map(row => `<p><span>${escapeHtml(row.message)}</span><span class="lifecycle-notice-actions">${user.role==="admin" && row.type==="lead_lifecycle_request" ? '<button class="ghost-button" data-review-management-request>Review requests</button>' : ''}<button class="ghost-button" data-dismiss-lifecycle="${escapeHtml(row.id)}" aria-label="Dismiss notification">Dismiss</button></span></p>`).join("");
+    host.querySelectorAll("[data-review-management-request]").forEach(button=>{button.onclick=()=>setView("archived");});
+    host.querySelectorAll("[data-dismiss-lifecycle]").forEach(button => { button.onclick = async () => {
+      try { await api("/api/lead-lifecycle-notices", { method: "PATCH", body: JSON.stringify({ id: button.dataset.dismissLifecycle }) }); fetchLifecycleNotices(); }
+      catch (error) { setToast(error.message, "error"); }
+    }; });
+  } catch { /* Existing CRM remains usable while notification delivery is retried on refresh. */ }
+}
 
 function pmrPayloadFromForm() {
   return Object.fromEntries(new FormData(els.pmrForm).entries());

@@ -17,7 +17,14 @@ The initial sandbox browser startup stalled; only its identified test processes 
 the local-only suite was rerun successfully with normal process permissions. No Production test,
 record change, migration, merge or manual deployment was performed.
 
-Current-main reconciliation and fresh hosted staging acceptance remain required before release.
+Reconciled with released main `240f3ab` after PR #76 merged. Kept both the lifecycle
+archive/closure/duplicate guards and the dedicated activity-write guard; generic lead edits cannot
+inject activities. Preserved all lifecycle tests and registration protections. The final
+`npm.cmd run verify` passed with PGlite enabled. Reminder/correction desktop/mobile tests passed
+again after reconciliation (2 cases, each exercising independent Admin/Salesman sessions).
+Admin attribution and Salesman personal-log isolation tests passed on desktop/mobile (4 applicable
+cases; 2 role-inapplicable skips). PWA assets use `activity-author-lifecycle` and
+`arg-pwa-v188-activity-author-lifecycle`. Fresh hosted staging acceptance remains required.
 
 ## After PR 74: 19 November 2026
 
