@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v185-lead-lifecycle-task-visibility";
+const CACHE_VERSION = "arg-pwa-v189-management-task-history-audit";
 const APP_SHELL = [
   "/",
   "/index.html",

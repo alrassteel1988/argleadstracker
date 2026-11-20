@@ -12,6 +12,7 @@ test("task drawer hides cached rows during refresh and ignores superseded reads"
   const workspace = { rows: [{ id: "archived-task" }], ready: true, loading: false, pending: false, generation: 0 };
   const dialog = { open: false, showModal() { this.open = true; } };
   const context = { managementTasks: workspace, state: { currentUser: { role: "salesman" } },
+    managementTaskDefaultFilter: () => "all",
     document: { querySelector: () => dialog },
     api: () => new Promise((resolve, reject) => requests.push({ resolve, reject })),
     renderManagementTaskDrawer: () => renders.push(workspace.rows.map(row => row.id)),
