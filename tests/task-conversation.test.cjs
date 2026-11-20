@@ -62,12 +62,17 @@ test("SQL conversation is atomic, role-scoped, immutable and archive-aware", asy
     await db.query(`insert into public.management_tasks(id,assignee_id,assignee_name,assigned_by,assigned_by_name,lead_id,title,instructions,due_date,priority,status,remarks,version,completed_at)
       values($1,$2,'Rep',$3,'Manager',$4,'RFQ','Original instructions','2099-01-01','medium','completed','Original completion',3,'2026-11-19T06:00:00Z')`,[task,sales,admin,lead]);
     await db.exec(sql(migration));
+    const beforeRepair=(await db.query("select proacl::text grants from pg_proc where oid='private.record_management_task_conversation(text,uuid,jsonb)'::regprocedure")).rows[0].grants;
+    await db.exec(sql("20261120113300_task_conversation_conflict_response.sql"));
+    assert.equal((await db.query("select proacl::text grants from pg_proc where oid='private.record_management_task_conversation(text,uuid,jsonb)'::regprocedure")).rows[0].grants,beforeRepair,"Repair must preserve execution grants");
+    const writer=(await db.query("select pg_get_functiondef('private.record_management_task_conversation(text,uuid,jsonb)'::regprocedure) definition")).rows[0].definition;
+    assert.doesNotMatch(writer,/errcode\s*=\s*'40001'/i,"Business conflicts must not trigger PostgREST serialization retries");
     const as=async id=>{await db.exec("set role authenticated");await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);};
     const call=async(action,input)=>(await db.query("select public.record_management_task_conversation($1,$2,$3) saved",[action,task,input])).rows[0].saved;
     const note={request_id:randomUUID(),expected_version:3,text:"Please clarify the specification."};
     await as(admin); const saved=await call("note",note); assert.equal(saved.version,4);
     assert.equal((await call("note",note)).version,4,"A retry must not append twice");
-    await assert.rejects(()=>call("note",{...note,text:"Reused key"}),{code:"40001"});
+    await assert.rejects(()=>call("note",{...note,text:"Reused key"}),{code:"PT409"});
     await as(sales); assert.equal((await db.query("select * from public.notifications")).rows.length,1);
     await assert.rejects(()=>call("note",{...note,expected_version:4}),{code:"42501"});
     const follow={request_id:randomUUID(),expected_version:4,text:"Call for the specification.",next_action_plan:"To Call",next_action_date:"2098-12-31"};
@@ -76,7 +81,10 @@ test("SQL conversation is atomic, role-scoped, immutable and archive-aware", asy
     assert.equal(completed.followup_lead.activities.length,2); assert.equal(completed.followup_lead.activities[0].text,"Keep");
     const entry=(await db.query("select * from public.management_task_remarks where type='follow_up_plan'")).rows[0];
     assert.equal(entry.activity_id,completed.followup_lead.activities[1].id); assert.equal(entry.author_id,sales);
-    await assert.rejects(()=>call("followup",{...follow,request_id:randomUUID()}),{code:"40001"});
+    await assert.rejects(()=>call("followup",{...follow,request_id:randomUUID()}),{code:"PT409"});
+    assert.equal((await db.query("select version from public.management_tasks")).rows[0].version,5,"A stale draft cannot change the task");
+    assert.equal((await db.query("select count(*)::int n from public.management_task_remarks")).rows[0].n,2,"A stale draft cannot append history");
+    assert.equal((await db.query("select jsonb_array_length(activities) n from public.leads")).rows[0].n,2,"A stale draft cannot create another Activity");
     for (const command of ["update public.management_task_remarks set text='Forged'","delete from public.management_task_remarks"]) await assert.rejects(()=>db.exec(command),{code:"42501"});
     await as(peer); await assert.rejects(()=>call("followup",follow),{code:"P0002"}); assert.equal((await db.query("select * from public.management_task_remarks")).rows.length,0);
     await as(admin); await assert.rejects(()=>call("followup",follow),{code:"42501"});

@@ -70,10 +70,26 @@ test("Admin note, Salesman notification and linked post-completion follow-up", a
     await row.locator("summary").click();
     await expect(row).toContainText("Follow-up plan"); await expect(row).toContainText("Completed");
     await expect(page.locator("#managementTasksWorkspace")).toContainText("planned a follow-up");
+    await card.getByRole("button",{name:"Plan follow-up",exact:true}).click();
+    await follow.getByRole("combobox",{name:"Follow-up action",exact:true}).selectOption("To Visit");
+    await follow.getByLabel("Follow-up date",{exact:true}).fill("2098-12-30");
+    await follow.getByLabel("Follow-up notes",{exact:true}).fill("Stale draft must remain unsaved after management replies.");
     await row.getByRole("button",{name:"Add note",exact:true}).click();
     await form.getByLabel("Management note",{exact:true}).fill("Thank you. Please retain the follow-up schedule.");
     await form.getByRole("button",{name:"Send note",exact:true}).click(); await expect(form).toBeHidden();
     await expect(row).toContainText("Thank you. Please retain");
+    const conflict=sales.waitForResponse(response=>response.url().endsWith(`/api/management-tasks/${id}/followup`) && response.request().method()==="POST");
+    await follow.getByRole("button",{name:"Save follow-up",exact:true}).click();
+    expect((await conflict).status()).toBe(409);
+    await expect(follow.getByRole("status")).toContainText("This task changed");
+    await expect(follow.getByLabel("Follow-up notes",{exact:true})).toHaveValue("Stale draft must remain unsaved after management replies.");
+    await expect(follow.getByRole("button",{name:"Save follow-up",exact:true})).toBeEnabled();
+    const unchanged=await sales.evaluate(async id=>({task:(await api("/api/management-tasks")).find(task=>task.id===id),lead:await api("/api/leads/ui-lead-1")}),id);
+    expect(unchanged.task.status).toBe("completed"); expect(unchanged.task.completed_at).toBe(before.completed_at);
+    expect(unchanged.task.remark_history.filter(entry=>entry.type==="follow_up_plan")).toHaveLength(1);
+    expect(unchanged.lead.activities.filter(activity=>activity.management_task_id===id)).toHaveLength(1);
+    await capture(sales,info,"task-stale-follow-up-conflict",{fullPage:false});
+    await follow.getByRole("button",{name:"Cancel",exact:true}).click();
     await capture(page,info,"admin-task-conversation",{fullPage:false});
   } finally { await ctx.close(); }
 });

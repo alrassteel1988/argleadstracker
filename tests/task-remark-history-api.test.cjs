@@ -27,6 +27,10 @@ require.cache[require.resolve("../supabase-client")].exports={...supabase,isSupa
       assert.equal(options.body.p_action,options.token==="admin"?"note":"followup");
       assert.equal(options.body.p_input.author_id,undefined); assert.equal(options.body.p_input.status,undefined);
       assert.equal(options.body.p_input.request_id,noticeId);
+      if(options.body.p_input.expected_version<task.version) {
+        const error=new Error("This task changed. Refresh before trying again");
+        error.status=409; error.code="PT409"; throw error;
+      }
       return {...task};
     }
     if(resource.startsWith("notifications?")) {
@@ -63,6 +67,9 @@ async function request(path,token,method="GET",body) {
     for(const [action,token] of [["note","admin"],["followup","sales"]]) {
       const input={request_id:noticeId,expected_version:task.version,text:"Please follow up",next_action_plan:"To Call",next_action_date:"2099-01-01",author_id:users.peer.id,status:"not_started"};
       assert.equal((await request(`/api/management-tasks/${task.id}/${action}`,token,"POST",input)).status,200);
+      const stale=await request(`/api/management-tasks/${task.id}/${action}`,token,"POST",{...input,expected_version:task.version-1});
+      assert.equal(stale.status,409,"PostgREST PT409 conflicts must reach the form as 409, not 503");
+      assert.equal(stale.data.error,"This task changed. Refresh before trying again");
       assert.equal((await request(`/api/management-tasks/${task.id}/${action}`,token==="admin"?"sales":"admin","POST",input)).status,403);
     }
     assert.ok(calls.every(call=>!call.options.serviceRole));

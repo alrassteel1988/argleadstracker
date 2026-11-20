@@ -28,6 +28,9 @@ authorize a Production migration, merge or manual deployment.
 - `supabase/migrations/20261120104635_management_task_conversation_followup.sql`:
   two remark types, nullable Activity linkage, unique request IDs, restrictive
   note visibility and authenticated conversation writer.
+- `supabase/migrations/20261120113300_task_conversation_conflict_response.sql`:
+  replaces only the private conversation writer, changing business-conflict
+  SQLSTATEs from `40001` to `PT409`; execution grants and guards are preserved.
 - `tests/task-conversation.test.cjs`, `tests/task-remark-history-api.test.cjs`:
   role, RLS, append-only, archive/reassignment, atomicity and retry coverage.
 - `tests/ui/task-conversation.spec.js`: cross-role desktop/mobile workflow,
@@ -108,6 +111,45 @@ feature. Relevant references:
 [password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
 
 ## Staging And Release Gates
+
+### Hosted Conflict Regression
+
+Hosted Admin/Salesman acceptance on the initial Preview passed note delivery,
+Started/Completion history, an additional remark, one linked follow-up Activity
+and a management reply while preserving completion and original instructions.
+A second Salesman draft was overtaken by that reply. It wrote no additional
+Activity or history, but returned 503 after approximately 126 seconds rather
+than promptly returning 409. Staging logs identified repeated `40001` errors
+from the conversation writer under PostgREST 14.18. The owner approved stopping
+only the identified retry backend; termination and its absence were verified.
+
+Supabase documents this PostgREST 14 retry behavior and recommends a non-retryable
+business error such as `PT409`:
+[SQLSTATE retry guidance](https://supabase.com/kb/troubleshooting/high-cpu-and-infinite-transaction-retries-when-using-custom-error-codes-in-rpc-functions-77326b).
+The follow-up migration preserves the original migration and all guards. The
+SQL regression first failed on the original function's retryable error code;
+after applying both migrations locally, it checks non-retryable conflicts,
+unchanged grants and no duplicate task/history/Activity writes. The browser test
+also checks concurrent Admin reply versus stale Salesman draft, retained input,
+HTTP 409 and re-enabled submission on desktop and mobile.
+
+Local repair verification on 20 November passed the SQL regression and both
+desktop/mobile cross-role browser cases. The first sandboxed full run stopped
+at `auth-refresh.test.js` with `connect EACCES 127.0.0.1`; rerunning with approved
+local loopback access passed `npm.cmd run verify`, including PGlite fixtures.
+The HTTP fixture also verifies that caller-scoped `PT409` errors reach both
+conversation routes as 409 rather than 503. No permission guard was weakened.
+
+The follow-up migration is NOT applied to staging or Production by publishing
+this change. Obtain separate staging approval, recheck backup/schema, apply only
+that migration and repeat the hosted stale-draft test before release. Do not
+repeat that hosted conflict test on the original writer, which can leave another
+retrying backend. Fresh local verification does not close this hosted gate.
+
+At the final baseline refresh, `origin/main` advanced to `1377bd7` (released
+PR #69) and PR #78 reported conflicts. This narrow repair does not resolve those
+unrelated UI/cache conflicts. Reconcile and verify against current main in a
+separate authorized step before owner review or release.
 
 The new migration requires the released PR #77 task-remark history migration and
 PR #76 archive safeguards. It preserves every existing history row, adds nullable
