@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v188-activity-author-lifecycle";
+const CACHE_VERSION = "arg-pwa-v190-activity-author-task-history";
 const APP_SHELL = [
   "/",
   "/index.html",

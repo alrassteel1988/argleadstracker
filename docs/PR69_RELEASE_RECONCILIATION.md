@@ -1,5 +1,67 @@
 # PR 69 Release Reconciliation
 
+## After Released PR 77: 20 November 2026
+
+Reconciled the existing PR 69 worktree with current main
+`58b004e93d18364248fd19e0b6419f26bb746c8e`, preserving the existing branch history.
+The five conflicts were shared asset revisions and cache assertions. Both feature stylesheets
+remain linked, and the combined assets advance to `activity-author-task-history` and
+`arg-pwa-v190-activity-author-task-history`. The task-history service, styling, migration and
+existing SQL/API/browser tests match released main unchanged, as do the lifecycle routes and
+archive/storage migrations. No new SQL migration, backfill or permission change is introduced.
+
+Added a cross-feature browser regression to `tests/ui/activity-entry.spec.js`: after Admin and
+Salesman reminder/correction saves, the Salesman completes a task and appends an additional
+remark. Both actors see the task timeline, the completion evidence and earlier task remarks
+remain unchanged, and the lead's separate activity history remains byte-for-byte equivalent.
+The scenario passes on desktop and mobile. Existing archive invalidation, caller-token API
+boundaries, removed-task rules and immutable histories remain enforced.
+
+Local verification passed:
+
+- `npm.cmd ci`: locked dependencies installed without lockfile changes; audit reported zero vulnerabilities.
+- `npm.cmd run verify` with `CRM_TEST_PGLITE_MODULE=@electric-sql/pglite`: passed, including
+  lifecycle SQL, registration, reassignment, all 13 task/history cases and task API pagination/security.
+- Activity-entry desktop/mobile: 2 passed, each exercising independent Admin and Salesman sessions.
+- Management-task Admin desktop/mobile: 8 passed, 2 role-inapplicable skips.
+- Attribution/personal-log desktop/mobile: 4 passed, 4 role-inapplicable skips.
+- Optional Salesman registration desktop/mobile: 2 passed, preserving blank, notes-only and explicit follow-up paths.
+- CRLF-aware diff check passed. Existing mixed line endings were preserved.
+
+The first focused run exposed a missing worktree PGlite dependency; installing the locked
+dependencies resolved it. The first complete sandbox verification stopped at the auth-refresh
+fixture with `connect EACCES 127.0.0.1:62575`. The unchanged test passed with normal localhost
+permissions, followed by the complete passing suite. No assertion or runtime guard was weakened.
+
+Exact commands (PowerShell in this worktree):
+
+```powershell
+npm.cmd ci
+$env:CRM_TEST_PGLITE_MODULE='@electric-sql/pglite'
+npm.cmd run verify
+$env:CRM_UI_SUITE='activity-entry'
+$env:CRM_UI_TEST_PORT='4711'
+node node_modules/playwright/cli.js test --config=playwright.ui.config.js --project=admin-desktop --project=admin-mobile --output=.tmp/pr69-after77-activity-results
+$env:CRM_UI_SUITE='management-tasks'
+$env:CRM_UI_TEST_PORT='4721'
+node node_modules/playwright/cli.js test --config=playwright.ui.config.js --project=admin-desktop --project=admin-mobile --output=.tmp/pr69-after77-task-results
+$env:CRM_UI_SUITE='admin-reference'
+$env:CRM_UI_TEST_PORT='4731'
+node node_modules/playwright/cli.js test --config=playwright.ui.config.js --grep 'recorded author|personal read-only log' --output=.tmp/pr69-after77-attribution-results
+$env:CRM_UI_SUITE='management-tasks'
+$env:CRM_UI_TEST_PORT='4741'
+node node_modules/playwright/cli.js test --config=playwright.ui.config.js --project=salesman-desktop --project=salesman-mobile --grep 'Salesman Step 3' --output=.tmp/pr69-after77-sales-registration-results
+git -c core.whitespace=cr-at-eol diff --check
+```
+
+Vercel's existing settings show exactly three overrides for `codex/activity-origin-author`,
+Preview only: Config URL/anon and Secret service-role. No value was revealed and no setting
+was changed. A fresh pushed-head Preview, staging sign-in mapping and hosted Admin/Salesman
+acceptance remain required; earlier hosted results below do not certify this reconciled head.
+No Production record/schema change, PR merge or manual deployment is performed in this update.
+Publication target remains `codex/activity-origin-author`; the local worktree branch is
+`codex/activity-author-after-74`. Other PRs remain separate.
+
 ## Reminder and Legacy Correction Follow-up: 20 November 2026
 
 Replaced the lead drawer's native reminder prompts with an in-page dialog using existing form styles.

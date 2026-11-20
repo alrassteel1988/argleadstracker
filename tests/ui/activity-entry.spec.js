@@ -81,5 +81,41 @@ test("legacy reminder form and corrections preserve the original activity", asyn
       await capture(target, info, `${label.toLowerCase()}-legacy-reminder-correction`);
       expect(await target.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     }
+    const assigned = await page.evaluate(() => api(`/api/management-tasks/${crypto.randomUUID()}/assign`, {
+      method: "POST", body: JSON.stringify({ title: "Activity reconciliation task", instructions: "Synthetic task history compatibility check.",
+        assignee_id: "ui-salesman", lead_id: "ui-lead-1", due_date: "2099-01-02", priority: "medium" })
+    }));
+    const completed = await sales.evaluate(task => api(`/api/management-tasks/${task.id}/progress`, {
+      method: "POST", body: JSON.stringify({ expected_version: task.version, status: "completed", remarks: "Synthetic completion evidence stays unchanged." })
+    }), assigned);
+    const activitiesBefore = await sales.evaluate(() => api("/api/leads/ui-lead-1").then(lead => lead.activities));
+    await sales.goto("/?view=tasks");
+    await sales.locator('[data-mg-tab="management"]').click();
+    const drawer = sales.locator("#managementTasksDrawer");
+    await expect(drawer.locator('[data-mg-filter="all"]')).toHaveAttribute("aria-pressed", "true");
+    const taskCard = drawer.locator(`[data-mg-card="${assigned.id}"]`);
+    await expect(taskCard).toContainText("Completed");
+    await taskCard.getByRole("button", { name: "Add remark", exact: true }).click();
+    await taskCard.getByLabel("Additional remark", { exact: true }).fill("Synthetic additional remark after activity correction.");
+    await taskCard.locator('.mg-task-progress-form button[type="submit"]').click();
+    await expect(taskCard.locator(".mg-task-remark-preview")).toHaveText("Synthetic additional remark after activity correction.");
+    await taskCard.locator(".mg-drawer-expanded > summary").click();
+    await expect(taskCard.locator(".mg-task-timeline li")).toHaveCount(2);
+    await expect(taskCard.locator(".mg-task-timeline")).toContainText(completed.remarks);
+    await expect(taskCard.locator(".mg-task-timeline button")).toHaveCount(0);
+    const after = await sales.evaluate(id => api("/api/management-tasks").then(rows => rows.find(task => task.id === id)), assigned.id);
+    expect(after.status).toBe("completed");
+    expect(after.completed_at).toBe(completed.completed_at);
+    expect(after.remarks).toBe(completed.remarks);
+    expect(after.remark_history.slice(0, -1)).toEqual(completed.remark_history);
+    expect(await sales.evaluate(() => api("/api/leads/ui-lead-1").then(lead => lead.activities))).toEqual(activitiesBefore);
+    await capture(sales, info, "activity-and-task-history-compatible");
+    await page.goto("/?view=tasks");
+    await page.locator('[data-mg-tab="management"]').click();
+    const adminTask = page.locator(`[data-mg-row="${assigned.id}"]`);
+    await adminTask.locator("summary").click();
+    await expect(adminTask.locator(".mg-task-timeline li")).toHaveCount(2);
+    await expect(adminTask).toContainText("Synthetic additional remark after activity correction.");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   } finally { await context.close().catch(() => {}); }
 });

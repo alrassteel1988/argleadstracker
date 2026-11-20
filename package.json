@@ -10,7 +10,7 @@
     "test:lead-enrichment-form": "node --check tests/lead-enrichment-form.test.js && node tests/lead-enrichment-form.test.js",
     "test:lead-creation-activity": "node --test tests/lead-creation-activity.test.cjs",
     "test:lead-reassignment": "node tests/lead-reassignment-api.test.js && node --test tests/lead-reassignment-database.test.cjs",
-    "test:management-tasks": "node --test tests/management-tasks.test.cjs && node --test tests/lead-registration-database.test.cjs && node tests/lead-registration-api.test.cjs",
+    "test:management-tasks": "node --test tests/management-tasks.test.cjs tests/task-remark-history.test.cjs && node tests/task-remark-history-api.test.cjs && node --test tests/lead-registration-database.test.cjs && node tests/lead-registration-api.test.cjs",
     "start": "node server.js",
     "test:ui:baseline": "playwright test --config=playwright.ui.config.js",
     "test:ui:meeting": "node -e \"process.env.CRM_UI_SUITE='meeting'; require('child_process').execFileSync(process.execPath, ['node_modules/playwright/cli.js', 'test', '--config=playwright.ui.config.js'], { stdio: 'inherit' })\"",

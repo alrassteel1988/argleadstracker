@@ -56,7 +56,7 @@ const {
 } = require("./src/services/activityWorkflowService");
 const { activityTransactionStatus, validateActivityTransaction, updateActivityTransaction, overdueActivityRows } = require("./src/services/activityTransactionStatus");
 const { canReadManagementTask, validateManagementTask, saveLocalManagementTask, requestsInitialManagementTask,
-  initialManagementTaskInput } = require("./src/services/managementTaskService");
+  initialManagementTaskInput, managementTaskWithRemarks } = require("./src/services/managementTaskService");
 const { canResolveLeadFollowup, isResolvedReminder, validateLeadFollowup, resolveLocalLeadFollowup } = require("./src/services/leadFollowupService");
 const {
   enrichCompanyFromGoogle,
@@ -5336,13 +5336,38 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
-  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen|remove|resolve_duplicate)$/i);
+  if (/^\/api\/management-tasks\/[^/]+\/remarks(?:\/[^/]+)?$/.test(url.pathname) && req.method !== "GET") {
+    return sendJson(res, 405, { error: "Task remark history cannot be edited or deleted. Append a new remark instead." });
+  }
+  const taskNoticeRead = url.pathname.match(/^\/api\/management-task-notices\/([0-9a-f-]{36})\/read$/i);
+  if (req.method === "GET" && url.pathname === "/api/management-task-notices" || req.method === "POST" && taskNoticeRead) {
+    if (user.role !== "admin") return sendJson(res, 403, { error: "Admin access required." });
+    const scope = `recipient_uid=eq.${encodeURIComponent(user.id)}&type=eq.management_task_remark&status=eq.pending`;
+    const matches = row => row.recipient_uid === String(user.id) && row.type === "management_task_remark" && row.status === "pending";
+    try {
+      if (req.method === "GET") return sendJson(res, 200, supabaseEnabled
+        ? await rest(`notifications?${scope}&select=id,message,payload,created_at&order=created_at.desc&limit=100`, supabaseDataOptions(user.token))
+        : db.notifications.filter(matches).slice(-100).reverse());
+      if (supabaseEnabled) await rest(`notifications?${scope}&id=eq.${taskNoticeRead[1]}`, { method: "PATCH", ...supabaseDataOptions(user.token), body: { status: "read" } });
+      else { const fresh = readDb(); fresh.notifications.filter(row => matches(row) && row.id === taskNoticeRead[1]).forEach(row => { row.status = "read"; }); writeDb(fresh); }
+      return sendJson(res, 200, { ok: true });
+    } catch { return sendJson(res, 503, { error: "Task notifications are temporarily unavailable." }); }
+  }
+  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen|remark|remove|resolve_duplicate)$/i);
   if ((req.method === "GET" && url.pathname === "/api/management-tasks") || (req.method === "POST" && managementTaskAction)) {
     if (!["admin", "salesman"].includes(user.role)) return sendJson(res, 403, { error: "Management tasks are not available to your role." });
+    const readTaskRemarks = async (id = "") => {
+      const history = [];
+      for (let offset = 0; ; offset += 250) {
+        const rows = await rest(`management_task_remarks?${id ? `task_id=eq.${encodeURIComponent(id)}&` : ""}select=*&order=created_at.asc,id.asc&limit=250&offset=${offset}`, supabaseDataOptions(user.token));
+        history.push(...rows);
+        if (rows.length < 250) return history;
+      }
+    };
     try {
       if (req.method === "GET") {
         if (!supabaseEnabled) {
-          return sendJson(res, 200, db.management_tasks.filter(task => canReadManagementTask(db, user, task)));
+          return sendJson(res, 200, db.management_tasks.filter(task => canReadManagementTask(db, user, task)).map(task => managementTaskWithRemarks(db, task)));
         }
         const tasks = [];
         for (let offset = 0; ; offset += 250) {
@@ -5350,7 +5375,12 @@ async function handleApi(req, res, url) {
           tasks.push(...rows);
           if (rows.length < 250) break;
         }
-        return sendJson(res, 200, tasks);
+        const history = new Map();
+        for (const entry of await readTaskRemarks()) {
+          if (!history.has(entry.task_id)) history.set(entry.task_id, []);
+          history.get(entry.task_id).push(entry);
+        }
+        return sendJson(res, 200, tasks.map(task => ({ ...task, remark_history: history.get(task.id) || [] })));
       }
       const [, id, rawAction] = managementTaskAction;
       const action = rawAction.toLowerCase();
@@ -5365,21 +5395,23 @@ async function handleApi(req, res, url) {
       if (supabaseEnabled) {
         const removing = action === "remove";
         const resolving = action === "resolve_duplicate";
-        const task = await rest(resolving ? "rpc/resolve_management_task_duplicate" : removing ? "rpc/remove_management_task" : "rpc/save_management_task", {
+        const task = await rest(action === "remark" ? "rpc/append_management_task_remark" : resolving ? "rpc/resolve_management_task_duplicate" : removing ? "rpc/remove_management_task" : "rpc/save_management_task", {
           method: "POST", ...supabaseDataOptions(user.token),
-          body: resolving ? { p_id: id, p_expected_version: values.expected_version, p_retained_id: values.retained_task_id,
+          body: action === "remark" ? { p_id: id, p_expected_version: values.expected_version, p_text: values.text }
+            : resolving ? { p_id: id, p_expected_version: values.expected_version, p_retained_id: values.retained_task_id,
             p_retained_version: values.retained_version, p_reason: values.reason, p_confirmed: values.confirmed }
             : removing ? { p_id: id, p_expected_version: values.expected_version, p_reason: values.reason }
             : { p_action: action, p_id: id, p_input: values }
         });
-        return sendJson(res, 200, task);
+        const history = await readTaskRemarks(id);
+        return sendJson(res, 200, { ...task, remark_history: history });
       }
       const freshDb = readDb();
       const freshUser = currentUser(req, freshDb);
       if (!freshUser) return sendJson(res, 401, { error: "Authentication required." });
       const task = saveLocalManagementTask(freshDb, freshUser, action, id, values, now.toISOString());
       writeDb(freshDb);
-      return sendJson(res, 200, task);
+      return sendJson(res, 200, { ...task, remark_history: managementTaskWithRemarks(freshDb, task).remark_history });
     } catch (error) {
       const message = String(error.message || "");
       if (/^Task not found\.?$/.test(message)) return sendJson(res, 404, { error: "Task not found." });
