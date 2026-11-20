@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v190-activity-author-task-history";
+const CACHE_VERSION = "arg-pwa-v193-task-conversation-full-width";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -14,7 +14,7 @@ test("task drawer hides cached rows during refresh and ignores superseded reads"
   const context = { managementTasks: workspace, state: { currentUser: { role: "salesman" } },
     managementTaskDefaultFilter: () => "all",
     document: { querySelector: () => dialog },
-    api: () => new Promise((resolve, reject) => requests.push({ resolve, reject })),
+    api: path => path === "/api/management-task-notices" ? Promise.resolve([]) : new Promise((resolve, reject) => requests.push({ resolve, reject })),
     renderManagementTaskDrawer: () => renders.push(workspace.rows.map(row => row.id)),
     renderManagementTasks: () => renders.push(workspace.rows.map(row => row.id)) };
   const functions = source.slice(source.indexOf("async function loadManagementTasks("), source.indexOf("function openManagementTaskForm("));
@@ -45,7 +45,7 @@ test("task mutations cannot repopulate lifecycle-invalidated rows or strand a re
   const requests = [];
   const workspace = { rows: [], ready: true, loading: false, pending: false, generation: 0 };
   const context = { managementTasks: workspace, state: { currentUser: { role: "salesman" } },
-    api: () => new Promise(resolve => requests.push(resolve)), renderManagementTasks: () => {} };
+    api: path => path === "/api/management-task-notices" ? Promise.resolve([]) : new Promise(resolve => requests.push(resolve)), renderManagementTasks: () => {} };
   runInNewContext(source.slice(source.indexOf("async function loadManagementTasks("), source.indexOf("function openManagementTaskForm("))
     + source.slice(source.indexOf("async function saveManagementTask("), source.indexOf('document.addEventListener("click", event => {', source.indexOf("async function saveManagementTask("))), context);
   const oldRead = context.loadManagementTasks();

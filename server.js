@@ -5341,19 +5341,31 @@ async function handleApi(req, res, url) {
   }
   const taskNoticeRead = url.pathname.match(/^\/api\/management-task-notices\/([0-9a-f-]{36})\/read$/i);
   if (req.method === "GET" && url.pathname === "/api/management-task-notices" || req.method === "POST" && taskNoticeRead) {
-    if (user.role !== "admin") return sendJson(res, 403, { error: "Admin access required." });
-    const scope = `recipient_uid=eq.${encodeURIComponent(user.id)}&type=eq.management_task_remark&status=eq.pending`;
-    const matches = row => row.recipient_uid === String(user.id) && row.type === "management_task_remark" && row.status === "pending";
+    if (!["admin", "salesman"].includes(user.role)) return sendJson(res, 403, { error: "Task access required." });
+    const noticeType = user.role === "admin" ? "management_task_remark" : "management_task_note";
+    const scope = `recipient_uid=eq.${encodeURIComponent(user.id)}&type=eq.${noticeType}&status=eq.pending`;
+    const matches = row => row.recipient_uid === String(user.id) && row.type === noticeType && row.status === "pending";
     try {
-      if (req.method === "GET") return sendJson(res, 200, supabaseEnabled
+      const rows = supabaseEnabled
         ? await rest(`notifications?${scope}&select=id,message,payload,created_at&order=created_at.desc&limit=100`, supabaseDataOptions(user.token))
-        : db.notifications.filter(matches).slice(-100).reverse());
+        : db.notifications.filter(matches).slice(-100).reverse();
+      // Notice payloads are not authority: recheck current task visibility with the caller's RLS.
+      const visible = new Set();
+      if (user.role === "salesman") {
+        const ids = [...new Set(rows.map(row => row.payload?.task_id).filter(id => /^[a-f0-9-]{36}$/i.test(id)))];
+        if (supabaseEnabled && ids.length) {
+          for (const task of await rest(`management_tasks?id=in.(${ids.join(",")})&select=id`, supabaseDataOptions(user.token))) visible.add(task.id);
+        } else if (!supabaseEnabled) for (const task of db.management_tasks.filter(task => canReadManagementTask(db, user, task))) visible.add(task.id);
+      }
+      const allowed = rows.filter(row => user.role === "admin" || visible.has(row.payload?.task_id));
+      if (req.method === "GET") return sendJson(res, 200, allowed);
+      if (!allowed.some(row => row.id === taskNoticeRead[1])) return sendJson(res, 404, { error: "Task notice not found." });
       if (supabaseEnabled) await rest(`notifications?${scope}&id=eq.${taskNoticeRead[1]}`, { method: "PATCH", ...supabaseDataOptions(user.token), body: { status: "read" } });
       else { const fresh = readDb(); fresh.notifications.filter(row => matches(row) && row.id === taskNoticeRead[1]).forEach(row => { row.status = "read"; }); writeDb(fresh); }
       return sendJson(res, 200, { ok: true });
     } catch { return sendJson(res, 503, { error: "Task notifications are temporarily unavailable." }); }
   }
-  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen|remark|remove|resolve_duplicate)$/i);
+  const managementTaskAction = url.pathname.match(/^\/api\/management-tasks\/([0-9a-f-]{36})\/(assign|edit|remind|progress|seen|remark|note|followup|remove|resolve_duplicate)$/i);
   if ((req.method === "GET" && url.pathname === "/api/management-tasks") || (req.method === "POST" && managementTaskAction)) {
     if (!["admin", "salesman"].includes(user.role)) return sendJson(res, 403, { error: "Management tasks are not available to your role." });
     const readTaskRemarks = async (id = "") => {
@@ -5385,7 +5397,7 @@ async function handleApi(req, res, url) {
       const [, id, rawAction] = managementTaskAction;
       const action = rawAction.toLowerCase();
       if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) return sendJson(res, 400, { error: "Invalid task ID." });
-      if ((["assign", "edit", "remind", "remove", "resolve_duplicate"].includes(action) ? "admin" : "salesman") !== user.role) {
+      if ((["assign", "edit", "remind", "note", "remove", "resolve_duplicate"].includes(action) ? "admin" : "salesman") !== user.role) {
         return sendJson(res, 403, { error: "This task action is not available to your role." });
       }
       const input = await readBody(req);
@@ -5395,7 +5407,8 @@ async function handleApi(req, res, url) {
       if (supabaseEnabled) {
         const removing = action === "remove";
         const resolving = action === "resolve_duplicate";
-        const task = await rest(action === "remark" ? "rpc/append_management_task_remark" : resolving ? "rpc/resolve_management_task_duplicate" : removing ? "rpc/remove_management_task" : "rpc/save_management_task", {
+        const conversation = ["note", "followup"].includes(action);
+        const task = await rest(conversation ? "rpc/record_management_task_conversation" : action === "remark" ? "rpc/append_management_task_remark" : resolving ? "rpc/resolve_management_task_duplicate" : removing ? "rpc/remove_management_task" : "rpc/save_management_task", {
           method: "POST", ...supabaseDataOptions(user.token),
           body: action === "remark" ? { p_id: id, p_expected_version: values.expected_version, p_text: values.text }
             : resolving ? { p_id: id, p_expected_version: values.expected_version, p_retained_id: values.retained_task_id,

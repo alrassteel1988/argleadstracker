@@ -15120,7 +15120,7 @@ function renderWeeklyReviewView() {
 
 const MG_TASK_LABELS = { not_started: "Not Started", in_progress: "In Progress", completed: "Completed" };
 const MG_TASK_FILTERS = { all: "All", not_started: "Not Started", in_progress: "In Progress", completed: "Completed", overdue: "Overdue", removed: "Removed" };
-const MG_REMARK_LABELS = { started: "Started", progress_update: "Progress update", completion: "Completion", additional_remark: "Additional remark" };
+const MG_REMARK_LABELS = { started: "Started", progress_update: "Progress update", completion: "Completion", additional_remark: "Additional remark", management_note: "Management note", follow_up_plan: "Follow-up plan" };
 const MG_TASK_ASSIGNED_TIME = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dubai", dateStyle: "medium", timeStyle: "medium" });
 const newManagementTaskState = () => ({ rows: [], ready: false, loading: false, error: "", tab: "weekly", adminFilter: "all",
   drawerFilter: "all", drawerAutoFilter: true, drawerQuery: "", drawerSort: "due", assignee: "", notices: [], openRows: new Set(), update: null, message: "", pending: false, generation: 0 });
@@ -15181,6 +15181,7 @@ function managementTaskTimeline(task) {
   const history = managementTaskHistory(task);
   return history.length ? `<ol class="mg-task-timeline">${history.map(item => `<li><strong>${escapeHtml(MG_REMARK_LABELS[item.type] || item.type)}</strong>
     <small>${escapeHtml(managementTaskAssignedTime(item.created_at))} &middot; ${escapeHtml(item.author_name || "Not recorded")}</small>
+    ${item.next_action_plan ? `<small>${escapeHtml(item.next_action_plan)} &middot; ${escapeHtml(formatDisplayDate(item.next_action_date))}</small>` : ""}
     ${item.text ? `<p>${escapeHtml(item.text)}</p>` : ""}</li>`).join("")}</ol>` : `<p>${escapeHtml(task.remarks || "No remarks yet.")}</p>`;
 }
 
@@ -15229,7 +15230,7 @@ function renderManagementTaskDashboard() {
   if (!metric || !panel || state.currentUser?.role !== "salesman") return;
   const { rows, ready } = managementTasks;
   const counts = managementTaskCounts(rows);
-  const unseen = rows.filter(task => !task.seen_at).length;
+  const unseen = rows.filter(task => !task.seen_at).length + managementTasks.notices.length;
   metric.innerHTML = `<button type="button" class="salesman-simplified-metric mg-task-metric" data-mg-open aria-haspopup="dialog">
     <span class="salesman-summary-card-copy"><span class="salesman-summary-card-label">Management tasks${unseen ? ` <b class="mg-task-unread">${unseen} new</b>` : ""}</span>
     <strong>${ready ? counts.pending : "--"}</strong><small>${ready ? `pending of ${counts.all} &middot; ${counts.overdue} overdue` : managementTasks.error ? "Unavailable" : "Loading"}</small>
@@ -15312,8 +15313,8 @@ function renderManagementTaskRow(task) {
       </summary>
     <div class="mg-task-details"><div><strong>Management instructions &middot; ${escapeHtml(task.assigned_by_name)}</strong><p>${escapeHtml(task.instructions)}</p>
       ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">Open linked lead</button>` : ""}</div>
-      <div><strong>Salesman remarks</strong>${managementTaskTimeline(task)}</div>
-      ${removed ? `<div><strong>Removal reason</strong><p>${escapeHtml(task.removal_reason || task.closure_reason)}</p>${task.duplicate_of_task_id ? `<p>Retained task: ${escapeHtml(retained?.title || task.duplicate_of_task_id)}</p>` : ""}</div>` : task.status === "completed" ? "" : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button>${canRemove ? `<button type="button" class="ghost-button" data-mg-remove="${id}">Remove task</button>` : ""}${initial ? `<button type="button" class="ghost-button" data-mg-resolve="${id}" ${candidates.length ? "" : "disabled"}>Resolve duplicate</button>` : ""}</div>`}
+      <div><strong>Task conversation</strong>${managementTaskTimeline(task)}</div>
+      ${removed ? `<div><strong>Removal reason</strong><p>${escapeHtml(task.removal_reason || task.closure_reason)}</p>${task.duplicate_of_task_id ? `<p>Retained task: ${escapeHtml(retained?.title || task.duplicate_of_task_id)}</p>` : ""}</div>` : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-note="${id}">Add note</button>${task.status === "completed" ? "" : `<button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button>${canRemove ? `<button type="button" class="ghost-button" data-mg-remove="${id}">Remove task</button>` : ""}${initial ? `<button type="button" class="ghost-button" data-mg-resolve="${id}" ${candidates.length ? "" : "disabled"}>Resolve duplicate</button>` : ""}`}</div>`}
       ${initial && !removed && task.status !== "completed" ? `<p class="mg-task-resolution-note">Protected initial next step. ${candidates.length ? "Retain another open task on this lead to resolve a duplicate." : "No eligible replacement on this lead. Tasks on other lead records require separate duplicate-lead review."}</p>` : ""}</div>
   </details>`;
 }
@@ -15346,6 +15347,7 @@ function renderManagementTaskDrawerList() {
   footer.hidden = !!stateMessage;
   footer.textContent = stateMessage ? "" : `Showing ${visible.length} of ${rows.length} tasks`;
   document.querySelector("#managementTasksDrawerList").innerHTML = stateMessage || `
+    ${managementTasks.notices.map(item => `<p class="mg-task-message" role="status">${escapeHtml(item.message)} <button type="button" class="text-button" data-mg-notice="${escapeHtml(item.id)}" data-mg-notice-task="${escapeHtml(item.payload?.task_id || "")}">View note</button></p>`).join("")}
     ${message ? `<p class="mg-task-message" role="status">${escapeHtml(message)}${message.includes("Refresh") ? ' <button type="button" class="ghost-button" data-mg-refresh>Refresh tasks</button>' : ""}</p>` : ""}
     ${visible.length ? `<div class="mg-drawer-table">
       <div class="mg-drawer-grid mg-drawer-columns" aria-hidden="true"><span>Due</span><span>Lead</span><span>Management task</span><span>Priority</span><span>Assigned by</span><span>Status</span><span>Your remarks</span><span>Action</span></div>
@@ -15369,9 +15371,9 @@ function renderManagementTaskDrawerRow(task, update) {
     <div data-label="Priority">${managementTaskPriority(task)}</div>
     <div data-label="Assigned by"><b>${escapeHtml(task.assigned_by_name || "Management")}</b><small>${escapeHtml(managementTaskDateTime(task.created_at))}</small></div>
     <div data-label="Status">${managementTaskStatus(task)}${completed ? "" : `<select data-mg-status="${id}" aria-label="Status for ${escapeHtml(task.title)}">${Object.entries(MG_TASK_LABELS).map(([key, label]) => `<option value="${key}"${key === (update?.status || task.status) ? " selected" : ""}>${label}</option>`).join("")}</select>`}</div>
-    <div class="mg-drawer-remarks" data-label="Latest remark"><p class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task) || "No remarks yet")}</p></div>
-    <div class="mg-drawer-action">${completed ? `<button type="button" class="ghost-button" data-mg-add-remark="${id}">Add remark</button>` : `<button type="button" class="${action === "completed" ? "primary-button" : "ghost-button"}" data-mg-progress="${id}" data-status="${action}">${action === "completed" ? "Complete" : "Start"}</button>${task.status === "in_progress" ? `<button type="button" class="ghost-button" data-mg-progress="${id}" data-status="in_progress" aria-label="Add progress" title="Add progress update">Progress</button>` : ""}`}</div>
-    <details class="mg-drawer-expanded"><summary>Management instructions and remarks</summary><div class="mg-task-details"><div><strong>Management instructions</strong><p>${escapeHtml(task.instructions)}</p></div><div><strong>Salesman remarks</strong>${managementTaskTimeline(task)}</div></div></details>
+    <div class="mg-drawer-remarks" data-label="Latest remark"><p class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task) || "No remarks yet")}</p><button type="button" class="text-button" data-mg-conversation="${id}" aria-controls="mg-conversation-${id}">View full conversation</button></div>
+    <div class="mg-drawer-action">${completed ? `<button type="button" class="ghost-button" data-mg-add-remark="${id}">Add remark</button>${lead && !lead.is_archived ? `<button type="button" class="ghost-button" data-mg-followup="${id}">Plan follow-up</button>` : ""}` : `<button type="button" class="${action === "completed" ? "primary-button" : "ghost-button"}" data-mg-progress="${id}" data-status="${action}">${action === "completed" ? "Complete" : "Start"}</button>${task.status === "in_progress" ? `<button type="button" class="ghost-button" data-mg-progress="${id}" data-status="in_progress" aria-label="Add progress" title="Add progress update">Progress</button>` : ""}`}</div>
+    <details class="mg-drawer-expanded" id="mg-conversation-${id}"><summary>Management instructions and remarks</summary><div class="mg-task-details"><div><strong>Management instructions</strong><p>${escapeHtml(task.instructions)}</p></div><div><strong>Task conversation</strong>${managementTaskTimeline(task)}</div></div></details>
     ${update ? `<form class="mg-task-progress-form" data-mg-progress-form="${id}"><label>${additional ? "Additional remark" : closing ? "Completion remarks for management" : "Progress remarks (optional)"}<textarea name="remarks" rows="3" maxlength="4000" ${closing || additional ? "required" : ""}>${escapeHtml(update.remarks)}</textarea></label>
       ${closing ? `<small data-mg-remark-length>${length}/10 characters required</small>` : ""}<div class="mg-task-form-actions"><button type="button" class="ghost-button" data-mg-discard>Not yet</button>
       <button type="submit" class="primary-button" ${closing && length < 10 || additional && !length ? "disabled" : ""}>${additional ? "Add remark" : closing ? "Mark completed" : "Save update"}</button></div><p class="mg-task-message" role="status" hidden></p></form>` : ""}
@@ -15394,7 +15396,7 @@ async function loadManagementTasks() {
   try {
     const rows = await api("/api/management-tasks");
     if (workspace !== managementTasks || workspace.generation !== generation) return;
-    const notices = state.currentUser?.role === "admin" ? await api("/api/management-task-notices").catch(() => []) : [];
+    const notices = await api("/api/management-task-notices").catch(() => []);
     if (workspace !== managementTasks || workspace.generation !== generation) return;
     workspace.rows = rows;
     if (workspace.drawerAutoFilter) workspace.drawerFilter = managementTaskDefaultFilter(rows);
@@ -15467,6 +15469,23 @@ function openManagementTaskForm(task) {
   dialog.showModal();
 }
 
+function openManagementTaskConversation(task, action) {
+  if (managementTaskRemoved(task) || state.currentUser?.role !== (action === "note" ? "admin" : "salesman")) return;
+  if (action === "followup" && (task.status !== "completed" || !task.lead_id)) return;
+  const form = document.querySelector("#managementTaskForm");
+  form.dataset.action = action;
+  form.dataset.taskId = task.id;
+  form.dataset.version = task.version;
+  form.dataset.requestId = crypto.randomUUID();
+  form.innerHTML = `<header class="mg-task-dialog-header"><h2 id="managementTaskFormTitle">${action === "note" ? "Add management note" : "Plan follow-up"}</h2><button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close task form" title="Close">&times;</button></header>
+    <div class="mg-task-form-fields"><p><strong>${escapeHtml(task.title)}</strong> &middot; ${escapeHtml(task.lead_name || task.assignee_name)}</p>
+      ${action === "followup" ? `<div class="mg-task-field-pair"><label>Follow-up action<select name="next_action_plan" required><option value="">Choose an action</option>${["To Call", "To Send Email", "To Visit"].map(plan => `<option>${plan}</option>`).join("")}</select></label><label>Follow-up date<input type="date" name="next_action_date" min="${managementTaskDate()}" required></label></div>` : ""}
+      <label>${action === "note" ? "Management note" : "Follow-up notes"}<textarea name="text" rows="4" maxlength="4000" required></textarea></label>
+      <p role="status" class="mg-task-message" hidden></p></div>
+    <footer class="mg-task-form-actions"><span>${action === "note" ? "The assigned salesman will be notified." : "Creates a separate Activity. This task stays Completed."}</span><button type="button" class="ghost-button" data-mg-close>Cancel</button><button type="submit" class="primary-button">${action === "note" ? "Send note" : "Save follow-up"}</button></footer>`;
+  form.closest("dialog").showModal();
+}
+
 function openManagementTaskDuplicateResolution(task) {
   if (state.currentUser?.role !== "admin" || task.removed_at || !["not_started", "in_progress"].includes(task.status)
     || !state.leads.some(lead => lead.initial_management_task_id === task.id)) return;
@@ -15514,14 +15533,15 @@ async function saveManagementTask(action, id, values, errorHost) {
   try {
     const saved = await api(`/api/management-tasks/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify(values) });
     if (workspace !== managementTasks || workspace.generation !== generation) return false;
-    const { resolved_lead, ...savedTask } = saved;
+    const { resolved_lead, followup_lead, ...savedTask } = saved;
     workspace.rows = [...workspace.rows.filter(task => task.id !== saved.id), savedTask];
     if (workspace.drawerAutoFilter) workspace.drawerFilter = managementTaskDefaultFilter(workspace.rows);
     if (action === "resolve_duplicate" && resolved_lead) {
       state.leads = state.leads.map(lead => String(lead.id) === String(resolved_lead.id) ? { ...lead, ...resolved_lead } : lead);
     }
+    if (followup_lead) state.leads = state.leads.map(lead => String(lead.id) === String(followup_lead.id) ? { ...lead, ...followup_lead } : lead);
     workspace.update = null;
-    workspace.message = { assign: "Task assigned.", edit: "Task updated.", remove: "Task removed. History retained.", resolve_duplicate: "Duplicate resolved. Linked next step and history retained.", remind: "Reminder sent in the CRM.", progress: "Task status saved.", remark: "Additional remark saved. Management notified.", seen: "Notice marked as read." }[action];
+    workspace.message = { assign: "Task assigned.", edit: "Task updated.", remove: "Task removed. History retained.", resolve_duplicate: "Duplicate resolved. Linked next step and history retained.", remind: "Reminder sent in the CRM.", progress: "Task status saved.", remark: "Additional remark saved. Management notified.", note: "Management note saved. Salesman notified.", followup: "Follow-up Activity saved. Task remains Completed.", seen: "Notice marked as read." }[action];
     renderManagementTasks({ refreshFocus: true });
     return true;
   } catch (error) {
@@ -15549,22 +15569,39 @@ async function saveManagementTask(action, id, values, errorHost) {
 }
 
 document.addEventListener("click", event => {
-  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remove],[data-mg-resolve],[data-mg-remind],[data-mg-progress],[data-mg-add-remark],[data-mg-notice],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
+  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remove],[data-mg-resolve],[data-mg-remind],[data-mg-progress],[data-mg-add-remark],[data-mg-note],[data-mg-followup],[data-mg-conversation],[data-mg-notice],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
   if (!button) return;
   const data = button.dataset, drawer = document.querySelector("#managementTasksDrawer");
-  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemove, data.mgResolve, data.mgRemind, data.mgProgress, data.mgSeen, data.mgAddRemark].includes(item.id));
+  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemove, data.mgResolve, data.mgRemind, data.mgProgress, data.mgSeen, data.mgAddRemark, data.mgNote, data.mgFollowup, data.mgConversation].includes(item.id));
   if ("mgClose" in data) { button.closest("dialog")?.close(); return; }
   if (managementTasks.pending) return;
   if (data.mgNotice) {
+    const workspace = managementTasks, generation = workspace.generation;
     api(`/api/management-task-notices/${encodeURIComponent(data.mgNotice)}/read`, { method: "POST", body: "{}" }).then(() => {
+      if (workspace !== managementTasks || workspace.generation !== generation) return;
       managementTasks.notices = managementTasks.notices.filter(item => item.id !== data.mgNotice);
+      if (state.currentUser?.role === "salesman") {
+        managementTasks.drawerFilter = "all"; managementTasks.drawerAutoFilter = false; managementTasks.drawerQuery = "";
+        renderManagementTaskDrawer();
+        const card = document.querySelector(`[data-mg-card="${CSS.escape(data.mgNoticeTask)}"]`);
+        if (card) { card.querySelector("details").open = true; card.scrollIntoView({ block: "nearest" }); }
+        return;
+      }
       managementTasks.assignee = ""; managementTasks.adminFilter = "all"; managementTasks.openRows.add(data.mgNoticeTask);
       renderManagementTaskWorkspace();
       document.querySelector(`[data-mg-row="${CSS.escape(data.mgNoticeTask)}"]`)?.scrollIntoView({ block: "nearest" });
-    }).catch(() => { managementTasks.message = "Could not mark this notice as read. Refresh and try again."; renderManagementTaskWorkspace(); });
+    }).catch(() => {
+      if (workspace !== managementTasks || workspace.generation !== generation) return;
+      managementTasks.message = "Could not mark this notice as read. Refresh and try again.";
+      renderManagementTasks();
+    });
     return;
   }
   if ("mgOpen" in data) openManagementTaskDrawer(data.mgOpen);
+  else if (data.mgConversation && task) {
+    const details = drawer.querySelector(`[data-mg-card="${CSS.escape(task.id)}"] .mg-drawer-expanded`);
+    if (details) { details.open = true; details.querySelector('summary')?.focus(); details.scrollIntoView({block:'nearest'}); }
+  }
   else if (data.mgTab) {
     if (state.currentUser?.role === "salesman" && data.mgTab === "management") openManagementTaskDrawer();
     else if (state.currentUser?.role === "admin") { managementTasks.tab = data.mgTab; renderManagementTaskWorkspace(); if (data.mgTab === "management") loadManagementTasks(); }
@@ -15581,6 +15618,7 @@ document.addEventListener("click", event => {
     managementTasks.assignee = managementTasks.assignee === data.mgAssignee ? "" : data.mgAssignee;
     renderManagementTaskWorkspace();
   } else if ("mgAssign" in data || data.mgEdit && task) openManagementTaskForm(task);
+  else if ((data.mgNote || data.mgFollowup) && task) openManagementTaskConversation(task, data.mgNote ? "note" : "followup");
   else if (data.mgRemove && task) openManagementTaskRemoval(task);
   else if (data.mgResolve && task) openManagementTaskDuplicateResolution(task);
   else if ((data.mgRemind || data.mgSeen) && task) {
@@ -15624,6 +15662,7 @@ document.querySelector("#managementTaskForm")?.addEventListener("submit", async 
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form));
   if (form.dataset.version) values.expected_version = Number(form.dataset.version);
+  if (["note", "followup"].includes(form.dataset.action)) values.request_id = form.dataset.requestId;
   if (form.dataset.action === "resolve_duplicate") {
     values.retained_version = Number(form.elements.retained_task_id.selectedOptions[0]?.dataset.version);
     values.confirmed = form.elements.confirmed.checked;
