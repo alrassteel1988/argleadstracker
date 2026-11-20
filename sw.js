@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v189-management-task-history-audit";
+const CACHE_VERSION = "arg-pwa-v191-task-conversation-followup";
 const APP_SHELL = [
   "/",
   "/index.html",

@@ -1,0 +1,79 @@
+const { test, expect } = require("@playwright/test");
+const { login, blockExternalTraffic, capture } = require("./helpers");
+
+test("Admin note, Salesman notification and linked post-completion follow-up", async ({ page, browser }, info) => {
+  test.skip(!info.project.name.startsWith("admin"), "Both roles share one synthetic workspace");
+  await blockExternalTraffic(page); await login(page, info);
+  const id=await page.evaluate(async()=>{
+    const id=crypto.randomUUID();
+    await api(`/api/management-tasks/${id}/assign`,{method:"POST",body:JSON.stringify({title:"Conversation RFQ",instructions:"Original procurement enquiry.",assignee_id:"ui-salesman",lead_id:"ui-lead-1",due_date:"2099-01-01",priority:"medium"})});
+    return id;
+  });
+  await page.goto("/?view=tasks"); await page.locator('[data-mg-tab="management"]').click();
+  const row=page.locator(`[data-mg-row="${id}"]`);
+  await row.locator("summary").click(); await row.getByRole("button",{name:"Add note",exact:true}).click();
+  const note="Please confirm the specification with procurement. Preserve this message in the conversation.";
+  const form=page.locator("#managementTaskFormDialog");
+  await form.getByLabel("Management note",{exact:true}).fill(note);
+  await form.getByRole("button",{name:"Send note",exact:true}).click(); await expect(form).toBeHidden();
+  await expect(row.locator(".mg-task-timeline")).toContainText(note);
+  const ctx=await browser.newContext({...info.project.use,serviceWorkers:"block"});
+  try {
+    const sales=await ctx.newPage(); await blockExternalTraffic(sales); await login(sales,{project:{name:"salesman"}});
+    await expect(sales.locator("#managementTasksMetric")).toContainText("new");
+    await sales.locator("#managementTasksMetric button").click();
+    const drawer=sales.locator("#managementTasksDrawer"), card=drawer.locator(`[data-mg-card="${id}"]`);
+    await drawer.getByRole("button",{name:"View note",exact:true}).click();
+    await expect(card.locator("details")).toHaveAttribute("open",""); await expect(card).toContainText(note);
+    await expect(drawer.getByRole("button",{name:"View note",exact:true})).toHaveCount(0);
+    await card.getByRole("button",{name:"Start",exact:true}).click();
+    await card.getByLabel("Progress remarks").fill("Started procurement contact.");
+    await card.locator('form button[type="submit"]').click();
+    await card.getByRole("button",{name:"Complete",exact:true}).click();
+    await card.getByLabel("Completion remarks for management").fill("Sent the requested quotation to procurement.");
+    await card.getByRole("button",{name:"Mark completed",exact:true}).click();
+    await drawer.locator('[data-mg-filter="completed"]').click();
+    const before=await sales.evaluate(async id=>(await api("/api/management-tasks")).find(task=>task.id===id),id);
+    await card.getByRole("button",{name:"Plan follow-up",exact:true}).click();
+    const follow=sales.locator("#managementTaskFormDialog");
+    await expect(follow.getByRole("combobox",{name:"Follow-up action",exact:true})).toHaveValue("");
+    await expect(follow.getByLabel("Follow-up date",{exact:true})).toHaveValue("");
+    await follow.getByRole("combobox",{name:"Follow-up action",exact:true}).selectOption("To Call");
+    await follow.getByLabel("Follow-up date",{exact:true}).fill("2098-12-31");
+    await follow.getByLabel("Follow-up notes",{exact:true}).fill("Call to confirm the quotation specification and delivery schedule.");
+    await capture(sales,info,"task-follow-up-form",{fullPage:false});
+    await sales.route(`**/api/management-tasks/${id}/followup`,async route=>{
+      await route.fetch();
+      await route.fulfill({status:503,json:{error:"Synthetic interrupted response. Retry the saved request."}});
+    },{times:1});
+    await follow.getByRole("button",{name:"Save follow-up",exact:true}).click();
+    await expect(follow.getByRole("status")).toContainText("Synthetic interrupted response");
+    await expect(follow.getByLabel("Follow-up notes",{exact:true})).toHaveValue("Call to confirm the quotation specification and delivery schedule.");
+    await follow.getByRole("button",{name:"Save follow-up",exact:true}).click(); await expect(follow).toBeHidden();
+    await card.locator("summary").click();
+    await expect(card.locator(".mg-task-timeline")).toContainText("Follow-up plan");
+    await expect(card.locator(".mg-task-timeline")).toContainText("To Call");
+    await expect(card.locator(".mg-task-timeline")).toContainText(note);
+    const after=await sales.evaluate(async id=>(await api("/api/management-tasks")).find(task=>task.id===id),id);
+    expect(after.status).toBe("completed"); expect(after.completed_at).toBe(before.completed_at); expect(after.remarks).toBe(before.remarks);
+    expect(after.remark_history.slice(0,-1)).toEqual(before.remark_history);
+    expect(after.remark_history.at(-1).activity_id).toBeTruthy();
+    expect(await card.locator(".mg-drawer-action").evaluate(element=>element.scrollWidth>element.clientWidth)).toBe(false);
+    expect(await sales.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+    await capture(sales,info,"task-follow-up-conversation",{fullPage:false});
+    const plan=await sales.evaluate(async()=>{
+      const lead=await api("/api/leads/ui-lead-1");
+      return lead.activities.filter(activity=>activity.management_task_id);
+    });
+    expect(plan).toHaveLength(1); expect(plan[0].type).toBe("Reminder"); expect(plan[0].due_date).toBe("2098-12-31");
+    await page.reload(); await page.locator('[data-mg-tab="management"]').click();
+    await row.locator("summary").click();
+    await expect(row).toContainText("Follow-up plan"); await expect(row).toContainText("Completed");
+    await expect(page.locator("#managementTasksWorkspace")).toContainText("planned a follow-up");
+    await row.getByRole("button",{name:"Add note",exact:true}).click();
+    await form.getByLabel("Management note",{exact:true}).fill("Thank you. Please retain the follow-up schedule.");
+    await form.getByRole("button",{name:"Send note",exact:true}).click(); await expect(form).toBeHidden();
+    await expect(row).toContainText("Thank you. Please retain");
+    await capture(page,info,"admin-task-conversation",{fullPage:false});
+  } finally { await ctx.close(); }
+});

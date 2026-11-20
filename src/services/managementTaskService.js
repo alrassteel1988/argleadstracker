@@ -102,10 +102,20 @@ function validateManagementTask(action, body, today) {
     }
     Object.assign(values, { status, remarks });
   }
-  if (action === "remark") {
+  if (["remark", "note", "followup"].includes(action)) {
     const text = str("text");
     if (!text || !limited(text, 4000)) throw taskError(400, "Enter an additional remark of 1 to 4000 characters.");
     values.text = text;
+  }
+  if (["note", "followup"].includes(action)) {
+    if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(str("request_id"))) throw taskError(400, "A valid task request ID is required.");
+    values.request_id = str("request_id").toLowerCase();
+    if (action === "followup") {
+      const plan = str("next_action_plan"), date = str("next_action_date"), parsed = new Date(date + "T00:00:00Z");
+      if (!["To Call", "To Send Email", "To Visit"].includes(plan)) throw taskError(400, "Choose a follow-up action.");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(+parsed) || parsed.toISOString().slice(0, 10) !== date || date < today) throw taskError(400, "Choose a follow-up date of today or later.");
+      Object.assign(values, { next_action_plan: plan, next_action_date: date });
+    }
   }
   if (action === "remove" || action === "resolve_duplicate") {
     const reason = str("reason");
@@ -124,6 +134,7 @@ function validateManagementTask(action, body, today) {
 }
 
 function saveLocalManagementTask(db, user, action, id, values, now) {
+  if (["note", "followup"].includes(action)) return saveLocalTaskConversation(db, user, action, id, values, now);
   if ((["assign", "edit", "remind", "remove", "resolve_duplicate"].includes(action) && user.role !== "admin")
     || (["remove", "resolve_duplicate"].includes(action) && user.status !== "active")
     || (["progress", "seen", "remark"].includes(action) && user.role !== "salesman")
@@ -216,6 +227,52 @@ function saveLocalManagementTask(db, user, action, id, values, now) {
     }
   }
   return resolvedLead ? { ...task, resolved_lead: resolvedLead } : task;
+}
+
+function saveLocalTaskConversation(db, user, action, id, values, now) {
+  if (user.status !== "active" || user.role !== (action === "note" ? "admin" : "salesman")) throw taskError(403, "This task action is not available to your role.");
+  const task = db.management_tasks.find(item => item.id === id);
+  if (!task || !canReadManagementTask(db, user, task)) throw taskError(404, "Task not found.");
+  const lead = db.leads.find(item => String(item.id) === task.lead_id);
+  if (task.removed_at || !statuses.includes(task.status) || task.lead_id && (!lead || lead.is_archived)) throw taskError(409, "This task changed. Refresh before trying again.");
+  const assignee = db.users.find(person => String(person.id) === task.assignee_id && person.role === "salesman" && person.status === "active");
+  if (!assignee || !ownsLinkedLead(db, task.assignee_id, task.lead_id)) throw taskError(409, "The salesman no longer has access to this task.");
+  if (action === "followup" && (!lead || task.status !== "completed")) throw taskError(400, "Choose a completed task with a linked lead to plan a follow-up.");
+  const type = action === "note" ? "management_note" : "follow_up_plan";
+  const existing = (db.management_task_remarks || []).find(item => item.task_id === id && item.author_id === String(user.id) && item.request_id === values.request_id);
+  if (existing) {
+    if (existing.type !== type || existing.text !== values.text || (existing.next_action_plan || "") !== (values.next_action_plan || "") || (existing.next_action_date || "") !== (values.next_action_date || "")) throw taskError(409, "This task request has already been used.");
+    return { ...task, ...(action === "followup" ? { followup_lead: { id: lead.id, activities: lead.activities, updated_at: lead.updated_at } } : {}) };
+  }
+  if (task.version !== values.expected_version) throw taskError(409, "This task changed. Refresh before trying again.");
+  if (action === "followup" && lead.activities != null && !Array.isArray(lead.activities)) throw taskError(409, "This task changed. Refresh before trying again.");
+  const actor = String(user.id), name = user.name || "CRM user", entryId = randomUUID();
+  const entry = { id: entryId, task_id: id, author_id: actor, author_name: name, type, text: values.text,
+    created_at: now, task_version: task.version + 1, request_id: values.request_id,
+    activity_id: action === "followup" ? `task-followup-${entryId}` : null,
+    next_action_plan: values.next_action_plan || null, next_action_date: values.next_action_date || null };
+  const history = managementTaskRemarks(db, task);
+  db.management_task_remarks ||= [];
+  for (const item of history) if (!db.management_task_remarks.some(row => row.id === item.id)) db.management_task_remarks.push(item);
+  if (action === "followup") {
+    const activity = { id: entry.activity_id, type: "Reminder", reminder: true, text: values.text, activity_required: values.text,
+      next_action_plan: values.next_action_plan, next_action_date: values.next_action_date, due_date: values.next_action_date,
+      management_task_id: id, task_remark_id: entryId, at: now, created_at: now, updated_at: now, version: 1,
+      created_by: actor, created_by_name: name, created_by_role: "salesman", transaction_status: "pending",
+      audit_history: [{ id: randomUUID(), action: "activity_created", actor_id: actor, actor_name: name, at: now }] };
+    lead.activities = [...(lead.activities || []), activity];
+    lead.updated_at = now;
+  }
+  Object.assign(task, { version: task.version + 1, updated_at: now });
+  db.management_task_remarks.push(entry);
+  db.management_task_events.push({ id: randomUUID(), task_id: id, action: "remark", actor_id: actor, actor_name: name, at: now, snapshot: { ...task, remark_id: entryId, conversation_type: type } });
+  db.notifications ||= [];
+  const recipients = action === "note" ? [assignee] : db.users.filter(person => person.role === "admin" && person.status === "active");
+  for (const person of recipients) db.notifications.push({ id: randomUUID(), recipient_uid: String(person.id), lead_id: task.lead_id || null,
+    type: action === "note" ? "management_task_note" : "management_task_remark", title: action === "note" ? "Management task note" : "Task follow-up planned",
+    message: `${name} ${action === "note" ? "added a management note to" : "planned a follow-up for"}: ${task.title}`,
+    payload: { task_id: id, remark_id: entryId }, status: "pending", created_at: now });
+  return { ...task, ...(action === "followup" ? { followup_lead: { id: lead.id, activities: lead.activities, updated_at: lead.updated_at } } : {}) };
 }
 
 module.exports = { taskError, canReadManagementTask, validateManagementTask, saveLocalManagementTask,
