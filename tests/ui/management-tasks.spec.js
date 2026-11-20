@@ -94,7 +94,10 @@ test("assign, progress and complete a management task across roles", async ({ pa
         range.selectNodeContents(action);
         const fonts = [".mg-drawer-lead button", ".mg-drawer-task > strong", ".mg-drawer-due b", ".mg-drawer-remarks p"]
           .map(selector => getComputedStyle(row.querySelector(selector)).fontSize);
-        return { fonts, actionFont: getComputedStyle(action).fontSize, selectFont: getComputedStyle(select).fontSize,
+        const preview = row.querySelector('.mg-drawer-remarks p'), panel = row.closest('dialog');
+        return { fonts, panelWidth: panel.getBoundingClientRect().width, viewportWidth: innerWidth,
+          previewWhitespace: getComputedStyle(preview).whiteSpace, previewOverflow: preview.scrollWidth > preview.clientWidth,
+          actionFont: getComputedStyle(action).fontSize, selectFont: getComputedStyle(select).fontSize,
           actionHeight: action.getBoundingClientRect().height, selectHeight: select.getBoundingClientRect().height,
           textLines: range.getClientRects().length, actionOverflow: action.scrollWidth > action.clientWidth,
           rowOverflow: row.scrollWidth > row.clientWidth, drawerOverflow: row.closest("dialog").scrollWidth > row.closest("dialog").clientWidth };
@@ -104,6 +107,9 @@ test("assign, progress and complete a management task across roles", async ({ pa
       expect(layout.actionHeight).toBe(layout.selectHeight);
       expect(layout.textLines, `Complete must stay on one line at ${width}px`).toBe(1);
       expect(layout.actionOverflow || layout.rowOverflow || layout.drawerOverflow).toBe(false);
+      expect(layout.panelWidth, `Task workspace must use the full viewport at ${width}px`).toBeGreaterThanOrEqual(layout.viewportWidth - 2);
+      expect(layout.previewWhitespace).toBe('pre-wrap');
+      expect(layout.previewOverflow).toBe(false);
       if (width === 1440 || width === 375) await capture(sales, info, `task-typography-${width}`, { fullPage: false });
     }
     await sales.setViewportSize(info.project.use.viewport);
@@ -126,11 +132,14 @@ test("assign, progress and complete a management task across roles", async ({ pa
     await expect(card).toContainText(remarks);
     const before = await sales.evaluate(async id => (await api("/api/management-tasks")).find(task => task.id === id), id);
     await card.getByRole("button", { name: "Add remark", exact: true }).click();
-    const correction = "Correction: the contact is Mr. Jai, not Mr. Raj.";
+    const correction = "Correction: the contact is Mr. Jai, not Mr. Raj.\nThe buyer requested a revised quotation covering specification, quantities, delivery terms and payment conditions. Keep this complete note visible without ellipsis, including the final reference: SYNTHETIC-REMARK-END-0123456789.";
     await card.getByLabel("Additional remark", { exact: true }).fill(correction);
     await card.locator('.mg-task-progress-form button[type="submit"]').click();
     await expect(card.locator(".mg-task-remark-preview")).toHaveText(correction);
-    await card.locator(".mg-drawer-expanded > summary").click();
+    expect(await card.locator('.mg-task-remark-preview').evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(40);
+    await capture(sales, info, 'salesman-full-width-latest-remark', {fullPage:false});
+    await card.getByRole('button', {name:'View full conversation',exact:true}).click();
+    await expect(card.locator('.mg-drawer-expanded')).toHaveAttribute('open', '');
     await expect(card.locator(".mg-task-timeline")).toContainText(remarks);
     await expect(card.locator(".mg-task-timeline")).toContainText(correction);
     await expect(card.locator(".mg-task-timeline")).toContainText("Additional remark");

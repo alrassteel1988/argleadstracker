@@ -15371,9 +15371,9 @@ function renderManagementTaskDrawerRow(task, update) {
     <div data-label="Priority">${managementTaskPriority(task)}</div>
     <div data-label="Assigned by"><b>${escapeHtml(task.assigned_by_name || "Management")}</b><small>${escapeHtml(managementTaskDateTime(task.created_at))}</small></div>
     <div data-label="Status">${managementTaskStatus(task)}${completed ? "" : `<select data-mg-status="${id}" aria-label="Status for ${escapeHtml(task.title)}">${Object.entries(MG_TASK_LABELS).map(([key, label]) => `<option value="${key}"${key === (update?.status || task.status) ? " selected" : ""}>${label}</option>`).join("")}</select>`}</div>
-    <div class="mg-drawer-remarks" data-label="Latest remark"><p class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task) || "No remarks yet")}</p></div>
+    <div class="mg-drawer-remarks" data-label="Latest remark"><p class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task) || "No remarks yet")}</p><button type="button" class="text-button" data-mg-conversation="${id}" aria-controls="mg-conversation-${id}">View full conversation</button></div>
     <div class="mg-drawer-action">${completed ? `<button type="button" class="ghost-button" data-mg-add-remark="${id}">Add remark</button>${lead && !lead.is_archived ? `<button type="button" class="ghost-button" data-mg-followup="${id}">Plan follow-up</button>` : ""}` : `<button type="button" class="${action === "completed" ? "primary-button" : "ghost-button"}" data-mg-progress="${id}" data-status="${action}">${action === "completed" ? "Complete" : "Start"}</button>${task.status === "in_progress" ? `<button type="button" class="ghost-button" data-mg-progress="${id}" data-status="in_progress" aria-label="Add progress" title="Add progress update">Progress</button>` : ""}`}</div>
-    <details class="mg-drawer-expanded"><summary>Management instructions and remarks</summary><div class="mg-task-details"><div><strong>Management instructions</strong><p>${escapeHtml(task.instructions)}</p></div><div><strong>Task conversation</strong>${managementTaskTimeline(task)}</div></div></details>
+    <details class="mg-drawer-expanded" id="mg-conversation-${id}"><summary>Management instructions and remarks</summary><div class="mg-task-details"><div><strong>Management instructions</strong><p>${escapeHtml(task.instructions)}</p></div><div><strong>Task conversation</strong>${managementTaskTimeline(task)}</div></div></details>
     ${update ? `<form class="mg-task-progress-form" data-mg-progress-form="${id}"><label>${additional ? "Additional remark" : closing ? "Completion remarks for management" : "Progress remarks (optional)"}<textarea name="remarks" rows="3" maxlength="4000" ${closing || additional ? "required" : ""}>${escapeHtml(update.remarks)}</textarea></label>
       ${closing ? `<small data-mg-remark-length>${length}/10 characters required</small>` : ""}<div class="mg-task-form-actions"><button type="button" class="ghost-button" data-mg-discard>Not yet</button>
       <button type="submit" class="primary-button" ${closing && length < 10 || additional && !length ? "disabled" : ""}>${additional ? "Add remark" : closing ? "Mark completed" : "Save update"}</button></div><p class="mg-task-message" role="status" hidden></p></form>` : ""}
@@ -15569,10 +15569,10 @@ async function saveManagementTask(action, id, values, errorHost) {
 }
 
 document.addEventListener("click", event => {
-  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remove],[data-mg-resolve],[data-mg-remind],[data-mg-progress],[data-mg-add-remark],[data-mg-note],[data-mg-followup],[data-mg-notice],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
+  const button = event.target.closest("[data-mg-tab],[data-mg-open],[data-mg-close],[data-mg-refresh],[data-mg-filter],[data-mg-assignee],[data-mg-assign],[data-mg-edit],[data-mg-remove],[data-mg-resolve],[data-mg-remind],[data-mg-progress],[data-mg-add-remark],[data-mg-note],[data-mg-followup],[data-mg-conversation],[data-mg-notice],[data-mg-discard],[data-mg-seen],[data-mg-lead]");
   if (!button) return;
   const data = button.dataset, drawer = document.querySelector("#managementTasksDrawer");
-  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemove, data.mgResolve, data.mgRemind, data.mgProgress, data.mgSeen, data.mgAddRemark, data.mgNote, data.mgFollowup].includes(item.id));
+  const task = managementTasks.rows.find(item => [data.mgEdit, data.mgRemove, data.mgResolve, data.mgRemind, data.mgProgress, data.mgSeen, data.mgAddRemark, data.mgNote, data.mgFollowup, data.mgConversation].includes(item.id));
   if ("mgClose" in data) { button.closest("dialog")?.close(); return; }
   if (managementTasks.pending) return;
   if (data.mgNotice) {
@@ -15598,6 +15598,10 @@ document.addEventListener("click", event => {
     return;
   }
   if ("mgOpen" in data) openManagementTaskDrawer(data.mgOpen);
+  else if (data.mgConversation && task) {
+    const details = drawer.querySelector(`[data-mg-card="${CSS.escape(task.id)}"] .mg-drawer-expanded`);
+    if (details) { details.open = true; details.querySelector('summary')?.focus(); details.scrollIntoView({block:'nearest'}); }
+  }
   else if (data.mgTab) {
     if (state.currentUser?.role === "salesman" && data.mgTab === "management") openManagementTaskDrawer();
     else if (state.currentUser?.role === "admin") { managementTasks.tab = data.mgTab; renderManagementTaskWorkspace(); if (data.mgTab === "management") loadManagementTasks(); }

@@ -163,6 +163,40 @@ worker to `arg-pwa-v192-task-conversation-activity-author` and client revision
 cross-role task-conversation desktop/mobile tests passed after reconciliation.
 Publishing this branch is not permission to merge or deploy.
 
+### Full-Width Salesman Workspace
+
+The owner additionally requested a wider Management Tasks view with readable
+remarks. The existing assigned-task panel now fills the viewport rather than
+being capped at 1040px. It retains the existing close/navigation behavior,
+filters, counts, search, sort and permission boundaries. The latest Salesman
+remark wraps completely without ellipsis; a row-level `View full conversation`
+button expands the existing immutable timeline and instructions. Desktop gives
+the remarks column more space; narrow screens retain the existing stacked
+cards and timeline. No new database migration or backend permission is needed.
+
+The regression first reproduced a 1040px panel at a 1440px viewport. Tests cover
+full width at 1440/1100/1024/901/900/768/375px, consistent control typography,
+no horizontal overflow, multiline remarks and opening the full conversation.
+Task completion, additional remarks, notification and conflict tests remain in
+the verification suite. Cache revision is now
+`arg-pwa-v193-task-conversation-full-width`, client
+`task-conversation-full-width`, stylesheet `8-full-width-conversation`.
+
+After the layout change, full `npm.cmd run verify` passed with PGlite enabled.
+The task browser suite passed 8 cases with 2 role-specific skips; its cross-role
+desktop/mobile cases include full-width, wrapping and timeline controls. The
+long-remark cases were rerun independently (2 passed), and task-conversation
+desktop/mobile tests passed (2). Screenshots were inspected on both viewports.
+
+The repaired hosted writer was also exercised with the existing synthetic task:
+an Admin reply advanced version 7 to 8 while a Salesman draft remained open at
+7. The old draft returned the refresh warning with retained inputs and an
+enabled submit button, without a duplicate Activity or history entry. Read-back
+confirmed one follow-up, unchanged completion/deadline/instructions and zero
+active conversation RPC backends. This backend acceptance used the already
+signed-in Preview sessions; fresh full-width Preview acceptance is still a
+separate gate, and Production remains excluded.
+
 The new migration requires the released PR #77 task-remark history migration and
 PR #76 archive safeguards. It preserves every existing history row, adds nullable
 columns and replaces only the remark type constraint. It does not backfill,
