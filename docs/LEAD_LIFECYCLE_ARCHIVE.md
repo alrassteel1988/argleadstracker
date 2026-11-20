@@ -3,7 +3,7 @@
 ## Scope and State
 
 Feature branch: `codex/lead-lifecycle-archive`, based on released main `0072f1f106e59bae85ad02e434e00de9e9796b4b`.
-Local changes only. This document does not authorize a commit, push, hosted migration, deployment, or merge.
+PR #76 is a staging candidate, not an approved Production release. This document does not authorize a hosted migration, deployment, or merge.
 PR #69 and the root worktree are separate and unchanged by this feature.
 
 The existing stack is a static JavaScript/PWA frontend, a Node HTTP API, and Supabase Auth/Postgres/RLS through PostgREST.
@@ -18,7 +18,8 @@ Lead records are in `public.leads`, linked to `public.companies`. Existing relat
 - `src/services/managementTaskService.js`: suspended archived/orphaned task behavior without changing history or deadlines.
 - `client.js`, `styles.css`: role-specific actions, responsive dialogs, Archived Leads and management approval queues.
 - `index.html`, `sw.js`: versioned asset references and refreshed PWA cache.
-- `supabase/migrations/20261120050707_lead_lifecycle_archive.sql`: prepared database migration, not a hosted application.
+- `supabase/migrations/20261120050707_lead_lifecycle_archive.sql`: lifecycle schema and rules; applied to staging only after approval.
+- `supabase/migrations/20261120063951_initial_management_lead_rls_readback.sql`: follow-up for the Admin initial-task registration read-back; prepared only.
 - `tests/lead-lifecycle.test.cjs`, `tests/lead-lifecycle-database.test.cjs`, `tests/ui/lead-lifecycle.spec.js`: focused local/synthetic coverage.
 - `tests/admin-salesman-permissions.e2e.test.js`, `tests/lead-enrichment-form.test.js`: approved archive behavior and enrichment isolation regression updates.
 - `tests/activity-dashboard-latest.test.js`, `tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`: updated cache assertions.
@@ -58,20 +59,26 @@ Existing unique website/Google-place constraints are NOT relaxed by approval. Wh
 
 ## Migration
 
-Prepared, NOT applied to a hosted database:
+Apply these files in order on a new approved database:
 
-`supabase/migrations/20261120050707_lead_lifecycle_archive.sql`
+1. `supabase/migrations/20261120050707_lead_lifecycle_archive.sql`
+2. `supabase/migrations/20261120063951_initial_management_lead_rls_readback.sql`
 
-The file was generated with the Supabase CLI's local-only `migration new` command, then edited and exercised in disposable PGlite databases.
-It adds the archive/closure/restore columns, immutable lifecycle events, duplicate reviews, private transactional command capabilities, validated RPCs, normalized indexes, and restrictive archive policies alongside existing RLS.
+The first file was applied to staging `grxzqxqgtksunzfhtwox` on 20 November 2026 with explicit approval after backup/schema checks. Supabase recorded it as `20261120062232_lead_lifecycle_archive`.
+The follow-up is NOT applied to staging or Production. Both files remain unapplied to Production.
+
+Both files were generated with the Supabase CLI's local-only `migration new` command, then edited and exercised in disposable PGlite databases.
+The first adds the archive/closure/restore columns, immutable lifecycle events, duplicate reviews, private transactional command capabilities, validated RPCs, normalized indexes, and restrictive archive policies alongside existing RLS.
 The same unapplied migration also adds `lead_archive_requests` for deletion/restore approvals. Only Admin can query the full queue. Salesmen receive a restricted caller-only RPC response without candidate lead IDs or another user's requests.
 It extends the existing atomic registration function without changing its normal RLS or read-back logic. The migration stops if that function differs from its reviewed baseline.
 Trusted allowlisted service-role workers retain ordinary import/enrichment writes, but cannot use service access to close/archive/restore/purge.
 There is no backfill or conversion of existing Lost/Dormant leads, and no deletion or rewriting of saved activities/tasks.
 
+The follow-up replaces only `public.save_initial_management_lead(jsonb)`. The hosted Admin save exposed an `INSERT ... RETURNING` failure under the new lookup-based lead visibility policy. The RPC now generates the lead ID, inserts without lead `RETURNING`, then performs a separate RLS-checked read in the same transaction, following the already-released Salesman registration pattern. Admin checks, creator validation, stage-constraint retry, caller privileges, task/audit triggers and RLS remain unchanged. A denied read-back or failed task aborts the whole company/lead/task transaction.
+
 Before any hosted application, the release owner must separately approve the exact project and migration, verify a fresh completed backup and schema, and coordinate writes from older builds.
-After approval, run ONLY this file in the selected project's SQL editor or the repository's approved migration tool. Do not run a reset, the bundled RUN_ALL scripts, or an unreviewed set of pending migrations.
-The file runs in a transaction. A failure must roll back the entire file; do not manually skip failed statements.
+After approval, run ONLY the approved file in the selected project's SQL editor or the repository's approved migration tool. Do not reapply the first file to staging, run a reset, the bundled RUN_ALL scripts, or an unreviewed set of pending migrations.
+Each file runs in a transaction. A failure must roll back the entire file; do not manually skip failed statements.
 
 Read-only post-application checks:
 
@@ -97,7 +104,7 @@ from pg_policies where schemaname='public' and policyname like 'Lifecycle%';
 No new environment variable, email provider, external service, or account-role change is required. Notifications use the existing in-app notification table.
 Existing Supabase URL, anon key, server-side service-role allowlist, authentication, private storage, CSP, and normal role isolation remain in force.
 Never supply Production credentials to local tests.
-Before an authenticated hosted Preview test, separately approve/configure exact-branch Preview overrides for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to staging only. Keep the service-role value a Secret. Do not inherit shared Production database credentials or put credentials in code/PR descriptions. That configuration has not been performed for this local branch.
+Before an authenticated hosted Preview test, separately approve/configure exact-branch Preview overrides for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to staging only. Keep the service-role value a Secret. Do not inherit shared Production database credentials or put credentials in code/PR descriptions. All three overrides were saved with approval for `codex/lead-lifecycle-archive` only on 20 November 2026. The owner then redeployed as Preview; the agent did not deploy.
 
 With repository dependencies installed (`npm ci`), run:
 
@@ -112,15 +119,18 @@ npx.cmd playwright test --config=playwright.ui.config.js --project=admin-desktop
 The lifecycle browser suite creates separate synthetic Admin/Salesman sessions and uses isolated local fixture databases.
 Coverage includes close reasons/notifications, archive isolation in UI/API/RLS/related PMRs and tasks, normalized duplicates, single-use review approval, restore/history preservation, orphan-company rollback, full edited-close data retention, trusted worker boundaries, and permanent-delete confirmation.
 Additional request tests prove the lead is byte-for-byte unchanged while deletion approval is pending, a Salesman cannot approve or restore directly, management receives the notification, rejection leaves the lead active, and Admin-approved removal/restoration preserves all activities.
+The initial-management registration regression uses the released Admin RPC and task triggers with the archive lookup policy. It reproduces SQLSTATE `42501` before the follow-up, then verifies one company/lead/task/audit event, preserved next-working-day scheduling, Salesman/peer isolation, denied forged callers, and rollback for invalid stages, task titles/assignees, duplicate task IDs and denied read-back. No permission bypass is used.
 Normal CRM verification remains required in addition to these focused tests.
 
 ## Release Gates and Boundaries
 
-- No hosted staging test or migration application has been performed for this feature.
+- Staging schema/RPC checks and three separate rolled-back Admin/Salesman database-role rehearsals passed. These covered closure/broadcast, archive isolation, request/restore approval, normalized duplicates, single-use permits, task/history preservation and purge/audit guards. Read-back confirmed zero rehearsal companies/leads/tasks/requests remained.
+- The first hosted Preview test on commit `4e38cd3` saved one synthetic Salesman lead without a follow-up. The Admin initial-task save failed with SQLSTATE `42501`; read-back confirmed zero company/lead records for that failed Admin attempt. Do not retry or claim hosted workflow success until the follow-up migration is separately approved/applied and the fresh Preview is retested.
+- The saved synthetic Salesman lead remains in staging as `PR76 Juniper Lifecycle Test 20Nov`; no deletion or reuse of that record is part of the follow-up fix.
 - Before release, rehearse the migration on the actual staging schema, run database advisors, and verify Admin/Salesman workflows on a fresh staging-only Preview, including two concurrent duplicate saves.
 - Review linked private-storage policies and any environment-specific tables not present in repository migrations. Restrictive policies are added to existing foreign keys; this cannot discover undocumented JSON references.
 - Archived PMR voice-note paths are denied by an additional Storage policy even to the file owner. Purge saves private path tombstones so removing a PMR cannot reopen that object's access. Previously issued signed URLs retain their existing expiration; no secret rotation is performed.
 - Permanent deletion removes the lead through existing database relationships, not backups or physical storage blobs. It retains lifecycle audit and private file guards. A separate retention/physical-erasure policy is required for those stores.
 - Existing saved weekly-report narratives/version snapshots and previously downloaded files are not rewritten or revoked. Current lead/task/activity feeds are filtered; historical free-text references are not automatically scrubbed.
 - Existing Google-place/website uniqueness constraints can reject an intentionally duplicated provider identity even after an Admin review. Do not weaken these constraints without a separate explicit decision.
-- Production migration, merge, deployment, real lead changes, and all other PRs remain outside this local implementation.
+- Production migration, merge, deployment, real lead changes, and all other PRs remain outside this staging candidate. PR #76 remains draft while hosted verification is incomplete.

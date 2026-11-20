@@ -183,7 +183,89 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
     await assert.rejects(()=>db.query("update public.leads set next_action='Must stay frozen' where id=$1",[editing.id]),{code:"42501"});
     await db.exec("reset role");
     assert.ok((await db.query("select next_action from public.leads where company_name='Harbor FZCO'")).rows.every(item=>item.next_action==="Trusted worker ordinary update"));
+
+    // Exercise the released Admin RPC and real task trigger under the archive lookup policy.
+    await db.exec(`alter table public.leads add column notes text, add column activity_purpose text;
+      alter table public.management_tasks add column assignee_name text, add column assigned_by uuid,
+        add column assigned_by_name text, add column lead_name text, add column instructions text,
+        add column priority text, add column created_at timestamptz, add column updated_at timestamptz,
+        add column notified_at timestamptz;
+      create table private.management_task_events(id uuid primary key default gen_random_uuid(),task_id uuid,
+        action text,actor_id uuid,actor_name text,at timestamptz,snapshot jsonb);
+      revoke all on private.management_task_events from public,anon,authenticated,service_role;`);
+    for (const file of ["20261116111051_initial_management_task.sql", "20261116124651_atomic_initial_management_lead.sql",
+      "20261118100838_lead_registration_task_choices.sql"]) {
+      await db.exec(readFileSync(join(__dirname,"../supabase/migrations",file),"utf8"));
+    }
+    await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261120063951_initial_management_lead_rls_readback.sql"),"utf8"));
+    const initialInput = (company_name, extra={}) => ({ company_name, created_by:admin, assigned_to:sales,
+      assigned_salesman:"Salesman", territory:"UAE-North", lead_status:"NEW", initial_management_task_id:randomUUID(),
+      next_action:"New Lead Outreach", next_action_date:null, activity_purpose:"Company Introductory", notes:"Synthetic Admin assignment", ...extra });
+    const initialSave = async input => (await db.query("select public.save_initial_management_lead($1) lead",[input])).rows[0].lead;
+    const initialCounts = async () => {
+      await db.exec("reset role");
+      return (await db.query(`select (select count(*)::int from public.companies) companies,
+        (select count(*)::int from public.leads) leads,(select count(*)::int from public.management_tasks) tasks,
+        (select count(*)::int from private.management_task_events) events`)).rows[0];
+    };
+    const originalCounts = await initialCounts();
+    await as(admin);
+    const assigned = await initialSave(initialInput("Cypress Admin lifecycle assignment"));
+    assert.equal(assigned.lead_status,"PROSPECT");
+    assert.equal(assigned.is_archived,false);
+    assert.equal(assigned.next_action,""); assert.equal(assigned.next_action_date,null);
+    const assignedTask = (await db.query("select * from public.management_tasks where id=$1",[assigned.initial_management_task_id])).rows[0];
+    assert.equal(assignedTask.lead_id,assigned.id); assert.equal(assignedTask.assignee_id,sales);
+    assert.equal(assignedTask.title,"New Lead Outreach"); assert.ok(assignedTask.due_date);
+    assert.equal((await db.query("select * from public.leads where id=$1",[assigned.id])).rows.length,1);
+    assert.deepEqual(await initialCounts(), {companies:originalCounts.companies+1,leads:originalCounts.leads+1,
+      tasks:originalCounts.tasks+1,events:originalCounts.events+1});
+    assert.equal((await db.query("select due_date=private.next_management_working_date(created_at) correct_deadline from public.management_tasks where id=$1",[assignedTask.id])).rows[0].correct_deadline,true);
+    await as(sales);
+    assert.equal((await db.query("select * from public.leads where id=$1",[assigned.id])).rows.length,1);
+    assert.equal((await db.query("select * from public.management_tasks where id=$1",[assignedTask.id])).rows.length,1);
+    await assert.rejects(()=>initialSave(initialInput("Forged Salesman initial assignment",{created_by:sales})),{code:"42501"});
+    await as(peer);
+    assert.equal((await db.query("select * from public.leads where id=$1",[assigned.id])).rows.length,0);
+    const stableCounts = await initialCounts();
+    await as(admin);
+    for (const [name,extra,code] of [
+      ["Rejected initial task title",{next_action:"Unsupported"},"22023"],
+      ["Rejected initial task assignee",{assigned_to:admin},"22023"],
+      ["Rejected initial stage",{lead_status:"INVALID"},"23514"],
+      ["Rejected initial task collision",{initial_management_task_id:assignedTask.id},"23505"],
+      ["Rejected initial creator",{created_by:peer},"42501"]
+    ]) {
+      await assert.rejects(()=>initialSave(initialInput(name,extra)),{code});
+      assert.deepEqual(await initialCounts(),stableCounts,"Failed initial assignment must roll back company, lead, task and task audit");
+      await as(admin);
+    }
+    await db.exec(`reset role; create policy reject_admin_initial_read on public.leads as restrictive for select to authenticated
+      using(company_name<>'Denied initial readback fixture');`);
+    await as(admin);
+    await assert.rejects(()=>initialSave(initialInput("Denied initial readback fixture")),{code:"P0002"});
+    assert.deepEqual(await initialCounts(),stableCounts,"Denied read-back must roll back the whole initial assignment");
+    await db.exec("drop policy reject_admin_initial_read on public.leads");
+    const initialSecurity = (await db.query(`select prosecdef,proconfig,
+      has_function_privilege('anon',oid,'execute') anon,
+      has_function_privilege('authenticated',oid,'execute') authenticated,
+      has_function_privilege('service_role',oid,'execute') service
+      from pg_proc where oid='public.save_initial_management_lead(jsonb)'::regprocedure`)).rows[0];
+    assert.equal(initialSecurity.prosecdef,false); assert.deepEqual(initialSecurity.proconfig,["search_path=pg_catalog"]);
+    assert.equal(initialSecurity.anon,false); assert.equal(initialSecurity.authenticated,true); assert.equal(initialSecurity.service,false);
+    await db.exec("alter table public.leads drop constraint leads_status_blueprint_check");
+    await as(admin);
+    const modernInitial = await initialSave(initialInput("Cypress modern Admin assignment",{
+      company_id:assigned.company_id,next_action:"Respond to Initial RFQ"
+    }));
+    assert.equal(modernInitial.lead_status,"NEW","Do not rewrite a stage already supported by the database");
+    assert.equal(modernInitial.company_id,assigned.company_id);
+    const reusedCounts = await initialCounts();
+    assert.deepEqual(reusedCounts,{companies:stableCounts.companies,leads:stableCounts.leads+1,
+      tasks:stableCounts.tasks+1,events:stableCounts.events+1});
+
     await db.exec("set role anon");
+    await assert.rejects(()=>initialSave(initialInput("Anonymous initial assignment")),{code:"42501"});
     await assert.rejects(()=>db.query("select public.check_lead_duplicates('{}',null)"),{code:"42501"});
     await assert.rejects(()=>db.query("select public.change_lead_lifecycle($1,'restore','{\"reason\":\"forged\"}')",[editing.id]),{code:"42501"});
   } finally { await db.close(); }
