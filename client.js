@@ -15070,9 +15070,13 @@ function managementTaskAssignedTime(date) {
   return Number.isFinite(time) ? MG_TASK_ASSIGNED_TIME.format(time) : "";
 }
 
+function managementTaskRemoved(task) {
+  return Boolean(task.removed_at) || task.status === "closed";
+}
+
 function managementTaskCounts(rows) {
   const today = managementTaskDate();
-  const active = rows.filter(task => !task.removed_at);
+  const active = rows.filter(task => !managementTaskRemoved(task));
   const completed = active.filter(task => task.status === "completed").length;
   return { all: active.length, pending: active.length - completed, completed, removed: rows.length - active.length,
     not_started: active.filter(task => task.status === "not_started").length,
@@ -15089,7 +15093,7 @@ function managementTaskOrder(rows) {
 
 function managementTaskFilter(rows, filter) {
   const today = managementTaskDate();
-  return managementTaskOrder(rows).filter(task => filter === "removed" ? Boolean(task.removed_at) : !task.removed_at && (filter === "all"
+  return managementTaskOrder(rows).filter(task => filter === "removed" ? managementTaskRemoved(task) : !managementTaskRemoved(task) && (filter === "all"
     || task.status === filter || filter === "pending" && task.status !== "completed"
     || filter === "overdue" && task.status !== "completed" && task.due_date < today));
 }
@@ -15117,7 +15121,7 @@ function managementTaskDefaultFilter(rows) {
 }
 
 function managementTaskTiming(task) {
-  if (task.removed_at) return ["neutral", managementTaskDateTime(task.removed_at)];
+  if (managementTaskRemoved(task)) return ["neutral", managementTaskDateTime(task.removed_at || task.closed_at)];
   if (task.status === "completed") return ["done", `Completed ${managementTaskDateTime(task.completed_at)}`];
   const days = Math.round((Date.parse(task.due_date) - Date.parse(managementTaskDate())) / 86400000);
   const span = `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`;
@@ -15130,7 +15134,7 @@ function managementTaskTag(text, tone = "") {
 }
 
 function managementTaskStatus(task) {
-  if (task.removed_at) return managementTaskTag("Removed", "neutral");
+  if (managementTaskRemoved(task)) return managementTaskTag("Removed", "neutral");
   return managementTaskTag(MG_TASK_LABELS[task.status] || "Unknown", task.status === "completed" ? "done" : task.status === "in_progress" ? "info" : "neutral");
 }
 
@@ -15226,6 +15230,7 @@ function managementTaskDuplicateCandidates(task) {
 
 function renderManagementTaskRow(task) {
   const id = escapeHtml(task.id);
+  const removed = managementTaskRemoved(task);
   const [tone, timing] = managementTaskTiming(task);
   const initial = state.leads.some(lead => lead.initial_management_task_id === task.id);
   const canRemove = ["not_started", "in_progress"].includes(task.status) && !initial;
@@ -15239,8 +15244,8 @@ function renderManagementTaskRow(task) {
     <div class="mg-task-details"><div><strong>Management instructions &middot; ${escapeHtml(task.assigned_by_name)}</strong><p>${escapeHtml(task.instructions)}</p>
       ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">Open linked lead</button>` : ""}</div>
       <div><strong>Salesman remarks</strong>${managementTaskTimeline(task)}</div>
-      ${task.removed_at ? `<div><strong>Removal reason</strong><p>${escapeHtml(task.removal_reason)}</p>${task.duplicate_of_task_id ? `<p>Retained task: ${escapeHtml(retained?.title || task.duplicate_of_task_id)}</p>` : ""}</div>` : task.status === "completed" ? "" : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button>${canRemove ? `<button type="button" class="ghost-button" data-mg-remove="${id}">Remove task</button>` : ""}${initial ? `<button type="button" class="ghost-button" data-mg-resolve="${id}" ${candidates.length ? "" : "disabled"}>Resolve duplicate</button>` : ""}</div>`}
-      ${initial && !task.removed_at && task.status !== "completed" ? `<p class="mg-task-resolution-note">Protected initial next step. ${candidates.length ? "Retain another open task on this lead to resolve a duplicate." : "No eligible replacement on this lead. Tasks on other lead records require separate duplicate-lead review."}</p>` : ""}</div>
+      ${removed ? `<div><strong>Removal reason</strong><p>${escapeHtml(task.removal_reason || task.closure_reason)}</p>${task.duplicate_of_task_id ? `<p>Retained task: ${escapeHtml(retained?.title || task.duplicate_of_task_id)}</p>` : ""}</div>` : task.status === "completed" ? "" : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button>${canRemove ? `<button type="button" class="ghost-button" data-mg-remove="${id}">Remove task</button>` : ""}${initial ? `<button type="button" class="ghost-button" data-mg-resolve="${id}" ${candidates.length ? "" : "disabled"}>Resolve duplicate</button>` : ""}</div>`}
+      ${initial && !removed && task.status !== "completed" ? `<p class="mg-task-resolution-note">Protected initial next step. ${candidates.length ? "Retain another open task on this lead to resolve a duplicate." : "No eligible replacement on this lead. Tasks on other lead records require separate duplicate-lead review."}</p>` : ""}</div>
   </details>`;
 }
 

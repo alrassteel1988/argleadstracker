@@ -48,6 +48,8 @@ test("remarks append across progress and completion without altering completed e
   assert.equal(trail[2].text,completed.remarks); assert.equal(trail[3].created_at,"2026-11-20T08:40:00Z");
   assert.equal(db.notifications.length,1); assert.equal(db.notifications[0].recipient_uid,admin.id);
   assert.equal(canReadManagementTask(db,sales,task),true); assert.equal(canReadManagementTask(db,peer,task),false);
+  assert.equal(canReadManagementTask(db,sales,{...task,status:"closed"}),false);
+  assert.equal(canReadManagementTask(db,admin,{...task,status:"closed"}),true);
   assert.throws(()=>save(peer,"remark",{expected_version:task.version,text:"Forged"}),{status:404});
   assert.throws(()=>save(admin,"remark",{expected_version:task.version,text:"Forged"}),{status:403});
   assert.throws(()=>save(sales,"remark",{expected_version:completed.version,text:"Retry"}),{status:409});
@@ -61,13 +63,25 @@ test("filters, counts, latest previews and default tabs include completed work",
   const today = new Date(Date.now()+4*3600000).toISOString().slice(0,10);
   const rows = ["not_started","in_progress","completed"].map((status,i)=>({id:String(i),status,due_date:"2000-01-01",title:"Fixture",created_at:today}));
   rows.push({...rows[0],id:"removed",removed_at:today});
+  rows.push({...rows[0],id:"withdrawn",status:"closed",closed_at:today,closure_reason:"Original audited withdrawal"});
   const counts = JSON.parse(JSON.stringify(helpers.managementTaskCounts(rows)));
-  assert.deepEqual(counts,{all:3,pending:2,completed:1,removed:1,not_started:1,in_progress:1,today:0,overdue:2});
-  for (const [filter,count] of [["all",3],["not_started",1],["in_progress",1],["completed",1],["overdue",2],["removed",1]]) assert.equal(helpers.managementTaskFilter(rows,filter).length,count);
+  assert.deepEqual(counts,{all:3,pending:2,completed:1,removed:2,not_started:1,in_progress:1,today:0,overdue:2});
+  for (const [filter,count] of [["all",3],["not_started",1],["in_progress",1],["completed",1],["overdue",2],["removed",2]]) assert.equal(helpers.managementTaskFilter(rows,filter).length,count);
   assert.equal(helpers.managementTaskDefaultFilter(rows),"not_started");
   assert.equal(helpers.managementTaskDefaultFilter(rows.slice(1,3)),"in_progress");
   assert.equal(helpers.managementTaskDefaultFilter([rows[2]]),"all");
   assert.equal(helpers.managementTaskLatestRemark({remarks:"Original",remark_history:[{id:"r",created_at:today,type:"additional_remark",text:"Correction"}]}),"Correction");
+});
+
+test("legacy withdrawn assignments retain their reason without live task actions", () => {
+  const source = readFileSync(join(__dirname,"../client.js"),"utf8");
+  const task = {id:"withdrawn",status:"closed",title:"Legacy assignment",instructions:"Original instructions",
+    closure_reason:"Original audited withdrawal",closed_at:"2026-11-19T08:00:00Z",due_date:"2026-11-19",created_at:"2026-11-18T08:00:00Z"};
+  const markup = vm.runInNewContext(source.slice(source.indexOf("const MG_TASK_LABELS"),source.indexOf("function renderManagementTaskDrawer()"))
+    + ";renderManagementTaskRow(task)",{task,state:{leads:[]},escapeHtml:value=>String(value||""),formatDisplayDate:value=>value});
+  assert.match(markup,/Removed/);
+  assert.match(markup,/Original audited withdrawal/);
+  assert.doesNotMatch(markup,/data-mg-(?:remind|edit|remove|resolve)=/);
 });
 
 test("SQL migration preserves original remarks/authors/times and enforces append-only RLS", async () => {

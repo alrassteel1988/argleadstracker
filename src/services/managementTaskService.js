@@ -44,7 +44,7 @@ function ownsLinkedLead(db, salesmanId, leadId) {
 }
 
 function canReadManagementTask(db, user, task) {
-  return user.role === "admin" || (user.role === "salesman" && !task.removed_at && task.assignee_id === String(user.id)
+  return user.role === "admin" || (user.role === "salesman" && !task.removed_at && task.status !== "closed" && task.assignee_id === String(user.id)
     && ownsLinkedLead(db, task.assignee_id, task.lead_id));
 }
 

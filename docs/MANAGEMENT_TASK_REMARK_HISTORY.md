@@ -173,3 +173,19 @@ Started/Progress/Completion/Additional remark history, immutable SQL access, sta
 denial, unchanged completion evidence and notifications to every active Admin. Zero rehearsal
 records persist. No follow-up migration is needed. Fresh hosted browser acceptance and separate
 Production migration approval remain required; no merge or manual deployment is performed.
+
+Hosted Admin/Salesman acceptance on reconciled commit `8071e9a` passed using one new synthetic
+assignment. Both views show Started, Progress update, Completion and Additional remark with the
+authenticated author and separate timestamps. Database read-back confirms the additional remark
+keeps the original completion text, completion timestamp and progress timestamp unchanged.
+Every active staging Admin received a notice; only the signed-in recipient's notice was acknowledged.
+The completed assignment and all four entries remain saved for review.
+
+That hosted pass exposed three older `closed` assignments in pending counts. These are legacy
+withdrawn assignments, not a fourth active task status. A regression reproduced inflated All,
+Pending and Overdue totals. They now appear only in Removed with their original closure reason
+and no live edit/reminder actions. No stored status, date or event is converted. The JSON fallback
+also excludes withdrawn assignments from Salesman reads, matching the existing hosted RLS helper.
+Final `npm.cmd run verify` passed with the new count/action/isolation regressions. Assets rotate
+to `management-task-history-audit` / `arg-pwa-v189-management-task-history-audit`.
+A final hosted read-only count check on this follow-up remains before Production readiness review.
