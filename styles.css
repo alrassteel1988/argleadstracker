@@ -26039,3 +26039,39 @@ body.tasks-mode .tasks-actions-card.inline {
     grid-template-columns: 1fr;
   }
 }
+.lead-lifecycle-dialog { width: min(640px, calc(100% - 24px)); max-height: calc(100dvh - 32px); padding: 20px; border: 1px solid var(--border, #cbd5e1); border-radius: 8px; overflow: auto; }
+.lead-lifecycle-dialog .lead-form { display: grid; gap: 16px; }
+.lead-lifecycle-dialog h2 { font-size: 22px; }
+.lead-lifecycle-dialog label { display: grid; gap: 6px; font-size: 14px; }
+.lead-lifecycle-dialog textarea { min-height: 96px; resize: vertical; }
+.lead-lifecycle-dialog input, .lead-lifecycle-dialog select, .lead-lifecycle-dialog textarea { width: 100%; min-width: 0; }
+.lead-lifecycle-dialog footer, .lifecycle-toolbar, .lifecycle-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.lifecycle-copy, .lead-lifecycle-view td, .lifecycle-reviews p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.lead-lifecycle-view { min-width: 0; padding: 20px 0; }
+.lead-lifecycle-view h2 { font-size: 24px; margin-bottom: 16px; }
+.lead-lifecycle-view .lifecycle-toolbar { margin-bottom: 16px; align-items: center; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(150px, 180px) minmax(170px, 210px) auto; }
+.lifecycle-toolbar input { flex: 1 1 240px; min-width: 0; }
+.lifecycle-table-scroll { max-width: 100%; overflow: auto; }
+.lead-lifecycle-view table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.lead-lifecycle-view th, .lead-lifecycle-view td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border, #cbd5e1); vertical-align: top; }
+.lead-lifecycle-view th { font-size: 12px; }
+.lifecycle-actions button { width: auto; font-size: 13px; }
+.lifecycle-reviews { margin-top: 24px; }
+.lifecycle-reviews article { padding: 16px 0; border-bottom: 1px solid var(--border, #cbd5e1); }
+.lead-lifecycle-notices p { padding: 12px; margin: 8px 0; background: #fff4cf; color: #423600; border-radius: 6px; overflow-wrap: anywhere; }
+.lead-lifecycle-notices { max-height: 30dvh; overflow: auto; }
+#leadLifecycleNotices p { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; font-size: 14px; }
+#leadLifecycleNotices .lifecycle-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; }
+#leadLifecycleNotices .ghost-button { width: auto; min-width: 36px; flex: 0 0 auto; }
+@media (max-width: 1100px) { .lead-lifecycle-view .lifecycle-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 700px) {
+  #leadLifecycleNotices p { grid-template-columns: minmax(0, 1fr); }
+  .lead-lifecycle-view .lifecycle-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .lead-lifecycle-view table, .lead-lifecycle-view tbody, .lead-lifecycle-view tr, .lead-lifecycle-view td { display: block; }
+  .lead-lifecycle-view thead { display: none; }
+  .lead-lifecycle-view td { padding: 5px 0; border: 0; }
+  .lead-lifecycle-view tr { padding: 12px 0; border-bottom: 1px solid var(--border, #cbd5e1); }
+  .lead-lifecycle-view td:first-child { font-weight: 700; }
+  .lead-lifecycle-view td::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 600; color: #52617a; }
+  .lifecycle-toolbar > * { max-width: 100%; }
+}

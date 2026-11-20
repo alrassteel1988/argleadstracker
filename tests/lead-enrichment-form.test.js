@@ -97,6 +97,7 @@ function fixture() {
   {
     let lookups = 0, backgroundJobs = 0;
     const context = vm.createContext({
+      leadLifecycle: require("../src/services/leadLifecycleService"),
       enrichCompanyFromGoogle: async () => { lookups += 1; },
       setTimeout: () => { backgroundJobs += 1; },
       clientIp: () => "fixture"

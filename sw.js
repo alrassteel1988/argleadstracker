@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v181-lead-creation-history";
+const CACHE_VERSION = "arg-pwa-v184-lead-lifecycle";
 const APP_SHELL = [
   "/",
   "/index.html",
