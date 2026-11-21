@@ -4,6 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 const leadLifecycle = require("./src/services/leadLifecycleService");
 const { handleLeadLifecycle } = require("./src/services/leadLifecycleRoutes");
+const { handleTaskDocuments } = require("./src/services/taskDocumentRoutes");
 
 function bootstrapEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -5336,6 +5337,9 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
+  if (await handleTaskDocuments(req, res, url, { user, supabaseEnabled, rest, sendJson, sendDownload, readRawBody,
+    readDb, writeDb, dataDir: DATA_DIR, bucket: ACTIVITY_ATTACHMENT_BUCKET, uploadStorageObjectToBucket,
+    createStorageSignedUrlForBucket })) return;
   if (/^\/api\/management-tasks\/[^/]+\/remarks(?:\/[^/]+)?$/.test(url.pathname) && req.method !== "GET") {
     return sendJson(res, 405, { error: "Task remark history cannot be edited or deleted. Append a new remark instead." });
   }

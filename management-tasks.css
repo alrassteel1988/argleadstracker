@@ -237,3 +237,17 @@ body dialog#managementTasksDrawer .mg-drawer-remarks button { width: auto; min-h
   body #appShell #tasksView .mg-task-heading-actions { flex-basis: auto; }
   .mg-task-progress-form .mg-task-form-actions > button { flex: 1 1 auto; }
 }
+.rfq-upload { display: grid; gap: 8px; min-width: 0; }
+.rfq-upload[hidden] { display: none; }
+.rfq-upload ul { list-style: none; padding: 0; margin: 0; }
+.rfq-upload li, .mg-task-document { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 8px 0; }
+.rfq-upload li span, .mg-task-document span { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.rfq-upload small, .mg-task-document small { display: block; font-size: 12px; }
+.mg-task-documents { margin-top: 12px; min-width: 0; }
+.mg-task-documents summary { cursor: pointer; }
+body #appShell #managementTasksWorkspace .mg-task-title-rfq,
+body dialog.mg-task-dialog .mg-task-title-rfq { color: var(--mg-red) !important; }
+.mg-task-document button { flex: 0 0 auto; }
+body dialog#managementTasksDrawer .mg-task-document button { width: auto !important; min-width: 0 !important; max-width: 100%; }
+.mg-document-retry { max-width: 180px; min-width: 0; }
+.mg-document-retry input { width: 100%; }

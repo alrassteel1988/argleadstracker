@@ -5,6 +5,8 @@ const { isDeepStrictEqual } = require("node:util");
 const MAX_ACTIVITY_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const ACTIVITY_ATTACHMENT_TYPES = Object.freeze({
   ".png": ["image/png"],
+  ".jpg": ["image/jpeg"],
+  ".jpeg": ["image/jpeg"],
   ".pdf": ["application/pdf"],
   ".doc": ["application/msword", "application/octet-stream"],
   ".docx": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/zip", "application/octet-stream"],
@@ -39,7 +41,7 @@ function validateActivityAttachment({ filename, contentType, buffer }) {
   const extension = path.extname(safeName).toLowerCase();
   const normalizedType = String(contentType || "application/octet-stream").split(";")[0].trim().toLowerCase();
   if (!ACTIVITY_ATTACHMENT_TYPES[extension]) {
-    const error = new Error("Attach a PNG, PDF, DOC, DOCX, XLS, or XLSX file.");
+    const error = new Error("Attach a PNG, JPEG, PDF, DOC, DOCX, XLS, or XLSX file.");
     error.status = 415;
     throw error;
   }
@@ -61,6 +63,7 @@ function validateActivityAttachment({ filename, contentType, buffer }) {
 
   const isPng = hasPrefix(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const isPdf = buffer.subarray(0, 5).toString("ascii") === "%PDF-";
+  const isJpeg = hasPrefix(buffer, [0xff, 0xd8, 0xff]) && buffer.subarray(-2).equals(Buffer.from([0xff, 0xd9]));
   const isOle = hasPrefix(buffer, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
   const isZip = hasPrefix(buffer, [0x50, 0x4b, 0x03, 0x04])
     || hasPrefix(buffer, [0x50, 0x4b, 0x05, 0x06])
@@ -68,6 +71,7 @@ function validateActivityAttachment({ filename, contentType, buffer }) {
   const zipText = isZip ? buffer.toString("latin1") : "";
   const signatureValid = extension === ".png"
     ? isPng
+    : [".jpg", ".jpeg"].includes(extension) ? isJpeg
     : extension === ".pdf"
       ? isPdf
       : [".doc", ".xls"].includes(extension)

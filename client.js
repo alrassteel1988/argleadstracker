@@ -629,6 +629,7 @@ const SESSION_KEY = "arg_crm_session";
 const REFRESH_SESSION_KEY = "arg_crm_refresh_session";
 let currentView = "dashboard";
 const leadFormTouched = new Set();
+let rfqLeadUpload = { owner: "", files: [], savedLead: null, busy: false };
 const leadEnrichmentCache = new Map();
 const leadAiSummaryCache = new Map();
 let leadEnrichmentTimer = null;
@@ -3937,6 +3938,11 @@ function resetLeadEnrichmentSession({ clearFields = false } = {}) {
 }
 
 function resetLeadWizardState() {
+  els.leadForm?.querySelectorAll("[data-rfq-frozen]").forEach(field => { field.disabled = false; delete field.dataset.rfqFrozen; });
+  if (els.leadSubmitButton) els.leadSubmitButton.disabled = false;
+  rfqLeadUpload = { owner: String(state.currentUser?.id || ""), files: [], savedLead: null, busy: false };
+  const uploadMessage = document.getElementById("leadRfqUploadMessage");
+  if (uploadMessage) uploadMessage.textContent = "";
   state.leadFormStep = 0;
   state.leadFormDetailsOpen = { company: false, contact: false };
 }
@@ -4171,6 +4177,10 @@ function renderLeadFormWizard() {
     taskChoice.hidden = !initialTask;
     taskChoice.querySelector("select").disabled = !initialTask;
   }
+  const rfq = initialTask && els.leadForm.elements.initial_management_task_title.value === "Respond to Initial RFQ";
+  document.getElementById("leadRfqFiles").hidden = !rfq;
+  document.getElementById("leadRfqFileInput").disabled = !rfq || Boolean(rfqLeadUpload.savedLead);
+  renderRfqLeadFiles();
   ["leadNextActionField", "leadNextActionDateField"].forEach(id => {
     const field = document.getElementById(id);
     if (!field) return;
@@ -15190,6 +15200,84 @@ function managementTaskDefaultFilter(rows) {
   return counts.not_started ? "not_started" : counts.in_progress ? "in_progress" : "all";
 }
 
+function managementTaskTitle(task) {
+  const rfq = String(task.title || "").trim().toLowerCase() === "respond to initial rfq";
+  return `<strong${rfq ? ' class="mg-task-title-rfq"' : ""}>${escapeHtml(task.title)}</strong>`;
+}
+
+function taskDocumentsMarkup(task) {
+  return task.lead_id ? `<details class="mg-task-documents" data-task-documents="${escapeHtml(task.id)}"><summary>Supporting documents</summary><div role="status">Open to load documents.</div></details>` : "";
+}
+
+function renderRfqLeadFiles() {
+  const list = document.getElementById("leadRfqFileList");
+  if (list) list.innerHTML = rfqLeadUpload.files.map(item => `<li><span>${escapeHtml(item.file.name)} <small>${escapeHtml(humanFileSize(item.file.size))}${item.saved ? " - Uploaded" : ""}</small></span>${rfqLeadUpload.savedLead ? "" : `<button type="button" class="text-button" data-rfq-remove="${item.id}">Remove</button>`}</li>`).join("");
+}
+
+async function uploadRfqLeadFiles(lead, draft) {
+  if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) throw new Error("The lead form or account changed during upload.");
+  if (!draft.files.length) return;
+  draft.savedLead = lead;
+  if (!lead.initial_management_task_id) throw new Error("The saved lead has no initial RFQ task. Contact Admin before retrying.");
+  for (const item of draft.files) {
+    if (item.saved) continue;
+    if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) throw new Error("The account changed. Sign in to the original Admin account to retry.");
+    await uploadTaskDocument(lead.initial_management_task_id, item.id, item.file, draft.owner);
+    if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) throw new Error("The account changed during upload.");
+    item.saved = true;
+    renderRfqLeadFiles();
+  }
+}
+
+async function uploadTaskDocument(taskId, id, file, owner) {
+  if (String(state.currentUser?.id) !== owner || state.currentUser?.role !== "admin") throw new Error("The upload account changed.");
+  const response = await authenticatedFetch(`/api/management-tasks/${taskId}/documents/${id}`, {
+    method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-Upload-Owner": owner }, body: file
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Document upload failed.");
+}
+
+function rfqUploadFailure(error, draft) {
+  if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) return;
+  document.getElementById("leadRfqUploadMessage").textContent = `Lead already saved. ${error.message} Retry uploads; do not create the lead again.`;
+  els.leadForm.querySelectorAll("input,select,textarea").forEach(field => {
+    if (!field.disabled) { field.disabled = true; field.dataset.rfqFrozen = "true"; }
+  });
+  els.leadSubmitButton.textContent = "Retry document uploads";
+  renderRfqLeadFiles();
+}
+
+async function loadTaskDocuments(event) {
+  const panel = event.target;
+  if (!panel.matches?.("[data-task-documents]") || !panel.open) return;
+  const owner = state.currentUser?.id;
+  const body = panel.querySelector("div");
+  body.textContent = "Loading documents...";
+  try {
+    const docs = await api(`/api/management-tasks/${panel.dataset.taskDocuments}/documents`);
+    if (owner !== state.currentUser?.id || !panel.isConnected) return;
+    body.innerHTML = docs.length ? docs.map(doc => `<div class="mg-task-document"><span>${escapeHtml(doc.filename)}<small>${escapeHtml(humanFileSize(doc.size))} &middot; ${escapeHtml(doc.uploaded_by_name)} &middot; ${escapeHtml(formatDateTime(doc.uploaded_at))}${doc.ready ? "" : " - Upload incomplete"}</small></span>${doc.ready ? `<button type="button" class="ghost-button" data-task-document="${escapeHtml(doc.download_url)}" data-filename="${escapeHtml(doc.filename)}">Download</button>` : doc.can_retry ? `<label class="mg-document-retry">Retry with the same file<input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" data-document-retry="${doc.id}" data-task="${escapeHtml(panel.dataset.taskDocuments)}" data-owner="${escapeHtml(String(owner))}"></label>` : ""}</div>`).join("") : "No supporting documents.";
+  } catch { if (owner === state.currentUser?.id && panel.isConnected) body.textContent = "Documents could not be loaded. Close and reopen to retry."; }
+}
+async function downloadTaskDocument(event) {
+  const download = event.target.closest("[data-task-document]");
+  if (!download) return;
+  try { await downloadExport(download.dataset.taskDocument, download.dataset.filename); }
+  catch (error) { setToast(error.message, "error"); }
+}
+async function retryTaskDocument(event) {
+  const input = event.target;
+  if (!input.matches?.("[data-document-retry]") || !input.files[0]) return;
+  input.disabled = true;
+  try {
+    await uploadTaskDocument(input.dataset.task, input.dataset.documentRetry, input.files[0], input.dataset.owner);
+    const panel = input.closest("[data-task-documents]");
+    if (panel?.isConnected) { panel.open = false; panel.open = true; }
+    setToast("Supporting document uploaded.", "success");
+  } catch (error) { if (input.isConnected) { input.disabled = false; input.value = ""; } setToast(error.message, "error"); }
+}
+
 function managementTaskTiming(task) {
   if (managementTaskRemoved(task)) return ["neutral", managementTaskDateTime(task.removed_at || task.closed_at)];
   if (task.status === "completed") return ["done", `Completed ${managementTaskDateTime(task.completed_at)}`];
@@ -15307,12 +15395,12 @@ function renderManagementTaskRow(task) {
   const candidates = initial ? managementTaskDuplicateCandidates(task) : [];
   const retained = task.duplicate_of_task_id && managementTasks.rows.find(item => item.id === task.duplicate_of_task_id);
   return `<details data-mg-row="${id}" ${managementTasks.openRows.has(task.id) ? "open" : ""}>
-    <summary class="mg-task-row"><span class="mg-task-row-title"><strong>${escapeHtml(task.title)}</strong><small>${task.lead_name ? escapeHtml(task.lead_name) + " &middot; " : ""}Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))}</small><small class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task))}</small></span>
+    <summary class="mg-task-row"><span class="mg-task-row-title">${managementTaskTitle(task)}<small>${task.lead_name ? escapeHtml(task.lead_name) + " &middot; " : ""}Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))}</small><small class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task))}</small></span>
       <span class="mg-task-row-person">${escapeHtml(task.assignee_name)}</span><time class="mg-task-row-date" datetime="${escapeHtml(task.due_date)}">${escapeHtml(formatDisplayDate(task.due_date))}</time>
       <span class="mg-task-row-timing">${managementTaskTag(timing, tone)}</span><span class="mg-task-row-priority">${managementTaskPriority(task)}</span><span class="mg-task-row-status">${managementTaskStatus(task)}</span><span class="mg-task-chevron" aria-hidden="true"></span>
       </summary>
     <div class="mg-task-details"><div><strong>Management instructions &middot; ${escapeHtml(task.assigned_by_name)}</strong><p>${escapeHtml(task.instructions)}</p>
-      ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">Open linked lead</button>` : ""}</div>
+      ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">Open linked lead</button>` : ""}${taskDocumentsMarkup(task)}</div>
       <div><strong>Task conversation</strong>${managementTaskTimeline(task)}</div>
       ${removed ? `<div><strong>Removal reason</strong><p>${escapeHtml(task.removal_reason || task.closure_reason)}</p>${task.duplicate_of_task_id ? `<p>Retained task: ${escapeHtml(retained?.title || task.duplicate_of_task_id)}</p>` : ""}</div>` : `<div class="mg-task-row-actions"><button type="button" class="ghost-button" data-mg-note="${id}">Add note</button>${task.status === "completed" ? "" : `<button type="button" class="ghost-button" data-mg-remind="${id}">Send reminder</button><button type="button" class="ghost-button" data-mg-edit="${id}">Edit task</button>${canRemove ? `<button type="button" class="ghost-button" data-mg-remove="${id}">Remove task</button>` : ""}${initial ? `<button type="button" class="ghost-button" data-mg-resolve="${id}" ${candidates.length ? "" : "disabled"}>Resolve duplicate</button>` : ""}`}</div>`}
       ${initial && !removed && task.status !== "completed" ? `<p class="mg-task-resolution-note">Protected initial next step. ${candidates.length ? "Retain another open task on this lead to resolve a duplicate." : "No eligible replacement on this lead. Tasks on other lead records require separate duplicate-lead review."}</p>` : ""}</div>
@@ -15366,14 +15454,14 @@ function renderManagementTaskDrawerRow(task, update) {
   return `<article class="mg-drawer-grid mg-drawer-row timing-${tone}" data-mg-card="${id}">
     <div class="mg-drawer-due" data-label="Deadline"><b>${escapeHtml(formatDisplayDate(task.due_date))}</b>${managementTaskTag(timing, tone)}</div>
     <div class="mg-drawer-lead" data-label="Lead">${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">${escapeHtml(task.lead_name || "Linked lead")}</button>${lead?.status ? `<small>${escapeHtml(lead.status)}</small>` : ""}` : "<small>No linked lead</small>"}</div>
-    <div class="mg-drawer-task"><strong>${escapeHtml(task.title)}</strong>${task.seen_at ? "" : managementTaskTag("New", "info")}<small class="mg-drawer-instruction-preview">${escapeHtml(task.instructions)}</small>
+    <div class="mg-drawer-task">${managementTaskTitle(task)}${task.seen_at ? "" : managementTaskTag("New", "info")}<small class="mg-drawer-instruction-preview">${escapeHtml(task.instructions)}</small>
       ${task.seen_at ? "" : `<button type="button" class="text-button" data-mg-seen="${id}">Mark notice read</button>`}</div>
     <div data-label="Priority">${managementTaskPriority(task)}</div>
     <div data-label="Assigned by"><b>${escapeHtml(task.assigned_by_name || "Management")}</b><small>${escapeHtml(managementTaskDateTime(task.created_at))}</small></div>
     <div data-label="Status">${managementTaskStatus(task)}${completed ? "" : `<select data-mg-status="${id}" aria-label="Status for ${escapeHtml(task.title)}">${Object.entries(MG_TASK_LABELS).map(([key, label]) => `<option value="${key}"${key === (update?.status || task.status) ? " selected" : ""}>${label}</option>`).join("")}</select>`}</div>
     <div class="mg-drawer-remarks" data-label="Latest remark"><p class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task) || "No remarks yet")}</p><button type="button" class="text-button" data-mg-conversation="${id}" aria-controls="mg-conversation-${id}">View full conversation</button></div>
     <div class="mg-drawer-action">${completed ? `<button type="button" class="ghost-button" data-mg-add-remark="${id}">Add remark</button>${lead && !lead.is_archived ? `<button type="button" class="ghost-button" data-mg-followup="${id}">Plan follow-up</button>` : ""}` : `<button type="button" class="${action === "completed" ? "primary-button" : "ghost-button"}" data-mg-progress="${id}" data-status="${action}">${action === "completed" ? "Complete" : "Start"}</button>${task.status === "in_progress" ? `<button type="button" class="ghost-button" data-mg-progress="${id}" data-status="in_progress" aria-label="Add progress" title="Add progress update">Progress</button>` : ""}`}</div>
-    <details class="mg-drawer-expanded" id="mg-conversation-${id}"><summary>Management instructions and remarks</summary><div class="mg-task-details"><div><strong>Management instructions</strong><p>${escapeHtml(task.instructions)}</p></div><div><strong>Task conversation</strong>${managementTaskTimeline(task)}</div></div></details>
+    <details class="mg-drawer-expanded" id="mg-conversation-${id}"><summary>Management instructions and remarks</summary><div class="mg-task-details"><div><strong>Management instructions</strong><p>${escapeHtml(task.instructions)}</p>${taskDocumentsMarkup(task)}</div><div><strong>Task conversation</strong>${managementTaskTimeline(task)}</div></div></details>
     ${update ? `<form class="mg-task-progress-form" data-mg-progress-form="${id}"><label>${additional ? "Additional remark" : closing ? "Completion remarks for management" : "Progress remarks (optional)"}<textarea name="remarks" rows="3" maxlength="4000" ${closing || additional ? "required" : ""}>${escapeHtml(update.remarks)}</textarea></label>
       ${closing ? `<small data-mg-remark-length>${length}/10 characters required</small>` : ""}<div class="mg-task-form-actions"><button type="button" class="ghost-button" data-mg-discard>Not yet</button>
       <button type="submit" class="primary-button" ${closing && length < 10 || additional && !length ? "disabled" : ""}>${additional ? "Add remark" : closing ? "Mark completed" : "Save update"}</button></div><p class="mg-task-message" role="status" hidden></p></form>` : ""}
@@ -15478,7 +15566,7 @@ function openManagementTaskConversation(task, action) {
   form.dataset.version = task.version;
   form.dataset.requestId = crypto.randomUUID();
   form.innerHTML = `<header class="mg-task-dialog-header"><h2 id="managementTaskFormTitle">${action === "note" ? "Add management note" : "Plan follow-up"}</h2><button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close task form" title="Close">&times;</button></header>
-    <div class="mg-task-form-fields"><p><strong>${escapeHtml(task.title)}</strong> &middot; ${escapeHtml(task.lead_name || task.assignee_name)}</p>
+    <div class="mg-task-form-fields"><p>${managementTaskTitle(task)} &middot; ${escapeHtml(task.lead_name || task.assignee_name)}</p>
       ${action === "followup" ? `<div class="mg-task-field-pair"><label>Follow-up action<select name="next_action_plan" required><option value="">Choose an action</option>${["To Call", "To Send Email", "To Visit"].map(plan => `<option>${plan}</option>`).join("")}</select></label><label>Follow-up date<input type="date" name="next_action_date" min="${managementTaskDate()}" required></label></div>` : ""}
       <label>${action === "note" ? "Management note" : "Follow-up notes"}<textarea name="text" rows="4" maxlength="4000" required></textarea></label>
       <p role="status" class="mg-task-message" hidden></p></div>
@@ -15497,7 +15585,7 @@ function openManagementTaskDuplicateResolution(task) {
   form.dataset.version = task.version;
   form.innerHTML = `<header class="mg-task-dialog-header"><h2 id="managementTaskFormTitle">Resolve duplicate task</h2><button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close task form" title="Close">&times;</button></header>
     <div class="mg-task-form-fields">
-      <p><strong>${escapeHtml(task.title)}</strong> &middot; ${escapeHtml(task.lead_name)} &middot; ${escapeHtml(task.assignee_name)}<br><small>Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))} (Dubai time)</small></p>
+      <p>${managementTaskTitle(task)} &middot; ${escapeHtml(task.lead_name)} &middot; ${escapeHtml(task.assignee_name)}<br><small>Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))} (Dubai time)</small></p>
       <p>The selected task becomes this lead's linked next step. This duplicate is removed from the salesman's list; its history and reason are retained. No lead records are merged.</p>
       <label>Task to retain<select name="retained_task_id" required><option value="">Choose an open task on this lead</option>${candidates.map(item => `<option value="${escapeHtml(item.id)}" data-version="${item.version}">${escapeHtml(item.title)} &middot; assigned ${escapeHtml(managementTaskAssignedTime(item.created_at))} &middot; due ${escapeHtml(formatDisplayDate(item.due_date))}</option>`).join("")}</select></label>
       <p data-mg-retained-preview aria-live="polite"></p>
@@ -15516,7 +15604,7 @@ function openManagementTaskRemoval(task) {
   form.dataset.version = task.version;
   form.innerHTML = `<header class="mg-task-dialog-header"><h2 id="managementTaskFormTitle">Remove task</h2><button type="button" class="ghost-button mg-task-close" data-mg-close aria-label="Close task form" title="Close">&times;</button></header>
     <div class="mg-task-form-fields">
-      <p><strong>${escapeHtml(task.title)}</strong> &middot; ${escapeHtml(task.assignee_name)}${task.lead_name ? " &middot; " + escapeHtml(task.lead_name) : ""}<br><small>Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))} (Dubai time)</small></p>
+      <p>${managementTaskTitle(task)} &middot; ${escapeHtml(task.assignee_name)}${task.lead_name ? " &middot; " + escapeHtml(task.lead_name) : ""}<br><small>Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))} (Dubai time)</small></p>
       <p>This removes the assignment from the salesman's list. The lead and task history are kept.</p>
       <label>Removal reason<textarea name="reason" rows="3" minlength="10" maxlength="4000" required></textarea></label>
       <p role="status" class="mg-task-message" hidden></p>
@@ -18412,7 +18500,29 @@ els.leadForm.addEventListener("change", event => {
   const field = event.target;
   if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)) return;
   if (field.name) leadFormTouched.add(field.name);
-  if (field.name === "assigned_salesman") renderLeadFormWizard();
+  if (["assigned_salesman", "initial_management_task_title"].includes(field.name)) renderLeadFormWizard();
+});
+document.addEventListener("toggle", loadTaskDocuments, true);
+document.addEventListener("click", downloadTaskDocument);
+document.addEventListener("change", retryTaskDocument);
+document.getElementById("leadRfqFileInput")?.addEventListener("change", event => {
+  const input = event.target;
+  const selected = [...input.files];
+  input.value = "";
+  const message = document.getElementById("leadRfqUploadMessage");
+  if (state.currentUser?.role !== "admin" || rfqLeadUpload.owner !== String(state.currentUser.id) || rfqLeadUpload.savedLead) return;
+  if (selected.length + rfqLeadUpload.files.length > 5 || selected.some(file => !/\.(pdf|docx?|png|jpe?g)$/i.test(file.name) || !file.size || file.size > 4 * 1024 * 1024)) {
+    message.textContent = "Choose up to 5 PDF, Word, PNG or JPEG files, no larger than 4 MB each."; return;
+  }
+  rfqLeadUpload.files.push(...selected.map(file => ({ file, id: crypto.randomUUID(), saved: false })));
+  message.textContent = "";
+  renderRfqLeadFiles();
+});
+document.getElementById("leadRfqFileList")?.addEventListener("click", event => {
+  const remove = event.target.closest("[data-rfq-remove]");
+  if (!remove || rfqLeadUpload.savedLead) return;
+  rfqLeadUpload.files = rfqLeadUpload.files.filter(item => item.id !== remove.dataset.rfqRemove);
+  renderRfqLeadFiles();
 });
 renderLeadProductInterestOptions();
 renderLeadFormWizard();
@@ -18431,6 +18541,19 @@ document.querySelector("#recordLeadVoice").addEventListener("click", () => {
 
 els.leadForm.addEventListener("submit", async event => {
   event.preventDefault();
+  if (rfqLeadUpload.busy) return;
+  const draft = rfqLeadUpload;
+  draft.busy = true;
+  els.leadSubmitButton.disabled = true;
+  try {
+  if (draft.savedLead) {
+    try {
+      await uploadRfqLeadFiles(draft.savedLead, draft);
+      state.selectedId = draft.savedLead.id;
+      resetLeadFormForNewLead(); els.leadDialog.close(); await loadLeads(); openLeadDrawer(state.selectedId, "overview");
+    } catch (error) { rfqUploadFailure(error, draft); }
+    return;
+  }
   const formData = new FormData(els.leadForm);
   const payload = Object.fromEntries(formData.entries());
   if (!state.editingLeadId && !leadGoogleLookupEnabled()) {
@@ -18526,11 +18649,17 @@ els.leadForm.addEventListener("submit", async event => {
       return;
     }
   }
+  if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) return;
   state.selectedId = lead.id;
+  if (state.currentUser?.role === "admin" && payload.initial_management_task_title === "Respond to Initial RFQ" && draft.files.length) {
+    try { await uploadRfqLeadFiles(lead, draft); }
+    catch (error) { rfqUploadFailure(error, draft); return; }
+  }
   resetLeadFormForNewLead();
   els.leadDialog.close();
   await loadLeads();
   if (!lead.is_archived) openLeadDrawer(lead.id, "overview");
+  } finally { draft.busy = false; if (draft === rfqLeadUpload) els.leadSubmitButton.disabled = false; }
 });
 
 function lifecycleDialog({ title, text = "", actions = [], closeReason = false, requestReasons = [], confirmName = "", password = false, fields = true }) {

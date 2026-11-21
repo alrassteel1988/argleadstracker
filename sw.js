@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v193-task-conversation-full-width";
+const CACHE_VERSION = "arg-pwa-v194-admin-rfq-documents";
 const APP_SHELL = [
   "/",
   "/index.html",
