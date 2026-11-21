@@ -252,8 +252,10 @@ body dialog#managementTasksDrawer .mg-task-document button { width: auto !import
 .mg-document-retry { max-width: 180px; min-width: 0; }
 .mg-document-retry input { width: 100%; }
 body dialog.mg-document-preview { width: min(1100px, calc(100vw - 24px)) !important; max-width: calc(100vw - 24px); padding: 0; }
+body dialog.mg-document-preview[open] { display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 0 !important; max-height: calc(100dvh - 24px); overflow: auto; }
+.mg-document-preview > .mg-task-dialog-header { flex: 0 0 auto; width: 100%; box-sizing: border-box; }
 .mg-document-preview .mg-task-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .mg-document-preview h2 { min-width: 0; overflow-wrap: anywhere; font-size: 18px; }
-.mg-document-preview-body { padding: 12px; min-width: 0; }
+.mg-document-preview-body { padding: 12px; min-width: 0; width: 100%; box-sizing: border-box; }
 .mg-document-preview-body iframe { display: block; border: 0; width: 100%; height: 70vh; }
 .mg-document-preview-body img { display: block; max-width: 100%; max-height: 70vh; margin: auto; object-fit: contain; }

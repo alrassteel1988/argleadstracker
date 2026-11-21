@@ -88,6 +88,11 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     await documentRow.getByRole("button",{name:"View",exact:true}).click();
     await expect(previews.locator("iframe")).toHaveAttribute("src", /^blob:/);
     await expect(previews.locator("iframe")).toHaveAttribute("title", "specification.pdf");
+    const previewHeader = await previews.locator("header").boundingBox();
+    const previewBody = await previews.locator(".mg-document-preview-body").boundingBox();
+    expect(previewBody.y).toBeGreaterThanOrEqual(previewHeader.y + previewHeader.height - 1);
+    expect(previewHeader.width).toBeGreaterThanOrEqual((await previews.boundingBox()).width - 4);
+    expect((await previews.locator("iframe").boundingBox()).width).toBeGreaterThanOrEqual(previewBody.width - 26);
     expect(await previews.getByRole("button",{name:"Close file preview"}).evaluate(button=>getComputedStyle(button,"::before").content)).not.toBe("none");
     await previews.getByRole("button",{name:"Close file preview"}).click();
     await expect(previews).toHaveCount(0);

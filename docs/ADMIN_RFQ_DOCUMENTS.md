@@ -96,10 +96,13 @@ company, one lead, one linked task and four ready documents, each with one
 Salesman notice. Current-owner reads passed; peer reads, Salesman uploads and
 direct metadata edits/deletes were denied. Archive/restore access checks passed
 in a rolled-back staging transaction. Both hosted roles displayed all four
-files. The viewer was pushed, but its hosted test returned a private-file
-retrieval error; the Storage-relative signed-path repair and regression test are
-approved for the branch-only repair commit and fresh staging verification. Neither
-View nor Download is counted as hosted-pass yet. Production readiness and
+files. The viewer initially returned a private-file retrieval error. Repair
+`4fdfe0188683e5c74e4a0825230e0779dcb725de` passed hosted staging retrieval:
+Salesman PNG and Admin JPEG previews decoded the synthetic images, and the
+Salesman PDF / Admin Word downloads matched the original fixture hashes. The PDF
+preview received its private blob. Screenshot review found a narrow-screen
+layout problem; its approved UI-only correction passes local desktop/mobile
+tests and still requires a fresh hosted visual check. Production readiness and
 migration approval are not included.
 
 No hosted migration, secret, environment change, Production operation, commit,
@@ -118,6 +121,7 @@ PDF, PNG and JPEG supporting files offer View alongside Download for authorized 
 - Branch: `codex/admin-rfq-supporting-files`; draft PR #79.
 - Pushed refresh fix: `13ecf8bc30d8d4b35068d6f4525f48d1345a26f9`.
 - Pushed viewer: `b2fdabed1a54b5bef87945ae6bc7b2a1b204fc44`.
+- Pushed retrieval repair: `4fdfe0188683e5c74e4a0825230e0779dcb725de`.
 - All three GitHub checks passed on the viewer commit; matching Preview is Ready.
 - `npm.cmd run verify` passed. Eight focused document/security/SQL tests passed.
   Four applicable desktop/mobile RFQ browser tests passed, with four deliberate
@@ -129,11 +133,16 @@ PDF, PNG and JPEG supporting files offer View alongside Download for authorized 
 - Hosted image View returned `Supporting document is unavailable.` Storage
   metadata and byte sizes remained intact. The RFQ-only signed-path repair
   passes local verification and tests both Storage-relative and already-correct
-  URLs. The owner approved the branch-only repair push; hosted retesting remains
-  required after the matching Preview is Ready.
+  URLs. The owner-approved repair passed hosted retrieval on the matching Ready
+  Preview; the original company/lead/task/document counts and task version,
+  status, priority and deadline were unchanged.
 - The repair changes only `src/services/taskDocumentRoutes.js`, its focused test
   and this report. It leaves the shared signer, permissions, caller credentials,
   redirect rejection, expiry and byte integrity checks unchanged.
 - No new migration is needed for View or the retrieval repair. No Production
   operations, merge or manual deployment were performed. Production readiness,
-  hosted retrieval acceptance and release-owner approval remain incomplete.
+  hosted final-layout acceptance and release-owner approval remain incomplete.
+- The generic narrow-screen dialog flex row squeezed the preview header and
+  body side by side. The viewer now explicitly stacks them; regression tests
+  assert vertical order, full-width header and PDF frame width on both viewports.
+  No authentication, file-route or database behavior changes in this correction.
