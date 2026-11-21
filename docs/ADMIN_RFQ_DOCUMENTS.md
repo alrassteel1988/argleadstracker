@@ -96,9 +96,11 @@ company, one lead, one linked task and four ready documents, each with one
 Salesman notice. Current-owner reads passed; peer reads, Salesman uploads and
 direct metadata edits/deletes were denied. Archive/restore access checks passed
 in a rolled-back staging transaction. Both hosted roles displayed all four
-files. Hosted browser download automation was interrupted, so that check remains
-unverified. The additional private viewer is local pending push approval and a
-fresh hosted test. Production readiness and migration approval are not included.
+files. The viewer was pushed, but its hosted test returned a private-file
+retrieval error; the Storage-relative signed-path repair and regression test are
+approved for the branch-only repair commit and fresh staging verification. Neither
+View nor Download is counted as hosted-pass yet. Production readiness and
+migration approval are not included.
 
 No hosted migration, secret, environment change, Production operation, commit,
 push, PR, merge or deployment is authorized by this document. After owner
@@ -110,3 +112,28 @@ controls merge/deployment after staging and Production readiness gates pass.
 ## Private File Preview
 
 PDF, PNG and JPEG supporting files offer View alongside Download for authorized Admins and the current assigned Salesman. View fetches the bytes through the same caller-authenticated, integrity-checked endpoint and displays a temporary in-page preview. No external viewer or public Storage URL is used. Closing the preview, signing out, changing account or losing the task during refresh clears it and revokes its temporary object URL. Word files remain download-only because this app has no private Word renderer. Viewing is not DRM: an authorized browser can still save already received content.
+
+## 21 November Verification Snapshot
+
+- Branch: `codex/admin-rfq-supporting-files`; draft PR #79.
+- Pushed refresh fix: `13ecf8bc30d8d4b35068d6f4525f48d1345a26f9`.
+- Pushed viewer: `b2fdabed1a54b5bef87945ae6bc7b2a1b204fc44`.
+- All three GitHub checks passed on the viewer commit; matching Preview is Ready.
+- `npm.cmd run verify` passed. Eight focused document/security/SQL tests passed.
+  Four applicable desktop/mobile RFQ browser tests passed, with four deliberate
+  role-specific skips. `git -c core.whitespace=cr-at-eol diff --check` passed.
+- The initial restricted local run failed with localhost `EACCES`; the approved
+  localhost-capable run passed. Viewer integration initially found missing
+  cleanup functions in isolated VM test harnesses; these harnesses were updated
+  to load the real cleanup functions, and all original guard assertions passed.
+- Hosted image View returned `Supporting document is unavailable.` Storage
+  metadata and byte sizes remained intact. The RFQ-only signed-path repair
+  passes local verification and tests both Storage-relative and already-correct
+  URLs. The owner approved the branch-only repair push; hosted retesting remains
+  required after the matching Preview is Ready.
+- The repair changes only `src/services/taskDocumentRoutes.js`, its focused test
+  and this report. It leaves the shared signer, permissions, caller credentials,
+  redirect rejection, expiry and byte integrity checks unchanged.
+- No new migration is needed for View or the retrieval repair. No Production
+  operations, merge or manual deployment were performed. Production readiness,
+  hosted retrieval acceptance and release-owner approval remain incomplete.

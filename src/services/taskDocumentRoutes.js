@@ -7,6 +7,12 @@ const { canReadManagementTask } = require("./managementTaskService");
 const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 const failure = (status, message) => Object.assign(new Error(message), { status });
 const hash = buffer => createHash("sha256").update(buffer).digest("hex");
+function documentFetchUrl(signed) {
+  const url = new URL(signed);
+  // The shared legacy signer joins Storage-relative paths to the project root.
+  if (url.pathname.startsWith("/object/sign/")) url.pathname = `/storage/v1${url.pathname}`;
+  return url.href;
+}
 function publicDocument(doc, user) {
   return { id: doc.id, filename: doc.filename, size: doc.size, content_type: doc.content_type,
     uploaded_at: doc.ready_at || doc.created_at, uploaded_by_name: doc.uploaded_by_name, ready: Boolean(doc.ready_at),
@@ -45,7 +51,7 @@ async function handleTaskDocuments(req, res, url, context) {
     let bytes;
     if (supabaseEnabled) {
       const signed = await createStorageSignedUrlForBucket(doc.bucket_id, doc.storage_key, 60, user.token);
-      const response = await fetch(signed, { redirect: "error" });
+      const response = await fetch(documentFetchUrl(signed), { redirect: "error" });
       if (!response.ok) throw failure(404, "Supporting document is unavailable.");
       bytes = Buffer.from(await response.arrayBuffer());
     } else bytes = fs.readFileSync(path.join(dataDir, doc.storage_key));
@@ -86,7 +92,7 @@ async function handleTaskDocuments(req, res, url, context) {
         // A lost response can leave accepted bytes behind. Verify them, never overwrite.
         if (![400, 409].includes(error.status)) throw error;
         const signed = await createStorageSignedUrlForBucket(bucket, doc.storage_key, 60, user.token);
-        const existing = await fetch(signed, { redirect: "error" });
+        const existing = await fetch(documentFetchUrl(signed), { redirect: "error" });
         if (!existing.ok || hash(Buffer.from(await existing.arrayBuffer())) !== file.sha256) throw failure(409, "Stored upload differs from this file.");
       }
       doc = await rpc(true);

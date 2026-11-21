@@ -159,10 +159,12 @@ test("Supabase upload retries preserve caller credentials and never publish inco
   const lead = { id: task.lead_id, assigned_to: task.assignee_id, initial_management_task_id: task.id };
   const id = randomUUID(), bytes = Buffer.from("%PDF-synthetic");
   let document, stored = false, noticeCount = 0, uploadCount = 0, rpcFinishes = 0, response;
+  let storageRelative = true;
   const calls = [];
   const context = { user, supabaseEnabled: true, bucket: "private-fixture",
     readRawBody: async () => bytes,
     sendJson: (_res, status, body) => { response = {status,body}; },
+    sendDownload: (_res,type,name,content) => { response = {type,name,bytes:content}; },
     rest: async (route, options) => {
       assert.equal(options.token, user.token); calls.push(route);
       if (route.startsWith("management_tasks?")) return [task];
@@ -187,16 +189,16 @@ test("Supabase upload retries preserve caller credentials and never publish inco
     },
     createStorageSignedUrlForBucket: async (bucket,key,ttl,token) => {
       assert.equal(token,user.token); assert.equal(bucket,"private-fixture"); assert.equal(key,document.storage_key); assert.equal(ttl,60);
-      return "https://storage-fixture.invalid/private-file";
+      return `https://storage-fixture.invalid${storageRelative ? "" : "/storage/v1"}/object/sign/private-file?token=synthetic`;
     }
   };
-  const request = () => handleTaskDocuments({method:"POST",headers:{"x-upload-owner":user.id,"x-file-name":"fixture.pdf","content-type":"application/pdf"}}, {},
+  const request = (method="POST") => handleTaskDocuments({method,headers:{"x-upload-owner":user.id,"x-file-name":"fixture.pdf","content-type":"application/pdf"}}, {},
     new URL(`http://fixture.invalid/api/management-tasks/${task.id}/documents/${id}`),context);
   await assert.rejects(request,{status:503});
   assert.equal(document.ready_at,null); assert.equal(noticeCount,0); assert.equal(rpcFinishes,0);
   const originalFetch=global.fetch;
   global.fetch=async (url,options) => {
-    assert.equal(url,"https://storage-fixture.invalid/private-file"); assert.equal(options.redirect,"error");
+    assert.equal(url,"https://storage-fixture.invalid/storage/v1/object/sign/private-file?token=synthetic"); assert.equal(options.redirect,"error");
     return {ok:true,arrayBuffer:async()=>bytes};
   };
   try {
@@ -204,6 +206,11 @@ test("Supabase upload retries preserve caller credentials and never publish inco
     assert.equal(uploadCount,2); assert.equal(noticeCount,1); assert.equal(rpcFinishes,1);
     assert.equal(response.status,201); assert.equal(response.body.document.ready,true);
     assert.equal(response.body.document.storage_key,undefined);
+    await request("GET");
+    assert.deepEqual(response.bytes,bytes,"Both download and lost-upload read-back must resolve the Storage API path");
+    storageRelative = false;
+    await request("GET");
+    assert.deepEqual(response.bytes,bytes,"Already-correct Storage API URLs must not be prefixed twice");
     assert.ok(calls.includes("rpc/save_task_document"));
   } finally { global.fetch=originalFetch; }
 });
