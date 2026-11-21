@@ -4,6 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 const leadLifecycle = require("./src/services/leadLifecycleService");
 const { handleLeadLifecycle } = require("./src/services/leadLifecycleRoutes");
+const { handleTaskDocuments } = require("./src/services/taskDocumentRoutes");
 
 function bootstrapEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -247,6 +248,7 @@ const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
@@ -256,6 +258,8 @@ const MIME_TYPES = {
 };
 
 const PUBLIC_STATIC_FILES = new Map([
+  ["/rfq-pdf-viewer.mjs", "rfq-pdf-viewer.mjs"],
+  ...require("./assets/pdfjs/manifest.json").map(file => [`/assets/pdfjs/${file}`, `assets/pdfjs/${file}`]),
   ["/index.html", "index.html"],
   ["/client.js", "client.js"],
   ["/styles.css", "styles.css"],
@@ -5336,6 +5340,9 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
+  if (await handleTaskDocuments(req, res, url, { user, supabaseEnabled, rest, sendJson, sendDownload, readRawBody,
+    readDb, writeDb, dataDir: DATA_DIR, bucket: ACTIVITY_ATTACHMENT_BUCKET, uploadStorageObjectToBucket,
+    createStorageSignedUrlForBucket })) return;
   if (/^\/api\/management-tasks\/[^/]+\/remarks(?:\/[^/]+)?$/.test(url.pathname) && req.method !== "GET") {
     return sendJson(res, 405, { error: "Task remark history cannot be edited or deleted. Append a new remark instead." });
   }

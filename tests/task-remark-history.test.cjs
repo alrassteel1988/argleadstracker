@@ -16,7 +16,8 @@ test("late Admin notices cannot restore an invalidated task workspace", async ()
   const context = { managementTasks:workspace, state:{currentUser:{role:"admin"}},
     api:async path => path === "/api/management-tasks" ? [{id:"stale-task"}] : notices,
     renderManagementTasks() {}, managementTaskDefaultFilter:() => "all" };
-  const actions = vm.runInNewContext(source.slice(source.indexOf("async function loadManagementTasks()"),
+  const actions = vm.runInNewContext(source.slice(source.indexOf("let taskDocumentPreview ="),source.indexOf("async function viewTaskDocument("))
+    + source.slice(source.indexOf("async function loadManagementTasks()"),
     source.indexOf("function openManagementTaskDrawer(")) + ";({loadManagementTasks,invalidateManagementTasks})",context);
   const loading = actions.loadManagementTasks();
   await new Promise(resolve => setImmediate(resolve));

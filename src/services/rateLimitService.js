@@ -144,7 +144,8 @@ function requestRateLimitCategory(method, pathname) {
   if ((verb === "GET" || verb === "POST") && path.startsWith("/api/exports/")) return "export";
   if (verb === "POST" && (
     path === "/api/pmr-voice-notes" ||
-    /\/api\/leads\/[^/]+\/activities\/[^/]+\/attachments$/.test(path)
+    /\/api\/leads\/[^/]+\/activities\/[^/]+\/attachments$/.test(path) ||
+    /^\/api\/management-tasks\/[^/]+\/documents\/[^/]+$/.test(path)
   )) return "upload";
   if (verb === "POST" && ["/api/places/search", "/api/leads/enrich-company"].includes(path)) return "search";
   if (

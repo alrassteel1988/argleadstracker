@@ -13,6 +13,9 @@ const publicRequests = [
   ["/leads/lead-1001/overview", "text/html"],
   ["/leads/lead-1001/prepare-meeting", "text/html"],
   ["/client.js?v=test", "text/javascript"],
+  ["/rfq-pdf-viewer.mjs", "text/javascript"],
+  ["/assets/pdfjs/build/pdf.min.mjs", "text/javascript"],
+  ["/assets/pdfjs/build/pdf.worker.min.mjs", "text/javascript"],
   ["/styles.css?v=test", "text/css"],
   ["/crm-theme.css?v=test", "text/css"],
   ["/crm-icons.css?v=test", "text/css"],
@@ -39,6 +42,9 @@ const publicRequests = [
 
 const blockedRequests = [
   "/server.js",
+  "/assets/pdfjs/manifest.json",
+  "/assets/pdfjs/unapproved.mjs",
+  "/assets/pdfjs/build/pdf.mjs.map",
   "/supabase-client.js",
   "/package.json",
   "/vercel.json",

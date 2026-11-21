@@ -42,7 +42,7 @@
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
   <link rel="stylesheet" href="/admin-dashboard-clean.css?v=14-activity-origin-author">
-  <link rel="stylesheet" href="/management-tasks.css?v=8-full-width-conversation">
+  <link rel="stylesheet" href="/management-tasks.css?v=9-rfq-documents">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
   <body>
@@ -1204,6 +1204,13 @@
                 <option value="Meeting">Meeting</option>
               </select></label>
               <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Type notes or record a voice note"></textarea></label>
+              <section class="wide rfq-upload" id="leadRfqFiles" hidden aria-labelledby="leadRfqFilesHeading">
+                <strong id="leadRfqFilesHeading">RFQ supporting documents</strong>
+                <label>Upload files<input id="leadRfqFileInput" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" disabled></label>
+                <small>PDF, Word, PNG or JPEG. Up to 5 files, 4 MB each.</small>
+                <ul id="leadRfqFileList"></ul>
+                <p id="leadRfqUploadMessage" role="status" aria-live="polite"></p>
+              </section>
               <div class="wide voice-control">
                 <button class="voice-button" id="recordLeadVoice" type="button">Record Voice Note</button>
                 <span class="voice-status" id="leadVoiceStatus" aria-live="polite"></span>
@@ -1833,7 +1840,7 @@
     <div class="app-toast hidden" id="appToast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="/client.js?v=task-conversation-full-width"></script>
+  <script src="/client.js?v=admin-rfq-documents"></script>
   </body>
 </html>
 

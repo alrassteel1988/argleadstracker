@@ -59,7 +59,7 @@ test("assign, progress and complete a management task across roles", async ({ pa
     await card.getByLabel("Progress remarks").fill("The buyer confirmed the specification; waiting for quantities.");
     await card.locator('.mg-task-progress-form button[type="submit"]').click();
     await workspace.getByRole("button", { name: "Refresh", exact: true }).click();
-    await row.locator("summary").click();
+    await row.locator(":scope > summary").click();
     const details = row.locator(".mg-task-details");
     await expect(details.locator(":scope > div").nth(0)).toContainText(instructions);
     await expect(details.locator(":scope > div").nth(1)).toContainText(progressRemarks);
@@ -178,7 +178,7 @@ test("assign, progress and complete a management task across roles", async ({ pa
   await page.reload();
   await page.locator('[data-mg-tab="management"]').click();
   await expect(row).toContainText("Completed");
-  await row.locator("summary").click();
+  await row.locator(":scope > summary").click();
   await expect(row).toContainText(remarks);
   await expect(row).toContainText("Correction: the contact is Mr. Jai, not Mr. Raj.");
   await expect(workspace).toContainText("added an additional remark to completed task");
@@ -232,7 +232,7 @@ test("Admin removes only the selected duplicate and keeps an audit view", async 
   const workspace = page.locator("#managementTasksWorkspace");
   const row = workspace.locator(`[data-mg-row="${duplicate}"]`);
   const originalRow = workspace.locator(`[data-mg-row="${original}"]`);
-  await row.locator("summary").click();
+  await row.locator(":scope > summary").click();
   await row.getByRole("button", { name: "Remove task" }).click();
   const dialog = page.locator("#managementTaskFormDialog");
   await expect(dialog).toContainText("Synthetic Steel Company 01");
@@ -246,7 +246,7 @@ test("Admin removes only the selected duplicate and keeps an audit view", async 
   await page.locator('[data-mg-tab="management"]').click();
   await workspace.getByRole("button", { name: "Removed 1" }).click();
   await expect(row).toContainText("Removed");
-  await row.locator("summary").click();
+  await row.locator(":scope > summary").click();
   await expect(row).toContainText(reason);
   await expect(row.getByRole("button", { name: "Remove task" })).toHaveCount(0);
 
@@ -405,7 +405,7 @@ test("Admin resolves an initial duplicate on the same lead and Salesman retains 
   await page.locator('[data-mg-tab="management"]').click();
   const workspace = page.locator("#managementTasksWorkspace");
   const source = workspace.locator(`[data-mg-row="${linked.initial_management_task_id}"]`);
-  await source.locator("summary").click();
+  await source.locator(":scope > summary").click();
   await expect(source.getByRole("button", { name: "Resolve duplicate", exact: true })).toBeDisabled();
   await expect(source).toContainText("separate duplicate-lead review");
   const originalViewport = page.viewportSize();
@@ -468,7 +468,7 @@ test("Admin resolves an initial duplicate on the same lead and Salesman retains 
   expect(savedLead.initial_management_task_id).toBe(keep);
   await workspace.getByRole("button", { name: /^Removed / }).click();
   await expect(source).toBeVisible();
-  await source.locator("summary").click();
+  await source.locator(":scope > summary").click();
   await expect(source).toContainText(reason);
   await expect(source).toContainText("Retained same-lead follow-up");
   await expect(source.getByRole("button", { name: "Resolve duplicate", exact: true })).toHaveCount(0);

@@ -1,1 +1,3 @@
 *.pdf binary
+/assets/pdfjs/** -text
+/assets/pdfjs/**/LICENSE* -whitespace

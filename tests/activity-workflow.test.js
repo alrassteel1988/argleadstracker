@@ -66,7 +66,7 @@ assert.equal(attachment("brief.docx", "application/vnd.openxmlformats-officedocu
 assert.equal(attachment("report.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx).extension, ".xlsx");
 assert.throws(
   () => attachment("malware.exe", "application/octet-stream", Buffer.from("MZ")),
-  /PNG, PDF, DOC, DOCX, XLS, or XLSX/
+  /PNG, JPEG, PDF, DOC, DOCX, XLS, or XLSX/
 );
 assert.throws(
   () => attachment("renamed.pdf", "application/pdf", Buffer.from("MZ executable")),

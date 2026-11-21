@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v193-task-conversation-full-width";
+const CACHE_VERSION = "arg-pwa-v198-private-pdf-renderer";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -35,6 +35,9 @@ const APP_SHELL = [
   "/admin-dashboard-clean.css",
   "/bauhaus-global.css",
   "/client.js",
+  "/rfq-pdf-viewer.mjs",
+  "/assets/pdfjs/build/pdf.min.mjs",
+  "/assets/pdfjs/build/pdf.worker.min.mjs",
   "/favicon.svg",
   "/manifest.json",
   "/icons/icon-192.png",
