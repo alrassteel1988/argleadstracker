@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v195-rfq-panel-refresh";
+const CACHE_VERSION = "arg-pwa-v196-private-rfq-preview";
 const APP_SHELL = [
   "/",
   "/index.html",

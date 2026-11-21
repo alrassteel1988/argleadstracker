@@ -63,7 +63,7 @@ new lead foreign key; document metadata is retained with a null lead reference.
 Implementation files:
 
 - `client.js`, `index.html`, `management-tasks.css`, `sw.js`: role-scoped Step 3
-  picker, safe retry, task downloads, responsive layout and cache revision.
+  picker, safe retry, task downloads/private previews, responsive layout and cache revision.
 - `server.js`, `src/services/taskDocumentRoutes.js`,
   `src/services/rateLimitService.js`, `src/services/activityWorkflowService.js`:
   authenticated routes, upload throttling, integrity/type checks and JPEG support.
@@ -71,7 +71,8 @@ Implementation files:
 - `package.json`, `playwright.ui.config.js`, `tests/task-documents.test.cjs`,
   `tests/ui/rfq-documents.spec.js`, `tests/ui/management-tasks.spec.js`,
   `tests/activity-workflow.test.js`, `tests/activity-dashboard-latest.test.js`,
-  `tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`:
+  `tests/admin-dashboard-layout.test.js`, `tests/global-bauhaus-system.test.js`,
+  `tests/management-tasks.test.cjs`, `tests/task-remark-history.test.cjs`:
   verification integration, isolated upload fixtures, direct row selectors and
   cache-version assertions.
 
@@ -88,10 +89,16 @@ $env:CRM_UI_SUITE='rfq-documents'
 node node_modules/playwright/cli.js test --config=playwright.ui.config.js
 ```
 
-The SQL tests use disposable local PGlite fixtures and do not apply a hosted
-migration. Browser tests use synthetic local records. Hosted Storage/RLS,
-bucket MIME behavior and Admin/Salesman Preview workflows still require staging
-verification after separate migration and branch-environment approval.
+The SQL tests use disposable local PGlite fixtures. Browser tests use synthetic
+local records. The separately approved staging migration was applied and its
+permissions/Storage rules verified. A synthetic Admin registration produced one
+company, one lead, one linked task and four ready documents, each with one
+Salesman notice. Current-owner reads passed; peer reads, Salesman uploads and
+direct metadata edits/deletes were denied. Archive/restore access checks passed
+in a rolled-back staging transaction. Both hosted roles displayed all four
+files. Hosted browser download automation was interrupted, so that check remains
+unverified. The additional private viewer is local pending push approval and a
+fresh hosted test. Production readiness and migration approval are not included.
 
 No hosted migration, secret, environment change, Production operation, commit,
 push, PR, merge or deployment is authorized by this document. After owner
@@ -99,3 +106,7 @@ approval and backup/schema rechecks, apply only the reviewed migration through
 the established project-scoped release process. Do not run a broad database push
 against an environment with unrelated pending migrations. The release owner
 controls merge/deployment after staging and Production readiness gates pass.
+
+## Private File Preview
+
+PDF, PNG and JPEG supporting files offer View alongside Download for authorized Admins and the current assigned Salesman. View fetches the bytes through the same caller-authenticated, integrity-checked endpoint and displays a temporary in-page preview. No external viewer or public Storage URL is used. Closing the preview, signing out, changing account or losing the task during refresh clears it and revokes its temporary object URL. Word files remain download-only because this app has no private Word renderer. Viewing is not DRM: an authorized browser can still save already received content.

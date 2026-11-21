@@ -17,7 +17,8 @@ test("task drawer hides cached rows during refresh and ignores superseded reads"
     api: path => path === "/api/management-task-notices" ? Promise.resolve([]) : new Promise((resolve, reject) => requests.push({ resolve, reject })),
     renderManagementTaskDrawer: () => renders.push(workspace.rows.map(row => row.id)),
     renderManagementTasks: () => renders.push(workspace.rows.map(row => row.id)) };
-  const functions = source.slice(source.indexOf("async function loadManagementTasks("), source.indexOf("function openManagementTaskForm("));
+  const functions = source.slice(source.indexOf("let taskDocumentPreview ="),source.indexOf("async function viewTaskDocument("))
+    + source.slice(source.indexOf("async function loadManagementTasks("), source.indexOf("function openManagementTaskForm("));
   runInNewContext(functions, context);
   const oldRead = context.loadManagementTasks();
   context.openManagementTaskDrawer();
@@ -46,7 +47,8 @@ test("task mutations cannot repopulate lifecycle-invalidated rows or strand a re
   const workspace = { rows: [], ready: true, loading: false, pending: false, generation: 0 };
   const context = { managementTasks: workspace, state: { currentUser: { role: "salesman" } },
     api: path => path === "/api/management-task-notices" ? Promise.resolve([]) : new Promise(resolve => requests.push(resolve)), renderManagementTasks: () => {} };
-  runInNewContext(source.slice(source.indexOf("async function loadManagementTasks("), source.indexOf("function openManagementTaskForm("))
+  runInNewContext(source.slice(source.indexOf("let taskDocumentPreview ="),source.indexOf("async function viewTaskDocument("))
+    + source.slice(source.indexOf("async function loadManagementTasks("), source.indexOf("function openManagementTaskForm("))
     + source.slice(source.indexOf("async function saveManagementTask("), source.indexOf('document.addEventListener("click", event => {', source.indexOf("async function saveManagementTask("))), context);
   const oldRead = context.loadManagementTasks();
   const save = context.saveManagementTask("seen", "active-task", {});

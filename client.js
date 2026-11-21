@@ -15282,9 +15282,57 @@ async function loadTaskDocuments(event) {
   try {
     const docs = await api(`/api/management-tasks/${panel.dataset.taskDocuments}/documents`);
     if (owner !== state.currentUser?.id || !panel.isConnected) return;
-    body.innerHTML = docs.length ? docs.map(doc => `<div class="mg-task-document"><span>${escapeHtml(doc.filename)}<small>${escapeHtml(humanFileSize(doc.size))} &middot; ${escapeHtml(doc.uploaded_by_name)} &middot; ${escapeHtml(formatDateTime(doc.uploaded_at))}${doc.ready ? "" : " - Upload incomplete"}</small></span>${doc.ready ? `<button type="button" class="ghost-button" data-task-document="${escapeHtml(doc.download_url)}" data-filename="${escapeHtml(doc.filename)}">Download</button>` : doc.can_retry ? `<label class="mg-document-retry">Retry with the same file<input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" data-document-retry="${doc.id}" data-task="${escapeHtml(panel.dataset.taskDocuments)}" data-owner="${escapeHtml(String(owner))}"></label>` : ""}</div>`).join("") : "No supporting documents.";
+    body.innerHTML = docs.length ? docs.map(doc => `<div class="mg-task-document"><span>${escapeHtml(doc.filename)}<small>${escapeHtml(humanFileSize(doc.size))} &middot; ${escapeHtml(doc.uploaded_by_name)} &middot; ${escapeHtml(formatDateTime(doc.uploaded_at))}${doc.ready ? "" : " - Upload incomplete"}</small></span>${doc.ready ? `${["application/pdf", "image/png", "image/jpeg"].includes(doc.content_type) ? `<button type="button" class="ghost-button" data-task-document-view="${escapeHtml(doc.download_url)}" data-task="${escapeHtml(panel.dataset.taskDocuments)}" data-filename="${escapeHtml(doc.filename)}">View</button>` : ""}<button type="button" class="ghost-button" data-task-document="${escapeHtml(doc.download_url)}" data-filename="${escapeHtml(doc.filename)}">Download</button>` : doc.can_retry ? `<label class="mg-document-retry">Retry with the same file<input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" data-document-retry="${doc.id}" data-task="${escapeHtml(panel.dataset.taskDocuments)}" data-owner="${escapeHtml(String(owner))}"></label>` : ""}</div>`).join("") : "No supporting documents.";
   } catch { if (owner === state.currentUser?.id && panel.isConnected) body.textContent = "Documents could not be loaded. Close and reopen to retry."; }
 }
+let taskDocumentPreview = null;
+
+function closeTaskDocumentPreview() {
+  const preview = taskDocumentPreview;
+  taskDocumentPreview = null;
+  if (!preview) return;
+  preview.abort.abort();
+  if (preview.url) URL.revokeObjectURL(preview.url);
+  preview.dialog.remove();
+}
+
+async function viewTaskDocument(event) {
+  const button = event.target.closest("[data-task-document-view]");
+  if (!button) return;
+  closeTaskDocumentPreview();
+  const dialog = document.createElement("dialog");
+  dialog.className = "mg-task-dialog mg-document-preview";
+  dialog.setAttribute("aria-label", "Supporting document preview");
+  dialog.innerHTML = `<header class="mg-task-dialog-header"><h2>${escapeHtml(button.dataset.filename)}</h2><button type="button" class="ghost-button mg-task-close" aria-label="Close file preview" title="Close">&times;</button></header><div class="mg-document-preview-body"><p role="status">Loading preview...</p></div>`;
+  const preview = {dialog, owner:state.currentUser?.id, task:button.dataset.task, abort:new AbortController(), url:""};
+  taskDocumentPreview = preview;
+  dialog.querySelector("button").addEventListener("click", closeTaskDocumentPreview);
+  dialog.addEventListener("cancel", closeTaskDocumentPreview);
+  dialog.addEventListener("close", () => { if (taskDocumentPreview === preview) closeTaskDocumentPreview(); });
+  document.body.append(dialog);
+  dialog.showModal();
+  try {
+    const response = await authenticatedFetch(button.dataset.taskDocumentView, {signal:preview.abort.signal});
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || "Document preview is unavailable.");
+    }
+    const blob = await response.blob();
+    if (preview !== taskDocumentPreview || preview.owner !== state.currentUser?.id || !dialog.isConnected) return;
+    if (!["application/pdf", "image/png", "image/jpeg"].includes(blob.type)) throw new Error("This file type cannot be previewed. Use Download to open it privately.");
+    preview.url = URL.createObjectURL(blob);
+    const media = document.createElement(blob.type === "application/pdf" ? "iframe" : "img");
+    if (blob.type === "application/pdf") media.title = button.dataset.filename;
+    else media.alt = button.dataset.filename;
+    media.src = preview.url;
+    dialog.querySelector(".mg-document-preview-body").replaceChildren(media);
+  } catch (error) {
+    if (preview === taskDocumentPreview && preview.owner === state.currentUser?.id && dialog.isConnected) {
+      dialog.querySelector("[role=status]").textContent = error.message || "Document preview is unavailable.";
+    }
+  }
+}
+
 async function downloadTaskDocument(event) {
   const download = event.target.closest("[data-task-document]");
   if (!download) return;
@@ -15517,12 +15565,14 @@ async function loadManagementTasks() {
     const notices = await api("/api/management-task-notices").catch(() => []);
     if (workspace !== managementTasks || workspace.generation !== generation) return;
     workspace.rows = rows;
+    if (taskDocumentPreview && !rows.some(task => task.id === taskDocumentPreview.task)) closeTaskDocumentPreview();
     if (workspace.drawerAutoFilter) workspace.drawerFilter = managementTaskDefaultFilter(rows);
     workspace.notices = notices;
     workspace.ready = true;
     workspace.error = "";
   } catch {
     if (workspace !== managementTasks || workspace.generation !== generation) return;
+    closeTaskDocumentPreview();
     workspace.ready = false;
     workspace.rows = [];
     workspace.error = "Unavailable";
@@ -15535,6 +15585,7 @@ async function loadManagementTasks() {
 }
 
 function invalidateManagementTasks() {
+  closeTaskDocumentPreview();
   managementTasks.generation += 1;
   managementTasks.rows = [];
   managementTasks.notices = [];
@@ -16824,6 +16875,7 @@ async function fetchSalesmanAccounts() {
 }
 
 function showLogin(message = "") {
+  closeTaskDocumentPreview();
   managementTasks = newManagementTaskState();
   for (const id of ["managementTasksDrawer", "managementTaskFormDialog"]) {
     const dialog = document.getElementById(id);
@@ -18533,6 +18585,7 @@ els.leadForm.addEventListener("change", event => {
   if (["assigned_salesman", "initial_management_task_title"].includes(field.name)) renderLeadFormWizard();
 });
 document.addEventListener("toggle", loadTaskDocuments, true);
+document.addEventListener("click", viewTaskDocument);
 document.addEventListener("click", downloadTaskDocument);
 document.addEventListener("change", retryTaskDocument);
 document.getElementById("leadRfqFileInput")?.addEventListener("change", event => {

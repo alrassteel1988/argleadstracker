@@ -20,9 +20,9 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     await expect(page.locator("#leadRfqFiles")).toBeHidden();
     await form.locator('[name="initial_management_task_title"]').selectOption("Respond to Initial RFQ");
     await expect(page.locator("#leadRfqFiles")).toBeVisible();
-    const pdf = Buffer.from("%PDF-synthetic RFQ specification"), jpeg = Buffer.from([255,216,255,224,255,217]);
+    const pdf = Buffer.from("%PDF-synthetic RFQ specification"), png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM9sAAAAASUVORK5CYII=", "base64");
     await page.locator("#leadRfqFileInput").setInputFiles([{ name:"specification.pdf",mimeType:"application/pdf",buffer:pdf },
-      { name:"drawing.jpeg",mimeType:"image/jpeg",buffer:jpeg }]);
+      { name:"drawing.png",mimeType:"image/png",buffer:png }]);
     await expect(page.locator("#leadRfqFileList li")).toHaveCount(2);
     await capture(page, info, "rfq-step3-supporting-files", { fullPage:false });
     const saves = [];
@@ -84,6 +84,19 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     const documentRow = card.locator('.mg-task-document').filter({hasText:"specification.pdf"});
     expect((await documentRow.locator(":scope > span").boundingBox()).width).toBeGreaterThanOrEqual(140);
     expect((await documentRow.getByRole("button",{name:"Download"}).boundingBox()).width).toBeLessThanOrEqual(140);
+    const previews = sales.getByRole("dialog",{name:"Supporting document preview"});
+    await documentRow.getByRole("button",{name:"View",exact:true}).click();
+    await expect(previews.locator("iframe")).toHaveAttribute("src", /^blob:/);
+    await expect(previews.locator("iframe")).toHaveAttribute("title", "specification.pdf");
+    expect(await previews.getByRole("button",{name:"Close file preview"}).evaluate(button=>getComputedStyle(button,"::before").content)).not.toBe("none");
+    await previews.getByRole("button",{name:"Close file preview"}).click();
+    await expect(previews).toHaveCount(0);
+    await card.locator('.mg-task-document').filter({hasText:"drawing.png"}).getByRole("button",{name:"View",exact:true}).click();
+    await expect(previews.locator("img")).toHaveAttribute("src", /^blob:/);
+    await expect(previews.locator("img")).toHaveJSProperty("naturalWidth",1);
+    await capture(sales,info,"rfq-private-file-view",{fullPage:false});
+    await sales.keyboard.press("Escape");
+    await expect(previews).toHaveCount(0);
     const received = sales.waitForEvent("download");
     await card.locator('.mg-task-document').filter({hasText:"specification.pdf"}).getByRole("button",{name:"Download"}).click();
     const download = await received;
@@ -92,8 +105,11 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     await documentRow.scrollIntoViewIfNeeded();
     await capture(sales, info, "rfq-salesman-documents", {fullPage:false});
     expect(await sales.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+    await documentRow.getByRole("button",{name:"View",exact:true}).click();
+    await expect(previews.locator("iframe")).toHaveAttribute("src", /^blob:/);
     await sales.route("**/api/management-tasks", route => route.fulfill({json:[]}));
     await sales.evaluate(() => loadManagementTasks());
+    await expect(previews).toHaveCount(0);
     await expect(card).toHaveCount(0);
     await expect(sales.locator("#managementTasksDrawerList [data-task-documents]")).toHaveCount(0);
   } finally { await context.close(); }

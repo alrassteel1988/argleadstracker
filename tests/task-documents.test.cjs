@@ -11,6 +11,37 @@ const { validateActivityAttachment } = require("../src/services/activityWorkflow
 const migration = "20261121050416_management_task_rfq_documents.sql";
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 
+test("closing a private preview aborts its request and clears its object URL", () => {
+  const vm = require("node:vm"), source = fs.readFileSync(path.join(__dirname,"../client.js"),"utf8");
+  const revoked=[], removed=[], aborted=[];
+  const context={URL:{revokeObjectURL:url=>revoked.push(url)}};
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf("let taskDocumentPreview ="),source.indexOf("async function viewTaskDocument(")),context);
+  context.fixture={url:"blob:private-synthetic",abort:{abort:()=>aborted.push(true)},dialog:{remove:()=>removed.push(true)}};
+  vm.runInContext("taskDocumentPreview=fixture; closeTaskDocumentPreview(); closeTaskDocumentPreview()",context);
+  assert.deepEqual(revoked,["blob:private-synthetic"]);
+  assert.deepEqual(removed,[true]); assert.deepEqual(aborted,[true]);
+  assert.equal(vm.runInContext("taskDocumentPreview",context),null);
+});
+
+test("a closed preview ignores late protected bytes instead of displaying them", async () => {
+  const vm = require("node:vm"), source = fs.readFileSync(path.join(__dirname,"../client.js"),"utf8");
+  let finish;
+  const dialog={isConnected:true,setAttribute(){},querySelector:()=>({addEventListener(){}}),addEventListener(){},
+    showModal(){},remove(){this.isConnected=false;}};
+  const context={state:{currentUser:{id:"sales"}},AbortController,escapeHtml:value=>value,
+    document:{createElement:()=>dialog,body:{append(){}}},
+    URL:{createObjectURL(){throw new Error("Late preview exposed bytes");}},
+    authenticatedFetch:()=>new Promise(resolve=>{finish=resolve;})};
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf("let taskDocumentPreview ="),source.indexOf("async function downloadTaskDocument(")),context);
+  const viewing=context.viewTaskDocument({target:{closest:()=>({dataset:{filename:"fixture.pdf",task:"synthetic",taskDocumentView:"/api/synthetic"}})}});
+  context.closeTaskDocumentPreview();
+  finish({ok:true,blob:async()=>({type:"application/pdf"})});
+  await viewing;
+  assert.equal(dialog.isConnected,false);
+});
+
 test("task disclosure restore keeps only fresh authorized panels and is account scoped", () => {
   const vm = require("node:vm"), source = fs.readFileSync(path.join(__dirname,"../client.js"),"utf8");
   const context = {state:{currentUser:{id:"sales"}}};
