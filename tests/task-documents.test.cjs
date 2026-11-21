@@ -11,6 +11,27 @@ const { validateActivityAttachment } = require("../src/services/activityWorkflow
 const migration = "20261121050416_management_task_rfq_documents.sql";
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 
+test("task disclosure restore keeps only fresh authorized panels and is account scoped", () => {
+  const vm = require("node:vm"), source = fs.readFileSync(path.join(__dirname,"../client.js"),"utf8");
+  const context = {state:{currentUser:{id:"sales"}}};
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf("function captureManagementTaskPanels("), source.indexOf("function renderRfqLeadFiles(")), context);
+  const conversation = {open:true,closest:()=>({dataset:{mgCard:"kept"}})};
+  const document = {open:true,dataset:{taskDocuments:"kept"}};
+  const old = {dataset:{taskPanelOwner:"sales"},querySelectorAll:selector=>selector.includes("data-mg-card") ? [conversation] : [document,{dataset:{taskDocuments:"gone"}}]};
+  const panels = context.captureManagementTaskPanels(old);
+  conversation.open = false; document.open = false;
+  const fresh = {dataset:{},querySelectorAll:selector=>selector.includes("data-mg-card") ? [conversation] : [document]};
+  context.restoreManagementTaskPanels(fresh,panels);
+  assert.equal(conversation.open,true); assert.equal(document.open,true);
+  assert.equal(fresh.dataset.taskPanelOwner,"sales");
+  context.state.currentUser.id = "peer";
+  conversation.open = false; document.open = false;
+  context.restoreManagementTaskPanels(fresh,panels);
+  assert.equal(conversation.open,false); assert.equal(document.open,false);
+  assert.equal(context.captureManagementTaskPanels(old).documents.size,0);
+});
+
 test("RFQ task title emphasis escapes labels and does not alter business priority", () => {
   const vm=require("node:vm"), source=fs.readFileSync(path.join(__dirname,"../client.js"),"utf8");
   const title=vm.runInNewContext(source.slice(source.indexOf("function managementTaskTitle("),source.indexOf("function taskDocumentsMarkup("))+";managementTaskTitle",

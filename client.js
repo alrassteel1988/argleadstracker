@@ -15209,6 +15209,31 @@ function taskDocumentsMarkup(task) {
   return task.lead_id ? `<details class="mg-task-documents" data-task-documents="${escapeHtml(task.id)}"><summary>Supporting documents</summary><div role="status">Open to load documents.</div></details>` : "";
 }
 
+function captureManagementTaskPanels(container) {
+  const owner = String(state.currentUser?.id || "");
+  return {
+    owner,
+    conversations: new Set(container?.dataset.taskPanelOwner === owner
+      ? [...container.querySelectorAll("[data-mg-card] .mg-drawer-expanded[open]")].map(panel => panel.closest("[data-mg-card]").dataset.mgCard) : []),
+    documents: new Set(container?.dataset.taskPanelOwner === owner
+      ? [...container.querySelectorAll("[data-task-documents][open]")].map(panel => panel.dataset.taskDocuments) : [])
+  };
+}
+
+function restoreManagementTaskPanels(container, panels) {
+  if (!container) return;
+  const owner = String(state.currentUser?.id || "");
+  container.dataset.taskPanelOwner = owner;
+  if (!owner || panels.owner !== owner) return;
+  // Restore disclosure state only, never old rows or protected document content.
+  container.querySelectorAll("[data-mg-card] .mg-drawer-expanded").forEach(panel => {
+    panel.open = panels.conversations.has(panel.closest("[data-mg-card]").dataset.mgCard);
+  });
+  container.querySelectorAll("[data-task-documents]").forEach(panel => {
+    panel.open = panels.documents.has(panel.dataset.taskDocuments);
+  });
+}
+
 function renderRfqLeadFiles() {
   const list = document.getElementById("leadRfqFileList");
   if (list) list.innerHTML = rfqLeadUpload.files.map(item => `<li><span>${escapeHtml(item.file.name)} <small>${escapeHtml(humanFileSize(item.file.size))}${item.saved ? " - Uploaded" : ""}</small></span>${rfqLeadUpload.savedLead ? "" : `<button type="button" class="text-button" data-rfq-remove="${item.id}">Remove</button>`}</li>`).join("");
@@ -15336,6 +15361,7 @@ function renderManagementTaskWorkspace() {
   const pane = document.querySelector("#managementTasksWorkspace");
   const weekly = document.querySelector("#weeklyTasksWorkspace");
   if (!tabs || !pane || !weekly) return;
+  const openPanels = captureManagementTaskPanels(pane);
   const admin = state.currentUser?.role === "admin";
   const selected = admin && managementTasks.tab === "management";
   if (admin && currentView === "tasks") {
@@ -15379,6 +15405,7 @@ function renderManagementTaskWorkspace() {
     if (row.open) managementTasks.openRows.add(row.dataset.mgRow);
     else managementTasks.openRows.delete(row.dataset.mgRow);
   }));
+  restoreManagementTaskPanels(pane, openPanels);
 }
 
 function managementTaskDuplicateCandidates(task) {
@@ -15424,6 +15451,8 @@ function renderManagementTaskDrawer() {
 }
 
 function renderManagementTaskDrawerList() {
+  const list = document.querySelector("#managementTasksDrawerList");
+  const openPanels = captureManagementTaskPanels(list);
   const { rows, drawerFilter, drawerQuery, drawerSort, update, message } = managementTasks;
   const query = drawerQuery.trim().toLowerCase();
   const visible = managementTaskFilter(rows, drawerFilter).filter(task => !query
@@ -15434,7 +15463,7 @@ function renderManagementTaskDrawerList() {
   const footer = document.querySelector("#managementTasksDrawerCount");
   footer.hidden = !!stateMessage;
   footer.textContent = stateMessage ? "" : `Showing ${visible.length} of ${rows.length} tasks`;
-  document.querySelector("#managementTasksDrawerList").innerHTML = stateMessage || `
+  list.innerHTML = stateMessage || `
     ${managementTasks.notices.map(item => `<p class="mg-task-message" role="status">${escapeHtml(item.message)} <button type="button" class="text-button" data-mg-notice="${escapeHtml(item.id)}" data-mg-notice-task="${escapeHtml(item.payload?.task_id || "")}">View note</button></p>`).join("")}
     ${message ? `<p class="mg-task-message" role="status">${escapeHtml(message)}${message.includes("Refresh") ? ' <button type="button" class="ghost-button" data-mg-refresh>Refresh tasks</button>' : ""}</p>` : ""}
     ${visible.length ? `<div class="mg-drawer-table">
@@ -15443,6 +15472,7 @@ function renderManagementTaskDrawerList() {
     </div>` : `<p class="mg-task-empty">${!query && managementTaskCounts(rows).completed && ["not_started", "in_progress", "pending", "overdue"].includes(drawerFilter)
       ? `No tasks in this view &mdash; you have ${managementTaskCounts(rows).completed} completed task${managementTaskCounts(rows).completed === 1 ? "" : "s"}. <button type="button" class="ghost-button" data-mg-filter="completed">View completed</button>`
       : rows.length ? "No tasks match your search or filter." : "No management tasks have been assigned to you."}</p>`}`;
+  restoreManagementTaskPanels(list, openPanels);
 }
 
 function renderManagementTaskDrawerRow(task, update) {

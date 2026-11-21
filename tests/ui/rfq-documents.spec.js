@@ -58,6 +58,14 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     const docs = await page.evaluate(id => api(`/api/management-tasks/${id}/documents`),task.id);
     expect(docs).toHaveLength(2); expect(docs.every(doc=>doc.ready)).toBe(true);
     expect(docs.some(doc=>doc.storage_key)).toBe(false);
+    const adminRow = page.locator(`[data-mg-row="${task.id}"]`);
+    await adminRow.locator(":scope > summary").click();
+    await adminRow.locator("[data-task-documents] > summary").click();
+    await expect(adminRow.locator(".mg-task-document")).toHaveCount(2);
+    await page.evaluate(() => loadManagementTasks());
+    await expect(adminRow).toHaveAttribute("open", "");
+    await expect(adminRow.locator("[data-task-documents]")).toHaveAttribute("open", "");
+    await expect(adminRow.locator(".mg-task-document")).toHaveCount(2);
     await sales.reload();
     await sales.locator("#managementTasksMetric button").click();
     const card = sales.locator(`[data-mg-card="${task.id}"]`);
@@ -66,6 +74,13 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     await card.locator("[data-task-documents] > summary").click();
     await expect(card.locator(".mg-task-document")).toHaveCount(2);
     await expect(card).toContainText("specification.pdf");
+    let documentReloads = 0;
+    sales.on("request", request => { if (new URL(request.url()).pathname === `/api/management-tasks/${task.id}/documents`) documentReloads++; });
+    await sales.evaluate(() => loadManagementTasks());
+    await expect(card.locator(".mg-drawer-expanded")).toHaveAttribute("open", "");
+    await expect(card.locator("[data-task-documents]")).toHaveAttribute("open", "");
+    await expect(card.locator(".mg-task-document")).toHaveCount(2);
+    expect(documentReloads).toBeGreaterThan(0);
     const documentRow = card.locator('.mg-task-document').filter({hasText:"specification.pdf"});
     expect((await documentRow.locator(":scope > span").boundingBox()).width).toBeGreaterThanOrEqual(140);
     expect((await documentRow.getByRole("button",{name:"Download"}).boundingBox()).width).toBeLessThanOrEqual(140);
@@ -77,6 +92,10 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     await documentRow.scrollIntoViewIfNeeded();
     await capture(sales, info, "rfq-salesman-documents", {fullPage:false});
     expect(await sales.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+    await sales.route("**/api/management-tasks", route => route.fulfill({json:[]}));
+    await sales.evaluate(() => loadManagementTasks());
+    await expect(card).toHaveCount(0);
+    await expect(sales.locator("#managementTasksDrawerList [data-task-documents]")).toHaveCount(0);
   } finally { await context.close(); }
 });
 
