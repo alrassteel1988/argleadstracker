@@ -15292,6 +15292,7 @@ function closeTaskDocumentPreview() {
   taskDocumentPreview = null;
   if (!preview) return;
   preview.abort.abort();
+  preview.pdfCleanup?.();
   if (preview.url) URL.revokeObjectURL(preview.url);
   preview.dialog.remove();
 }
@@ -15320,10 +15321,16 @@ async function viewTaskDocument(event) {
     const blob = await response.blob();
     if (preview !== taskDocumentPreview || preview.owner !== state.currentUser?.id || !dialog.isConnected) return;
     if (!["application/pdf", "image/png", "image/jpeg"].includes(blob.type)) throw new Error("This file type cannot be previewed. Use Download to open it privately.");
+    if (blob.type === "application/pdf") {
+      const { renderPrivatePdf } = await import("/rfq-pdf-viewer.mjs");
+      if (preview !== taskDocumentPreview || preview.owner !== state.currentUser?.id || !dialog.isConnected) return;
+      preview.pdfCleanup = await renderPrivatePdf({ blob, container: dialog.querySelector(".mg-document-preview-body"),
+        signal: preview.abort.signal, isCurrent: () => preview === taskDocumentPreview && preview.owner === state.currentUser?.id });
+      return;
+    }
     preview.url = URL.createObjectURL(blob);
-    const media = document.createElement(blob.type === "application/pdf" ? "iframe" : "img");
-    if (blob.type === "application/pdf") media.title = button.dataset.filename;
-    else media.alt = button.dataset.filename;
+    const media = document.createElement("img");
+    media.alt = button.dataset.filename;
     media.src = preview.url;
     dialog.querySelector(".mg-document-preview-body").replaceChildren(media);
   } catch (error) {

@@ -114,7 +114,16 @@ controls merge/deployment after staging and Production readiness gates pass.
 
 ## Private File Preview
 
-PDF, PNG and JPEG supporting files offer View alongside Download for authorized Admins and the current assigned Salesman. View fetches the bytes through the same caller-authenticated, integrity-checked endpoint and displays a temporary in-page preview. No external viewer or public Storage URL is used. Closing the preview, signing out, changing account or losing the task during refresh clears it and revokes its temporary object URL. Word files remain download-only because this app has no private Word renderer. Viewing is not DRM: an authorized browser can still save already received content.
+PDF, PNG and JPEG supporting files offer View alongside Download for authorized Admins and the current assigned Salesman. View fetches bytes through the same caller-authenticated, integrity-checked endpoint. PNG/JPEG use a temporary object URL. PDFs use the bundled PDF.js canvas renderer with page navigation and zoom, not a browser PDF plugin, external viewer or public Storage URL. Closing the preview, signing out, changing account or losing task access aborts the request, destroys the PDF worker/canvas rendering and revokes temporary image URLs. Word files remain download-only. Viewing is not DRM: an authorized browser can still save already received content.
+
+PDF.js 6.5.438 is pinned and self-hosted with upstream licenses and integrity
+tests in `assets/pdfjs`. Only exact approved asset paths are served. No new npm
+runtime dependency, external viewer service, CSP exception or environment setting
+is required. PDF scripting/annotation actions are not executed, XFA/WASM/font-face
+loading and dynamic evaluation are disabled, parsing uses a worker, previews are limited to 500 pages and
+16 million canvas/image pixels. Password-protected, invalid or unsupported PDFs
+show a download fallback. Original document bytes and downloads are unchanged.
+See `assets/pdfjs/PROVENANCE.md` for the pinned registry integrity and update rules.
 
 ## 21 November Verification Snapshot
 
@@ -122,6 +131,7 @@ PDF, PNG and JPEG supporting files offer View alongside Download for authorized 
 - Pushed refresh fix: `13ecf8bc30d8d4b35068d6f4525f48d1345a26f9`.
 - Pushed viewer: `b2fdabed1a54b5bef87945ae6bc7b2a1b204fc44`.
 - Pushed retrieval repair: `4fdfe0188683e5c74e4a0825230e0779dcb725de`.
+- Pushed stacked layout: `30593cdc490279dce35b9e861da5ae34f18b92d4`.
 - All three GitHub checks passed on the viewer commit; matching Preview is Ready.
 - `npm.cmd run verify` passed. Eight focused document/security/SQL tests passed.
   Four applicable desktop/mobile RFQ browser tests passed, with four deliberate
@@ -144,5 +154,16 @@ PDF, PNG and JPEG supporting files offer View alongside Download for authorized 
   hosted final-layout acceptance and release-owner approval remain incomplete.
 - The generic narrow-screen dialog flex row squeezed the preview header and
   body side by side. The viewer now explicitly stacks them; regression tests
-  assert vertical order, full-width header and PDF frame width on both viewports.
+  assert vertical order, full-width header and PDF content width on both viewports.
   No authentication, file-route or database behavior changes in this correction.
+- Native PDF embedding remained blank in the Codex browser even with verified
+  bytes. The owner approved a bundled private renderer. Local tests now parse a
+  real two-page PDF, assert nonblank canvas pixels, navigate pages and zoom on
+  desktop/mobile. The UI fixture allowlist explicitly copies only the new public
+  runtime assets; initial missing-manifest fixture failures did not touch hosted
+  environments. Full local verification includes vendor integrity and exact
+  static-route/header checks. Fresh hosted canvas acceptance remains required.
+- The renderer's final full `npm.cmd run verify` passed, including nine focused
+  document/vendor tests. Browser coverage also checks that closing a PDF stops
+  its worker. Upstream license whitespace is retained byte-for-byte; only those
+  vendor license files are exempt from whitespace linting.

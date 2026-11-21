@@ -1,6 +1,19 @@
 const { test, expect } = require("@playwright/test");
 const { capture, login, blockExternalTraffic } = require("./helpers");
 
+function syntheticPdf() {
+  const content = number => `BT /F1 24 Tf 50 300 Td (RFQ SYNTHETIC PRIVATE PREVIEW PAGE ${number}) Tj ET`;
+  const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+    ...[6,7].map(id=>`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 400] /Resources << /Font << /F1 5 0 R >> >> /Contents ${id} 0 R >>`),
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ...[1,2].map(number=>`<< /Length ${content(number).length} >>\nstream\n${content(number)}\nendstream`)];
+  let body="%PDF-1.4\n", offsets=[0];
+  objects.forEach((object,index)=>{offsets.push(Buffer.byteLength(body));body+=`${index+1} 0 obj\n${object}\nendobj\n`;});
+  const start=Buffer.byteLength(body);
+  body+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n${offsets.slice(1).map(offset=>`${String(offset).padStart(10,"0")} 00000 n \n`).join("")}trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`;
+  return Buffer.from(body);
+}
+
 test("Admin RFQ supporting files survive a lost upload response and are downloadable by the assigned Salesman", async ({ page, browser }, info) => {
   test.skip(!info.project.name.startsWith("admin"), "Independent Admin and Salesman sessions");
   await blockExternalTraffic(page);
@@ -20,7 +33,7 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     await expect(page.locator("#leadRfqFiles")).toBeHidden();
     await form.locator('[name="initial_management_task_title"]').selectOption("Respond to Initial RFQ");
     await expect(page.locator("#leadRfqFiles")).toBeVisible();
-    const pdf = Buffer.from("%PDF-synthetic RFQ specification"), png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM9sAAAAASUVORK5CYII=", "base64");
+    const pdf = syntheticPdf(), png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM9sAAAAASUVORK5CYII=", "base64");
     await page.locator("#leadRfqFileInput").setInputFiles([{ name:"specification.pdf",mimeType:"application/pdf",buffer:pdf },
       { name:"drawing.png",mimeType:"image/png",buffer:png }]);
     await expect(page.locator("#leadRfqFileList li")).toHaveCount(2);
@@ -86,16 +99,33 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     expect((await documentRow.getByRole("button",{name:"Download"}).boundingBox()).width).toBeLessThanOrEqual(140);
     const previews = sales.getByRole("dialog",{name:"Supporting document preview"});
     await documentRow.getByRole("button",{name:"View",exact:true}).click();
-    await expect(previews.locator("iframe")).toHaveAttribute("src", /^blob:/);
-    await expect(previews.locator("iframe")).toHaveAttribute("title", "specification.pdf");
+    const pdfCanvas=previews.locator('canvas[data-pdf-rendered="true"]');
+    await expect(pdfCanvas).toBeVisible();
+    expect(sales.workers()).toHaveLength(1);
+    await expect(pdfCanvas).toHaveAttribute("aria-label", "PDF page 1 of 2");
+    const ink=await pdfCanvas.evaluate(canvas=>{
+      const pixels=canvas.getContext("2d").getImageData(0,0,canvas.width,canvas.height).data;
+      let count=0;for(let i=0;i<pixels.length;i+=4) if(pixels[i]<200&&pixels[i+1]<200&&pixels[i+2]<200&&pixels[i+3]>0) count++;
+      return count;
+    });
+    expect(ink).toBeGreaterThan(100);
     const previewHeader = await previews.locator("header").boundingBox();
     const previewBody = await previews.locator(".mg-document-preview-body").boundingBox();
     expect(previewBody.y).toBeGreaterThanOrEqual(previewHeader.y + previewHeader.height - 1);
     expect(previewHeader.width).toBeGreaterThanOrEqual((await previews.boundingBox()).width - 4);
-    expect((await previews.locator("iframe").boundingBox()).width).toBeGreaterThanOrEqual(previewBody.width - 26);
+    expect((await previews.locator(".mg-pdf-paper").boundingBox()).width).toBeGreaterThanOrEqual(previewBody.width - 26);
+    await previews.getByRole("button",{name:"Next PDF page"}).click();
+    await expect(pdfCanvas).toHaveAttribute("aria-label", "PDF page 2 of 2");
+    await expect(previews.getByRole("button",{name:"Next PDF page"})).toBeDisabled();
+    await previews.getByRole("button",{name:"Previous PDF page"}).click();
+    await expect(pdfCanvas).toHaveAttribute("aria-label", "PDF page 1 of 2");
+    await previews.getByRole("combobox",{name:"PDF zoom"}).selectOption("1.5");
+    await expect(pdfCanvas).toBeVisible();
+    await capture(sales,info,"rfq-private-pdf-canvas",{fullPage:false});
     expect(await previews.getByRole("button",{name:"Close file preview"}).evaluate(button=>getComputedStyle(button,"::before").content)).not.toBe("none");
     await previews.getByRole("button",{name:"Close file preview"}).click();
     await expect(previews).toHaveCount(0);
+    await expect.poll(()=>sales.workers().length).toBe(0);
     await card.locator('.mg-task-document').filter({hasText:"drawing.png"}).getByRole("button",{name:"View",exact:true}).click();
     await expect(previews.locator("img")).toHaveAttribute("src", /^blob:/);
     await expect(previews.locator("img")).toHaveJSProperty("naturalWidth",1);
@@ -111,7 +141,7 @@ test("Admin RFQ supporting files survive a lost upload response and are download
     await capture(sales, info, "rfq-salesman-documents", {fullPage:false});
     expect(await sales.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
     await documentRow.getByRole("button",{name:"View",exact:true}).click();
-    await expect(previews.locator("iframe")).toHaveAttribute("src", /^blob:/);
+    await expect(previews.locator('canvas[data-pdf-rendered="true"]')).toBeVisible();
     await sales.route("**/api/management-tasks", route => route.fulfill({json:[]}));
     await sales.evaluate(() => loadManagementTasks());
     await expect(previews).toHaveCount(0);

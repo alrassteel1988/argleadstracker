@@ -6,7 +6,7 @@ const {execFileSync} = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "../..");
 const BASELINE_REF = "62ec92668261142e5c0fa8b3a1be91359fee9241";
-const RUNTIME_FILE = /^(?:server\.js|client\.js|supabase-client\.js|enrichment\.js|index\.html|manifest\.json|favicon\.svg|sw\.js|[^/]+\.css|src\/.+\.js|icons\/.+\.png|assets\/brand\/.+\.png|assets\/email\/Al Ras Group - Company Profile\.pdf)$/;
+const RUNTIME_FILE = /^(?:server\.js|client\.js|supabase-client\.js|enrichment\.js|index\.html|manifest\.json|favicon\.svg|sw\.js|rfq-pdf-viewer\.mjs|[^/]+\.css|src\/.+\.js|icons\/.+\.png|assets\/brand\/.+\.png|assets\/email\/Al Ras Group - Company Profile\.pdf|assets\/pdfjs\/(?:manifest\.json|(?:build|standard_fonts|cmaps|wasm)\/[^/]+\.(?:mjs|js|bcmap|pfb|ttf)))$/;
 const FIXTURE_PASSWORD = "SyntheticUiOnly123!";
 const FIXTURE_USERS = [
   { id: "ui-admin", name: "Demo Admin", email: "admin@crm-ui.test", role: "admin", territory: "Mixed" },
@@ -19,7 +19,7 @@ function copyRuntime(source, destination, prefix = "") {
     const relative = `${prefix}${item.name}`;
     if (item.isDirectory()) {
       if (!["src", "icons", "assets", "assets/brand", "assets/email"].includes(relative)
-        && !relative.startsWith("src/")) continue;
+        && !relative.startsWith("src/") && relative !== "assets/pdfjs" && !relative.startsWith("assets/pdfjs/")) continue;
       copyRuntime(path.join(source, item.name), destination, `${relative}/`);
       continue;
     }

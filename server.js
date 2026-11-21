@@ -248,6 +248,7 @@ const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
@@ -257,6 +258,8 @@ const MIME_TYPES = {
 };
 
 const PUBLIC_STATIC_FILES = new Map([
+  ["/rfq-pdf-viewer.mjs", "rfq-pdf-viewer.mjs"],
+  ...require("./assets/pdfjs/manifest.json").map(file => [`/assets/pdfjs/${file}`, `assets/pdfjs/${file}`]),
   ["/index.html", "index.html"],
   ["/client.js", "client.js"],
   ["/styles.css", "styles.css"],
