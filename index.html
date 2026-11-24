@@ -36,13 +36,13 @@
   <link rel="stylesheet" href="/crm-shell.css?v=3-branding">
   <link rel="stylesheet" href="/crm-dashboard.css?v=20-salesman-activity-only">
   <link rel="stylesheet" href="/crm-data.css?v=1">
-  <link rel="stylesheet" href="/crm-record.css?v=9-lead-sidebar-height">
+  <link rel="stylesheet" href="/crm-record.css?v=10-summary-versions">
   <link rel="stylesheet" href="/crm-activity.css?v=1">
   <link rel="stylesheet" href="/crm-team.css?v=1">
   <link rel="stylesheet" href="/crm-reports.css?v=1">
   <link rel="stylesheet" href="/crm-dialogs.css?v=1">
   <link rel="stylesheet" href="/admin-dashboard-clean.css?v=14-activity-origin-author">
-  <link rel="stylesheet" href="/management-tasks.css?v=9-rfq-documents">
+  <link rel="stylesheet" href="/management-tasks.css?v=10-summary-attachments">
   <link rel="stylesheet" href="/mobile-ui.css?v=2-login-typography">
   </head>
   <body>
@@ -1204,6 +1204,13 @@
                 <option value="Meeting">Meeting</option>
               </select></label>
               <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Type notes or record a voice note"></textarea></label>
+              <section class="wide rfq-upload" id="leadSummaryFiles" hidden aria-labelledby="leadSummaryFilesHeading">
+                <strong id="leadSummaryFilesHeading">Lead summary document</strong>
+                <label>Lead summary PDF<input id="leadSummaryFileInput" type="file" accept=".pdf,application/pdf" disabled></label>
+                <small>PDF, up to 4 MB.</small>
+                <ul id="leadSummaryFileList"></ul>
+                <p id="leadSummaryUploadMessage" role="status" aria-live="polite"></p>
+              </section>
               <section class="wide rfq-upload" id="leadRfqFiles" hidden aria-labelledby="leadRfqFilesHeading">
                 <strong id="leadRfqFilesHeading">RFQ supporting documents</strong>
                 <label>Upload files<input id="leadRfqFileInput" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" disabled></label>

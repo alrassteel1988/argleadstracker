@@ -1,6 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
+  "git": {
+    "deploymentEnabled": {
+      "codex/lead-summary-versions": false
+    }
+  },
   "builds": [
     { "src": "rfq-pdf-viewer.mjs", "use": "@vercel/static" },
     { "src": "assets/pdfjs/**", "use": "@vercel/static" },

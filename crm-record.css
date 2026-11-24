@@ -898,3 +898,25 @@ body #appShell #leadDetailView :is(.meta-label, .activity-type-label, .handoff-e
   body #appShell #leadDetailView .record-overview-assistant-host #aiAssistantLauncher { position: static !important; inset: auto !important; transform: none !important; width: 48px; height: 48px; min-width: 48px; min-height: 48px; margin: 0; padding: 12px; border-radius: 10px !important; box-shadow: none; }
   body #appShell #leadDetailView .record-overview-assistant-host #aiAssistantLauncher span { display: none; }
 }
+.lead-summary-version { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; padding:14px 0; border-bottom:1px solid #dbe3ec; }
+.lead-summary-version > div { min-width:0; overflow-wrap:anywhere; }
+.lead-summary-version p { margin:6px 0; }
+.lead-summary-note { white-space:pre-wrap; }
+.lead-summary-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.lead-summary-archive { margin-top:16px; }
+dialog.lead-summary-dialog[open] { display:flex; flex-direction:column; width:min(640px,calc(100vw - 24px)); max-width:calc(100vw - 24px); max-height:calc(100dvh - 24px); padding:0; overflow:hidden; }
+.lead-summary-dialog .mg-task-dialog-header { flex:none; padding:16px; display:flex; align-items:center; gap:12px; justify-content:space-between; }
+.lead-summary-dialog h2 { font-size:18px; overflow-wrap:anywhere; min-width:0; margin:0; }
+.lead-summary-dialog-body { flex:1; min-width:0; min-height:0; padding:16px; overflow:auto; }
+.lead-summary-dialog-body form { display:grid; gap:12px; }
+.lead-summary-dialog-body input, .lead-summary-dialog-body textarea { max-width:100%; width:100%; box-sizing:border-box; }
+.lead-summary-dialog-body textarea { min-height:100px; }
+.lead-summary-dialog-body footer { display:flex; justify-content:flex-end; }
+body dialog.lead-summary-dialog.lead-summary-viewer[open] { position:fixed; inset:0; box-sizing:border-box; width:100% !important; height:100dvh; max-width:100% !important; max-height:100dvh !important; margin:0 !important; border-radius:0 !important; }
+.lead-summary-viewer .mg-pdf-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:12px; }
+.lead-summary-viewer .mg-pdf-toolbar button { width:40px; min-width:40px; flex:0 0 40px; }
+.lead-summary-viewer .mg-pdf-toolbar select { width:auto !important; min-width:100px; max-width:160px; margin-inline-start:auto; }
+@media(max-width:600px) {
+  .lead-summary-version { grid-template-columns:minmax(0,1fr); }
+  .lead-summary-section .drawer-tab-heading { flex-wrap:wrap; gap:12px; }
+}
