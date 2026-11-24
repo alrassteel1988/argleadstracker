@@ -3943,6 +3943,8 @@ function resetLeadWizardState() {
   rfqLeadUpload = { owner: String(state.currentUser?.id || ""), files: [], savedLead: null, busy: false };
   const uploadMessage = document.getElementById("leadRfqUploadMessage");
   if (uploadMessage) uploadMessage.textContent = "";
+  const summaryMessage = document.getElementById("leadSummaryUploadMessage");
+  if (summaryMessage) summaryMessage.textContent = "";
   state.leadFormStep = 0;
   state.leadFormDetailsOpen = { company: false, contact: false };
 }
@@ -4180,6 +4182,8 @@ function renderLeadFormWizard() {
   const rfq = initialTask && els.leadForm.elements.initial_management_task_title.value === "Respond to Initial RFQ";
   document.getElementById("leadRfqFiles").hidden = !rfq;
   document.getElementById("leadRfqFileInput").disabled = !rfq || Boolean(rfqLeadUpload.savedLead);
+  document.getElementById("leadSummaryFiles").hidden = !initialTask;
+  document.getElementById("leadSummaryFileInput").disabled = !initialTask || Boolean(rfqLeadUpload.savedLead);
   renderRfqLeadFiles();
   ["leadNextActionField", "leadNextActionDateField"].forEach(id => {
     const field = document.getElementById(id);
@@ -11620,6 +11624,153 @@ function leadIntelligenceUploadMarkup(leadId, { hasReport = false, processing = 
   return `<label class="primary-button lead-intel-upload-control">${label}<input type="file" accept="application/pdf,.pdf" data-lead-intelligence-upload="${escapeHtml(leadId)}"></label>`;
 }
 
+let leadSummaryDialog = null;
+
+function closeLeadSummaryDialog() {
+  const draft = leadSummaryDialog;
+  leadSummaryDialog = null;
+  if (!draft) return;
+  draft.abort.abort();
+  draft.pdfCleanup?.();
+  draft.file = null;
+  draft.dialog.remove();
+}
+
+function leadSummaryDialogCurrent(draft) {
+  return leadSummaryDialog === draft && draft.dialog.isConnected && draft.owner === state.currentUser?.id
+    && (!draft.archived || state.currentUser?.role === "admin") && (draft.documentId || state.currentUser?.role === "admin")
+    && (draft.taskId ? currentView === draft.view && managementTasks.rows.some(task=>task.id===draft.taskId && task.lead_id===draft.leadId && !managementTaskRemoved(task))
+      : currentView === "lead" && state.selectedId === draft.leadId && state.leadDrawerTab === "intel");
+}
+
+function createLeadSummaryDialog(leadId,title,viewer = false) {
+  closeLeadSummaryDialog();
+  const dialog = document.createElement("dialog");
+  dialog.className = `mg-task-dialog lead-summary-dialog${viewer ? " lead-summary-viewer" : ""}`;
+  dialog.setAttribute("aria-label",viewer ? "Lead summary full-page viewer" : "Publish lead summary");
+  dialog.innerHTML = `<header class="mg-task-dialog-header"><h2>${escapeHtml(title)}</h2><button type="button" class="ghost-button mg-task-close" aria-label="Close lead summary" title="Close">&times;</button></header><div class="lead-summary-dialog-body"><p role="status">Loading...</p></div>`;
+  const draft = {dialog,owner:state.currentUser?.id,leadId,view:currentView,abort:new AbortController(),file:null};
+  leadSummaryDialog = draft;
+  dialog.querySelector("button").addEventListener("click",closeLeadSummaryDialog);
+  dialog.addEventListener("cancel",closeLeadSummaryDialog);
+  dialog.addEventListener("close",()=>{if(leadSummaryDialog === draft) closeLeadSummaryDialog();});
+  document.body.append(dialog); dialog.showModal();
+  return draft;
+}
+
+async function viewLeadSummary(leadId,doc,archived = false,taskId = "") {
+  const draft = createLeadSummaryDialog(leadId,doc.filename,true);
+  draft.documentId=doc.id; draft.archived=archived;draft.taskId=taskId;
+  const body=draft.dialog.querySelector(".lead-summary-dialog-body");
+  try {
+    const response=await authenticatedFetch(doc.download_url,{signal:draft.abort.signal});
+    if(!response.ok) {const result=await response.json().catch(()=>({}));throw new Error(result.error || "Summary unavailable.");}
+    const blob=await response.blob();
+    if(!leadSummaryDialogCurrent(draft)) return;
+    if(blob.type!=="application/pdf") throw new Error("This summary is not a PDF.");
+    const {renderPrivatePdf}=await import("/rfq-pdf-viewer.mjs");
+    if(!leadSummaryDialogCurrent(draft)) return;
+    draft.pdfCleanup=await renderPrivatePdf({blob,container:body,signal:draft.abort.signal,isCurrent:()=>leadSummaryDialogCurrent(draft)});
+  } catch(error) {if(leadSummaryDialogCurrent(draft)) body.querySelector("[role=status]").textContent=error.message;}
+}
+
+function openLeadSummaryUpload(leadId,current) {
+  if(state.currentUser?.role!=="admin") return;
+  const draft=createLeadSummaryDialog(leadId,current ? "Replace lead summary" : "Upload lead summary");
+  draft.id=crypto.randomUUID(); draft.previous=current?.id || ""; draft.attempted=false;
+  const body=draft.dialog.querySelector(".lead-summary-dialog-body");
+  body.innerHTML=`<form><label>Summary PDF<input type="file" accept=".pdf,application/pdf" required></label><small>PDF, up to 4 MB.</small><label>What changed?<textarea name="note" maxlength="500" ${current ? "required" : ""}></textarea></label><p role="status"></p><footer><button type="submit" class="primary-button">Publish summary</button></footer></form>`;
+  const form=body.querySelector("form"),picker=form.querySelector("input"),note=form.querySelector("textarea"),message=form.querySelector("[role=status]"),submit=form.querySelector('[type="submit"]');
+  form.addEventListener("submit",async event=>{
+    event.preventDefault();
+    if(!leadSummaryDialogCurrent(draft) || draft.busy || state.currentUser?.role!=="admin") return;
+    draft.file ||= picker.files[0];
+    if(!draft.file || !/\.pdf$/i.test(draft.file.name) || !draft.file.size || draft.file.size>4*1024*1024) {message.textContent="Choose a PDF up to 4 MB.";draft.file=null;return;}
+    if(draft.previous && !note.value.trim()) {message.textContent="Enter a reason for replacing the summary.";return;}
+    draft.note ??= note.value.trim(); draft.busy=true;draft.attempted=true;
+    picker.disabled=note.disabled=submit.disabled=true; submit.textContent="Publishing...";message.textContent="";
+    try {
+      const response=await authenticatedFetch(`/api/leads/${encodeURIComponent(leadId)}/summary-documents/${draft.id}`,{
+        method:"POST",signal:draft.abort.signal,headers:{"Content-Type":"application/pdf","X-File-Name":encodeURIComponent(draft.file.name),
+          "X-Upload-Owner":String(draft.owner),"X-Current-Document":draft.previous,"X-Change-Note":encodeURIComponent(draft.note)},body:draft.file});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok) throw Object.assign(new Error(result.error || "Summary upload failed."),{status:response.status});
+      if(!leadSummaryDialogCurrent(draft)) return;
+      closeLeadSummaryDialog(); setToast("Lead summary published. Previous versions retained.","success");
+      document.querySelectorAll("[data-lead-summary]").forEach(loadLeadSummaryPanel);
+    } catch(error) {
+      if(!leadSummaryDialogCurrent(draft)) return;
+      message.textContent=`${error.message}${error.status===409 ? " Close and refresh before starting a new replacement." : " Retry uses the same document request."}`;
+      submit.disabled=error.status===409; submit.textContent="Retry upload";
+    } finally {draft.busy=false;}
+  });
+}
+
+function leadSummaryDocumentMarkup(doc,archived = false) {
+  return `<article class="lead-summary-version"><div><strong>${escapeHtml(doc.filename)}</strong><p>Version ${escapeHtml(String(doc.version))} &middot; ${escapeHtml(formatDateTime(doc.published_at))} &middot; ${escapeHtml(doc.uploaded_by_name)}</p>${doc.change_note ? `<p class="lead-summary-note">${escapeHtml(doc.change_note)}</p>` : ""}${!archived ? `<small>Review ${new Date(doc.review_due_at)<new Date() ? "due" : "by"} ${escapeHtml(formatDisplayDate(doc.review_due_at))}</small>` : `<small>Archived ${escapeHtml(formatDateTime(doc.archived_at))}</small>`}</div><div class="lead-summary-actions"><button type="button" class="ghost-button" data-summary-view="${doc.id}">View full page</button><button type="button" class="ghost-button" data-summary-download="${doc.id}">Download</button></div></article>`;
+}
+
+async function downloadLeadSummaryDocument(leadId,doc,taskId = "") {
+    const owner=state.currentUser?.id,view=currentView;
+    const current=()=>owner===state.currentUser?.id && (taskId ? currentView===view && managementTasks.rows.some(task=>task.id===taskId && task.lead_id===leadId && !managementTaskRemoved(task)) : currentView==="lead" && state.selectedId===leadId);
+    try {
+      const response=await authenticatedFetch(doc.download_url);
+      if(!response.ok) {const result=await response.json().catch(()=>({}));throw new Error(result.error || "Summary unavailable.");}
+      const blob=await response.blob();
+      if(!current()) return;
+      const url=URL.createObjectURL(blob),link=document.createElement("a");
+      try {link.href=url;link.download=doc.filename;document.body.append(link);link.click();}
+      finally {link.remove();URL.revokeObjectURL(url);}
+    } catch(error){if(current()) setToast(error.message,"error");}
+}
+
+function bindLeadSummaryDocuments(container,leadId,documents,archived = false) {
+  container.querySelectorAll("[data-summary-view]").forEach(button=>button.addEventListener("click",()=>viewLeadSummary(leadId,documents.find(doc=>doc.id===button.dataset.summaryView),archived)));
+  container.querySelectorAll("[data-summary-download]").forEach(button=>button.addEventListener("click",()=>downloadLeadSummaryDocument(leadId,documents.find(row=>row.id===button.dataset.summaryDownload))));
+}
+
+async function loadLeadSummaryArchive(details,leadId,offset=0) {
+  const owner=state.currentUser?.id,body=details.querySelector("div");
+  body.textContent="Loading archived versions...";
+  try {
+    const result=await api(`/api/leads/${encodeURIComponent(leadId)}/summary-documents?archived=1&offset=${offset}`);
+    if(!details.isConnected || owner!==state.currentUser?.id || state.currentUser?.role!=="admin") return;
+    body.innerHTML=result.documents.map(doc=>leadSummaryDocumentMarkup(doc,true)).join("") || "No archived versions.";
+    body.insertAdjacentHTML("beforeend",`<div class="lead-summary-actions">${offset ? '<button type="button" class="ghost-button" data-summary-previous>Previous</button>' : ""}${result.has_more ? '<button type="button" class="ghost-button" data-summary-next>Next</button>' : ""}</div>`);
+    bindLeadSummaryDocuments(body,leadId,result.documents,true);
+    body.querySelector("[data-summary-previous]")?.addEventListener("click",()=>loadLeadSummaryArchive(details,leadId,offset-20));
+    body.querySelector("[data-summary-next]")?.addEventListener("click",()=>loadLeadSummaryArchive(details,leadId,offset+20));
+  } catch(error) {if(details.isConnected && owner===state.currentUser?.id) body.textContent=error.message;}
+}
+
+async function loadLeadSummaryPanel(panel) {
+  if(panel.summaryRequestPending) return;
+  const owner=state.currentUser?.id,leadId=panel.dataset.leadSummary;
+  panel.dataset.summaryOwner=String(owner || "");
+  panel.summaryRequestPending=true;
+  if(!panel.dataset.summaryLoaded) panel.innerHTML='<h3>Lead summary document</h3><p role="status">Loading summary...</p>';
+  try {
+    const result=await api(`/api/leads/${encodeURIComponent(leadId)}/summary-documents`);
+    if(!panel.isConnected || owner!==state.currentUser?.id) return;
+    const current=result.documents[0];
+    if(leadSummaryDialog?.documentId && !leadSummaryDialog.archived && leadSummaryDialog.documentId!==current?.id) closeLeadSummaryDialog();
+    panel.innerHTML=`<div class="drawer-tab-heading"><h3>Lead summary document</h3>${result.can_upload ? `<button type="button" class="primary-button" data-summary-upload>${current ? "Upload new version" : "Upload summary PDF"}</button>` : ""}</div>${current ? leadSummaryDocumentMarkup(current) : '<p>No lead summary document yet.</p>'}${state.currentUser?.role==="admin" ? '<details class="lead-summary-archive"><summary>Archived versions</summary><div></div></details>' : ""}`;
+    panel.dataset.summaryLoaded="true";
+    panel.querySelector("[data-summary-upload]")?.addEventListener("click",()=>openLeadSummaryUpload(leadId,current));
+    bindLeadSummaryDocuments(panel,leadId,result.documents);
+    panel.querySelector("details")?.addEventListener("toggle",event=>{if(event.target.open) void loadLeadSummaryArchive(event.target,leadId);});
+  } catch(error) {
+    if(panel.isConnected && owner===state.currentUser?.id) {
+      panel.innerHTML='<h3>Lead summary document</h3><p role="status">Summary documents are unavailable. Ask management to check the document setup.</p><button type="button" class="ghost-button">Retry</button>';
+      panel.querySelector("button").addEventListener("click",()=>loadLeadSummaryPanel(panel));
+    }
+  } finally {panel.summaryRequestPending=false;}
+}
+
+function leadSummaryPanelMarkup(lead) {
+  return `<section class="drawer-section lead-summary-section" data-lead-summary="${escapeHtml(lead.id)}"><h3>Lead summary document</h3><p role="status">Loading summary...</p></section>`;
+}
+
 function renderDrawerIntel(lead) {
   const statePayload = state.leadDrawerIntel && !Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : { market_items: Array.isArray(state.leadDrawerIntel) ? state.leadDrawerIntel : [] };
   const report = statePayload.report || null;
@@ -11633,6 +11784,7 @@ function renderDrawerIntel(lead) {
   const failedVisible = failed && !processing;
   const uploadControl = leadIntelligenceUploadMarkup(lead.id, { hasReport: Boolean(report), processing });
   return `
+    ${leadSummaryPanelMarkup(lead)}
     <section class="drawer-section lead-intel-section">
       <div class="drawer-tab-heading">
         <h3>UAE Structural Steel Lead Intelligence</h3>
@@ -11722,7 +11874,8 @@ function renderLeadDrawer() {
     return;
   }
 
-  const body = state.leadDrawerLoading ? drawerSkeleton() : ({
+  const body = state.leadDrawerLoading
+    ? `${state.leadDrawerTab === "intel" ? leadSummaryPanelMarkup(lead) : ""}${drawerSkeleton()}` : ({
     overview: renderDrawerOverview(lead),
     activities: renderDrawerActivities(lead),
     pmr: renderDrawerPmrs(lead),
@@ -11730,6 +11883,13 @@ function renderLeadDrawer() {
     intel: renderDrawerIntel(lead),
     notes: renderDrawerNotes(lead)
   }[state.leadDrawerTab] || renderDrawerOverview(lead));
+
+  // Keep an authorized panel's pending request attached across unrelated redraws.
+  const previousSummary=els.leadDetailPageContent.querySelector("[data-lead-summary]");
+  const preserveSummary=state.leadDrawerTab==="intel" && previousSummary?.dataset.leadSummary===lead.id
+    && previousSummary.dataset.summaryOwner===String(state.currentUser?.id)
+    && state.currentUser?.status==="active"
+    && (state.currentUser?.role==="admin" || state.currentUser?.role==="salesman" && !lead.is_archived && lead.assigned_to===state.currentUser.id);
 
   els.leadDetailView.classList.remove("hidden");
   els.leadDetailPageContent.innerHTML = `
@@ -11772,6 +11932,7 @@ function renderLeadDrawer() {
     <div class="drawer-body lead-detail-page-body">${body}</div>
     <div class="record-mobile-actions" aria-label="Lead actions"><button class="primary-button" type="button" data-drawer-log-activity="${escapeHtml(lead.id)}">Add activity</button><button class="ghost-button" type="button" data-record-note>Note</button></div>
   `;
+  if(preserveSummary) els.leadDetailPageContent.querySelector("[data-lead-summary]")?.replaceWith(previousSummary);
   if (assistantLauncher) els.leadDetailPageContent.querySelector(".record-assistant-host")?.appendChild(assistantLauncher);
   renderLeadAiSummaryPanel(lead, { panel: els.leadAiSummaryPagePanel, content: els.leadAiSummaryPageContent });
   bindLeadDrawerEvents();
@@ -11820,6 +11981,7 @@ function arrangeMobileLeadOverview() {
 }
 
 function bindLeadDrawerEvents() {
+  document.querySelectorAll("[data-lead-summary]").forEach(loadLeadSummaryPanel);
   const assistantForm = els.leadDetailPageContent?.querySelector(".record-overview-assistant");
   const transferQuestion = () => {
     const input = assistantForm.querySelector("input");
@@ -15209,6 +15371,36 @@ function taskDocumentsMarkup(task) {
   return task.lead_id ? `<details class="mg-task-documents" data-task-documents="${escapeHtml(task.id)}"><summary>Supporting documents</summary><div role="status">Open to load documents.</div></details>` : "";
 }
 
+function taskSummaryMarkup(task) {
+  return `<span class="mg-task-summary-attachment" data-task-summary="${escapeHtml(task.id)}" data-label="Attachments"><small>${task.lead_id && !managementTaskRemoved(task) ? "Loading..." : "--"}</small></span>`;
+}
+
+async function loadTaskSummaryAttachments(container) {
+  if(leadSummaryDialog?.taskId && !leadSummaryDialogCurrent(leadSummaryDialog)) closeLeadSummaryDialog();
+  const owner=state.currentUser?.id,generation=managementTasks.generation;
+  const cells=[...container.querySelectorAll("[data-task-summary]")];
+  const tasks=managementTasks.rows.filter(task=>task.lead_id && !managementTaskRemoved(task) && cells.some(cell=>cell.dataset.taskSummary===task.id));
+  for(let offset=0;offset<tasks.length;offset+=100) {
+    const chunk=tasks.slice(offset,offset+100);
+    try {
+      const result=await api(`/api/management-task-summary-documents?ids=${chunk.map(task=>encodeURIComponent(task.id)).join(",")}`);
+      if(owner!==state.currentUser?.id || generation!==managementTasks.generation || !container.isConnected) return;
+      for(const task of chunk) {
+        const doc=result.attachments.find(item=>item.task_id===task.id)?.document;
+        if(leadSummaryDialog?.taskId===task.id && leadSummaryDialog.documentId!==doc?.id) closeLeadSummaryDialog();
+        for(const cell of cells.filter(cell=>cell.dataset.taskSummary===task.id && cell.isConnected)) {
+          cell.innerHTML=doc ? `<small>Lead summary</small><span>${escapeHtml(doc.filename)}</span><div class="lead-summary-actions"><button type="button" class="text-button" data-task-summary-view>View</button><button type="button" class="text-button" data-task-summary-download>Download</button></div>` : '<small>No lead summary</small>';
+          cell.querySelector("[data-task-summary-view]")?.addEventListener("click",event=>{event.stopPropagation();viewLeadSummary(task.lead_id,doc,false,task.id);});
+          cell.querySelector("[data-task-summary-download]")?.addEventListener("click",event=>{event.stopPropagation();downloadLeadSummaryDocument(task.lead_id,doc,task.id);});
+        }
+      }
+    } catch {
+      if(owner!==state.currentUser?.id || generation!==managementTasks.generation) return;
+      cells.filter(cell=>cell.isConnected && chunk.some(task=>task.id===cell.dataset.taskSummary)).forEach(cell=>{cell.innerHTML='<small>Unavailable</small>';});
+    }
+  }
+}
+
 function captureManagementTaskPanels(container) {
   const owner = String(state.currentUser?.id || "");
   return {
@@ -15237,14 +15429,28 @@ function restoreManagementTaskPanels(container, panels) {
 function renderRfqLeadFiles() {
   const list = document.getElementById("leadRfqFileList");
   if (list) list.innerHTML = rfqLeadUpload.files.map(item => `<li><span>${escapeHtml(item.file.name)} <small>${escapeHtml(humanFileSize(item.file.size))}${item.saved ? " - Uploaded" : ""}</small></span>${rfqLeadUpload.savedLead ? "" : `<button type="button" class="text-button" data-rfq-remove="${item.id}">Remove</button>`}</li>`).join("");
+  const summary=document.getElementById("leadSummaryFileList"),item=rfqLeadUpload.summary;
+  if(summary) summary.innerHTML=item ? `<li><span>${escapeHtml(item.file.name)} <small>${escapeHtml(humanFileSize(item.file.size))}${item.saved ? " - Uploaded" : ""}</small></span>${rfqLeadUpload.savedLead ? "" : '<button type="button" class="text-button" data-summary-remove>Remove</button>'}</li>` : "";
 }
 
 async function uploadRfqLeadFiles(lead, draft) {
   if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) throw new Error("The lead form or account changed during upload.");
-  if (!draft.files.length) return;
+  const files=draft.rfqEnabled===false ? [] : draft.files;
+  if (!files.length && !draft.summary) return;
   draft.savedLead = lead;
+  if(draft.summary && !draft.summary.saved) {
+    const item=draft.summary;
+    const response=await authenticatedFetch(`/api/leads/${encodeURIComponent(lead.id)}/summary-documents/${item.id}`,{
+      method:"POST",headers:{"Content-Type":"application/pdf","X-File-Name":encodeURIComponent(item.file.name),"X-Upload-Owner":draft.owner,
+        "X-Current-Document":"","X-Change-Note":"Initial lead summary"},body:item.file});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(result.error || "Lead summary upload failed.");
+    if(draft!==rfqLeadUpload || draft.owner!==String(state.currentUser?.id)) throw new Error("The account changed during upload.");
+    item.saved=true;renderRfqLeadFiles();
+  }
+  if (!files.length) return;
   if (!lead.initial_management_task_id) throw new Error("The saved lead has no initial RFQ task. Contact Admin before retrying.");
-  for (const item of draft.files) {
+  for (const item of files) {
     if (item.saved) continue;
     if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) throw new Error("The account changed. Sign in to the original Admin account to retry.");
     await uploadTaskDocument(lead.initial_management_task_id, item.id, item.file, draft.owner);
@@ -15266,6 +15472,8 @@ async function uploadTaskDocument(taskId, id, file, owner) {
 function rfqUploadFailure(error, draft) {
   if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) return;
   document.getElementById("leadRfqUploadMessage").textContent = `Lead already saved. ${error.message} Retry uploads; do not create the lead again.`;
+  const message=document.getElementById("leadSummaryUploadMessage");
+  if(message) message.textContent=`Lead already saved. ${error.message} Retry uploads; do not create the lead again.`;
   els.leadForm.querySelectorAll("input,select,textarea").forEach(field => {
     if (!field.disabled) { field.disabled = true; field.dataset.rfqFrozen = "true"; }
   });
@@ -15453,7 +15661,7 @@ function renderManagementTaskWorkspace() {
     <section class="mg-task-table" aria-label="Assigned tasks">
       <div class="mg-task-toolbar">${managementTaskFilters(scope, adminFilter)}<span>${assignee ? `<button type="button" class="text-button" data-mg-assignee="">Clear salesman filter</button> &middot; ` : ""}${visible.length} shown</span></div>
       <p class="mg-task-message" role="status" ${message ? "" : "hidden"}>${escapeHtml(message)}</p>
-      <div class="mg-task-row mg-task-table-head" aria-hidden="true"><span>Task</span><span>Salesman</span><span>Deadline</span><span>Timing</span><span>Priority</span><span>Status</span><span></span></div>
+      <div class="mg-task-row mg-task-table-head" aria-hidden="true"><span>Task</span><span>Salesman</span><span>Deadline</span><span>Timing</span><span>Priority</span><span>Status</span><span>Attachments</span><span></span></div>
       ${visible.map(renderManagementTaskRow).join("") || '<p class="mg-task-empty">No tasks match this view.</p>'}
     </section>`}`;
   pane.querySelectorAll("details[data-mg-row]").forEach(row => row.addEventListener("toggle", () => {
@@ -15461,6 +15669,7 @@ function renderManagementTaskWorkspace() {
     else managementTasks.openRows.delete(row.dataset.mgRow);
   }));
   restoreManagementTaskPanels(pane, openPanels);
+  void loadTaskSummaryAttachments(pane);
 }
 
 function managementTaskDuplicateCandidates(task) {
@@ -15479,7 +15688,7 @@ function renderManagementTaskRow(task) {
   return `<details data-mg-row="${id}" ${managementTasks.openRows.has(task.id) ? "open" : ""}>
     <summary class="mg-task-row"><span class="mg-task-row-title">${managementTaskTitle(task)}<small>${task.lead_name ? escapeHtml(task.lead_name) + " &middot; " : ""}Assigned ${escapeHtml(managementTaskAssignedTime(task.created_at))}</small><small class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task))}</small></span>
       <span class="mg-task-row-person">${escapeHtml(task.assignee_name)}</span><time class="mg-task-row-date" datetime="${escapeHtml(task.due_date)}">${escapeHtml(formatDisplayDate(task.due_date))}</time>
-      <span class="mg-task-row-timing">${managementTaskTag(timing, tone)}</span><span class="mg-task-row-priority">${managementTaskPriority(task)}</span><span class="mg-task-row-status">${managementTaskStatus(task)}</span><span class="mg-task-chevron" aria-hidden="true"></span>
+      <span class="mg-task-row-timing">${managementTaskTag(timing, tone)}</span><span class="mg-task-row-priority">${managementTaskPriority(task)}</span><span class="mg-task-row-status">${managementTaskStatus(task)}</span>${taskSummaryMarkup(task)}<span class="mg-task-chevron" aria-hidden="true"></span>
       </summary>
     <div class="mg-task-details"><div><strong>Management instructions &middot; ${escapeHtml(task.assigned_by_name)}</strong><p>${escapeHtml(task.instructions)}</p>
       ${task.lead_id ? `<button type="button" class="text-button" data-mg-lead="${escapeHtml(task.lead_id)}">Open linked lead</button>` : ""}${taskDocumentsMarkup(task)}</div>
@@ -15522,12 +15731,13 @@ function renderManagementTaskDrawerList() {
     ${managementTasks.notices.map(item => `<p class="mg-task-message" role="status">${escapeHtml(item.message)} <button type="button" class="text-button" data-mg-notice="${escapeHtml(item.id)}" data-mg-notice-task="${escapeHtml(item.payload?.task_id || "")}">View note</button></p>`).join("")}
     ${message ? `<p class="mg-task-message" role="status">${escapeHtml(message)}${message.includes("Refresh") ? ' <button type="button" class="ghost-button" data-mg-refresh>Refresh tasks</button>' : ""}</p>` : ""}
     ${visible.length ? `<div class="mg-drawer-table">
-      <div class="mg-drawer-grid mg-drawer-columns" aria-hidden="true"><span>Due</span><span>Lead</span><span>Management task</span><span>Priority</span><span>Assigned by</span><span>Status</span><span>Your remarks</span><span>Action</span></div>
+      <div class="mg-drawer-grid mg-drawer-columns" aria-hidden="true"><span>Due</span><span>Lead</span><span>Management task</span><span>Priority</span><span>Assigned by</span><span>Status</span><span>Your remarks</span><span>Attachments</span><span>Action</span></div>
       ${visible.map(task => renderManagementTaskDrawerRow(task, update?.id === task.id ? update : null)).join("")}
     </div>` : `<p class="mg-task-empty">${!query && managementTaskCounts(rows).completed && ["not_started", "in_progress", "pending", "overdue"].includes(drawerFilter)
       ? `No tasks in this view &mdash; you have ${managementTaskCounts(rows).completed} completed task${managementTaskCounts(rows).completed === 1 ? "" : "s"}. <button type="button" class="ghost-button" data-mg-filter="completed">View completed</button>`
       : rows.length ? "No tasks match your search or filter." : "No management tasks have been assigned to you."}</p>`}`;
   restoreManagementTaskPanels(list, openPanels);
+  void loadTaskSummaryAttachments(list);
 }
 
 function renderManagementTaskDrawerRow(task, update) {
@@ -15545,6 +15755,7 @@ function renderManagementTaskDrawerRow(task, update) {
     <div data-label="Assigned by"><b>${escapeHtml(task.assigned_by_name || "Management")}</b><small>${escapeHtml(managementTaskDateTime(task.created_at))}</small></div>
     <div data-label="Status">${managementTaskStatus(task)}${completed ? "" : `<select data-mg-status="${id}" aria-label="Status for ${escapeHtml(task.title)}">${Object.entries(MG_TASK_LABELS).map(([key, label]) => `<option value="${key}"${key === (update?.status || task.status) ? " selected" : ""}>${label}</option>`).join("")}</select>`}</div>
     <div class="mg-drawer-remarks" data-label="Latest remark"><p class="mg-task-remark-preview">${escapeHtml(managementTaskLatestRemark(task) || "No remarks yet")}</p><button type="button" class="text-button" data-mg-conversation="${id}" aria-controls="mg-conversation-${id}">View full conversation</button></div>
+    ${taskSummaryMarkup(task)}
     <div class="mg-drawer-action">${completed ? `<button type="button" class="ghost-button" data-mg-add-remark="${id}">Add remark</button>${lead && !lead.is_archived ? `<button type="button" class="ghost-button" data-mg-followup="${id}">Plan follow-up</button>` : ""}` : `<button type="button" class="${action === "completed" ? "primary-button" : "ghost-button"}" data-mg-progress="${id}" data-status="${action}">${action === "completed" ? "Complete" : "Start"}</button>${task.status === "in_progress" ? `<button type="button" class="ghost-button" data-mg-progress="${id}" data-status="in_progress" aria-label="Add progress" title="Add progress update">Progress</button>` : ""}`}</div>
     <details class="mg-drawer-expanded" id="mg-conversation-${id}"><summary>Management instructions and remarks</summary><div class="mg-task-details"><div><strong>Management instructions</strong><p>${escapeHtml(task.instructions)}</p>${taskDocumentsMarkup(task)}</div><div><strong>Task conversation</strong>${managementTaskTimeline(task)}</div></div></details>
     ${update ? `<form class="mg-task-progress-form" data-mg-progress-form="${id}"><label>${additional ? "Additional remark" : closing ? "Completion remarks for management" : "Progress remarks (optional)"}<textarea name="remarks" rows="3" maxlength="4000" ${closing || additional ? "required" : ""}>${escapeHtml(update.remarks)}</textarea></label>
@@ -16564,6 +16775,8 @@ function renderDetail() {
 }
 
 function render() {
+  if (leadSummaryDialog && (!leadSummaryDialogCurrent(leadSummaryDialog)
+    || !state.leads.some(lead=>lead.id===leadSummaryDialog.leadId && (!lead.is_archived || state.currentUser?.role==="admin")))) closeLeadSummaryDialog();
   if (state.currentUser && !isSalesmanRole() && (currentView === "focus" || currentView === "neglected" && !isPrivilegedDashboardRole())) currentView = "ai-actions";
   document.querySelector("#aiAssistantLauncher")?.classList.toggle("hidden", !state.currentUser);
   renderMetrics();
@@ -16882,6 +17095,14 @@ async function fetchSalesmanAccounts() {
 }
 
 function showLogin(message = "") {
+  closeLeadSummaryDialog();
+  if (rfqLeadUpload.summary) {
+    resetLeadWizardState();
+    document.getElementById("leadSummaryFileList")?.replaceChildren();
+    const input=document.getElementById("leadSummaryFileInput");
+    if(input) input.value="";
+    if(els.leadDialog?.open) els.leadDialog.close();
+  }
   closeTaskDocumentPreview();
   managementTasks = newManagementTaskState();
   for (const id of ["managementTasksDrawer", "managementTaskFormDialog"]) {
@@ -18595,6 +18816,18 @@ document.addEventListener("toggle", loadTaskDocuments, true);
 document.addEventListener("click", viewTaskDocument);
 document.addEventListener("click", downloadTaskDocument);
 document.addEventListener("change", retryTaskDocument);
+document.getElementById("leadSummaryFileInput")?.addEventListener("change", event => {
+  const input=event.target,file=input.files[0];input.value="";
+  if(state.currentUser?.role!=="admin" || rfqLeadUpload.owner!==String(state.currentUser.id) || rfqLeadUpload.savedLead) return;
+  const message=document.getElementById("leadSummaryUploadMessage");
+  if(!file) return;
+  if(!/\.pdf$/i.test(file.name) || !file.size || file.size>4*1024*1024) {message.textContent="Choose a PDF up to 4 MB.";return;}
+  rfqLeadUpload.summary={file,id:crypto.randomUUID(),saved:false};message.textContent="";renderRfqLeadFiles();
+});
+document.getElementById("leadSummaryFileList")?.addEventListener("click",event=>{
+  if(!event.target.closest("[data-summary-remove]") || rfqLeadUpload.savedLead) return;
+  rfqLeadUpload.summary=null;renderRfqLeadFiles();
+});
 document.getElementById("leadRfqFileInput")?.addEventListener("change", event => {
   const input = event.target;
   const selected = [...input.files];
@@ -18636,6 +18869,11 @@ els.leadForm.addEventListener("submit", async event => {
   draft.busy = true;
   els.leadSubmitButton.disabled = true;
   try {
+  if(draft.summary && !draft.summary.saved) {
+    const header=await draft.summary.file.slice(0,5).text();
+    if(draft!==rfqLeadUpload || draft.owner!==String(state.currentUser?.id)) return;
+    if(header!=="%PDF-") {setLeadFormStep(2);document.getElementById("leadSummaryUploadMessage").textContent="Choose a valid PDF before saving the lead.";return;}
+  }
   if (draft.savedLead) {
     try {
       await uploadRfqLeadFiles(draft.savedLead, draft);
@@ -18646,6 +18884,10 @@ els.leadForm.addEventListener("submit", async event => {
   }
   const formData = new FormData(els.leadForm);
   const payload = Object.fromEntries(formData.entries());
+  draft.rfqEnabled=payload.initial_management_task_title==="Respond to Initial RFQ";
+  if (draft.summary && state.currentUser?.role === "admin" && (!payload.initial_management_task_title || !payload.assigned_salesman || payload.assigned_salesman.toLowerCase() === "unassigned")) {
+    setLeadFormStep(0); setEnrichmentStatus("Assign a Salesman and management task before attaching a lead summary.","error"); return;
+  }
   if (!state.editingLeadId && !leadGoogleLookupEnabled()) {
     payload.enrichment_source = "manual";
     payload.enrichment_status = "pending";
@@ -18741,7 +18983,7 @@ els.leadForm.addEventListener("submit", async event => {
   }
   if (draft !== rfqLeadUpload || draft.owner !== String(state.currentUser?.id)) return;
   state.selectedId = lead.id;
-  if (state.currentUser?.role === "admin" && payload.initial_management_task_title === "Respond to Initial RFQ" && draft.files.length) {
+  if (state.currentUser?.role === "admin" && (draft.summary || payload.initial_management_task_title === "Respond to Initial RFQ" && draft.files.length)) {
     try { await uploadRfqLeadFiles(lead, draft); }
     catch (error) { rfqUploadFailure(error, draft); return; }
   }

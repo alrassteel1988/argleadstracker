@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const leadLifecycle = require("./src/services/leadLifecycleService");
 const { handleLeadLifecycle } = require("./src/services/leadLifecycleRoutes");
 const { handleTaskDocuments } = require("./src/services/taskDocumentRoutes");
+const { handleLeadSummaryDocuments } = require("./src/services/leadSummaryDocumentRoutes");
 
 function bootstrapEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -5340,6 +5341,9 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
+  if (await handleLeadSummaryDocuments(req, res, url, { user, supabaseEnabled, rest, sendJson, sendDownload, readRawBody,
+    readDb, writeDb, dataDir: DATA_DIR, bucket: LEAD_INTELLIGENCE_BUCKET, uploadStorageObjectToBucket,
+    createStorageSignedUrlForBucket })) return;
   if (await handleTaskDocuments(req, res, url, { user, supabaseEnabled, rest, sendJson, sendDownload, readRawBody,
     readDb, writeDb, dataDir: DATA_DIR, bucket: ACTIVITY_ATTACHMENT_BUCKET, uploadStorageObjectToBucket,
     createStorageSignedUrlForBucket })) return;
