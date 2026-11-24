@@ -1800,6 +1800,7 @@ function canonicalTerritory(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
   const lower = raw.toLowerCase();
+  if(lower==="qatar") return "Qatar";
   const exact = GCC_TERRITORIES.find(item => item.toLowerCase() === lower);
   if (exact) return exact;
   if (["dubai", "sharjah", "ajman", "ras al khaimah", "rak", "fujairah", "umm al quwain", "uaq", "uae", "uae north"].includes(lower)) return "UAE-North";
@@ -1807,7 +1808,7 @@ function canonicalTerritory(value) {
   if (lower.includes("saudi")) return "Saudi";
   if (lower.includes("kuwait")) return "Kuwait";
   if (lower.includes("bahrain")) return "Bahrain";
-  if (lower.includes("oman")) return "Oman";
+  if (/\boman\b/.test(lower)) return "Oman";
   if (lower.includes("mixed")) return "Mixed";
   return raw;
 }
@@ -2210,13 +2211,12 @@ async function pipelineReportLeadsForUser(payload, user, supabaseEnabled, db) {
 function prepareLeadPayloadForUser(payload, user, existing = null) {
   const next = { ...(payload || {}) };
   if (isDirectorOrAdmin(user)) {
-    if (next.territory) next.territory = canonicalTerritory(next.territory);
+    if (next.territory) next.territory = existing ? canonicalTerritory(next.territory) : newLeadTerritory(next.territory, user.territory);
     return next;
   }
   delete next.assigned_to;
   delete next.created_by;
-  next.territory = existing?.territory ? canonicalTerritory(existing.territory) : canonicalTerritory(user.territory);
-  if (!next.territory || next.territory === "Mixed") next.territory = canonicalTerritory(user.territory);
+  next.territory = existing ? existing.territory : newLeadTerritory(next.territory, user.territory);
   if (existing?.assigned_salesman) {
     next.assigned_salesman = existing.assigned_salesman;
   } else {
@@ -2351,8 +2351,21 @@ function actionResponse(action, lead, pmr) {
   return "Action is not available.";
 }
 
+function newLeadTerritory(value, fallback = "UAE-North") {
+  const raw = value == null || value === "" ? String(fallback || "UAE-North") : value;
+  if (typeof raw !== "string" || /[\u0000-\u001f\u007f]/.test(raw)) {
+    throw Object.assign(new Error("Enter a valid territory using plain text."), { status: 400 });
+  }
+  const territory = raw.trim().replace(/\s+/g, " ");
+  if (!territory || [...territory].length > 100 || territory === "__custom_territory__") {
+    throw Object.assign(new Error("Enter a territory of 1 to 100 characters."), { status: 400 });
+  }
+  return canonicalTerritory(territory);
+}
+
 function normalizeNewLead(input, user) {
   const lead = normalizeLead(input);
+  lead.territory = newLeadTerritory(input.territory, isDirectorOrAdmin(user) ? lead.territory : user?.territory);
   if (user.role === "salesman") {
     const action = String(input.next_action || "").trim();
     const date = String(input.next_action_date || "").trim();
@@ -2416,7 +2429,7 @@ function toSupabaseLead(input, user, { initialTask = false, newRegistration = fa
     lead_status: lead.stage,
     ...(leadLifecycle.isClosed(lead.stage) ? leadLifecycle.validateClose(input) : {}),
     notes: lead.notes,
-    territory: salesmanScoped && profileTerritory ? profileTerritory : lead.territory,
+    territory: salesmanScoped && profileTerritory && !newRegistration ? profileTerritory : lead.territory,
     assigned_salesman: salesmanScoped && profileName ? profileName : lead.assigned_salesman,
     priority: lead.priority,
     estimated_value: lead.estimated_value,

@@ -169,6 +169,22 @@ async function create(token, body) {
     if (postgres) {
       const counts = (await postgres.query("select (select count(*)::int from public.companies) as companies,(select count(*)::int from public.leads) as leads")).rows[0];
       assert.deepEqual(counts, {companies:3,leads:3});
+      await postgres.exec(readFileSync(join(__dirname,"../supabase/migrations/20261124050745_lead_territory_options.sql"),"utf8"));
+    }
+    registrationError = null;
+    for (const territory of ["Qatar","India","Netherlands","Turkmenistan","Romania"]) {
+      const saved=await create("sales",{company_name:`International ${territory}`,territory,created_by:users.admin.id,assigned_to:users.admin.id});
+      assert.equal(saved.status,201,JSON.stringify(saved.body));
+      assert.equal(saved.body.territory,territory);
+      assert.equal(writes.at(-1).body.p_lead.created_by,users.sales.id);
+      assert.equal(writes.at(-1).body.p_lead.assigned_to,users.sales.id);
+      if(postgres) assert.equal((await postgres.query("select territory from public.leads where id=$1",[saved.body.id])).rows[0].territory,territory);
+    }
+    for (const token of ["admin","sales"]) {
+      const before=writes.length;
+      assert.equal((await create(token,{company_name:"Invalid territory",territory:"x".repeat(101)})).status,400);
+      assert.equal((await create(token,{company_name:"Invalid territory",territory:"India\nPrivate"})).status,400);
+      assert.equal(writes.length,before,"Territory validation must happen before any database write");
     }
     console.log("PASS Supabase new-lead API task choices, atomic writes, optional follow-ups and role isolation");
   } finally { await new Promise(resolve => server.close(resolve)); await postgres?.close(); }

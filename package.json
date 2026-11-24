@@ -5,7 +5,8 @@
   "description": "Shared web and mobile CRM platform for ARG Leads Tracker.",
   "scripts": {
     "build": "node -e \"console.log('No asset compilation required for ARG Leads Tracker')\"",
-    "verify": "npm run check && npm run test:lead-enrichment-form && npm run test:sales-lead-summary-auth-loading && npm run test:lead-creation-activity && npm run test:lead-lifecycle && npm test && npm run test:lead-reassignment && npm run test:management-tasks && npm run test:task-documents && npm run test:ui:tokens && npm run build",
+    "verify": "npm run check && npm run test:lead-territory-options && npm run test:lead-enrichment-form && npm run test:sales-lead-summary-auth-loading && npm run test:lead-creation-activity && npm run test:lead-lifecycle && npm test && npm run test:lead-reassignment && npm run test:management-tasks && npm run test:task-documents && npm run test:ui:tokens && npm run build",
+    "test:lead-territory-options": "node --test tests/lead-territory-options.test.cjs",
     "test:task-documents": "node --check src/services/taskDocumentRoutes.js && node --test tests/task-documents.test.cjs tests/pdfjs-vendor.test.cjs",
     "test:lead-lifecycle": "node --check src/services/leadLifecycleRoutes.js && node --test tests/lead-lifecycle.test.cjs tests/lead-lifecycle-database.test.cjs",
     "test:lead-enrichment-form": "node --check tests/lead-enrichment-form.test.js && node tests/lead-enrichment-form.test.js",

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v198-private-pdf-renderer";
+const CACHE_VERSION = "arg-pwa-v199-qatar-manual-territories";
 const APP_SHELL = [
   "/",
   "/index.html",

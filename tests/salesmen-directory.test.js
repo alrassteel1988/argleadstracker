@@ -79,7 +79,8 @@ assert.match(client, /function openNewLeadForm\(\)/, "All Add lead entry points 
 assert.match(client, /openLeadForm"\)\?\.addEventListener\("click", openNewLeadForm\)/, "Topbar Add lead must open the create lead workflow");
 assert.match(client, /salesmanSimplifiedAddLead\?\.addEventListener\("click", openNewLeadForm\)/, "Salesman dashboard Add lead must open the create lead workflow");
 assert.match(client, /payload\.assigned_salesman = state\.currentUser\.name \|\| state\.currentUser\.email \|\| payload\.assigned_salesman/, "Salesman lead saves must post the logged-in salesman owner");
-assert.match(client, /payload\.territory = state\.currentUser\.territory \|\| payload\.territory/, "Salesman lead saves must post the logged-in salesman territory");
+assert.doesNotMatch(client, /payload\.territory = state\.currentUser\.territory \|\| payload\.territory/, "New customer territory must not be overwritten by the account territory");
+assert.match(client, /delete payload\.custom_territory/, "UI-only custom Territory control must not leak into database columns");
 assert.match(client, /new Chart\(els\.performanceChart/, "Assigned-lead chart must use the existing Chart.js dependency");
 assert.match(client, /new Chart\(els\.salesmenSummaryChart/, "Summary chart must use the existing Chart.js dependency");
 

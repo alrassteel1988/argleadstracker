@@ -3962,6 +3962,21 @@ function setLeadFormMode(mode = "create") {
     els.leadSubmitButton.textContent = mode === "edit" ? "Save Changes" : "Save Lead";
   }
   if (els.formSalesman) els.formSalesman.disabled = mode === "edit" && state.currentUser?.role !== "admin";
+  if (els.formTerritory) els.formTerritory.disabled = mode === "edit" && !isAdminOrManager();
+  renderLeadTerritoryInput();
+}
+
+function renderLeadTerritoryInput() {
+  const custom=document.getElementById("formCustomTerritory");
+  const wrapper=document.getElementById("customTerritoryField");
+  if(!custom || !wrapper || !els.formTerritory) return;
+  const option=[...els.formTerritory.options].find(item=>item.value==="__custom_territory__");
+  if(option) option.hidden=Boolean(state.editingLeadId);
+  const active=!state.editingLeadId && els.formTerritory.value==="__custom_territory__";
+  wrapper.classList.toggle("hidden",!active);
+  custom.disabled=!active;
+  custom.required=active;
+  if(!active) custom.setCustomValidity("");
 }
 
 function activityRecordingElapsedSeconds(session = activityModalRecorder) {
@@ -4163,6 +4178,7 @@ function syncLeadWizardDetailsFromValues() {
 }
 
 function renderLeadFormWizard() {
+  renderLeadTerritoryInput();
   if (!els.leadForm) return;
   const step = Number(state.leadFormStep || 0);
   const panels = [...els.leadForm.querySelectorAll("[data-lead-step-panel]")];
@@ -4231,7 +4247,7 @@ function renderLeadFormWizard() {
 
 function leadStepFieldNames(step = state.leadFormStep) {
   const map = [
-    ["company_name", "assigned_salesman", "territory", "sector"],
+    ["company_name", "assigned_salesman", "territory", "custom_territory", "sector"],
     ["contact_person", "phone", "email", "stage", "priority"],
     ["initial_management_task_title", "next_action", "next_action_date", "activity_purpose", "notes"]
   ];
@@ -4242,6 +4258,7 @@ function validateLeadStep(step = state.leadFormStep) {
   const names = leadStepFieldNames(step);
   for (const name of names) {
     const field = els.leadForm?.elements?.[name];
+    if(name==="custom_territory" && field && !field.disabled) field.setCustomValidity(field.value.trim() ? "" : "Enter a country or territory.");
     if (field && typeof field.reportValidity === "function" && !field.reportValidity()) {
       field.focus();
       return false;
@@ -4264,6 +4281,7 @@ function resetLeadFormForNewLead() {
   setLeadFormMode("create");
   resetLeadWizardState();
   els.leadForm.reset();
+  renderLeadTerritoryInput();
   leadFormTouched.clear();
   state.duplicateMatches = [];
   state.duplicateChecking = false;
@@ -4271,7 +4289,7 @@ function resetLeadFormForNewLead() {
   resetLeadEnrichmentSession();
   if (!isAdminOrManager()) {
     els.formSalesman.value = state.currentUser.name;
-    if (els.formTerritory) els.formTerritory.value = state.currentUser.territory || els.formTerritory.value;
+    if (els.formTerritory && state.currentUser.territory) ensureLeadFormSelectValue("territory",state.currentUser.territory,els.formTerritory.value);
   }
   if (els.leadForm.elements.next_action_date) {
     els.leadForm.elements.next_action_date.value = state.currentUser?.role === "salesman" ? "" : managementTaskDate();
@@ -17057,9 +17075,10 @@ async function loadWorkspace() {
   fillSelect(els.formPriority, state.settings.priorities);
   fillSelect(els.formSector, state.settings.sectors || []);
   fillSelect(els.formTier, state.settings.tiers || []);
-  fillSelect(els.formTerritory, state.settings.territories || []);
+  fillSelect(els.formTerritory,[...new Set([...(state.settings.territories || []).map(value=>String(value).trim().toLowerCase()==="qatar" ? "Qatar" : value),"Qatar"])]);
+  els.formTerritory.add(new Option("Add manually","__custom_territory__"));
   if (!isAdminOrManager() && els.formTerritory) {
-    els.formTerritory.value = state.currentUser.territory || els.formTerritory.value;
+    if(state.currentUser.territory) ensureLeadFormSelectValue("territory",state.currentUser.territory,els.formTerritory.value);
   }
   fillSelect(els.salesmanTerritory, state.settings.territories || []);
   fillSelect(document.querySelector("#pmrHeat"), state.settings.pmr?.heat || ["1", "2", "3", "4", "5"]);
@@ -18579,6 +18598,7 @@ els.leadForm.querySelectorAll("input, textarea, select").forEach(field => {
   field.addEventListener("input", () => {
     leadEnrichmentChanges.delete(field.name);
     if (field.name) leadFormTouched.add(field.name);
+    if(field.name==="custom_territory") field.setCustomValidity("");
     if (["next_action", "next_action_date"].includes(field.name)) {
       els.leadForm.elements.next_action.setCustomValidity("");
       els.leadForm.elements.next_action_date.setCustomValidity("");
@@ -18590,6 +18610,7 @@ els.leadForm.addEventListener("change", event => {
   if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)) return;
   if (field.name) leadFormTouched.add(field.name);
   if (["assigned_salesman", "initial_management_task_title"].includes(field.name)) renderLeadFormWizard();
+  if(field.name==="territory") renderLeadTerritoryInput();
 });
 document.addEventListener("toggle", loadTaskDocuments, true);
 document.addEventListener("click", viewTaskDocument);
@@ -18646,6 +18667,15 @@ els.leadForm.addEventListener("submit", async event => {
   }
   const formData = new FormData(els.leadForm);
   const payload = Object.fromEntries(formData.entries());
+  if(!state.editingLeadId && payload.territory==="__custom_territory__") {
+    payload.territory=String(payload.custom_territory || "").trim().replace(/\s+/g," ");
+    if(!payload.territory) {
+      setLeadFormStep(0);
+      validateLeadStep(0);
+      return;
+    }
+  }
+  delete payload.custom_territory;
   if (!state.editingLeadId && !leadGoogleLookupEnabled()) {
     payload.enrichment_source = "manual";
     payload.enrichment_status = "pending";
@@ -18662,7 +18692,6 @@ els.leadForm.addEventListener("submit", async event => {
   }
   if (!state.editingLeadId && !isAdminOrManager() && state.currentUser) {
     payload.assigned_salesman = state.currentUser.name || state.currentUser.email || payload.assigned_salesman;
-    payload.territory = state.currentUser.territory || payload.territory;
   }
   try {
     if (payload.stage === "CLOSED_NOT_INTERESTED") {

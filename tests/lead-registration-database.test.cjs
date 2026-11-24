@@ -5,7 +5,8 @@ const { join } = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE || "@electric-sql/pglite");
 
-for (const creationAudit of [false, true]) test(`new lead RPC preserves RLS and atomicity on the blueprint schema (creation audit: ${creationAudit})`, async () => {
+for (const creationAudit of [false, true, "international"]) test(`new lead RPC preserves RLS and atomicity on the blueprint schema (creation audit: ${creationAudit})`, async () => {
+  const international = creationAudit === "international";
   const db = new PGlite();
   const admin = randomUUID(), sales = randomUUID(), peer = randomUUID(), inactive = randomUUID();
   try {
@@ -50,6 +51,12 @@ for (const creationAudit of [false, true]) test(`new lead RPC preserves RLS and 
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118111941_atomic_new_lead_registration.sql"), "utf8"));
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118113937_registration_rls_readback.sql"), "utf8"));
     if (creationAudit) await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118122627_lead_creation_activity_audit.sql"), "utf8"));
+    if (international) {
+      await db.exec(`drop policy own_lead_insert on public.leads;
+        create policy admin_lead_insert on public.leads for insert to authenticated with check (
+          exists(select 1 from public.profiles where id=auth.uid() and role='admin' and status='active'));`);
+      await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261124050745_lead_territory_options.sql"),"utf8"));
+    }
     const as = async (id, role="authenticated") => {
       await db.exec(`set role ${role}`);
       await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id || ""]);
@@ -70,7 +77,7 @@ for (const creationAudit of [false, true]) test(`new lead RPC preserves RLS and 
     await assert.rejects(() => save(input("Inactive fixture",{created_by:inactive,assigned_to:inactive})), {code:"42501"});
     await as(sales);
     for (const extra of [{created_by:admin},{assigned_to:peer},{assigned_to:null},{assigned_salesman:"Peer"},
-      {territory:"Saudi"},{initial_management_task_id:randomUUID()}]) {
+      ...(international ? [] : [{territory:"Saudi"}]),{initial_management_task_id:randomUUID()}]) {
       await assert.rejects(() => save(input("Forged fixture",extra)), {code:"42501"});
     }
     await assert.rejects(() => save(input("Unsupported fixture",{removed_at:"2026-01-01"})), {code:"22023"});
@@ -151,5 +158,24 @@ for (const creationAudit of [false, true]) test(`new lead RPC preserves RLS and 
     assert.equal(security.anon,false);
     assert.equal(security.authenticated,true);
     assert.equal(security.service,false);
+    if (international) {
+      await as(sales);
+      for (const territory of ["Qatar","India","Netherlands","Turkmenistan","Romania","  New   Zealand  "]) {
+        const row=await save(input(`International ${territory}`,{territory}));
+        assert.equal(row.territory,territory.trim().replace(/\s+/g," "));
+        assert.equal(row.assigned_to,sales); assert.equal(row.created_by,sales);
+      }
+      const before=await counts(); await as(sales);
+      for (const territory of ["", "x".repeat(101),"India\nPrivate", "__custom_territory__",{country:"India"},17,null]) {
+        await assert.rejects(()=>save(input("Invalid territory",{territory})),{code:"22023"});
+      }
+      await assert.rejects(()=>db.query(`insert into public.leads(company_name,created_by,assigned_to,territory) values('Forged direct insert',$1,$2,'India')`,[sales,peer]),{code:"42501"});
+      assert.deepEqual(await counts(),before,"Territory rejection cannot leave orphan companies");
+      await as(peer);
+      assert.equal((await db.query("select * from public.leads")).rows.length,0,"Customer geography never grants a peer lead access");
+      await as(admin);
+      const adminInternational=await save(input("Admin international",{created_by:admin,assigned_to:null,assigned_salesman:"Unassigned",territory:"Netherlands"}));
+      assert.equal(adminInternational.territory,"Netherlands");
+    }
   } finally { await db.close(); }
 });
