@@ -61,7 +61,7 @@ begin
     'primary_contact_title','contact_email','secondary_contact_name','secondary_contact_title','secondary_contact_mobile',
     'secondary_contact_email','hunter_confidence_score','lead_status','notes','territory','assigned_salesman','priority',
     'estimated_value','product_interest','activity_purpose','next_action','next_action_date','last_activity','source',
-    'quotation_ref','first_order_date','estimated_monthly_volume','tags','activities','lost_reason','lost_reason_detail',
+    'quotation_ref','first_order_date','estimated_monthly_volume','tags','activities','closed_reason','closed_note','lost_reason','lost_reason_detail',
     'lost_competitor','lost_at','lost_by','imported_at','imported_by','auto_enrichment','enrichment_status','enrichment_source',
     'enriched_at','enrichment_updated_at','created_by','assigned_to'
   ])) then raise exception 'Unsupported lead registration field' using errcode='22023'; end if;
@@ -97,7 +97,12 @@ begin
     else raise;
     end if;
   end;
-  select to_jsonb(l) into strict saved_lead from public.leads l where l.id=saved_id;
+  -- Closing during registration archives immediately; keep the released minimal response.
+  if p_lead->>'lead_status'='CLOSED_NOT_INTERESTED' and actor.role<>'admin' then
+    saved_lead:=jsonb_build_object('id',saved_id,'is_archived',true,'lead_status','CLOSED_NOT_INTERESTED');
+  else
+    select to_jsonb(l) into strict saved_lead from public.leads l where l.id=saved_id;
+  end if;
   return saved_lead;
 end;
 $$;

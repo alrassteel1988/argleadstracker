@@ -5,7 +5,7 @@ const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE || "@electric-sql/pglite");
 
-test("archive lifecycle, RLS, duplicate review and immutable audit are transactional", async () => {
+for (const territoryUpgrade of [false,true]) test(`archive lifecycle, RLS, duplicate review and immutable audit are transactional (Territory upgrade: ${territoryUpgrade})`, async () => {
   const db = new PGlite();
   const admin=randomUUID(), sales=randomUUID(), peer=randomUUID(), lead=randomUUID(), company=randomUUID();
   const attachmentPaths = [`activity-attachments/${lead}/synthetic/file.txt`, `lead-intelligence/${lead.toUpperCase()}/synthetic.pdf`];
@@ -68,6 +68,7 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
       from pg_proc where oid='private.lifecycle_storage_visible(text)'::regprocedure`)).rows[0];
     const previousStoragePrivileges = await storagePrivileges();
     await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261120075756_lifecycle_attachment_storage_boundary.sql"),"utf8"));
+    if(territoryUpgrade) await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261124050745_lead_territory_options.sql"),"utf8"));
     assert.deepEqual(await storagePrivileges(),previousStoragePrivileges,"Storage fix must preserve the existing helper privileges and fixed search path");
     const as=async id=>{ await db.exec("set role authenticated"); await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]); };
     const change=async(action,input={})=>(await db.query("select public.change_lead_lifecycle($1,$2,$3::jsonb) result",[lead,action,JSON.stringify(input)])).rows[0].result;
@@ -137,12 +138,17 @@ test("archive lifecycle, RLS, duplicate review and immutable audit are transacti
     assert.equal((await db.query("select count(*)::int n from public.notifications where type='lead_closed'")).rows[0].n,3);
     assert.equal((await db.query("select count(*)::int n from public.leads where id=$1",[lead])).rows[0].n,0);
     await as(peer);
-    const closedInput={company_name:"Willow closed signup fixture",created_by:peer,assigned_to:peer,assigned_salesman:"Peer",territory:"UAE-North",
+    const closedInput={company_name:"Willow closed signup fixture",created_by:peer,assigned_to:peer,assigned_salesman:"Peer",territory:territoryUpgrade ? "Qatar" : "UAE-North",
       lead_status:"CLOSED_NOT_INTERESTED",closed_reason:"No requirement",closed_note:"Synthetic closed registration",next_action:"",next_action_date:null,activities:[]};
     const saved=(await db.query("select public.save_new_crm_lead($1) lead",[closedInput])).rows[0].lead;
     assert.equal(saved.is_archived,true); assert.equal(saved.company_name,undefined,"A Salesman cannot read back the archived row");
     assert.equal((await db.query("select * from public.leads where id=$1",[saved.id])).rows.length,0);
     await db.exec("reset role");
+    const closedRow=(await db.query("select closed_reason,closed_note,territory from public.leads where id=$1",[saved.id])).rows[0];
+    assert.equal(closedRow.closed_reason,closedInput.closed_reason);
+    assert.equal(closedRow.closed_note,closedInput.closed_note);
+    assert.equal(closedRow.territory,closedInput.territory);
+    assert.deepEqual(Object.keys(saved).sort(),["id","is_archived","lead_status"],"Registration must not return archived lead details to a Salesman");
     const before=(await db.query("select count(*)::int n from public.companies")).rows[0].n;
     await as(peer);
     await assert.rejects(()=>db.query("select public.save_new_crm_lead($1)",[{...closedInput,company_name:"Rejected closed signup fixture",closed_reason:"Other",closed_note:""}]),{code:"22023"});

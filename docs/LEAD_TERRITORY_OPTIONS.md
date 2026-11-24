@@ -85,5 +85,30 @@ The first focused permission run caught an effect of adding Qatar to global
 defaults on the configuration approval test. The implementation was narrowed to
 the form and normalization; existing approval assertions remain intact.
 
+## Hosted Preflight Repair
+
+Read-only staging/Production preflight on 24 November found that the replacement
+RPC omitted the released lifecycle migration's closed_reason/closed_note
+allowlist and minimal archived-registration response. No hosted migration had
+been applied. A local test running the actual released lifecycle migrations
+before the Territory migration reproduced `Unsupported lead registration field`.
+
+The narrowly approved repair retains those fields and returns only id,
+is_archived and lead_status when a non-Admin registration closes/archives
+immediately. It does not grant a Salesman archived-row visibility. Both the
+unmodified lifecycle baseline and the upgraded lifecycle now run the full RLS,
+duplicate, notification, archive/restore, audit, attachment and initial-task
+workflow. Closure reasons/notes remain stored and the archived row stays hidden.
+This extends the earlier smaller registration fixture; it does not remove it.
+
+The migration was confirmed absent from both hosted migration ledgers before
+editing. Fresh backup confirmation, Vercel mapping/branch isolation and hosted
+role rehearsal remain outstanding. No hosted writes or Production changes are
+part of this repair. `npm.cmd run verify` passed after the repair
+(`territory-verify-lifecycle-repair.log`). Both complete lifecycle SQL cases
+passed without skips. Frontend assets are unchanged from the four passing
+desktop/mobile cases; no new asset cache revision is required for this SQL/test
+repair. The owner approved committing/pushing only this narrow repair.
+
 Hosted migration, full populated-schema rehearsal, disaster recovery and live
 Admin/Salesman workflow verification remain release gates. Do not merge/deploy.
