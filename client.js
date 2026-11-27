@@ -17075,8 +17075,14 @@ async function loadWorkspace() {
   fillSelect(els.formPriority, state.settings.priorities);
   fillSelect(els.formSector, state.settings.sectors || []);
   fillSelect(els.formTier, state.settings.tiers || []);
-  fillSelect(els.formTerritory,[...new Set([...(state.settings.territories || []).map(value=>String(value).trim().toLowerCase()==="qatar" ? "Qatar" : value),"Qatar"])]);
-  els.formTerritory.add(new Option("Add manually","__custom_territory__"));
+  const registrationTerritories = ["Qatar", "India", "Iraq", "Syria"];
+  fillSelect(els.formTerritory, [...new Set([
+    ...(state.settings.territories || []).map(value => registrationTerritories.find(
+      territory => territory.toLowerCase() === String(value).trim().toLowerCase()
+    ) || value),
+    ...registrationTerritories
+  ])]);
+  els.formTerritory.add(new Option("Others (please specify)", "__custom_territory__"));
   if (!isAdminOrManager() && els.formTerritory) {
     if(state.currentUser.territory) ensureLeadFormSelectValue("territory",state.currentUser.territory,els.formTerritory.value);
   }

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "arg-pwa-v199-qatar-manual-territories";
+const CACHE_VERSION = "arg-pwa-v200-international-territory-choices";
 const APP_SHELL = [
   "/",
   "/index.html",
