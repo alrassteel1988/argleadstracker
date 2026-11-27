@@ -1,0 +1,73 @@
+const {test,expect}=require("@playwright/test");
+const {login,blockExternalTraffic,capture}=require("./helpers");
+
+test("both roles register a custom customer territory without changing ownership",async({page},info)=>{
+  // This workflow validates five complete registrations per role and viewport.
+  test.setTimeout(120000);
+  await blockExternalTraffic(page);
+  const role=await login(page,info), admin=role==="admin";
+  await page.goto("/?view=pipeline");
+  await page.locator("#openLeadForm").click();
+  await page.locator("#leadGoogleLookup").uncheck();
+  await page.locator("#leadCompanyName").fill(admin ? "Boreal Azimuth Export Laboratory" : "Atlas Zircon Prospect Laboratory");
+  if(admin) await page.locator("#formSalesman").selectOption("Demo Salesman");
+  for(const country of ["Qatar","India","Iraq","Syria"]) {
+    await expect(page.locator(`#formTerritory option[value="${country}"]`)).toHaveCount(1);
+  }
+  await expect(page.locator('#formTerritory option[value="__custom_territory__"]')).toHaveText("Others (please specify)");
+  await page.locator("#formTerritory").selectOption("__custom_territory__");
+  const custom=page.locator("#formCustomTerritory");
+  await expect(custom).toBeVisible();
+  await expect(page.locator("#customTerritoryField")).toContainText("Please specify territory");
+  await page.locator("#leadStepNext").click();
+  await expect(page.locator('[data-lead-step-panel="0"]')).toBeVisible();
+  await custom.fill("   ");await page.locator("#leadStepNext").click();
+  await expect(page.locator('[data-lead-step-panel="0"]')).toBeVisible();
+  await custom.fill(admin ? "  Netherlands  " : "Turkmenistan");
+  await page.locator("#formTerritory").selectOption("UAE-North");
+  await expect(custom).toBeDisabled();
+  await expect(custom).toBeHidden();
+  await page.locator("#formTerritory").selectOption("__custom_territory__");
+  await capture(page,info,"international-customer-territory",{fullPage:false});
+  await page.locator("#leadStepNext").click();
+  await page.locator("#leadStepNext").click();
+  const saved=page.waitForResponse(response=>response.url().endsWith("/api/leads")&&response.request().method()==="POST");
+  await page.locator("#leadSubmitButton").click();
+  const response=await saved, lead=await response.json();
+  expect(response.status(),JSON.stringify(lead)).toBe(201);
+  expect(lead.territory).toBe(admin ? "Netherlands" : "Turkmenistan");
+  expect(lead.assigned_salesman).toBe("Demo Salesman");
+  expect(response.request().postDataJSON().custom_territory).toBeUndefined();
+  await expect(page.locator("#leadDialog")).toBeHidden();
+  await page.goto("/?view=pipeline");
+  await page.locator("#openLeadForm").click();
+  await expect(custom).toBeHidden();
+  await expect(custom).toHaveValue("");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+  const presets=[
+    ["Qatar","Dune Meridian Material Laboratory"],
+    ["India","Copper Willow Survey Workshop"],
+    ["Iraq","Violet Lantern Energy Laboratory"],
+    ["Syria","Silver Canyon Pipeline Research"]
+  ];
+  for(const [country,company] of presets) {
+    await page.locator("#leadGoogleLookup").uncheck();
+    await page.locator("#leadCompanyName").fill(company);
+    if(admin) await page.locator("#formSalesman").selectOption("Demo Salesman");
+    await page.locator("#formTerritory").selectOption(country);
+    await expect(custom).toBeHidden();
+    await expect(custom).toBeDisabled();
+    await page.locator("#leadStepNext").click();await page.locator("#leadStepNext").click();
+    const presetSave=page.waitForResponse(response=>response.url().endsWith("/api/leads")&&response.request().method()==="POST");
+    await page.locator("#leadSubmitButton").click();
+    const presetResponse=await presetSave,presetLead=await presetResponse.json();
+    expect(presetResponse.status(),JSON.stringify(presetLead)).toBe(201);
+    expect(presetLead.territory).toBe(country);
+    expect(presetLead.assigned_to).toBe("ui-salesman");
+    await expect(page.locator("#leadDialog")).toBeHidden();
+    if(country!=="Syria") {
+      await page.goto("/?view=pipeline");
+      await page.locator("#openLeadForm").click();
+    }
+  }
+});

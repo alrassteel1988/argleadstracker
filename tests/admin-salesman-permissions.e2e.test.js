@@ -214,8 +214,15 @@ async function request(baseUrl, pathName, { method = "GET", token = "", csrfToke
     });
     assert.equal(salesmanCreatedLead.response.status, 201, JSON.stringify(salesmanCreatedLead.data));
     assert.equal(salesmanCreatedLead.data.assigned_salesman, "E2E Salesman");
-    assert.equal(salesmanCreatedLead.data.territory, "UAE-North");
+    assert.equal(salesmanCreatedLead.data.territory, "Saudi", "Customer territory is descriptive; ownership remains locked to the Salesman");
     assert.equal(salesmanCreatedLead.data.created_by, salesmanAccount.data.id);
+    const territoryEdit=await request(baseUrl,`/api/leads/${salesmanCreatedLead.data.id}`,{
+      method:"PATCH",token:salesmanToken,csrfToken:salesmanCsrfToken,
+      body:{territory:"Netherlands",notes:"Synthetic permitted contact update"}
+    });
+    assert.equal(territoryEdit.response.status,200,JSON.stringify(territoryEdit.data));
+    assert.equal(territoryEdit.data.territory,"Saudi","Contact edits cannot change the stored customer territory");
+    assert.equal(territoryEdit.data.assigned_to,salesmanAccount.data.id);
     const creation = salesmanCreatedLead.data.activities.filter(activity => activity.lead_creation);
     assert.equal(creation.length, 1);
     assert.equal(creation[0].text, "New Lead Account creation");
