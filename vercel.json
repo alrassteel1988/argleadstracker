@@ -3,7 +3,8 @@
   "version": 2,
   "git": {
     "deploymentEnabled": {
-      "codex/lead-territory-options": false
+      "codex/lead-territory-options": false,
+      "codex/lead-insert-policy-boundary": false
     }
   },
   "builds": [

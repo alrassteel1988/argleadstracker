@@ -37,7 +37,10 @@ test("manual territory input is required only during a new manual registration",
   select.value=option.value;context.state.editingLeadId="existing";context.renderLeadTerritoryInput();assert.equal(option.hidden,true);assert.equal(custom.disabled,true);
 });
 
-test("Git-only Territory branch disables its own automatic deployment only",()=>{
+test("Git-only Territory and insert-policy branches disable only their automatic deployments",()=>{
   const config=JSON.parse(fs.readFileSync(path.join(root,"vercel.json"),"utf8"));
-  assert.deepEqual(config.git.deploymentEnabled,{"codex/lead-territory-options":false});
+  assert.deepEqual(config.git.deploymentEnabled,{
+    "codex/lead-territory-options":false,
+    "codex/lead-insert-policy-boundary":false
+  });
 });
