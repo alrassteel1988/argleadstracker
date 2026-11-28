@@ -5,8 +5,9 @@ const { join } = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE || "@electric-sql/pglite");
 
-for (const creationAudit of [false, true, "international"]) test(`new lead RPC preserves RLS and atomicity on the blueprint schema (creation audit: ${creationAudit})`, async () => {
-  const international = creationAudit === "international";
+for (const creationAudit of [false, true, "international", "insert-boundary"]) test(`new lead RPC preserves RLS and atomicity on the blueprint schema (creation audit: ${creationAudit})`, async () => {
+  const insertBoundary = creationAudit === "insert-boundary";
+  const international = creationAudit === "international" || insertBoundary;
   const db = new PGlite();
   const admin = randomUUID(), sales = randomUUID(), peer = randomUUID(), inactive = randomUUID();
   try {
@@ -52,10 +53,15 @@ for (const creationAudit of [false, true, "international"]) test(`new lead RPC p
     await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118113937_registration_rls_readback.sql"), "utf8"));
     if (creationAudit) await db.exec(readFileSync(join(__dirname, "../supabase/migrations/20261118122627_lead_creation_activity_audit.sql"), "utf8"));
     if (international) {
-      await db.exec(`drop policy own_lead_insert on public.leads;
-        create policy admin_lead_insert on public.leads for insert to authenticated with check (
-          exists(select 1 from public.profiles where id=auth.uid() and role='admin' and status='active'));`);
+      await db.exec("drop policy own_lead_insert on public.leads");
+      if (insertBoundary) {
+        const legacy = readFileSync(join(__dirname,"../supabase/migrations/20260803105004_replace_legacy_rls_policies.sql"),"utf8");
+        await db.exec(legacy.match(/create or replace function private\.crm_is_leadership\(\)[\s\S]+?\$\$;/)[0]);
+        await db.exec(legacy.match(/create policy "F04 leads insert"[^;]+;/)[0]);
+      } else await db.exec(`create policy admin_lead_insert on public.leads for insert to authenticated with check (
+        exists(select 1 from public.profiles where id=auth.uid() and role='admin' and status='active'));`);
       await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261124050745_lead_territory_options.sql"),"utf8"));
+      if (insertBoundary) await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261128045804_lead_insert_policy_boundary.sql"),"utf8"));
     }
     const as = async (id, role="authenticated") => {
       await db.exec(`set role ${role}`);

@@ -5,7 +5,7 @@ const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { PGlite } = require(process.env.CRM_TEST_PGLITE_MODULE || "@electric-sql/pglite");
 
-for (const territoryUpgrade of [false,true]) test(`archive lifecycle, RLS, duplicate review and immutable audit are transactional (Territory upgrade: ${territoryUpgrade})`, async () => {
+for (const territoryUpgrade of [false,true,"insert-boundary"]) test(`archive lifecycle, RLS, duplicate review and immutable audit are transactional (Territory upgrade: ${territoryUpgrade})`, async () => {
   const db = new PGlite();
   const admin=randomUUID(), sales=randomUUID(), peer=randomUUID(), lead=randomUUID(), company=randomUUID();
   const attachmentPaths = [`activity-attachments/${lead}/synthetic/file.txt`, `lead-intelligence/${lead.toUpperCase()}/synthetic.pdf`];
@@ -68,12 +68,23 @@ for (const territoryUpgrade of [false,true]) test(`archive lifecycle, RLS, dupli
       from pg_proc where oid='private.lifecycle_storage_visible(text)'::regprocedure`)).rows[0];
     const previousStoragePrivileges = await storagePrivileges();
     await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261120075756_lifecycle_attachment_storage_boundary.sql"),"utf8"));
+    if (territoryUpgrade === "insert-boundary") {
+      // Model the released per-operation policies, not the older test-only permissive ALL rule.
+      await db.exec(`drop policy lead_access on public.leads;
+        create policy lead_read on public.leads for select to authenticated using(private.crm_can_access_lead(id));
+        create policy lead_update on public.leads for update to authenticated using(private.crm_can_access_lead(id)) with check(created_by=auth.uid() or private.crm_can_access_lead(id));
+        create policy lead_delete on public.leads for delete to authenticated using(private.crm_can_access_lead(id));`);
+      const legacy = readFileSync(join(__dirname,"../supabase/migrations/20260803105004_replace_legacy_rls_policies.sql"),"utf8");
+      await db.exec(legacy.match(/create or replace function private\.crm_is_leadership\(\)[\s\S]+?\$\$;/)[0]);
+      await db.exec(legacy.match(/create policy "F04 leads insert"[^;]+;/)[0]);
+    }
     if(territoryUpgrade) await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261124050745_lead_territory_options.sql"),"utf8"));
+    if(territoryUpgrade === "insert-boundary") await db.exec(readFileSync(join(__dirname,"../supabase/migrations/20261128045804_lead_insert_policy_boundary.sql"),"utf8"));
     assert.deepEqual(await storagePrivileges(),previousStoragePrivileges,"Storage fix must preserve the existing helper privileges and fixed search path");
     const as=async id=>{ await db.exec("set role authenticated"); await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]); };
     const change=async(action,input={})=>(await db.query("select public.change_lead_lifecycle($1,$2,$3::jsonb) result",[lead,action,JSON.stringify(input)])).rows[0].result;
     const check=async(input)=>(await db.query("select public.check_lead_duplicates($1::jsonb,null) result",[JSON.stringify(input)])).rows[0].result.matches;
-    const create=async(name,phone="",email="")=>db.query("insert into public.leads(company_name,assigned_to,assigned_salesman,created_by,phone,contact_email) values($1,$2,'Peer',$2,$3,$4)",[name,peer,phone,email]);
+    const create=async(name,phone="",email="")=>db.query("insert into public.leads(company_name,assigned_to,assigned_salesman,created_by,phone,contact_email,territory) values($1,$2,'Peer',$2,$3,$4,'UAE-North')",[name,peer,phone,email]);
     await as(sales);
     await assert.rejects(()=>change("close",{closed_reason:"Other"}), /note|reason/i);
     await assert.rejects(()=>change("archive",{reason:"Sales cannot archive manually"}),{code:"42501"});
